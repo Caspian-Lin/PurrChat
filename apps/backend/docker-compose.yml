@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: purrchat-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-purrchat}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - purrchat-network
+
+  # PurrChat 后端服务
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: purrchat-backend
+    environment:
+      # 服务器配置
+      PORT: ${PORT:-8080}
+      GIN_MODE: ${GIN_MODE:-release}
+      
+      # 数据库配置
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-purrchat}
+      
+      # JWT配置
+      JWT_SECRET: ${JWT_SECRET:-your_jwt_secret_key_here_change_in_production}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-24h}
+      
+      # 日志配置
+      LOG_DIRECTORY: /app/logs
+      LOG_MAX_FILES: ${LOG_MAX_FILES:-10}
+      LOG_MAX_LINES: ${LOG_MAX_LINES:-10000}
+    ports:
+      - "${PORT:-8080}:8080"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - purrchat-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  purrchat-network:
+    driver: bridge

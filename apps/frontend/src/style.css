@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* 主题变量 */
+  --theme-primary: #899cf0;
+  --theme-secondary: #764ba2;
+  --theme-gradient: linear-gradient(135deg, #899cf0 0%, #764ba2 100%);
+
+  /* 浅色主题默认值 */
+  --background-color: #ffffff;
+  --surface-color: #f5f5f5;
+  --surface-hover-color: #e8e8e8;
+  --text-color: #333333;
+  --text-secondary-color: #666666;
+  --text-tertiary-color: #999999;
+  --border-color: #e0e0e0;
+  --shadow-color: rgba(0, 0, 0, 0.1);
+  --modal-overlay-color: rgba(0, 0, 0, 0.5);
+  --input-background: #ffffff;
+  --input-border: #dddddd;
+  --message-sent-background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);
+  --message-received-background: #f0f0f0;
+  --card-background: #fafafa;
+
+  color-scheme: light dark;
+  color: var(--text-color);
+  background-color: var(--background-color);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 深色主题 */
+[data-theme='dark'] {
+  --background-color: #1a1a1a;
+  --surface-color: #2d2d2d;
+  --surface-hover-color: #3d3d3d;
+  --text-color: #ffffff;
+  --text-secondary-color: #b0b0b0;
+  --text-tertiary-color: #808080;
+  --border-color: #404040;
+  --shadow-color: rgba(0, 0, 0, 0.3);
+  --modal-overlay-color: rgba(0, 0, 0, 0.7);
+  --input-background: #2d2d2d;
+  --input-border: #404040;
+  --message-received-background: #3d3d3d;
+  --card-background: #252525;
+}
+
+a {
+  font-weight: 500;
+  color: var(--theme-primary);
+  text-decoration: inherit;
+}
+a:hover {
+  color: var(--theme-secondary);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--surface-color);
+  color: var(--text-color);
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: var(--theme-primary);
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+.card {
+  padding: 2em;
+}

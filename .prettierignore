@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+bin/
+
+# Coverage
+coverage/
+
+# Logs
+logs/
+*.log
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Tauri build outputs
+src-tau/target/
+.cargo/
+
+# Misc
+.cache/
+.turbo/
+.DS_Store
+*.min.js
+*.min.css

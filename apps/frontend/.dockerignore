@@ -1,0 +1,52 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Build output
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Tauri
+src-tau/target
+src-tau/Cargo.lock
+
+# Tests
+coverage
+*.test.ts
+*.test.tsx
+tests/
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.gitlab-ci.yml
+
+# Documentation
+README.md
+DEPLOYMENT.md
+*.md
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log

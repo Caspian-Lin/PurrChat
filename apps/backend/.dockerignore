@@ -1,0 +1,55 @@
+# Git
+.git
+.gitignore
+
+# 测试
+tests/
+*_test.go
+
+# 日志
+logs/
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 文档
+README.md
+MIGRATION.md
+UPDATE_SUMMARY.md
+*.md
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 二进制文件
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+server
+
+# 构建缓存
+.cache/
+vendor/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore

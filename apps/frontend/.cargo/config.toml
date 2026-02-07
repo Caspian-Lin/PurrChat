@@ -1,0 +1,6 @@
+[target.x86_64-pc-windows-msvc]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-gcc-ar"
+
+[env]
+RUSTFLAGS = "-C link-args=-static -C link-args=-lwindows -C link-args=-luser32 -C link-args=-lgdi32 -C link-args=-lshell32"

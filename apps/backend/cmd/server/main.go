@@ -1,0 +1,141 @@
+package main
+
+import (
+	"os"
+	"os/signal"
+	"syscall"
+
+	"purr-chat-server/internal/handlers"
+	"purr-chat-server/internal/repository"
+	"purr-chat-server/internal/services"
+	"purr-chat-server/pkg/config"
+	"purr-chat-server/pkg/database"
+	"purr-chat-server/pkg/logger"
+
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	// 加载配置
+	cfg := config.Load()
+	config.Validate(cfg)
+
+	// 初始化日志
+	logConfig := &logger.LogConfig{
+		Directory: cfg.Log.Directory,
+		MaxFiles:  cfg.Log.MaxFiles,
+		MaxLines:  cfg.Log.MaxLines,
+	}
+	if err := logger.InitWithConfig(logConfig); err != nil {
+		// 如果文件日志初始化失败，使用默认的日志初始化
+		logger.Init()
+		logger.Error("Failed to initialize file logger:", err)
+	}
+
+	logger.Info("Starting PurrChat Server...")
+
+	// 初始化数据库
+	dsn := config.GetDSN(&cfg.DB)
+	if err := database.Init(dsn); err != nil {
+		logger.Error("Failed to connect to database:", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	// 设置 Gin 模式
+	gin.SetMode(cfg.GinMode)
+
+	// 创建 Gin 路由
+	r := gin.Default()
+
+	// 配置日志中间件（记录所有API活动）
+	r.Use(handlers.LoggingMiddleware())
+
+	// 配置 CORS 中间件
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	})
+
+	// 初始化依赖
+	userRepo := repository.NewUserRepository()
+	conversationRepo := repository.NewConversationRepository()
+	messageRepo := repository.NewMessageRepository()
+	friendshipRepo := repository.NewFriendshipRepository()
+	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
+	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo)
+	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret)
+	chatHandler := handlers.NewChatHandler(authService, chatService)
+
+	// 健康检查
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":  "ok",
+			"message": "PurrChat Server is running",
+		})
+	})
+
+	// 认证路由
+	auth := r.Group("/api")
+	{
+		auth.POST("/register", authHandler.Register)
+		auth.POST("/login", authHandler.Login)
+		auth.GET("/me", handlers.AuthMiddleware(cfg.JWT.Secret), authHandler.Me)
+		auth.PUT("/profile", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.UpdateProfile)
+	}
+
+	// 用户路由
+	users := r.Group("/api/users")
+	{
+		users.GET("/search", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SearchUsers)
+		users.GET("/:id", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetUserByID)
+		users.GET("/uid/:uid", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetUserByUID)
+	}
+
+	// 会话路由
+	conversations := r.Group("/api/conversations")
+	{
+		conversations.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetConversations)
+		conversations.POST("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.CreateConversation)
+	}
+
+	// 消息路由
+	messages := r.Group("/api/messages")
+	{
+		messages.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetMessages)
+		messages.POST("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SendMessage)
+	}
+
+	// 好友路由
+	friends := r.Group("/api/friends")
+	{
+		friends.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetFriends)
+		friends.POST("/request", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SendFriendRequest)
+		friends.POST("/handle", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.HandleFriendRequest)
+	}
+
+	// 启动服务器
+	go func() {
+		logger.Infof("Server is running on port %s", cfg.Port)
+		if err := r.Run(":" + cfg.Port); err != nil {
+			logger.Error("Failed to start server:", err)
+			os.Exit(1)
+		}
+	}()
+
+	// 优雅关闭
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("Shutting down server...")
+}
