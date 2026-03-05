@@ -32,6 +32,9 @@ export default [
     rules: {
       ...configPrettier.rules,
       'prettier/prettier': 'warn',
+      'no-unused-vars': 'warn',
+      '@typescript-eslint/no-unused-vars': 'warn',
+      'vue/no-unused-vars': 'warn',
     },
   },
   {
