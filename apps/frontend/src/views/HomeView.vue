@@ -1,10 +1,7 @@
 <template>
   <div class="flex h-screen">
     <!-- 左侧导航栏 -->
-    <SideNavbar
-      :current-user="currentUser"
-      @show-profile="handleShowProfile"
-    />
+    <SideNavbar :current-user="currentUser" @show-profile="handleShowProfile" />
 
     <!-- 路由视图 - 显示不同的panel -->
     <div class="flex-1">
