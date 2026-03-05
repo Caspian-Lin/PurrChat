@@ -3,10 +3,12 @@ import { useAuthController } from '../controllers/authController';
 import { useRouter } from 'vue-router';
 
 // Mock vue-router
+const mockRouter = {
+  push: vi.fn(),
+};
+
 vi.mock('vue-router', () => ({
-  useRouter: vi.fn(() => ({
-    push: vi.fn(),
-  })),
+  useRouter: vi.fn(() => mockRouter),
 }));
 
 // Mock auth store
@@ -30,11 +32,9 @@ vi.mock('../stores/auth', () => ({
 }));
 
 describe('Auth Controller', () => {
-  let routerPush: ReturnType<typeof vi.fn>;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    routerPush = vi.mocked(useRouter()).push;
+    mockRouter.push.mockClear();
     mockAuth.token.value = null;
     mockAuth.user.value = null;
     mockAuth.isAuthenticated.value = false;
@@ -61,7 +61,7 @@ describe('Auth Controller', () => {
         'test@example.com',
         '1234567890'
       );
-      expect(routerPush).toHaveBeenCalledWith('/');
+      expect(mockRouter.push).toHaveBeenCalledWith('/');
     });
 
     it('should handle failed registration', async () => {
@@ -76,7 +76,7 @@ describe('Auth Controller', () => {
       );
 
       expect(result).toBe(false);
-      expect(routerPush).not.toHaveBeenCalled();
+      expect(mockRouter.push).not.toHaveBeenCalled();
     });
   });
 
@@ -89,7 +89,7 @@ describe('Auth Controller', () => {
 
       expect(result).toBe(true);
       expect(mockAuth.login).toHaveBeenCalledWith('test@example.com', 'password123');
-      expect(routerPush).toHaveBeenCalledWith('/');
+      expect(mockRouter.push).toHaveBeenCalledWith('/');
     });
 
     it('should handle failed login', async () => {
@@ -99,7 +99,7 @@ describe('Auth Controller', () => {
       const result = await controller.handleLogin('test@example.com', 'wrongpassword');
 
       expect(result).toBe(false);
-      expect(routerPush).not.toHaveBeenCalled();
+      expect(mockRouter.push).not.toHaveBeenCalled();
     });
   });
 
@@ -109,7 +109,7 @@ describe('Auth Controller', () => {
       controller.handleLogout();
 
       expect(mockAuth.logout).toHaveBeenCalled();
-      expect(routerPush).toHaveBeenCalledWith('/login');
+      expect(mockRouter.push).toHaveBeenCalledWith('/login');
     });
   });
 
@@ -144,7 +144,7 @@ describe('Auth Controller', () => {
       const result = controller.requireAuth();
 
       expect(result).toBe(false);
-      expect(routerPush).toHaveBeenCalledWith('/login');
+      expect(mockRouter.push).toHaveBeenCalledWith('/login');
     });
 
     it('should not redirect when authenticated', () => {
@@ -154,7 +154,7 @@ describe('Auth Controller', () => {
       const result = controller.requireAuth();
 
       expect(result).toBe(true);
-      expect(routerPush).not.toHaveBeenCalled();
+      expect(mockRouter.push).not.toHaveBeenCalled();
     });
   });
 
@@ -166,7 +166,7 @@ describe('Auth Controller', () => {
       const result = controller.requireGuest();
 
       expect(result).toBe(false);
-      expect(routerPush).toHaveBeenCalledWith('/');
+      expect(mockRouter.push).toHaveBeenCalledWith('/');
     });
 
     it('should not redirect when not authenticated', () => {
@@ -176,7 +176,7 @@ describe('Auth Controller', () => {
       const result = controller.requireGuest();
 
       expect(result).toBe(true);
-      expect(routerPush).not.toHaveBeenCalled();
+      expect(mockRouter.push).not.toHaveBeenCalled();
     });
   });
 });

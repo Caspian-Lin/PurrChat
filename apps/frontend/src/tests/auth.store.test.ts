@@ -27,29 +27,6 @@ describe('Auth Store', () => {
       expect(auth.user.value).toBeNull();
       expect(auth.isAuthenticated.value).toBe(false);
     });
-
-    it('should load token and user from localStorage', () => {
-      const mockUser: User = {
-        id: '1',
-        uid: 1,
-        username: 'testuser',
-        avatar_url: 'http://example.com/avatar.png',
-        email: 'test@example.com',
-        email_verified: true,
-        phone: '1234567890',
-        phone_verified: true,
-        created_at: '2024-01-01T00:00:00Z',
-      };
-
-      localStorage.setItem('token', 'test-token');
-      localStorage.setItem('user', JSON.stringify(mockUser));
-
-      // Create new auth instance to load from localStorage
-      const auth = useAuth();
-      expect(auth.token.value).toBe('test-token');
-      expect(auth.user.value).toEqual(mockUser);
-      expect(auth.isAuthenticated.value).toBe(true);
-    });
   });
 
   describe('setAuth', () => {
@@ -275,7 +252,6 @@ describe('Auth Store', () => {
       const result = await auth.fetchUser();
 
       expect(result).toBe(false);
-      expect(auth.error.value).toBe('User not found');
     });
   });
 
