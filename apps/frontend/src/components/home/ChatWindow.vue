@@ -129,11 +129,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { getUserAvatar, getUserUsername, getOtherUser } from '../../utils/userHelpers';
+import { ref } from 'vue';
+import { getUserUsername, getOtherUser } from '../../utils/userHelpers';
 import { formatTime, formatTimeWithSeconds } from '../../utils/formatTime';
-import { useFriends } from '../../composables/useFriends';
-import { BsDownload, BsEmojiSmile, BsPaperclip, BsCamera, BsCameraVideo } from 'vue-icons-plus/bs';
+import { BsEmojiSmile, BsPaperclip, BsCamera, BsCameraVideo } from 'vue-icons-plus/bs';
 import type { Conversation, Message } from '../../models/types';
 
 interface Props {
@@ -151,43 +150,12 @@ const emit = defineEmits<{
   'update-conversation': [];
 }>();
 
-const { handleFriendRequest } = useFriends();
-
 const newMessage = ref('');
-
-// 判断当前用户是否是好友请求的接收者
-// 在私聊会话中，会话的创建者（created_by）是好友请求的发送者，另一个用户是接收者
-const isFriendRequestRecipient = computed(() => {
-  if (!props.conversation || !props.currentUserId) return false;
-  // 如果会话有 created_by 字段且不等于当前用户ID，则当前用户是接收者
-  return props.conversation.created_by !== props.currentUserId;
-});
 
 const handleSend = () => {
   if (!props.conversation?.id || !newMessage.value.trim()) return;
   emit('send-message', newMessage.value);
   newMessage.value = '';
-};
-
-const handleExport = () => {
-  if (!props.conversation?.id) return;
-  emit('export-messages');
-};
-
-const handleAcceptFriendRequest = async () => {
-  if (!props.conversation?.id) return;
-  const success = await handleFriendRequest(props.conversation.id, 'accept');
-  if (success) {
-    emit('update-conversation');
-  }
-};
-
-const handleRejectFriendRequest = async () => {
-  if (!props.conversation?.id) return;
-  const success = await handleFriendRequest(props.conversation.id, 'reject');
-  if (success) {
-    emit('update-conversation');
-  }
 };
 </script>
 
