@@ -11,6 +11,9 @@ import (
 
 // TestNewConversation 测试新的会话功能
 func TestNewConversation(t *testing.T) {
+	SetupTestDB(t)
+	defer CleanupTestDB(t)
+
 	ctx := context.Background()
 
 	// 初始化repositories
@@ -32,6 +35,7 @@ func TestNewConversation(t *testing.T) {
 
 	// 测试1: 创建私聊会话
 	t.Run("CreateDirectConversation", func(t *testing.T) {
+		CleanupTestTables(t)
 		// 创建两个测试用户
 		user1, err := createTestUser(ctx, userRepo, "user1_direct")
 		if err != nil {
@@ -78,6 +82,7 @@ func TestNewConversation(t *testing.T) {
 
 	// 测试2: 创建群聊会话
 	t.Run("CreateGroupConversation", func(t *testing.T) {
+		CleanupTestTables(t)
 		// 创建三个测试用户
 		owner, err := createTestUser(ctx, userRepo, "owner_group")
 		if err != nil {
@@ -173,6 +178,7 @@ func TestNewConversation(t *testing.T) {
 
 	// 测试3: 添加成员到群聊
 	t.Run("AddMemberToConversation", func(t *testing.T) {
+		CleanupTestTables(t)
 		// 创建测试用户
 		owner, err := createTestUser(ctx, userRepo, "owner_add")
 		if err != nil {
@@ -225,6 +231,7 @@ func TestNewConversation(t *testing.T) {
 
 	// 测试4: 从群聊移除成员
 	t.Run("RemoveMemberFromConversation", func(t *testing.T) {
+		CleanupTestTables(t)
 		// 创建测试用户
 		owner, err := createTestUser(ctx, userRepo, "owner_remove")
 		if err != nil {
@@ -282,6 +289,7 @@ func TestNewConversation(t *testing.T) {
 
 	// 测试5: 获取会话成员
 	t.Run("GetConversationMembers", func(t *testing.T) {
+		CleanupTestTables(t)
 		// 创建测试用户
 		owner, err := createTestUser(ctx, userRepo, "owner_get")
 		if err != nil {
@@ -347,6 +355,7 @@ func TestNewConversation(t *testing.T) {
 
 	// 测试6: 查找用户的会话
 	t.Run("FindUserConversations", func(t *testing.T) {
+		CleanupTestTables(t)
 		// 创建测试用户
 		user1, err := createTestUser(ctx, userRepo, "user1_find")
 		if err != nil {
@@ -398,12 +407,19 @@ func TestNewConversation(t *testing.T) {
 
 // createTestUser 创建测试用户
 func createTestUser(ctx context.Context, userRepo repository.UserRepository, username string) (*models.User, error) {
+	phone := username
+	if len(phone) > 10 {
+		phone = phone[:10]
+	}
+	phone = "phone_" + phone
+
 	user := &models.User{
 		Username:      username,
 		Email:         username + "@test.com",
 		PasswordHash:  "test_hash",
 		Salt:          "test_salt",
 		UID:           1000 + len(username),
+		Phone:         phone,
 		EmailVerified: true,
 		PhoneVerified: true,
 	}
