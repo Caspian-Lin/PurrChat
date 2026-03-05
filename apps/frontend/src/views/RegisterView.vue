@@ -61,15 +61,9 @@
           {{ auth.error }}
         </BaseAlert>
 
-        <BaseButton
-          type="primary"
-          block
-          :disabled="auth.loading.value"
-          @click="handleSubmit"
-          class="!h-12 !font-medium"
-        >
-          {{ auth.loading.value ? '注册中...' : '注册' }}
-        </BaseButton>
+        <button type="submit" block :disabled="auth.loading" class="!h-12 !font-medium">
+          {{ auth.loading ? '注册中...' : '注册' }}
+        </button>
       </form>
 
       <div class="text-center mt-6 text-sm" style="color: var(--text-secondary-color)">
@@ -91,7 +85,6 @@ import { ref } from 'vue';
 import { useAuthController } from '../controllers/authController';
 import ThemeSwitcher from '../components/ThemeSwitcher.vue';
 import DynamicBackground from '../components/DynamicBackground.vue';
-import BaseButton from '../components/common/BaseButton.vue';
 import BaseInput from '../components/common/BaseInput.vue';
 import BaseFormItem from '../components/common/BaseFormItem.vue';
 import BaseAlert from '../components/common/BaseAlert.vue';
@@ -104,10 +97,36 @@ const password = ref('');
 const confirmPassword = ref('');
 
 const handleSubmit = async () => {
-  if (password.value !== confirmPassword.value) {
-    auth.error.value = '两次输入的密码不一致';
+  // 验证用户名长度
+  if (username.value.length < 3 || username.value.length > 20) {
+    auth.error = '用户名长度必须在3-20个字符之间';
     return;
   }
+
+  // 验证密码长度
+  if (password.value.length < 6) {
+    auth.error = '密码长度至少为6个字符';
+    return;
+  }
+
+  // 验证两次密码是否一致
+  if (password.value !== confirmPassword.value) {
+    auth.error = '两次输入的密码不一致';
+    return;
+  }
+
+  // 验证邮箱格式（如果提供了邮箱）
+  if (email.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) {
+    auth.error = '邮箱格式不正确';
+    return;
+  }
+
+  // 验证手机号长度（如果提供了手机号）
+  if (phone.value && phone.value.length > 20) {
+    auth.error = '手机号长度不能超过20个字符';
+    return;
+  }
+
   await auth.handleRegister(username.value, password.value, email.value, phone.value);
 };
 </script>

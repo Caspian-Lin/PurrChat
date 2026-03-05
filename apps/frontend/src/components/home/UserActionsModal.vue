@@ -41,7 +41,6 @@
 
 <script setup lang="ts">
 import BaseModal from '../common/BaseModal.vue';
-import BaseButton from '../common/BaseButton.vue';
 import type { User } from '../../models/types';
 
 interface Props {

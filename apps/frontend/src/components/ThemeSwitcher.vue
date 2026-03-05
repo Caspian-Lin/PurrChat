@@ -1,8 +1,11 @@
 <template>
   <div>
-    <BaseButton circle size="medium" type="tertiary" @click="showModal = true">
-      <component :is="themeIcon" class="text-sm" size="12" />
-    </BaseButton>
+    <button
+      class="relative w-10 h-10 flex items-center justify-center rounded-lg hover:bg-hover-bg transition-colors"
+      @click="showModal = true"
+    >
+      <component :is="themeIcon" class="text-text-tertiary" :size="20" />
+    </button>
 
     <BaseModal :show="showModal" title="主题设置" @update:show="showModal = $event">
       <div class="space-y-4">
@@ -14,7 +17,7 @@
             class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-hover-bg transition-colors rounded-lg"
             @click="handleSelect('light')"
           >
-            <SunnyOutline class="w-6 h-6" />
+            <BsSun />
             <span class="flex-1">浅色</span>
             <div
               v-if="themeStore.mode === 'light'"
@@ -26,7 +29,7 @@
             class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-hover-bg transition-colors rounded-lg"
             @click="handleSelect('dark')"
           >
-            <MoonOutline class="w-6 h-6" />
+            <BsMoon />
             <span class="flex-1">深色</span>
             <div
               v-if="themeStore.mode === 'dark'"
@@ -64,17 +67,16 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { SunnyOutline, MoonOutline } from '@vicons/ionicons5';
+import { BsSun, BsMoon } from 'vue-icons-plus/bs';
 import { useThemeStore } from '../stores/theme';
 import { themeColors } from '../config/theme';
 import BaseModal from './common/BaseModal.vue';
-import BaseButton from './common/BaseButton.vue';
 
 const themeStore = useThemeStore();
 const showModal = ref(false);
 
 const themeIcon = computed(() => {
-  return themeStore.mode === 'light' ? SunnyOutline : MoonOutline;
+  return themeStore.mode === 'light' ? BsSun : BsMoon;
 });
 
 const handleSelect = (key: string) => {

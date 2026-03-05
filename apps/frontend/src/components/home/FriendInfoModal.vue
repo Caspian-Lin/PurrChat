@@ -63,13 +63,12 @@
           </span>
         </div>
       </div>
-      <BaseButton type="primary" size="large" @click="$emit('start-chat')"> 发消息 </BaseButton>
+      <Button type="primary"  class="relative px-3 py-2" @click="$emit('start-chat')"> 发消息 </Button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import BaseButton from '../common/BaseButton.vue';
 import type { Friendship } from '../../models/types';
 
 interface Props {

@@ -11,13 +11,18 @@ export const useFriends = () => {
    * 获取好友列表
    */
   const loadFriends = async () => {
+    console.log('[useFriends] loadFriends 开始');
     try {
       const response = await api.getFriends();
+      console.log('[useFriends] getFriends 响应', response);
       if (response.success && response.data) {
         friends.value = response.data;
+        console.log('[useFriends] 好友列表加载成功', friends.value.length, '个好友');
+      } else {
+        console.log('[useFriends] 好友列表加载失败', response.message);
       }
     } catch (error) {
-      console.error('Failed to load friends:', error);
+      console.error('[useFriends] Failed to load friends:', error);
     }
   };
 

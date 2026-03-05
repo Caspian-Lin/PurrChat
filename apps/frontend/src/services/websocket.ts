@@ -1,5 +1,5 @@
 import { ref, onUnmounted } from 'vue';
-import { useAuth } from '../stores/auth';
+import { useAuthStore } from '../stores/auth';
 
 export interface WebSocketMessage {
   type: string;
@@ -197,9 +197,9 @@ class WebSocketService {
     );
 
     setTimeout(() => {
-      const auth = useAuth();
-      if (auth.token.value && auth.user.value) {
-        this.connect(auth.token.value, auth.user.value.id);
+      const auth = useAuthStore();
+      if (auth.token && auth.user) {
+        this.connect(auth.token, auth.user.id);
       }
     }, delay);
   }
@@ -248,9 +248,9 @@ export const websocketService = new WebSocketService();
 // Vue composable
 export function useWebSocket() {
   const connect = () => {
-    const auth = useAuth();
-    if (auth.token.value && auth.user.value) {
-      websocketService.connect(auth.token.value, auth.user.value.id);
+    const auth = useAuthStore();
+    if (auth.token && auth.user) {
+      websocketService.connect(auth.token, auth.user.id);
     }
   };
 

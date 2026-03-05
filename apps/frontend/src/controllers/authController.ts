@@ -1,9 +1,9 @@
-import { useAuth } from '../stores/auth';
+import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
 
 // 认证控制器
 export function useAuthController() {
-  const auth = useAuth();
+  const auth = useAuthStore();
   const router = useRouter();
 
   // 注册处理
@@ -21,9 +21,12 @@ export function useAuthController() {
   };
 
   // 登录处理
-  const handleLogin = async (username: string, password: string) => {
-    const success = await auth.login(username, password);
+  const handleLogin = async (email: string, password: string) => {
+    console.log('[authController] handleLogin 开始', { email, password: '***' });
+    const success = await auth.login(email, password);
+    console.log('[authController] handleLogin 结果', { success });
     if (success) {
+      console.log('[authController] 跳转到首页');
       router.push('/');
     }
     return success;
@@ -37,15 +40,15 @@ export function useAuthController() {
 
   // 检查认证状态
   const checkAuth = async () => {
-    if (auth.isAuthenticated.value) {
+    if (auth.isAuthenticated) {
       await auth.fetchUser();
     }
-    return auth.isAuthenticated.value;
+    return auth.isAuthenticated;
   };
 
   // 路由守卫 - 需要认证
   const requireAuth = () => {
-    if (!auth.isAuthenticated.value) {
+    if (!auth.isAuthenticated) {
       router.push('/login');
       return false;
     }
@@ -54,7 +57,7 @@ export function useAuthController() {
 
   // 路由守卫 - 未认证
   const requireGuest = () => {
-    if (auth.isAuthenticated.value) {
+    if (auth.isAuthenticated) {
       router.push('/');
       return false;
     }

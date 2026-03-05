@@ -29,7 +29,7 @@ func NewAuthService(userRepo repository.UserRepository, jwtKey string) *AuthServ
 }
 
 // Register 用户注册
-func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest) (*models.User, error) {
+func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest) (*models.LoginResponse, error) {
 	logger.InfofWithCaller("Registering user: %s", req.Username)
 
 	// 检查用户名是否已存在
@@ -82,9 +82,23 @@ func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest)
 		return nil, err
 	}
 
+	// 生成 JWT token
+	token, err := jwt.GenerateToken(user.ID.String(), s.jwtKey, 24*time.Hour)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to generate token for user %s: %v", user.Username, err)
+		return nil, err
+	}
+
 	logger.InfofWithCaller("User registered successfully: %s (ID: %s)", user.Username, user.ID)
 
-	return user, nil
+	// 清除密码相关字段
+	user.PasswordHash = ""
+	user.Salt = ""
+
+	return &models.LoginResponse{
+		Token: token,
+		User:  user,
+	}, nil
 }
 
 // Login 用户登录

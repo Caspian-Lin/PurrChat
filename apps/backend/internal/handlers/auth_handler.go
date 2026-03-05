@@ -45,7 +45,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	user, err := h.authService.Register(c.Request.Context(), &req)
+	resp, err := h.authService.Register(c.Request.Context(), &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Registration failed for username %s: %v", req.Username, err)
 		c.JSON(http.StatusBadRequest, models.AuthResponse{
@@ -55,16 +55,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	logger.InfofWithCaller("User registered successfully: %s (ID: %s)", user.Username, user.ID)
-
-	// 清除密码相关字段
-	user.PasswordHash = ""
-	user.Salt = ""
+	logger.InfofWithCaller("User registered successfully: %s (ID: %s)", resp.User.Username, resp.User.ID)
 
 	c.JSON(http.StatusOK, models.AuthResponse{
 		Success: true,
 		Message: "Registration successful",
-		Data:    user,
+		Data:    resp,
 	})
 }
 

@@ -20,6 +20,7 @@ type MessageRepository interface {
 	CountByConversationID(ctx context.Context, conversationID uuid.UUID) (int, error)
 	CountUnreadByConversationID(ctx context.Context, conversationID, userID uuid.UUID) (int, error)
 	FindLastByConversationID(ctx context.Context, conversationID uuid.UUID) (*models.Message, error)
+	FindByConversationIDSince(ctx context.Context, conversationID uuid.UUID, since time.Time) ([]*models.Message, error)
 }
 
 type messageRepository struct {
@@ -177,6 +178,46 @@ func (r *messageRepository) FindLastByConversationID(ctx context.Context, conver
 	}
 
 	return message, nil
+}
+
+// FindByConversationIDSince 增量获取会话中的消息（从指定时间之后）
+func (r *messageRepository) FindByConversationIDSince(ctx context.Context, conversationID uuid.UUID, since time.Time) ([]*models.Message, error) {
+	logger.InfofWithCaller("Finding messages for conversation %s since %v", conversationID, since)
+
+	query := `
+		SELECT id, conversation_id, sender_id, content, msg_type, created_at
+		FROM messages
+		WHERE conversation_id = $1 AND created_at > $2
+		ORDER BY created_at ASC
+	`
+
+	rows, err := database.GetPool().Query(ctx, query, conversationID, since)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to query messages: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var messages []*models.Message
+	for rows.Next() {
+		message := &models.Message{}
+		err := rows.Scan(
+			&message.ID,
+			&message.ConversationID,
+			&message.SenderID,
+			&message.Content,
+			&message.MsgType,
+			&message.CreatedAt,
+		)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to scan message: %v", err)
+			return nil, err
+		}
+		messages = append(messages, message)
+	}
+
+	logger.InfofWithCaller("Found %d new messages for conversation %s", len(messages), conversationID)
+	return messages, nil
 }
 
 // FriendshipRepository 好友关系仓储接口

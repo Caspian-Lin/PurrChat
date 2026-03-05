@@ -30,6 +30,14 @@ const apiClient: AxiosInstance = axios.create({
 // 请求拦截器 - 添加 token
 apiClient.interceptors.request.use(
   (config) => {
+    console.log('[axios] 请求拦截器', {
+      method: config.method?.toUpperCase(),
+      url: config.url,
+      baseURL: config.baseURL,
+      fullURL: `${config.baseURL}${config.url}`,
+      headers: config.headers,
+      data: config.data,
+    });
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -37,14 +45,28 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('[axios] 请求拦截器错误', error);
     return Promise.reject(error);
   }
 );
 
 // 响应拦截器 - 处理错误
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('[axios] 响应拦截器成功', {
+      status: response.status,
+      data: response.data,
+      url: response.config.url,
+    });
+    return response;
+  },
   (error) => {
+    console.error('[axios] 响应拦截器错误', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data,
+      url: error.config?.url,
+    });
     if (error.response?.status === 401) {
       // Token 过期或无效，清除本地存储
       localStorage.removeItem('token');
@@ -59,13 +81,23 @@ apiClient.interceptors.response.use(
 // API 方法
 export const api = {
   // 用户注册
-  register: (data: RegisterRequest): Promise<ApiResponse<User>> => {
+  register: (data: RegisterRequest): Promise<ApiResponse<LoginResponse>> => {
     return apiClient.post('/api/register', data).then((res) => res.data);
   },
 
   // 用户登录
   login: (data: LoginRequest): Promise<ApiResponse<LoginResponse>> => {
-    return apiClient.post('/api/login', data).then((res) => res.data);
+    console.log('[api] 发送登录请求', { url: '/api/login', data: { ...data, password: '***' } });
+    return apiClient
+      .post('/api/login', data)
+      .then((res) => {
+        console.log('[api] 登录请求响应', res.data);
+        return res.data;
+      })
+      .catch((error) => {
+        console.error('[api] 登录请求失败', error);
+        throw error;
+      });
   },
 
   // 获取当前用户信息
@@ -121,6 +153,18 @@ export const api = {
     return apiClient
       .get('/api/messages/export', {
         params: { conversation_id: conversationId },
+      })
+      .then((res) => res.data);
+  },
+
+  // 增量获取会话的消息（从指定时间之后）
+  getMessagesIncremental: (
+    conversationId: string,
+    sinceTimestamp: number
+  ): Promise<ApiResponse<Message[]>> => {
+    return apiClient
+      .get('/api/messages/incremental', {
+        params: { conversation_id: conversationId, since_timestamp: sinceTimestamp },
       })
       .then((res) => res.data);
   },

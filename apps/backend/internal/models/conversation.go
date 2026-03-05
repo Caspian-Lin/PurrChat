@@ -56,6 +56,12 @@ type GetMessagesRequest struct {
 	Offset         int    `form:"offset" binding:"omitempty,min=0"`
 }
 
+// GetMessagesIncrementalRequest 增量获取消息请求
+type GetMessagesIncrementalRequest struct {
+	ConversationID string `form:"conversation_id" binding:"required,uuid"`
+	SinceTimestamp int64  `form:"since_timestamp" binding:"required"` // Unix时间戳（毫秒）
+}
+
 // MessagesResponse 消息列表响应
 type MessagesResponse struct {
 	Success bool      `json:"success"`

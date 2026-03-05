@@ -31,6 +31,7 @@
             {{ friendship.friend?.username }}
           </span>
           <span
+            v-if="friendship.status !== 'accepted'"
             :class="['text-xs px-2 py-1 rounded', getFriendshipStatusColor(friendship.status)]"
             style="background: var(--surface-color)"
           >

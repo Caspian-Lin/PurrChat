@@ -22,9 +22,65 @@ export const useChat = () => {
         // 需要反转顺序，让最新的消息在最下面
         messages.value = [...response.data].reverse();
         scrollToBottom();
+
+        // 缓存消息
+        await messageCache.addMessages(conversationId, response.data);
+        console.log(`[useChat] Loaded and cached ${response.data.length} messages for conversation ${conversationId}`);
       }
     } catch (error) {
-      console.error('Failed to load messages:', error);
+      console.error('[useChat] Failed to load messages:', error);
+    }
+  };
+
+  /**
+   * 增量获取消息（从指定时间之后）
+   * @param conversationId - 会话ID
+   * @param sinceTimestamp - 起始时间戳（毫秒）
+   */
+  const loadMessagesIncremental = async (conversationId: string, sinceTimestamp: number) => {
+    try {
+      console.log(`[useChat] Loading incremental messages for conversation ${conversationId} since ${sinceTimestamp}`);
+      const response = await api.getMessagesIncremental(conversationId, sinceTimestamp);
+      if (response.success && response.data && response.data.length > 0) {
+        // 增量消息是按created_at ASC排序的（从旧到新）
+        // 直接添加到消息列表
+        response.data.forEach((msg) => {
+          // 检查消息是否已存在
+          const exists = messages.value.some((m) => m.id === msg.id);
+          if (!exists) {
+            messages.value.push(msg);
+          }
+        });
+        scrollToBottom();
+
+        // 缓存新消息
+        await messageCache.addMessages(conversationId, response.data);
+        console.log(`[useChat] Loaded and cached ${response.data.length} incremental messages for conversation ${conversationId}`);
+      } else {
+        console.log(`[useChat] No new messages for conversation ${conversationId} since ${sinceTimestamp}`);
+      }
+      return response.success && response.data ? response.data.length : 0;
+    } catch (error) {
+      console.error('[useChat] Failed to load incremental messages:', error);
+      return 0;
+    }
+  };
+
+  /**
+   * 检查并加载会话的增量消息
+   * @param conversationId - 会话ID
+   */
+  const checkAndLoadIncremental = async (conversationId: string) => {
+    // 检查是否有缓存
+    if (messageCache.hasCache(conversationId)) {
+      const lastUpdated = messageCache.getLastUpdated(conversationId);
+      console.log(`[useChat] Checking incremental messages for conversation ${conversationId}, last updated: ${lastUpdated}`);
+      const newMessageCount = await loadMessagesIncremental(conversationId, lastUpdated);
+      return newMessageCount;
+    } else {
+      console.log(`[useChat] No cache found for conversation ${conversationId}, loading all messages`);
+      await loadMessages(conversationId);
+      return 0;
     }
   };
 
@@ -49,12 +105,13 @@ export const useChat = () => {
         scrollToBottom();
 
         // 缓存发送的消息
-        messageCache.addMessage(conversationId, response.data);
+        await messageCache.addMessage(conversationId, response.data);
+        console.log(`[useChat] Message sent and cached for conversation ${conversationId}`);
         return true;
       }
       return false;
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('[useChat] Failed to send message:', error);
       message.error('发送消息失败');
       return false;
     }
@@ -122,6 +179,8 @@ export const useChat = () => {
     messages,
     messagesContainer,
     loadMessages,
+    loadMessagesIncremental,
+    checkAndLoadIncremental,
     sendMessage,
     exportMessages,
     addMessage,

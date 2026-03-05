@@ -190,6 +190,7 @@ func main() {
 	{
 		messages.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetMessages)
 		messages.GET("/export", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.ExportMessages)
+		messages.GET("/incremental", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetMessagesIncremental)
 		messages.POST("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SendMessage)
 	}
 

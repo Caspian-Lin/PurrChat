@@ -2,23 +2,34 @@
   <div class="flex h-full">
     <!-- 会话列表 -->
     <div
-      class="flex flex-col min-w-[200px] max-w-[400px] bg-bg-primary border-r border-border-color"
+      class="flex flex-col min-w-[300px] max-w-[400px] bg-bg-primary border-r border-border-color"
     >
       <!-- 搜索用户 -->
       <div class="flex items-center gap-2 p-3 bg-bg-secondary border-b border-border-color">
-        <div
-          class="flex-1 flex items-center justify-center bg-bg-quaternary rounded-md h-[40px] px-3"
-        >
-          <div class="text-text-tertiary text-base font-normal">搜索会话...</div>
+        <div class="flex-1 flex items-center bg-bg-quaternary rounded-md h-[40px] px-3">
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜索会话、消息内容、好友名..."
+            class="w-full bg-transparent text-text-tertiary text-base font-normal outline-none"
+            @input="handleSearch"
+          />
         </div>
-        <div
-          class="w-[40px] h-[40px] bg-accent-color rounded-md hover:opacity-80 transition-opacity cursor-pointer"
-        />
+        <button
+          v-if="searchQuery"
+          class="relative p-2 flex items-center justify-center transition-all text-text-tertiary hover:text-text-primary"
+          @click="clearSearch"
+        >
+          <BsXCircle />
+        </button>
+        <button v-else class="relative p-2 flex items-center justify-center transition-all">
+          <BsSearch />
+        </button>
       </div>
 
       <!-- 会话列表 -->
       <ConversationList
-        :conversations="conversations"
+        :conversations="filteredConversations"
         :selected-id="selectedConversation?.id"
         :current-user-id="currentUser?.id"
         @select="handleSelectConversation"
@@ -62,18 +73,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useAuthController } from '../../../controllers/authController';
 import { useWebSocket } from '../../../services/websocket';
 import { useConversations } from '../../../composables/useConversations';
 import { useFriends } from '../../../composables/useFriends';
 import { useChat } from '../../../composables/useChat';
+import { useMessageCache } from '../../../services/messageCache';
+import { useMessageStore } from '../../../stores/message';
 import ConversationList from '../ConversationList.vue';
 import ChatWindow from '../ChatWindow.vue';
 import UserProfileModal from '../UserProfileModal.vue';
 import UserActionsModal from '../UserActionsModal.vue';
 import type { User, Conversation } from '../../../models/types';
-
+import { BsSearch, BsXCircle } from 'vue-icons-plus/bs';
 // Auth
 const auth = useAuthController();
 const { currentUser } = auth;
@@ -82,8 +95,72 @@ const { currentUser } = auth;
 const { conversations, loadConversations, createConversation, deleteConversation } =
   useConversations();
 const { loadFriends, sendFriendRequest } = useFriends();
-const { messages, loadMessages, sendMessage, exportMessages, clearMessages } = useChat();
+const {
+  messages,
+  loadMessages,
+  loadMessagesIncremental,
+  checkAndLoadIncremental,
+  sendMessage,
+  exportMessages,
+  clearMessages,
+  messagesContainer,
+} = useChat();
+const { addMessage: cacheMessage } = useMessageCache();
 const ws = useWebSocket();
+const messageStore = useMessageStore();
+
+// 滚动到底部
+const scrollToBottom = async () => {
+  await nextTick();
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+  }
+};
+
+// 搜索状态
+const searchQuery = ref('');
+
+// 过滤后的会话列表
+const filteredConversations = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return conversations.value;
+  }
+
+  const query = searchQuery.value.toLowerCase();
+  return conversations.value.filter((conv) => {
+    // 搜索会话名称
+    if (conv.name && conv.name.toLowerCase().includes(query)) {
+      return true;
+    }
+
+    // 搜索好友名称
+    if (conv.members) {
+      for (const member of conv.members) {
+        if (member.user && member.user.username.toLowerCase().includes(query)) {
+          return true;
+        }
+      }
+    }
+
+    // 搜索最后一条消息内容
+    if (conv.last_message && conv.last_message.content.toLowerCase().includes(query)) {
+      return true;
+    }
+
+    return false;
+  });
+});
+
+// 搜索处理
+const handleSearch = () => {
+  console.log('[ChatPanel] Search query:', searchQuery.value);
+};
+
+// 清除搜索
+const clearSearch = () => {
+  searchQuery.value = '';
+  console.log('[ChatPanel] Search cleared');
+};
 
 // State
 const selectedConversation = ref<Conversation | null>(null);
@@ -103,10 +180,11 @@ const handleShowUserProfile = (user: User) => {
   showProfileModal.value = true;
 };
 
-const handleSelectConversation = (conversation: Conversation) => {
+const handleSelectConversation = async (conversation: Conversation) => {
   selectedConversation.value = conversation;
   selectedUser.value = null;
-  loadMessages(conversation.id);
+  // 使用增量加载检查并获取新消息
+  await checkAndLoadIncremental(conversation.id);
 };
 
 const handleDeleteConversation = async (conversationId: string) => {
@@ -187,8 +265,11 @@ watch(selectedConversation, async (newConv, oldConv) => {
 
 // Lifecycle
 onMounted(async () => {
+  console.log('[ChatPanel] onMounted 开始');
   await auth.checkAuth();
-  if (currentUser.value) {
+  console.log('[ChatPanel] checkAuth 完成', { currentUser });
+  if (currentUser) {
+    console.log('[ChatPanel] currentUser 存在，开始加载数据');
     await loadConversations();
     await loadFriends();
 
@@ -196,12 +277,16 @@ onMounted(async () => {
     ws.connect();
 
     // 注册新消息处理器
-    ws.on('new_message', (data: any) => {
+    ws.on('new_message', async (data: any) => {
       const newMessage = data.message;
+      console.log('[ChatPanel] New message received via WebSocket:', newMessage);
 
       // 如果是当前会话的消息，添加到消息列表
       if (selectedConversation.value?.id === newMessage.conversation_id) {
         messages.value.push(newMessage);
+        scrollToBottom();
+        // 缓存新消息
+        await cacheMessage(newMessage.conversation_id, newMessage);
       }
 
       // 更新会话列表中的最后一条消息
@@ -250,7 +335,10 @@ onMounted(async () => {
     ws.on('error', (error: any) => {
       console.error('WebSocket error:', error);
     });
+  } else {
+    console.log('[ChatPanel] currentUser 不存在，不加载数据');
   }
+  console.log('[ChatPanel] onMounted 结束');
 });
 
 onUnmounted(() => {

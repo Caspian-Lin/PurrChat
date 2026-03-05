@@ -279,6 +279,50 @@ func (h *ChatHandler) ExportMessages(c *gin.Context) {
 	})
 }
 
+// GetMessagesIncremental 增量获取会话的消息
+// @Summary 增量获取会话的消息（从指定时间之后）
+// @Tags 聊天
+// @Produce json
+// @Security BearerAuth
+// @Param conversation_id query string true "会话ID"
+// @Param since_timestamp query int64 true "起始时间戳（毫秒）"
+// @Success 200 {object} models.MessagesResponse
+// @Router /api/messages/incremental [get]
+func (h *ChatHandler) GetMessagesIncremental(c *gin.Context) {
+	var req models.GetMessagesIncrementalRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		logger.ErrorfWithCaller("Invalid get incremental messages request: %v", err)
+		c.JSON(http.StatusBadRequest, models.MessagesResponse{
+			Success: false,
+			Message: "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	messages, err := h.chatService.GetMessagesIncremental(c.Request.Context(), req.ConversationID, req.SinceTimestamp)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to get incremental messages for conversation %s: %v", req.ConversationID, err)
+		c.JSON(http.StatusInternalServerError, models.MessagesResponse{
+			Success: false,
+			Message: "Failed to get incremental messages",
+		})
+		return
+	}
+
+	// 转换为切片
+	var msgSlice []models.Message
+	for _, msg := range messages {
+		msgSlice = append(msgSlice, *msg)
+	}
+
+	logger.InfofWithCaller("Retrieved %d incremental messages for conversation %s", len(msgSlice), req.ConversationID)
+
+	c.JSON(http.StatusOK, models.MessagesResponse{
+		Success: true,
+		Data:    msgSlice,
+	})
+}
+
 // SendMessage 发送消息
 // @Summary 发送消息
 // @Tags 聊天

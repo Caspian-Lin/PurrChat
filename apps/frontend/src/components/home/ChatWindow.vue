@@ -16,16 +16,16 @@
     </div>
 
     <!-- 消息列表 -->
-    <div class="flex-1 overflow-y-auto p-8 space-y-6 bg-bg-quaternary border-b border-border-color">
+    <div class="flex-1 overflow-y-auto p-4 space-y-2 bg-bg-quaternary border-b border-border-color">
       <div
         v-for="message in messages"
         :key="message.id"
         :class="[
-          'flex gap-6 max-w-[70%]',
+          'flex gap-2 max-w-[75%]',
           { 'flex-row-reverse ml-auto': message.sender_id === currentUserId },
         ]"
       >
-        <div class="w-[84px] h-[84px] roundrect overflow-hidden flex-shrink-0">
+        <div class="size-12 roundrect overflow-hidden flex-shrink-0">
           <img
             v-if="message.sender?.avatar_url"
             :src="message.sender.avatar_url"
@@ -40,7 +40,7 @@
             {{ message.sender?.username?.charAt(0) || '?' }}
           </div>
         </div>
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-1">
           <!-- 对方的消息显示昵称，自己的消息不显示昵称 -->
           <div
             v-if="message.sender_id !== currentUserId"
@@ -50,8 +50,8 @@
           </div>
           <div
             :class="[
-              'px-6 py-4 rounded-2xl break-words',
-              message.sender_id === currentUserId ? 'rounded-br-none' : 'rounded-bl-none',
+              'px-4 py-2 rounded-2xl break-words',
+              // message.sender_id === currentUserId ? 'rounded-br-none' : 'rounded-bl-none',
             ]"
             :style="{
               background:
@@ -73,31 +73,31 @@
 
     <!-- 消息输入区 -->
     <div
-      class="flex flex-col min-h-[400px] max-h-[800px] bg-bg-primary border-t border-border-color"
+      class="flex flex-col min-h-[300px] max-h-[800px] bg-bg-primary border-t border-border-color"
     >
       <!-- 文本选项 -->
-      <div class="flex items-center gap-4 px-4 py-6">
+      <div class="flex items-center gap-3 px-4 py-4">
         <button
-          class="w-[40px] h-[40px] roundrect flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
           title="表情"
         >
           <BsEmojiSmile class="text-2xl" />
         </button>
         <button
-          class="w-[60px] h-[60px] roundrect flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
           title="文件"
         >
           <BsPaperclip class="text-2xl" />
         </button>
         <button
-          class="w-[60px] h-[60px] roundrect flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
           title="截图"
         >
           <BsCamera class="text-2xl" />
         </button>
         <div class="h-[18px] w-px bg-border-color" />
         <button
-          class="w-[60px] h-[60px] roundrect flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
           title="视频通话"
         >
           <BsCameraVideo class="text-2xl" />
@@ -105,11 +105,11 @@
       </div>
 
       <!-- 文本输入区 -->
-      <div class="flex-1 px-8 overflow-y-auto">
+      <div class="flex-1 px-4 overflow-y-auto">
         <textarea
           v-model="newMessage"
           placeholder="text here..."
-          class="w-full h-full bg-transparent text-[40px] text-text-tertiary resize-none outline-none"
+          class="w-full h-full bg-transparent text-xl text-text-tertiary resize-none outline-none"
           @keydown.enter.prevent="handleSend"
         />
       </div>
@@ -117,7 +117,7 @@
       <!-- 发送按钮 -->
       <div class="flex justify-end px-8 py-8">
         <button
-          class="w-[180px] h-[60px] roundrect bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-[36px]"
+          class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-xl"
           :disabled="!newMessage.trim()"
           @click="handleSend"
         >

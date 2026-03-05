@@ -13,12 +13,12 @@ vi.mock('vue-router', () => ({
 
 // Mock auth store
 const mockAuth = {
-  token: { value: null },
-  user: { value: null },
-  loading: { value: false },
-  error: { value: null },
-  isAuthenticated: { value: false },
-  currentUser: { value: null },
+  token: null,
+  user: null,
+  loading: false,
+  error: null,
+  isAuthenticated: false,
+  currentUser: null,
   register: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
@@ -28,18 +28,18 @@ const mockAuth = {
 };
 
 vi.mock('../stores/auth', () => ({
-  useAuth: vi.fn(() => mockAuth),
+  useAuthStore: vi.fn(() => mockAuth),
 }));
 
 describe('Auth Controller', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRouter.push.mockClear();
-    mockAuth.token.value = null;
-    mockAuth.user.value = null;
-    mockAuth.isAuthenticated.value = false;
-    mockAuth.loading.value = false;
-    mockAuth.error.value = null;
+    mockAuth.token = null;
+    mockAuth.user = null;
+    mockAuth.isAuthenticated = false;
+    mockAuth.loading = false;
+    mockAuth.error = null;
   });
 
   describe('handleRegister', () => {
@@ -115,7 +115,7 @@ describe('Auth Controller', () => {
 
   describe('checkAuth', () => {
     it('should fetch user when authenticated', async () => {
-      mockAuth.isAuthenticated.value = true;
+      mockAuth.isAuthenticated = true;
       mockAuth.fetchUser.mockResolvedValueOnce(true);
 
       const controller = useAuthController();
@@ -126,7 +126,7 @@ describe('Auth Controller', () => {
     });
 
     it('should not fetch user when not authenticated', async () => {
-      mockAuth.isAuthenticated.value = false;
+      mockAuth.isAuthenticated = false;
 
       const controller = useAuthController();
       const result = await controller.checkAuth();
@@ -138,7 +138,7 @@ describe('Auth Controller', () => {
 
   describe('requireAuth', () => {
     it('should redirect to login when not authenticated', () => {
-      mockAuth.isAuthenticated.value = false;
+      mockAuth.isAuthenticated = false;
 
       const controller = useAuthController();
       const result = controller.requireAuth();
@@ -148,7 +148,7 @@ describe('Auth Controller', () => {
     });
 
     it('should not redirect when authenticated', () => {
-      mockAuth.isAuthenticated.value = true;
+      mockAuth.isAuthenticated = true;
 
       const controller = useAuthController();
       const result = controller.requireAuth();
@@ -160,7 +160,7 @@ describe('Auth Controller', () => {
 
   describe('requireGuest', () => {
     it('should redirect to home when authenticated', () => {
-      mockAuth.isAuthenticated.value = true;
+      mockAuth.isAuthenticated = true;
 
       const controller = useAuthController();
       const result = controller.requireGuest();
@@ -170,7 +170,7 @@ describe('Auth Controller', () => {
     });
 
     it('should not redirect when not authenticated', () => {
-      mockAuth.isAuthenticated.value = false;
+      mockAuth.isAuthenticated = false;
 
       const controller = useAuthController();
       const result = controller.requireGuest();

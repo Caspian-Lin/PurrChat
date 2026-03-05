@@ -170,6 +170,41 @@ func (s *ChatService) GetAllMessages(ctx context.Context, conversationIDStr stri
 	return messages, nil
 }
 
+// GetMessagesIncremental 增量获取会话的消息（从指定时间之后）
+func (s *ChatService) GetMessagesIncremental(ctx context.Context, conversationIDStr string, sinceTimestamp int64) ([]*models.Message, error) {
+	logger.InfofWithCaller("Getting incremental messages for conversation %s since %d", conversationIDStr, sinceTimestamp)
+
+	// 解析 conversationID
+	conversationID, err := uuid.Parse(conversationIDStr)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to parse conversation ID %s: %v", conversationIDStr, err)
+		return nil, err
+	}
+
+	// 将时间戳转换为time.Time
+	since := time.UnixMilli(sinceTimestamp)
+
+	// 获取增量消息
+	messages, err := s.messageRepo.FindByConversationIDSince(ctx, conversationID, since)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to get incremental messages: %v", err)
+		return nil, err
+	}
+
+	// 为每条消息加载发送者信息
+	for _, msg := range messages {
+		sender, err := s.userRepo.FindByID(ctx, msg.SenderID)
+		if err == nil {
+			sender.PasswordHash = ""
+			sender.Salt = ""
+			msg.Sender = sender
+		}
+	}
+
+	logger.InfofWithCaller("Retrieved %d incremental messages for conversation %s", len(messages), conversationIDStr)
+	return messages, nil
+}
+
 // SendMessage 发送消息
 func (s *ChatService) SendMessage(ctx context.Context, senderID string, req *models.SendMessageRequest) (*models.Message, error) {
 	logger.InfofWithCaller("Sending message from user %s to conversation %s", senderID, req.ConversationID)

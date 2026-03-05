@@ -54,6 +54,7 @@
         </div>
       </div>
       <button
+        v-if="isCurrentUser"
         class="w-full py-3 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-semibold"
         @click="emit('logout')"
       >
@@ -70,6 +71,7 @@ import type { User } from '../../models/types';
 interface Props {
   show: boolean;
   user: User | null;
+  isCurrentUser?: boolean;
 }
 
 defineProps<Props>();

@@ -2,7 +2,7 @@
   <div class="flex h-full">
     <!-- 好友列表 -->
     <div
-      class="flex flex-col min-w-[200px] max-w-[400px] bg-bg-primary border-r border-border-color"
+      class="flex flex-col min-w-[300px] max-w-[400px] bg-bg-primary border-r border-border-color"
     >
       <!-- 搜索好友 -->
       <div class="flex items-center gap-2 p-3 bg-bg-secondary border-b border-border-color">
@@ -11,9 +11,10 @@
         >
           <div class="text-text-tertiary text-base font-normal">搜索好友...</div>
         </div>
-        <div
-          class="w-[40px] h-[40px] bg-accent-color rounded-md hover:opacity-80 transition-opacity cursor-pointer"
-        />
+        <button class="relative p-2 flex items-center justify-center transition-all">
+          <!-- @click="handleSeachUser('friends')" -->
+          <BsPlusCircle />
+        </button>
       </div>
 
       <!-- 好友列表 -->
@@ -52,6 +53,7 @@ import { useAuthController } from '../../../controllers/authController';
 import { useFriends } from '../../../composables/useFriends';
 import { useConversations } from '../../../composables/useConversations';
 import { useRouter } from 'vue-router';
+import { BsPlusCircle } from 'vue-icons-plus/bs';
 import FriendList from '../FriendList.vue';
 import FriendInfoModal from '../FriendInfoModal.vue';
 import UserProfileModal from '../UserProfileModal.vue';
@@ -105,10 +107,16 @@ watch(currentUser, async () => {
 
 // Lifecycle
 onMounted(async () => {
+  console.log('[FriendsPanel] onMounted 开始');
   await auth.checkAuth();
-  if (currentUser.value) {
+  console.log('[FriendsPanel] checkAuth 完成', { currentUser });
+  if (currentUser) {
+    console.log('[FriendsPanel] currentUser 存在，开始加载数据');
     await loadFriends();
+  } else {
+    console.log('[FriendsPanel] currentUser 不存在，不加载数据');
   }
+  console.log('[FriendsPanel] onMounted 结束');
 });
 </script>
 
