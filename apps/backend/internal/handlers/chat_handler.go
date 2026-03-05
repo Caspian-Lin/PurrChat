@@ -8,6 +8,7 @@ import (
 	"purr-chat-server/pkg/logger"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // ChatHandler 聊天处理器
@@ -235,6 +236,49 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 	})
 }
 
+// ExportMessages 导出会话的所有消息
+// @Summary 导出会话的所有消息
+// @Tags 聊天
+// @Produce json
+// @Security BearerAuth
+// @Param conversation_id query string true "会话ID"
+// @Success 200 {object} models.MessagesResponse
+// @Router /api/messages/export [get]
+func (h *ChatHandler) ExportMessages(c *gin.Context) {
+	conversationID := c.Query("conversation_id")
+	if conversationID == "" {
+		logger.ErrorfWithCaller("Missing conversation_id parameter for export messages")
+		c.JSON(http.StatusBadRequest, models.MessagesResponse{
+			Success: false,
+			Message: "conversation_id is required",
+		})
+		return
+	}
+
+	messages, err := h.chatService.GetAllMessages(c.Request.Context(), conversationID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to export messages for conversation %s: %v", conversationID, err)
+		c.JSON(http.StatusInternalServerError, models.MessagesResponse{
+			Success: false,
+			Message: "Failed to export messages",
+		})
+		return
+	}
+
+	// 转换为切片
+	var msgSlice []models.Message
+	for _, msg := range messages {
+		msgSlice = append(msgSlice, *msg)
+	}
+
+	logger.InfofWithCaller("Exported %d messages for conversation %s", len(msgSlice), conversationID)
+
+	c.JSON(http.StatusOK, models.MessagesResponse{
+		Success: true,
+		Data:    msgSlice,
+	})
+}
+
 // SendMessage 发送消息
 // @Summary 发送消息
 // @Tags 聊天
@@ -344,129 +388,11 @@ func (h *ChatHandler) CreateConversation(c *gin.Context) {
 		return
 	}
 
-	logger.InfofWithCaller("Conversation created successfully: ID=%s, User1=%s, User2=%s", conversation.ID, conversation.User1ID, conversation.User2ID)
+	logger.InfofWithCaller("Conversation created successfully: ID=%s, Name=%s", conversation.ID, conversation.Name)
 
 	c.JSON(http.StatusOK, models.MessageResponse{
 		Success: true,
 		Message: "Conversation created successfully",
-		Data:    conversation,
-	})
-}
-
-// SendFriendRequest 发送好友请求
-// @Summary 发送好友请求
-// @Tags 好友
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body models.FriendRequest true "目标用户ID"
-// @Success 200 {object} models.FriendRequestResponse
-// @Router /api/friends/request [post]
-func (h *ChatHandler) SendFriendRequest(c *gin.Context) {
-	var req models.FriendRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.ErrorfWithCaller("Invalid send friend request: %v", err)
-		c.JSON(http.StatusBadRequest, models.FriendRequestResponse{
-			Success: false,
-			Message: "Invalid request: " + err.Error(),
-		})
-		return
-	}
-
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for send friend request")
-		c.JSON(http.StatusUnauthorized, models.FriendRequestResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
-	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for send friend request")
-		c.JSON(http.StatusUnauthorized, models.FriendRequestResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
-		return
-	}
-
-	conversation, err := h.chatService.SendFriendRequest(c.Request.Context(), userIDStr, req.TargetUserID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to send friend request from %s to %s: %v", userIDStr, req.TargetUserID, err)
-		c.JSON(http.StatusBadRequest, models.FriendRequestResponse{
-			Success: false,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	logger.InfofWithCaller("Friend request sent successfully: From=%s, To=%s", userIDStr, req.TargetUserID)
-
-	c.JSON(http.StatusOK, models.FriendRequestResponse{
-		Success: true,
-		Message: "Friend request sent successfully",
-		Data:    conversation,
-	})
-}
-
-// HandleFriendRequest 处理好友请求
-// @Summary 处理好友请求
-// @Tags 好友
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body models.HandleFriendRequestRequest true "处理请求"
-// @Success 200 {object} models.HandleFriendRequestResponse
-// @Router /api/friends/handle [post]
-func (h *ChatHandler) HandleFriendRequest(c *gin.Context) {
-	var req models.HandleFriendRequestRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.ErrorfWithCaller("Invalid handle friend request: %v", err)
-		c.JSON(http.StatusBadRequest, models.HandleFriendRequestResponse{
-			Success: false,
-			Message: "Invalid request: " + err.Error(),
-		})
-		return
-	}
-
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for handle friend request")
-		c.JSON(http.StatusUnauthorized, models.HandleFriendRequestResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
-	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for handle friend request")
-		c.JSON(http.StatusUnauthorized, models.HandleFriendRequestResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
-		return
-	}
-
-	conversation, err := h.chatService.HandleFriendRequest(c.Request.Context(), userIDStr, &req)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to handle friend request %s by user %s: %v", req.ConversationID, userIDStr, err)
-		c.JSON(http.StatusBadRequest, models.HandleFriendRequestResponse{
-			Success: false,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	logger.InfofWithCaller("Friend request handled successfully: ConversationID=%s, Action=%s, User=%s", req.ConversationID, req.Action, userIDStr)
-
-	c.JSON(http.StatusOK, models.HandleFriendRequestResponse{
-		Success: true,
-		Message: "Friend request handled successfully",
 		Data:    conversation,
 	})
 }
@@ -542,6 +468,17 @@ func (h *ChatHandler) GetUserByID(c *gin.Context) {
 		return
 	}
 
+	// 验证UUID格式
+	_, err := uuid.Parse(id)
+	if err != nil {
+		logger.ErrorfWithCaller("Invalid user ID format: %s", id)
+		c.JSON(http.StatusBadRequest, models.AuthResponse{
+			Success: false,
+			Message: "Invalid user ID format",
+		})
+		return
+	}
+
 	user, err := h.chatService.GetUserByID(c.Request.Context(), id)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get user by ID %s: %v", id, err)
@@ -584,5 +521,134 @@ func (h *ChatHandler) GetUserByUID(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, models.AuthResponse{
 		Success: false,
 		Message: "Not implemented yet",
+	})
+}
+
+// SendFriendRequest 发送好友请求
+// @Summary 发送好友请求
+// @Tags 好友
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body models.FriendRequest true "好友请求信息"
+// @Success 200 {object} models.FriendRequestResponse
+// @Router /api/friends/request [post]
+func (h *ChatHandler) SendFriendRequest(c *gin.Context) {
+	var req models.FriendRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.ErrorfWithCaller("Invalid send friend request: %v", err)
+		c.JSON(http.StatusBadRequest, models.FriendRequestResponse{
+			Success: false,
+			Message: "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		logger.ErrorfWithCaller("Unauthorized access attempt for send friend request")
+		c.JSON(http.StatusUnauthorized, models.FriendRequestResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	userIDStr, ok := userID.(string)
+	if !ok {
+		logger.ErrorfWithCaller("Invalid user ID type for send friend request")
+		c.JSON(http.StatusUnauthorized, models.FriendRequestResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	// 发送好友请求（会创建好友关系记录和会话）
+	conversation, err := h.chatService.SendFriendRequest(c.Request.Context(), userIDStr, req.TargetUserID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to send friend request from %s to %s: %v", userIDStr, req.TargetUserID, err)
+		c.JSON(http.StatusBadRequest, models.FriendRequestResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	logger.InfofWithCaller("Friend request sent successfully from %s to %s", userIDStr, req.TargetUserID)
+
+	c.JSON(http.StatusOK, models.FriendRequestResponse{
+		Success: true,
+		Message: "Friend request sent successfully",
+		Data:    conversation,
+	})
+}
+
+// HandleFriendRequest 处理好友请求
+// @Summary 处理好友请求
+// @Tags 好友
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body models.HandleFriendRequestRequest true "处理好友请求信息"
+// @Success 200 {object} models.HandleFriendRequestResponse
+// @Router /api/friends/handle [post]
+func (h *ChatHandler) HandleFriendRequest(c *gin.Context) {
+	var req models.HandleFriendRequestRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.ErrorfWithCaller("Invalid handle friend request: %v", err)
+		c.JSON(http.StatusBadRequest, models.HandleFriendRequestResponse{
+			Success: false,
+			Message: "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		logger.ErrorfWithCaller("Unauthorized access attempt for handle friend request")
+		c.JSON(http.StatusUnauthorized, models.HandleFriendRequestResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	userIDStr, ok := userID.(string)
+	if !ok {
+		logger.ErrorfWithCaller("Invalid user ID type for handle friend request")
+		c.JSON(http.StatusUnauthorized, models.HandleFriendRequestResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	// 验证操作
+	if req.Action != "accept" && req.Action != "reject" {
+		logger.ErrorfWithCaller("Invalid action for handle friend request: %s", req.Action)
+		c.JSON(http.StatusBadRequest, models.HandleFriendRequestResponse{
+			Success: false,
+			Message: "Invalid action. Must be 'accept' or 'reject'",
+		})
+		return
+	}
+
+	// 处理好友请求
+	err := h.chatService.HandleFriendRequest(c.Request.Context(), userIDStr, req.ConversationID.String(), req.Action)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to handle friend request: %v", err)
+		c.JSON(http.StatusBadRequest, models.HandleFriendRequestResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	logger.InfofWithCaller("Friend request %s successfully by user %s", req.Action, userIDStr)
+
+	c.JSON(http.StatusOK, models.HandleFriendRequestResponse{
+		Success: true,
+		Message: "Friend request " + req.Action + "ed successfully",
 	})
 }

@@ -19,8 +19,6 @@ type ConversationRepository interface {
 	FindByUsers(ctx context.Context, user1ID, user2ID uuid.UUID) (*models.Conversation, error)
 	FindByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Conversation, error)
 	Update(ctx context.Context, conversation *models.Conversation) error
-	UpdateRequestStatus(ctx context.Context, conversationID uuid.UUID, status models.RequestStatus) error
-	MarkAsPendingRequest(ctx context.Context, conversationID uuid.UUID) error
 }
 
 type conversationRepository struct {
@@ -33,15 +31,15 @@ func NewConversationRepository() ConversationRepository {
 
 // Create 创建会话
 func (r *conversationRepository) Create(ctx context.Context, conversation *models.Conversation) error {
-	logger.InfofWithCaller("Creating conversation between %s and %s", conversation.User1ID, conversation.User2ID)
+	logger.InfofWithCaller("Creating conversation: %s", conversation.Name)
 
 	conversation.ID = uuid.New()
 	conversation.CreatedAt = time.Now()
 	conversation.UpdatedAt = time.Now()
 
 	query := `
-		INSERT INTO conversations (id, conversation_type, user1_id, user2_id, has_pending_request, request_status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO conversations (id, conversation_type, name, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at, updated_at
 	`
 
@@ -49,10 +47,8 @@ func (r *conversationRepository) Create(ctx context.Context, conversation *model
 		return tx.QueryRow(ctx, query,
 			conversation.ID,
 			conversation.ConversationType,
-			conversation.User1ID,
-			conversation.User2ID,
-			conversation.HasPendingRequest,
-			conversation.RequestStatus,
+			conversation.Name,
+			conversation.CreatedBy,
 			conversation.CreatedAt,
 			conversation.UpdatedAt,
 		).Scan(&conversation.ID, &conversation.CreatedAt, &conversation.UpdatedAt)
@@ -70,7 +66,7 @@ func (r *conversationRepository) Create(ctx context.Context, conversation *model
 // FindByID 根据ID查找会话
 func (r *conversationRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Conversation, error) {
 	query := `
-		SELECT id, conversation_type, user1_id, user2_id, has_pending_request, request_status, created_at, updated_at
+		SELECT id, conversation_type, name, created_by, created_at, updated_at
 		FROM conversations
 		WHERE id = $1
 	`
@@ -79,10 +75,8 @@ func (r *conversationRepository) FindByID(ctx context.Context, id uuid.UUID) (*m
 	err := database.GetPool().QueryRow(ctx, query, id).Scan(
 		&conversation.ID,
 		&conversation.ConversationType,
-		&conversation.User1ID,
-		&conversation.User2ID,
-		&conversation.HasPendingRequest,
-		&conversation.RequestStatus,
+		&conversation.Name,
+		&conversation.CreatedBy,
 		&conversation.CreatedAt,
 		&conversation.UpdatedAt,
 	)
@@ -94,22 +88,23 @@ func (r *conversationRepository) FindByID(ctx context.Context, id uuid.UUID) (*m
 	return conversation, nil
 }
 
-// FindByUsers 根据两个用户ID查找会话
+// FindByUsers 根据两个用户ID查找会话（通过enrollment表）
 func (r *conversationRepository) FindByUsers(ctx context.Context, user1ID, user2ID uuid.UUID) (*models.Conversation, error) {
 	query := `
-		SELECT id, conversation_type, user1_id, user2_id, has_pending_request, request_status, created_at, updated_at
-		FROM conversations
-		WHERE (user1_id = $1 AND user2_id = $2) OR (user1_id = $2 AND user2_id = $1)
+		SELECT DISTINCT c.id, c.conversation_type, c.name, c.created_by, c.created_at, c.updated_at
+		FROM conversations c
+		INNER JOIN enrollments e1 ON c.id = e1.conversation_id AND e1.user_id = $1
+		INNER JOIN enrollments e2 ON c.id = e2.conversation_id AND e2.user_id = $2
+		WHERE c.conversation_type = 'direct'
+		LIMIT 1
 	`
 
 	conversation := &models.Conversation{}
 	err := database.GetPool().QueryRow(ctx, query, user1ID, user2ID).Scan(
 		&conversation.ID,
 		&conversation.ConversationType,
-		&conversation.User1ID,
-		&conversation.User2ID,
-		&conversation.HasPendingRequest,
-		&conversation.RequestStatus,
+		&conversation.Name,
+		&conversation.CreatedBy,
 		&conversation.CreatedAt,
 		&conversation.UpdatedAt,
 	)
@@ -124,12 +119,11 @@ func (r *conversationRepository) FindByUsers(ctx context.Context, user1ID, user2
 // FindByUserID 根据用户ID查找所有会话
 func (r *conversationRepository) FindByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Conversation, error) {
 	query := `
-		SELECT id, conversation_type, user1_id, user2_id, has_pending_request, request_status, created_at, updated_at
-		FROM conversations
-		WHERE user1_id = $1 OR user2_id = $1
-		ORDER BY
-			has_pending_request DESC,
-			updated_at DESC
+		SELECT DISTINCT c.id, c.conversation_type, c.name, c.created_by, c.created_at, c.updated_at
+		FROM conversations c
+		INNER JOIN enrollments e ON c.id = e.conversation_id
+		WHERE e.user_id = $1
+		ORDER BY c.updated_at DESC
 	`
 
 	rows, err := database.GetPool().Query(ctx, query, userID)
@@ -144,10 +138,8 @@ func (r *conversationRepository) FindByUserID(ctx context.Context, userID uuid.U
 		err := rows.Scan(
 			&conversation.ID,
 			&conversation.ConversationType,
-			&conversation.User1ID,
-			&conversation.User2ID,
-			&conversation.HasPendingRequest,
-			&conversation.RequestStatus,
+			&conversation.Name,
+			&conversation.CreatedBy,
 			&conversation.CreatedAt,
 			&conversation.UpdatedAt,
 		)
@@ -164,49 +156,15 @@ func (r *conversationRepository) FindByUserID(ctx context.Context, userID uuid.U
 func (r *conversationRepository) Update(ctx context.Context, conversation *models.Conversation) error {
 	query := `
 		UPDATE conversations
-		SET conversation_type = $1, has_pending_request = $2, request_status = $3, updated_at = $4
-		WHERE id = $5
+		SET conversation_type = $1, name = $2, updated_at = $3
+		WHERE id = $4
 	`
 
 	_, err := database.GetPool().Exec(ctx, query,
 		conversation.ConversationType,
-		conversation.HasPendingRequest,
-		conversation.RequestStatus,
+		conversation.Name,
 		time.Now(),
 		conversation.ID,
-	)
-
-	return err
-}
-
-// UpdateRequestStatus 更新请求状态
-func (r *conversationRepository) UpdateRequestStatus(ctx context.Context, conversationID uuid.UUID, status models.RequestStatus) error {
-	query := `
-		UPDATE conversations
-		SET request_status = $1, updated_at = $2
-		WHERE id = $3
-	`
-
-	_, err := database.GetPool().Exec(ctx, query,
-		status,
-		time.Now(),
-		conversationID,
-	)
-
-	return err
-}
-
-// MarkAsPendingRequest 标记为有待处理请求
-func (r *conversationRepository) MarkAsPendingRequest(ctx context.Context, conversationID uuid.UUID) error {
-	query := `
-		UPDATE conversations
-		SET has_pending_request = true, request_status = 'pending', updated_at = $1
-		WHERE id = $2
-	`
-
-	_, err := database.GetPool().Exec(ctx, query,
-		time.Now(),
-		conversationID,
 	)
 
 	return err

@@ -13,7 +13,7 @@ export const themeColors: Record<
   { primary: string; secondary: string; gradient: string }
 > = {
   purple: {
-    primary: '#899cf0',
+    primary: '#bf5eff',
     secondary: '#764ba2',
     gradient: 'linear-gradient(135deg, #899cf0 0%, #764ba2 100%)',
   },
@@ -23,9 +23,9 @@ export const themeColors: Record<
     gradient: 'linear-gradient(135deg, #1d79cb 0%, #57a6eb 100%)',
   },
   green: {
-    primary: '#43da75',
-    secondary: '#a4f86f',
-    gradient: 'linear-gradient(135deg, #43da75 0%, #a4f86f 100%)',
+    primary: '#70e874',
+    secondary: '#92de63',
+    gradient: 'linear-gradient(135deg, #70e874 0%, #92de63 100%)',
   },
   orange: {
     primary: '#fa709a',
@@ -52,19 +52,23 @@ export const themeColors: Record<
 // 浅色主题配色
 export const lightTheme = {
   background: '#ffffff',
-  surface: '#f5f5f5',
+  surface: '#f9f9f9',
   surfaceHover: '#e8e8e8',
-  text: '#333333',
-  textSecondary: '#666666',
-  textTertiary: '#999999',
-  border: '#e0e0e0',
+  surfaceSecondary: '#f4f4f4',
+  surfaceTertiary: '#f2f2f2',
+  text: '#000000',
+  textSecondary: '#000000cc',
+  textTertiary: '#00000099',
+  border: '#d9d9d9',
   shadow: 'rgba(0, 0, 0, 0.1)',
   modalOverlay: 'rgba(0, 0, 0, 0.5)',
-  inputBackground: '#ffffff',
-  inputBorder: '#dddddd',
+  inputBackground: '#f2f2f2',
+  inputBorder: '#d9d9d9',
   messageSent: 'linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%)',
-  messageReceived: '#f0f0f0',
-  cardBackground: '#fafafa',
+  messageReceived: '#fffffffa',
+  cardBackground: '#f9f9f9',
+  hoverBackground: '#f2f2f2',
+  selectedBackground: '#e8f4fd',
 };
 
 // 深色主题配色
@@ -72,17 +76,21 @@ export const darkTheme = {
   background: '#1a1a1a',
   surface: '#2d2d2d',
   surfaceHover: '#3d3d3d',
+  surfaceSecondary: '#252525',
+  surfaceTertiary: '#1f1f1f',
   text: '#ffffff',
-  textSecondary: '#b0b0b0',
-  textTertiary: '#808080',
+  textSecondary: '#e0e0e0',
+  textTertiary: '#b0b0b0',
   border: '#404040',
   shadow: 'rgba(0, 0, 0, 0.3)',
   modalOverlay: 'rgba(0, 0, 0, 0.7)',
-  inputBackground: '#2d2d2d',
+  inputBackground: '#1f1f1f',
   inputBorder: '#404040',
   messageSent: 'linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%)',
   messageReceived: '#3d3d3d',
-  cardBackground: '#252525',
+  cardBackground: '#2d2d2d',
+  hoverBackground: '#3d3d3d',
+  selectedBackground: '#1e3a5f',
 };
 
 // 默认主题配置

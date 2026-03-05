@@ -3,9 +3,11 @@ package services
 import (
 	"context"
 	"errors"
+	"time"
 
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/repository"
+	"purr-chat-server/internal/websocket"
 	"purr-chat-server/pkg/logger"
 
 	"github.com/google/uuid"
@@ -13,10 +15,12 @@ import (
 
 // ChatService 聊天服务
 type ChatService struct {
-	userRepo         repository.UserRepository
-	conversationRepo repository.ConversationRepository
-	messageRepo      repository.MessageRepository
-	friendshipRepo   repository.FriendshipRepository
+	userRepo                repository.UserRepository
+	conversationRepo        repository.ConversationRepository
+	messageRepo             repository.MessageRepository
+	friendshipRepo          repository.FriendshipRepository
+	enrollmentRepo          repository.EnrollmentRepository
+	conversationMessageRepo repository.ConversationMessageRepository
 }
 
 // NewChatService 创建聊天服务
@@ -25,12 +29,16 @@ func NewChatService(
 	conversationRepo repository.ConversationRepository,
 	messageRepo repository.MessageRepository,
 	friendshipRepo repository.FriendshipRepository,
+	enrollmentRepo repository.EnrollmentRepository,
+	conversationMessageRepo repository.ConversationMessageRepository,
 ) *ChatService {
 	return &ChatService{
-		userRepo:         userRepo,
-		conversationRepo: conversationRepo,
-		messageRepo:      messageRepo,
-		friendshipRepo:   friendshipRepo,
+		userRepo:                userRepo,
+		conversationRepo:        conversationRepo,
+		messageRepo:             messageRepo,
+		friendshipRepo:          friendshipRepo,
+		enrollmentRepo:          enrollmentRepo,
+		conversationMessageRepo: conversationMessageRepo,
 	}
 }
 
@@ -50,36 +58,58 @@ func (s *ChatService) GetConversations(ctx context.Context, userID string) ([]*m
 		return nil, err
 	}
 
-	// 为每个会话加载关联的用户信息和最后一条消息
+	// 为每个会话加载成员信息和最后一条消息
 	for _, conv := range conversations {
-		// 加载用户信息
-		if conv.User1ID != id {
-			user, err := s.userRepo.FindByID(ctx, conv.User1ID)
-			if err == nil {
-				user.PasswordHash = ""
-				user.Salt = ""
-				conv.User1 = user
+		// 加载成员信息
+		members, err := s.enrollmentRepo.FindByConversationID(ctx, conv.ID)
+		if err == nil {
+			// 为每个成员加载用户信息
+			for _, member := range members {
+				user, err := s.userRepo.FindByID(ctx, member.UserID)
+				if err == nil {
+					user.PasswordHash = ""
+					user.Salt = ""
+					member.User = user
+				}
 			}
-		} else {
-			user, err := s.userRepo.FindByID(ctx, conv.User2ID)
+			conv.Members = members
+		}
+
+		// 为私聊会话设置名称（如果还没有）
+		var otherUserID uuid.UUID
+		if conv.ConversationType == models.ConversationTypeDirect && conv.Name == "" {
+			// 找到另一个用户
+			for _, member := range members {
+				if member.UserID != id {
+					otherUserID = member.UserID
+					user, err := s.userRepo.FindByID(ctx, member.UserID)
+					if err == nil {
+						conv.Name = user.Username
+					}
+					break
+				}
+			}
+		}
+
+		// 为私聊会话加载好友关系状态
+		if conv.ConversationType == models.ConversationTypeDirect && otherUserID != uuid.Nil {
+			friendship, err := s.friendshipRepo.FindByUsers(ctx, id, otherUserID)
 			if err == nil {
-				user.PasswordHash = ""
-				user.Salt = ""
-				conv.User2 = user
+				conv.FriendshipStatus = &friendship.Status
 			}
 		}
 
 		// 加载最后一条消息
-		lastMsg, err := s.messageRepo.FindLastByConversationID(ctx, conv.ID)
-		if err == nil {
+		messages, err := s.conversationMessageRepo.FindMessages(ctx, conv.ID, 1, 0)
+		if err == nil && len(messages) > 0 {
 			// 加载发送者信息
-			sender, err := s.userRepo.FindByID(ctx, lastMsg.SenderID)
+			sender, err := s.userRepo.FindByID(ctx, messages[0].SenderID)
 			if err == nil {
 				sender.PasswordHash = ""
 				sender.Salt = ""
-				lastMsg.Sender = sender
+				messages[0].Sender = sender
 			}
-			conv.LastMessage = lastMsg
+			conv.LastMessage = messages[0]
 		}
 	}
 
@@ -89,8 +119,40 @@ func (s *ChatService) GetConversations(ctx context.Context, userID string) ([]*m
 }
 
 // GetMessages 获取会话的消息
-func (s *ChatService) GetMessages(ctx context.Context, conversationID uuid.UUID, limit, offset int) ([]*models.Message, error) {
-	messages, err := s.messageRepo.FindByConversationID(ctx, conversationID, limit, offset)
+func (s *ChatService) GetMessages(ctx context.Context, conversationIDStr string, limit, offset int) ([]*models.Message, error) {
+	// 解析 conversationID
+	conversationID, err := uuid.Parse(conversationIDStr)
+	if err != nil {
+		return nil, err
+	}
+
+	messages, err := s.conversationMessageRepo.FindMessages(ctx, conversationID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	// 为每条消息加载发送者信息
+	for _, msg := range messages {
+		sender, err := s.userRepo.FindByID(ctx, msg.SenderID)
+		if err == nil {
+			sender.PasswordHash = ""
+			sender.Salt = ""
+			msg.Sender = sender
+		}
+	}
+
+	return messages, nil
+}
+
+// GetAllMessages 获取会话的所有消息
+func (s *ChatService) GetAllMessages(ctx context.Context, conversationIDStr string) ([]*models.Message, error) {
+	// 解析 conversationID
+	conversationID, err := uuid.Parse(conversationIDStr)
+	if err != nil {
+		return nil, err
+	}
+
+	messages, err := s.conversationMessageRepo.FindAllMessages(ctx, conversationID)
 	if err != nil {
 		return nil, err
 	}
@@ -118,44 +180,25 @@ func (s *ChatService) SendMessage(ctx context.Context, senderID string, req *mod
 		return nil, err
 	}
 
-	// 验证会话是否存在
-	conversation, err := s.conversationRepo.FindByID(ctx, req.ConversationID)
-	if err != nil {
-		logger.ErrorfWithCaller("Conversation not found: %s", req.ConversationID)
-		return nil, errors.New("conversation not found")
-	}
-
 	// 检查发送者是否是会话的参与者
-	if conversation.User1ID != senderUUID && conversation.User2ID != senderUUID {
+	enrollment, err := s.enrollmentRepo.FindByConversationAndUser(ctx, req.ConversationID, senderUUID)
+	if err != nil {
 		logger.ErrorfWithCaller("User %s is not a participant in conversation %s", senderID, req.ConversationID)
 		return nil, errors.New("not a participant in this conversation")
 	}
-
-	// 如果是陌生人会话，检查消息数量限制
-	if conversation.ConversationType == models.ConversationTypeStranger {
-		// 检查是否是发送者发送的消息
-		count, err := s.messageRepo.CountByConversationID(ctx, req.ConversationID)
-		if err != nil {
-			logger.ErrorfWithCaller("Failed to count messages for conversation %s: %v", req.ConversationID, err)
-			return nil, err
-		}
-
-		// 如果对方还没有回复，限制只能发送3条消息
-		if conversation.RequestStatus == models.RequestStatusNone && count >= 3 {
-			logger.ErrorfWithCaller("Message limit reached for stranger conversation %s", req.ConversationID)
-			return nil, errors.New("message limit reached for stranger conversation")
-		}
-	}
+	_ = enrollment // 避免未使用变量警告
 
 	// 创建消息
 	message := &models.Message{
+		ID:             uuid.New(),
 		ConversationID: req.ConversationID,
 		SenderID:       senderUUID,
 		Content:        req.Content,
 		MsgType:        models.MsgType(req.MsgType),
+		CreatedAt:      time.Now(),
 	}
 
-	err = s.messageRepo.Create(ctx, message)
+	err = s.conversationMessageRepo.InsertMessage(ctx, req.ConversationID, message)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to create message: %v", err)
 		return nil, err
@@ -167,6 +210,24 @@ func (s *ChatService) SendMessage(ctx context.Context, senderID string, req *mod
 		sender.PasswordHash = ""
 		sender.Salt = ""
 		message.Sender = sender
+	}
+
+	// 通过WebSocket推送消息给会话的其他成员
+	if websocket.GlobalHub != nil {
+		// 获取会话的所有成员
+		members, err := s.enrollmentRepo.FindByConversationID(ctx, req.ConversationID)
+		if err == nil {
+			// 提取成员ID列表
+			memberIDs := make([]uuid.UUID, 0, len(members))
+			for _, member := range members {
+				memberIDs = append(memberIDs, member.UserID)
+			}
+			// 推送消息给所有成员
+			websocket.GlobalHub.SendToConversation(req.ConversationID, senderUUID, *message, memberIDs)
+			logger.InfofWithCaller("Message broadcasted via WebSocket to %d members", len(memberIDs))
+		} else {
+			logger.ErrorfWithCaller("Failed to get conversation members for WebSocket broadcast: %v", err)
+		}
 	}
 
 	logger.InfofWithCaller("Message sent successfully: ID=%s, ConversationID=%s, SenderID=%s", message.ID, message.ConversationID, message.SenderID)
@@ -196,6 +257,14 @@ func (s *ChatService) CreateConversation(ctx context.Context, userID, targetUser
 		return nil, errors.New("cannot create conversation with yourself")
 	}
 
+	// 检查目标用户是否存在
+	targetUser, err := s.userRepo.FindByID(ctx, targetUUID)
+	if err != nil {
+		logger.ErrorfWithCaller("Target user not found: %s", targetUserID)
+		return nil, errors.New("target user not found")
+	}
+	_ = targetUser // 避免未使用变量警告
+
 	// 检查会话是否已存在
 	existingConv, err := s.conversationRepo.FindByUsers(ctx, userUUID, targetUUID)
 	if err == nil {
@@ -203,21 +272,11 @@ func (s *ChatService) CreateConversation(ctx context.Context, userID, targetUser
 		return existingConv, nil
 	}
 
-	// 检查是否已经是好友
-	friendship, err := s.friendshipRepo.FindByUsers(ctx, userUUID, targetUUID)
-	isFriend := err == nil && friendship.Status == models.FriendshipStatusAccepted
-
 	// 创建会话
 	conversation := &models.Conversation{
-		ConversationType:  models.ConversationTypeStranger,
-		User1ID:           userUUID,
-		User2ID:           targetUUID,
-		HasPendingRequest: false,
-		RequestStatus:     models.RequestStatusNone,
-	}
-
-	if isFriend {
-		conversation.ConversationType = models.ConversationTypeFriend
+		ConversationType: models.ConversationTypeDirect,
+		Name:             "", // 私聊会话名称将在加载时动态生成
+		CreatedBy:        &userUUID,
 	}
 
 	err = s.conversationRepo.Create(ctx, conversation)
@@ -226,14 +285,46 @@ func (s *ChatService) CreateConversation(ctx context.Context, userID, targetUser
 		return nil, err
 	}
 
+	// 为会话创建消息表
+	err = s.conversationMessageRepo.CreateMessageTable(ctx, conversation.ID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to create message table: %v", err)
+		return nil, err
+	}
+
+	// 创建enrollment记录
+	ownerEnrollment := &models.Enrollment{
+		ConversationID: conversation.ID,
+		UserID:         userUUID,
+		Role:           models.EnrollmentRoleOwner,
+		JoinedAt:       time.Now(),
+	}
+	err = s.enrollmentRepo.Create(ctx, ownerEnrollment)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to create owner enrollment: %v", err)
+		return nil, err
+	}
+
+	memberEnrollment := &models.Enrollment{
+		ConversationID: conversation.ID,
+		UserID:         targetUUID,
+		Role:           models.EnrollmentRoleMember,
+		JoinedAt:       time.Now(),
+	}
+	err = s.enrollmentRepo.Create(ctx, memberEnrollment)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to create member enrollment: %v", err)
+		return nil, err
+	}
+
 	logger.InfofWithCaller("Conversation created successfully: ID=%s, Type=%s", conversation.ID, conversation.ConversationType)
 
 	return conversation, nil
 }
 
-// SendFriendRequest 发送好友请求
-func (s *ChatService) SendFriendRequest(ctx context.Context, userID, targetUserID string) (*models.Conversation, error) {
-	logger.InfofWithCaller("Sending friend request from %s to %s", userID, targetUserID)
+// CreateGroupConversation 创建群聊会话
+func (s *ChatService) CreateGroupConversation(ctx context.Context, userID, name string, memberIDs []string) (*models.Conversation, error) {
+	logger.InfofWithCaller("Creating group conversation: %s", name)
 
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
@@ -241,169 +332,61 @@ func (s *ChatService) SendFriendRequest(ctx context.Context, userID, targetUserI
 		return nil, err
 	}
 
-	targetUUID, err := uuid.Parse(targetUserID)
+	// 创建会话
+	conversation := &models.Conversation{
+		ConversationType: models.ConversationTypeGroup,
+		Name:             name,
+		CreatedBy:        &userUUID,
+	}
+
+	err = s.conversationRepo.Create(ctx, conversation)
 	if err != nil {
-		logger.ErrorfWithCaller("Failed to parse target user ID %s: %v", targetUserID, err)
+		logger.ErrorfWithCaller("Failed to create conversation: %v", err)
 		return nil, err
 	}
 
-	// 检查是否是同一个用户
-	if userUUID == targetUUID {
-		logger.ErrorfWithCaller("Attempt to send friend request to yourself: %s", userID)
-		return nil, errors.New("cannot send friend request to yourself")
-	}
-
-	// 检查是否已经是好友
-	friendship, err := s.friendshipRepo.FindByUsers(ctx, userUUID, targetUUID)
-	if err == nil && friendship.Status == models.FriendshipStatusAccepted {
-		logger.ErrorfWithCaller("Users are already friends: %s and %s", userID, targetUserID)
-		return nil, errors.New("already friends")
-	}
-
-	// 获取或创建会话
-	conversation, err := s.conversationRepo.FindByUsers(ctx, userUUID, targetUUID)
+	// 为会话创建消息表
+	err = s.conversationMessageRepo.CreateMessageTable(ctx, conversation.ID)
 	if err != nil {
-		// 创建新会话
-		conversation = &models.Conversation{
-			ConversationType:  models.ConversationTypeStranger,
-			User1ID:           userUUID,
-			User2ID:           targetUUID,
-			HasPendingRequest: true,
-			RequestStatus:     models.RequestStatusPending,
-		}
-		err = s.conversationRepo.Create(ctx, conversation)
-		if err != nil {
-			logger.ErrorfWithCaller("Failed to create conversation for friend request: %v", err)
-			return nil, err
-		}
-	} else {
-		// 标记为有待处理请求
-		err = s.conversationRepo.MarkAsPendingRequest(ctx, conversation.ID)
-		if err != nil {
-			logger.ErrorfWithCaller("Failed to mark conversation as pending: %v", err)
-			return nil, err
-		}
-		conversation.HasPendingRequest = true
-		conversation.RequestStatus = models.RequestStatusPending
-	}
-
-	// 创建好友关系记录
-	if friendship == nil {
-		friendship = &models.Friendship{
-			UserID:   userUUID,
-			FriendID: targetUUID,
-			Status:   models.FriendshipStatusPending,
-		}
-		err = s.friendshipRepo.Create(ctx, friendship)
-		if err != nil {
-			logger.ErrorfWithCaller("Failed to create friendship: %v", err)
-			return nil, err
-		}
-	} else {
-		friendship.Status = models.FriendshipStatusPending
-		err = s.friendshipRepo.Update(ctx, friendship)
-		if err != nil {
-			logger.ErrorfWithCaller("Failed to update friendship: %v", err)
-			return nil, err
-		}
-	}
-
-	logger.InfofWithCaller("Friend request sent successfully: From=%s, To=%s", userID, targetUserID)
-
-	return conversation, nil
-}
-
-// HandleFriendRequest 处理好友请求
-func (s *ChatService) HandleFriendRequest(ctx context.Context, userID string, req *models.HandleFriendRequestRequest) (*models.Conversation, error) {
-	logger.InfofWithCaller("Handling friend request: ConversationID=%s, Action=%s, User=%s", req.ConversationID, req.Action, userID)
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to parse user ID %s: %v", userID, err)
+		logger.ErrorfWithCaller("Failed to create message table: %v", err)
 		return nil, err
 	}
 
-	// 获取会话
-	conversation, err := s.conversationRepo.FindByID(ctx, req.ConversationID)
+	// 创建创建者的enrollment记录
+	ownerEnrollment := &models.Enrollment{
+		ConversationID: conversation.ID,
+		UserID:         userUUID,
+		Role:           models.EnrollmentRoleOwner,
+		JoinedAt:       time.Now(),
+	}
+	err = s.enrollmentRepo.Create(ctx, ownerEnrollment)
 	if err != nil {
-		logger.ErrorfWithCaller("Conversation not found: %s", req.ConversationID)
-		return nil, errors.New("conversation not found")
+		logger.ErrorfWithCaller("Failed to create owner enrollment: %v", err)
+		return nil, err
 	}
 
-	// 检查用户是否是会话的参与者
-	if conversation.User1ID != userUUID && conversation.User2ID != userUUID {
-		logger.ErrorfWithCaller("User %s is not a participant in conversation %s", userID, req.ConversationID)
-		return nil, errors.New("not a participant in this conversation")
+	// 为其他成员创建enrollment记录
+	for _, memberIDStr := range memberIDs {
+		memberUUID, err := uuid.Parse(memberIDStr)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to parse member ID %s: %v", memberIDStr, err)
+			continue
+		}
+
+		memberEnrollment := &models.Enrollment{
+			ConversationID: conversation.ID,
+			UserID:         memberUUID,
+			Role:           models.EnrollmentRoleMember,
+			JoinedAt:       time.Now(),
+		}
+		err = s.enrollmentRepo.Create(ctx, memberEnrollment)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to create member enrollment: %v", err)
+			continue
+		}
 	}
 
-	// 确定对方用户ID
-	var otherUserID uuid.UUID
-	if conversation.User1ID == userUUID {
-		otherUserID = conversation.User2ID
-	} else {
-		otherUserID = conversation.User1ID
-	}
-
-	// 获取好友关系
-	friendship, err := s.friendshipRepo.FindByUsers(ctx, userUUID, otherUserID)
-	if err != nil {
-		logger.ErrorfWithCaller("Friend request not found for users %s and %s", userID, otherUserID)
-		return nil, errors.New("friend request not found")
-	}
-
-	// 处理请求
-	if req.Action == "accept" {
-		// 接受好友请求
-		friendship.Status = models.FriendshipStatusAccepted
-		err = s.friendshipRepo.Update(ctx, friendship)
-		if err != nil {
-			logger.ErrorfWithCaller("Failed to update friendship: %v", err)
-			return nil, err
-		}
-
-		// 更新会话类型
-		conversation.ConversationType = models.ConversationTypeFriend
-		conversation.HasPendingRequest = false
-		conversation.RequestStatus = models.RequestStatusAccepted
-		err = s.conversationRepo.Update(ctx, conversation)
-		if err != nil {
-			logger.ErrorfWithCaller("Failed to update conversation: %v", err)
-			return nil, err
-		}
-
-		// 创建双向好友关系
-		reverseFriendship := &models.Friendship{
-			UserID:   otherUserID,
-			FriendID: userUUID,
-			Status:   models.FriendshipStatusAccepted,
-		}
-		err = s.friendshipRepo.Create(ctx, reverseFriendship)
-		if err != nil {
-			logger.ErrorfWithCaller("Failed to create reverse friendship: %v", err)
-			return nil, err
-		}
-
-		logger.InfofWithCaller("Friend request accepted: %s and %s are now friends", userID, otherUserID)
-	} else {
-		// 拒绝好友请求
-		friendship.Status = models.FriendshipStatusBlocked
-		err = s.friendshipRepo.Update(ctx, friendship)
-		if err != nil {
-			logger.ErrorfWithCaller("Failed to update friendship: %v", err)
-			return nil, err
-		}
-
-		// 更新会话状态
-		conversation.HasPendingRequest = false
-		conversation.RequestStatus = models.RequestStatusRejected
-		err = s.conversationRepo.Update(ctx, conversation)
-		if err != nil {
-			logger.ErrorfWithCaller("Failed to update conversation: %v", err)
-			return nil, err
-		}
-
-		logger.InfofWithCaller("Friend request rejected: %s rejected %s", userID, otherUserID)
-	}
+	logger.InfofWithCaller("Group conversation created successfully: ID=%s, Name=%s", conversation.ID, conversation.Name)
 
 	return conversation, nil
 }
@@ -426,8 +409,11 @@ func (s *ChatService) GetFriends(ctx context.Context, userID string) ([]*models.
 		var friendID uuid.UUID
 		if fs.UserID == id {
 			friendID = fs.FriendID
-		} else {
+		} else if fs.FriendID == id {
 			friendID = fs.UserID
+		} else {
+			logger.ErrorfWithCaller("Friendship does not belong to user %s, skipping", id)
+			continue // 跳过不属于当前用户的好友关系
 		}
 
 		// 加载好友信息
@@ -459,4 +445,304 @@ func (s *ChatService) GetUserByID(ctx context.Context, userID string) (*models.U
 	user.Salt = ""
 
 	return user, nil
+}
+
+// AddMemberToConversation 添加成员到会话
+func (s *ChatService) AddMemberToConversation(ctx context.Context, conversationIDStr, userID, targetUserID string, role models.EnrollmentRole) error {
+	conversationID, err := uuid.Parse(conversationIDStr)
+	if err != nil {
+		return err
+	}
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return err
+	}
+
+	targetUUID, err := uuid.Parse(targetUserID)
+	if err != nil {
+		return err
+	}
+
+	// 检查操作者是否是会话的管理员或拥有者
+	enrollment, err := s.enrollmentRepo.FindByConversationAndUser(ctx, conversationID, userUUID)
+	if err != nil {
+		return errors.New("not authorized")
+	}
+
+	if enrollment.Role != models.EnrollmentRoleOwner && enrollment.Role != models.EnrollmentRoleAdmin {
+		return errors.New("not authorized")
+	}
+
+	// 检查目标用户是否已经在会话中
+	_, err = s.enrollmentRepo.FindByConversationAndUser(ctx, conversationID, targetUUID)
+	if err == nil {
+		return errors.New("user already in conversation")
+	}
+
+	// 添加成员
+	newEnrollment := &models.Enrollment{
+		ConversationID: conversationID,
+		UserID:         targetUUID,
+		Role:           role,
+		JoinedAt:       time.Now(),
+	}
+
+	return s.enrollmentRepo.Create(ctx, newEnrollment)
+}
+
+// RemoveMemberFromConversation 从会话中移除成员
+func (s *ChatService) RemoveMemberFromConversation(ctx context.Context, conversationIDStr, userID, targetUserID string) error {
+	conversationID, err := uuid.Parse(conversationIDStr)
+	if err != nil {
+		return err
+	}
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return err
+	}
+
+	targetUUID, err := uuid.Parse(targetUserID)
+	if err != nil {
+		return err
+	}
+
+	// 检查操作者是否是会话的管理员或拥有者
+	enrollment, err := s.enrollmentRepo.FindByConversationAndUser(ctx, conversationID, userUUID)
+	if err != nil {
+		return errors.New("not authorized")
+	}
+
+	if enrollment.Role != models.EnrollmentRoleOwner && enrollment.Role != models.EnrollmentRoleAdmin {
+		return errors.New("not authorized")
+	}
+
+	// 不能移除拥有者
+	targetEnrollment, err := s.enrollmentRepo.FindByConversationAndUser(ctx, conversationID, targetUUID)
+	if err != nil {
+		return errors.New("user not in conversation")
+	}
+
+	if targetEnrollment.Role == models.EnrollmentRoleOwner {
+		return errors.New("cannot remove owner")
+	}
+
+	// 移除成员
+	return s.enrollmentRepo.DeleteByConversationAndUser(ctx, conversationID, targetUUID)
+}
+
+// GetConversationMembers 获取会话成员
+func (s *ChatService) GetConversationMembers(ctx context.Context, conversationIDStr string) ([]*models.Enrollment, error) {
+	conversationID, err := uuid.Parse(conversationIDStr)
+	if err != nil {
+		return nil, err
+	}
+
+	members, err := s.enrollmentRepo.FindByConversationID(ctx, conversationID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 加载用户信息
+	for _, member := range members {
+		user, err := s.userRepo.FindByID(ctx, member.UserID)
+		if err == nil {
+			user.PasswordHash = ""
+			user.Salt = ""
+			member.User = user
+		}
+	}
+
+	return members, nil
+}
+
+// SendFriendRequest 发送好友请求
+func (s *ChatService) SendFriendRequest(ctx context.Context, userID, targetUserID string) (*models.Conversation, error) {
+	logger.InfofWithCaller("Sending friend request from %s to %s", userID, targetUserID)
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to parse user ID %s: %v", userID, err)
+		return nil, err
+	}
+
+	targetUUID, err := uuid.Parse(targetUserID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to parse target user ID %s: %v", targetUserID, err)
+		return nil, err
+	}
+
+	// 检查是否是同一个用户
+	if userUUID == targetUUID {
+		logger.ErrorfWithCaller("Attempt to send friend request to yourself: %s", userID)
+		return nil, errors.New("cannot send friend request to yourself")
+	}
+
+	// 检查目标用户是否存在
+	targetUser, err := s.userRepo.FindByID(ctx, targetUUID)
+	if err != nil {
+		logger.ErrorfWithCaller("Target user not found: %s", targetUserID)
+		return nil, errors.New("target user not found")
+	}
+	_ = targetUser // 避免未使用变量警告
+
+	// 检查是否已经存在好友关系
+	existingFriendship, err := s.friendshipRepo.FindByUsers(ctx, userUUID, targetUUID)
+	if err == nil {
+		// 如果已存在好友关系，检查状态
+		if existingFriendship.Status == models.FriendshipStatusPending {
+			logger.InfofWithCaller("Friend request already pending between %s and %s", userID, targetUserID)
+			return nil, errors.New("friend request already pending")
+		} else if existingFriendship.Status == models.FriendshipStatusAccepted {
+			logger.InfofWithCaller("Already friends with user %s", targetUserID)
+			return nil, errors.New("already friends with this user")
+		}
+		// 如果是 blocked 状态，允许重新发送请求
+	}
+
+	// 创建好友关系记录（状态为 pending）
+	friendship := &models.Friendship{
+		UserID:   userUUID,
+		FriendID: targetUUID,
+		Status:   models.FriendshipStatusPending,
+	}
+	err = s.friendshipRepo.Create(ctx, friendship)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to create friendship: %v", err)
+		return nil, err
+	}
+
+	logger.InfofWithCaller("Friendship created successfully: ID=%s, Status=%s", friendship.ID, friendship.Status)
+
+	// 创建会话
+	conversation, err := s.CreateConversation(ctx, userID, targetUserID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to create conversation: %v", err)
+		return nil, err
+	}
+
+	// 通过WebSocket通知接收者有新的好友请求
+	if websocket.GlobalHub != nil {
+		websocket.GlobalHub.SendToUser(targetUUID, "new_friend_request", map[string]interface{}{
+			"conversation_id": conversation.ID.String(),
+			"sender_id":       userID,
+			"status":          "pending",
+		})
+		logger.InfofWithCaller("New friend request notification sent to user %s", targetUUID)
+	}
+
+	logger.InfofWithCaller("Friend request sent successfully from %s to %s", userID, targetUserID)
+
+	return conversation, nil
+}
+
+// HandleFriendRequest 处理好友请求
+func (s *ChatService) HandleFriendRequest(ctx context.Context, userID, conversationIDStr string, action string) error {
+	logger.InfofWithCaller("Handling friend request: action=%s, user=%s, conversation=%s", action, userID, conversationIDStr)
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to parse user ID %s: %v", userID, err)
+		return err
+	}
+
+	conversationUUID, err := uuid.Parse(conversationIDStr)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to parse conversation ID %s: %v", conversationIDStr, err)
+		return err
+	}
+
+	// 获取会话成员
+	members, err := s.enrollmentRepo.FindByConversationID(ctx, conversationUUID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to get conversation members: %v", err)
+		return errors.New("conversation not found")
+	}
+
+	// 找到另一个用户
+	var targetUUID uuid.UUID
+	for _, member := range members {
+		if member.UserID != userUUID {
+			targetUUID = member.UserID
+			break
+		}
+	}
+
+	if targetUUID == uuid.Nil {
+		logger.ErrorfWithCaller("Failed to find target user in conversation %s", conversationIDStr)
+		return errors.New("failed to find target user")
+	}
+
+	// 查找好友关系
+	friendship, err := s.friendshipRepo.FindByUsers(ctx, userUUID, targetUUID)
+	if err != nil {
+		logger.ErrorfWithCaller("Friendship not found between %s and %s: %v", userID, targetUUID, err)
+		return errors.New("friend request not found")
+	}
+
+	// 检查当前用户是否是好友请求的接收者
+	// 在 SendFriendRequest 中，UserID 是发送者，FriendID 是接收者
+	// 所以接收方应该检查 friendship.FriendID == userUUID
+	if friendship.FriendID != userUUID {
+		logger.ErrorfWithCaller("User %s is not the recipient of the friend request. friendship.UserID=%s, friendship.FriendID=%s", userID, friendship.UserID, friendship.FriendID)
+		return errors.New("not authorized to handle this friend request")
+	}
+
+	// 确定发送者（好友请求的发送方）
+	senderUUID := friendship.UserID
+
+	// 根据操作更新状态
+	if action == "accept" {
+		friendship.Status = models.FriendshipStatusAccepted
+		logger.InfofWithCaller("Friend request accepted between %s and %s", userID, senderUUID)
+
+		// 更新好友关系状态
+		err = s.friendshipRepo.Update(ctx, friendship)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to update friendship: %v", err)
+			return err
+		}
+
+		// 通过WebSocket通知双方好友请求状态已更新
+		if websocket.GlobalHub != nil {
+			// 通知接收者（当前用户）
+			websocket.GlobalHub.SendToUser(userUUID, "friend_request_update", map[string]interface{}{
+				"conversation_id": conversationIDStr,
+				"status":          "accepted",
+				"action":          action,
+			})
+			// 通知发送者（另一个用户）
+			websocket.GlobalHub.SendToUser(senderUUID, "friend_request_update", map[string]interface{}{
+				"conversation_id": conversationIDStr,
+				"status":          "accepted",
+				"action":          action,
+			})
+			logger.InfofWithCaller("Friend request acceptance notification sent to both users %s and %s", userUUID, senderUUID)
+		}
+	} else if action == "reject" {
+		// 删除好友关系
+		err = s.friendshipRepo.Delete(ctx, friendship.ID)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to delete friendship: %v", err)
+			return err
+		}
+		logger.InfofWithCaller("Friend request rejected between %s and %s", userID, senderUUID)
+
+		// 通过WebSocket通知发送者好友请求被拒绝
+		if websocket.GlobalHub != nil {
+			websocket.GlobalHub.SendToUser(senderUUID, "friend_request_update", map[string]interface{}{
+				"conversation_id": conversationIDStr,
+				"status":          "rejected",
+				"action":          action,
+			})
+			logger.InfofWithCaller("Friend request rejection notification sent to user %s", senderUUID)
+		}
+		return nil
+	} else {
+		logger.ErrorfWithCaller("Invalid action: %s", action)
+		return errors.New("invalid action")
+	}
+
+	return nil
 }

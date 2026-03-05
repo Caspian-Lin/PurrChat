@@ -1,0 +1,262 @@
+<template>
+  <div class="flex h-full">
+    <!-- 会话列表 -->
+    <div
+      class="flex flex-col min-w-[200px] max-w-[400px] bg-bg-primary border-r border-border-color"
+    >
+      <!-- 搜索用户 -->
+      <div class="flex items-center gap-2 p-3 bg-bg-secondary border-b border-border-color">
+        <div
+          class="flex-1 flex items-center justify-center bg-bg-quaternary rounded-md h-[40px] px-3"
+        >
+          <div class="text-text-tertiary text-base font-normal">搜索会话...</div>
+        </div>
+        <div
+          class="w-[40px] h-[40px] bg-accent-color rounded-md hover:opacity-80 transition-opacity cursor-pointer"
+        />
+      </div>
+
+      <!-- 会话列表 -->
+      <ConversationList
+        :conversations="conversations"
+        :selected-id="selectedConversation?.id"
+        :current-user-id="currentUser?.id"
+        @select="handleSelectConversation"
+        @show-user="handleShowUserProfile"
+        @delete-conversation="handleDeleteConversation"
+      />
+    </div>
+
+    <!-- 聊天窗口 -->
+    <div class="flex-1 flex flex-col bg-bg-tertiary">
+      <ChatWindow
+        v-if="selectedConversation"
+        :conversation="selectedConversation"
+        :messages="messages"
+        :current-user-id="currentUser?.id"
+        @send-message="handleSendMessage"
+        @export-messages="handleExportMessages"
+        @show-user="handleShowUserProfile"
+        @update-conversation="handleUpdateConversation"
+      />
+
+      <!-- 空状态 -->
+      <div v-else class="flex-1 flex flex-col items-center justify-center text-text-tertiary">
+        <div class="text-6xl mb-4">💬</div>
+        <h3 class="text-2xl font-semibold mb-2 text-text-primary">欢迎来到 PurrChat</h3>
+        <p>选择一个会话开始聊天</p>
+      </div>
+    </div>
+
+    <!-- 个人资料弹窗 -->
+    <UserProfileModal v-model:show="showProfileModal" :user="displayUser" />
+
+    <!-- 搜索用户操作弹窗 -->
+    <UserActionsModal
+      v-model:show="showSearchModal"
+      :user="selectedSearchUser"
+      @send-friend-request="handleSendFriendRequest"
+      @start-chat="handleStartChatWithSearchUser"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { useAuthController } from '../../../controllers/authController';
+import { useWebSocket } from '../../../services/websocket';
+import { useConversations } from '../../../composables/useConversations';
+import { useFriends } from '../../../composables/useFriends';
+import { useChat } from '../../../composables/useChat';
+import ConversationList from '../ConversationList.vue';
+import ChatWindow from '../ChatWindow.vue';
+import UserProfileModal from '../UserProfileModal.vue';
+import UserActionsModal from '../UserActionsModal.vue';
+import type { User, Conversation } from '../../../models/types';
+
+// Auth
+const auth = useAuthController();
+const { currentUser } = auth;
+
+// Composables
+const { conversations, loadConversations, createConversation, deleteConversation } =
+  useConversations();
+const { loadFriends, sendFriendRequest } = useFriends();
+const { messages, loadMessages, sendMessage, exportMessages, clearMessages } = useChat();
+const ws = useWebSocket();
+
+// State
+const selectedConversation = ref<Conversation | null>(null);
+const selectedUser = ref<User | null>(null);
+const showProfileModal = ref(false);
+const showSearchModal = ref(false);
+const selectedSearchUser = ref<User | null>(null);
+
+// Computed
+const displayUser = computed(() => {
+  return selectedUser.value || currentUser.value;
+});
+
+// Handlers
+const handleShowUserProfile = (user: User) => {
+  selectedUser.value = user;
+  showProfileModal.value = true;
+};
+
+const handleSelectConversation = (conversation: Conversation) => {
+  selectedConversation.value = conversation;
+  selectedUser.value = null;
+  loadMessages(conversation.id);
+};
+
+const handleDeleteConversation = async (conversationId: string) => {
+  const success = await deleteConversation(conversationId);
+  if (success) {
+    // 如果删除的是当前选中的会话，清空选中状态
+    if (selectedConversation.value?.id === conversationId) {
+      selectedConversation.value = null;
+      clearMessages();
+    }
+    // 重新加载会话列表
+    await loadConversations();
+  }
+};
+
+const handleSendFriendRequest = async () => {
+  if (!selectedSearchUser.value?.id) return;
+
+  const success = await sendFriendRequest(selectedSearchUser.value.id);
+  if (success) {
+    showSearchModal.value = false;
+    selectedSearchUser.value = null;
+    await loadConversations();
+  }
+};
+
+const handleStartChatWithSearchUser = async () => {
+  if (!selectedSearchUser.value?.id) return;
+
+  const conversation = await createConversation(selectedSearchUser.value.id);
+  if (conversation) {
+    showSearchModal.value = false;
+    selectedSearchUser.value = null;
+    handleSelectConversation(conversation);
+  }
+};
+
+const handleSendMessage = async (content: string) => {
+  if (!selectedConversation.value?.id) return;
+
+  const success = await sendMessage(selectedConversation.value.id, content);
+  if (success) {
+    // 更新会话列表中的最后一条消息
+    const conversation = conversations.value.find((c) => c.id === selectedConversation.value?.id);
+    if (conversation && messages.value.length > 0) {
+      conversation.last_message = messages.value[messages.value.length - 1];
+    }
+  }
+};
+
+const handleExportMessages = () => {
+  if (!selectedConversation.value?.id) return;
+  exportMessages(selectedConversation.value.id);
+};
+
+const handleUpdateConversation = async () => {
+  // 更新会话列表和好友列表
+  await loadConversations();
+  await loadFriends();
+};
+
+// Watchers
+watch(currentUser, async () => {
+  if (currentUser.value) {
+    await loadConversations();
+    await loadFriends();
+  }
+});
+
+watch(selectedConversation, async (newConv, oldConv) => {
+  if (newConv && newConv.id !== oldConv?.id) {
+    // 先清空消息列表，避免消息残留
+    clearMessages();
+    // 然后加载新会话的消息
+    await loadMessages(newConv.id);
+  }
+});
+
+// Lifecycle
+onMounted(async () => {
+  await auth.checkAuth();
+  if (currentUser.value) {
+    await loadConversations();
+    await loadFriends();
+
+    // 连接WebSocket
+    ws.connect();
+
+    // 注册新消息处理器
+    ws.on('new_message', (data: any) => {
+      const newMessage = data.message;
+
+      // 如果是当前会话的消息，添加到消息列表
+      if (selectedConversation.value?.id === newMessage.conversation_id) {
+        messages.value.push(newMessage);
+      }
+
+      // 更新会话列表中的最后一条消息
+      const conversation = conversations.value.find((c) => c.id === newMessage.conversation_id);
+      if (conversation) {
+        conversation.last_message = newMessage;
+      }
+    });
+
+    // 注册新好友请求处理器
+    ws.on('new_friend_request', async (data: any) => {
+      console.log('New friend request received:', data);
+
+      // 更新会话列表
+      await loadConversations();
+    });
+
+    // 注册好友请求状态更新处理器
+    ws.on('friend_request_update', async (data: any) => {
+      console.log('Friend request update received:', data);
+
+      // 更新会话列表
+      await loadConversations();
+
+      // 更新好友列表
+      await loadFriends();
+
+      // 如果当前选中的会话是更新的会话，更新会话信息
+      if (selectedConversation.value?.id === data.conversation_id) {
+        const updatedConversation = conversations.value.find((c) => c.id === data.conversation_id);
+        if (updatedConversation) {
+          selectedConversation.value = updatedConversation;
+        }
+      }
+    });
+
+    // 注册连接状态处理器
+    ws.on('connected', () => {
+      console.log('WebSocket connected');
+    });
+
+    ws.on('disconnected', () => {
+      console.log('WebSocket disconnected');
+    });
+
+    ws.on('error', (error: any) => {
+      console.error('WebSocket error:', error);
+    });
+  }
+});
+
+onUnmounted(() => {
+  // 断开WebSocket连接
+  ws.disconnect();
+});
+</script>
+
+<style scoped></style>

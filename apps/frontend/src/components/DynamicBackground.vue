@@ -157,7 +157,8 @@ class GeometricShape {
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rotation);
     ctx.globalAlpha = this.opacity;
-    ctx.fillStyle = colors[this.colorIndex] ?? colors[0];
+    const color = colors[this.colorIndex] ?? colors[0] ?? '#000000';
+    ctx.fillStyle = color;
 
     switch (this.type) {
       case 'circle':

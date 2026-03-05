@@ -39,28 +39,37 @@ export interface ApiResponse<T = any> {
 }
 
 // 会话类型
-export type ConversationType = 'friend' | 'stranger';
-
-// 请求状态
-export type RequestStatus = 'none' | 'pending' | 'accepted' | 'rejected';
+export type ConversationType = 'direct' | 'group';
 
 // 好友状态
 export type FriendshipStatus = 'pending' | 'accepted' | 'blocked';
+
+// Enrollment角色
+export type EnrollmentRole = 'owner' | 'admin' | 'member';
+
+// Enrollment类型
+export interface Enrollment {
+  id: string;
+  conversation_id: string;
+  user_id: string;
+  role: EnrollmentRole;
+  joined_at: string;
+  last_read_at?: string;
+  user?: User;
+}
 
 // 会话类型
 export interface Conversation {
   id: string;
   conversation_type: ConversationType;
-  user1_id: string;
-  user2_id: string;
-  has_pending_request: boolean;
-  request_status: RequestStatus;
+  name?: string;
+  created_by?: string;
   created_at: string;
   updated_at: string;
-  user1?: User;
-  user2?: User;
+  members?: Enrollment[];
   last_message?: Message;
   unread_count?: number;
+  friendship_status?: FriendshipStatus; // 好友关系状态（仅私聊会话）
 }
 
 // 好友关系类型

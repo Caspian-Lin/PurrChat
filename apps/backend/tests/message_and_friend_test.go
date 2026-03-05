@@ -153,7 +153,8 @@ func TestSendMessage(t *testing.T) {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
 	convData := createResp.Data.(map[string]interface{})
-	conversationID, _ := uuid.Parse(convData["id"].(string))
+	conversationIDStr := convData["id"].(string)
+	conversationID, _ := uuid.Parse(conversationIDStr)
 
 	tests := []struct {
 		name            string
@@ -361,7 +362,8 @@ func TestHandleFriendRequest(t *testing.T) {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
 	convData := sendResp.Data.(map[string]interface{})
-	conversationID, _ := uuid.Parse(convData["id"].(string))
+	conversationIDStr := convData["id"].(string)
+	conversationID, _ := uuid.Parse(conversationIDStr)
 
 	tests := []struct {
 		name            string
@@ -538,7 +540,8 @@ func TestFriendWorkflow(t *testing.T) {
 		assert.True(t, sendResp.Success)
 
 		convData := sendResp.Data.(map[string]interface{})
-		conversationID, _ := uuid.Parse(convData["id"].(string))
+		conversationIDStr := convData["id"].(string)
+		conversationID, _ := uuid.Parse(conversationIDStr)
 
 		// 2. 接受好友请求
 		handleReq := models.HandleFriendRequestRequest{
@@ -573,5 +576,223 @@ func TestFriendWorkflow(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, friendsResp.Success)
 		assert.GreaterOrEqual(t, len(friendsResp.Data), 1)
+	})
+}
+
+// TestHandleFriendRequestAuthorization 测试好友请求的授权验证
+// 验证接收方可以处理好友请求，发送方不能处理自己的好友请求
+func TestHandleFriendRequestAuthorization(t *testing.T) {
+	SetupTestDB(t)
+	SetupTestRouter()
+	defer CleanupTestDB(t)
+
+	_, passwordHash, _ := hash.HashPasswordWithSalt("password123")
+
+	t.Run("发送方不能接受自己的好友请求", func(t *testing.T) {
+		// 创建独立的测试用户
+		sender := CreateTestUser(t, "s1", "s1@example.com", passwordHash)
+		recipient := CreateTestUser(t, "r1", "r1@example.com", passwordHash)
+
+		token1 := GetAuthToken(t, sender.ID.String()) // 发送方的 token
+
+		// 1. 发送好友请求（sender 发送给 recipient）
+		sendReq := models.FriendRequest{
+			TargetUserID: recipient.ID.String(),
+		}
+
+		body, _ := json.Marshal(sendReq)
+		req, _ := http.NewRequest("POST", "/api/friends/request", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token1)
+		w := httptest.NewRecorder()
+		testRouter.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var sendResp models.FriendRequestResponse
+		err := json.Unmarshal(w.Body.Bytes(), &sendResp)
+		assert.NoError(t, err)
+		assert.True(t, sendResp.Success)
+
+		convData := sendResp.Data.(map[string]interface{})
+		conversationIDStr := convData["id"].(string)
+		conversationID, _ := uuid.Parse(conversationIDStr)
+
+		// 2. 发送方尝试接受自己的好友请求（应该失败）
+		handleReq := models.HandleFriendRequestRequest{
+			ConversationID: conversationID,
+			Action:         "accept",
+		}
+
+		body, _ = json.Marshal(handleReq)
+		req, _ = http.NewRequest("POST", "/api/friends/handle", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token1) // 使用发送方的 token
+		w = httptest.NewRecorder()
+		testRouter.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var handleResp models.HandleFriendRequestResponse
+		err = json.Unmarshal(w.Body.Bytes(), &handleResp)
+		assert.NoError(t, err)
+		assert.False(t, handleResp.Success)
+		assert.Contains(t, handleResp.Message, "not authorized")
+	})
+
+	t.Run("接收方可以接受好友请求", func(t *testing.T) {
+		// 创建独立的测试用户
+		sender := CreateTestUser(t, "s2", "s2@example.com", passwordHash)
+		recipient := CreateTestUser(t, "r2", "r2@example.com", passwordHash)
+
+		token1 := GetAuthToken(t, sender.ID.String())    // 发送方的 token
+		token2 := GetAuthToken(t, recipient.ID.String()) // 接收方的 token
+
+		// 1. 发送好友请求（sender 发送给 recipient）
+		sendReq := models.FriendRequest{
+			TargetUserID: recipient.ID.String(),
+		}
+
+		body, _ := json.Marshal(sendReq)
+		req, _ := http.NewRequest("POST", "/api/friends/request", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token1)
+		w := httptest.NewRecorder()
+		testRouter.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var sendResp models.FriendRequestResponse
+		err := json.Unmarshal(w.Body.Bytes(), &sendResp)
+		assert.NoError(t, err)
+		assert.True(t, sendResp.Success)
+
+		convData := sendResp.Data.(map[string]interface{})
+		conversationIDStr := convData["id"].(string)
+		conversationID, _ := uuid.Parse(conversationIDStr)
+
+		// 2. 接收方接受好友请求（应该成功）
+		handleReq := models.HandleFriendRequestRequest{
+			ConversationID: conversationID,
+			Action:         "accept",
+		}
+
+		body, _ = json.Marshal(handleReq)
+		req, _ = http.NewRequest("POST", "/api/friends/handle", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token2) // 使用接收方的 token
+		w = httptest.NewRecorder()
+		testRouter.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var handleResp models.HandleFriendRequestResponse
+		err = json.Unmarshal(w.Body.Bytes(), &handleResp)
+		assert.NoError(t, err)
+		assert.True(t, handleResp.Success)
+	})
+
+	t.Run("发送方不能拒绝自己的好友请求", func(t *testing.T) {
+		// 创建独立的测试用户
+		sender := CreateTestUser(t, "s3", "s3@example.com", passwordHash)
+		recipient := CreateTestUser(t, "r3", "r3@example.com", passwordHash)
+
+		token1 := GetAuthToken(t, sender.ID.String()) // 发送方的 token
+
+		// 1. 发送好友请求（sender 发送给 recipient）
+		sendReq := models.FriendRequest{
+			TargetUserID: recipient.ID.String(),
+		}
+
+		body, _ := json.Marshal(sendReq)
+		req, _ := http.NewRequest("POST", "/api/friends/request", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token1)
+		w := httptest.NewRecorder()
+		testRouter.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var sendResp models.FriendRequestResponse
+		err := json.Unmarshal(w.Body.Bytes(), &sendResp)
+		assert.NoError(t, err)
+		assert.True(t, sendResp.Success)
+
+		convData := sendResp.Data.(map[string]interface{})
+		conversationIDStr := convData["id"].(string)
+		conversationID, _ := uuid.Parse(conversationIDStr)
+
+		// 2. 发送方尝试拒绝自己的好友请求（应该失败）
+		handleReq := models.HandleFriendRequestRequest{
+			ConversationID: conversationID,
+			Action:         "reject",
+		}
+
+		body, _ = json.Marshal(handleReq)
+		req, _ = http.NewRequest("POST", "/api/friends/handle", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token1) // 使用发送方的 token
+		w = httptest.NewRecorder()
+		testRouter.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var handleResp models.HandleFriendRequestResponse
+		err = json.Unmarshal(w.Body.Bytes(), &handleResp)
+		assert.NoError(t, err)
+		assert.False(t, handleResp.Success)
+		assert.Contains(t, handleResp.Message, "not authorized")
+	})
+
+	t.Run("接收方可以拒绝好友请求", func(t *testing.T) {
+		// 创建独立的测试用户
+		sender := CreateTestUser(t, "s4", "s4@example.com", passwordHash)
+		recipient := CreateTestUser(t, "r4", "r4@example.com", passwordHash)
+
+		token1 := GetAuthToken(t, sender.ID.String())    // 发送方的 token
+		token2 := GetAuthToken(t, recipient.ID.String()) // 接收方的 token
+
+		// 1. 发送好友请求（sender 发送给 recipient）
+		sendReq := models.FriendRequest{
+			TargetUserID: recipient.ID.String(),
+		}
+
+		body, _ := json.Marshal(sendReq)
+		req, _ := http.NewRequest("POST", "/api/friends/request", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token1)
+		w := httptest.NewRecorder()
+		testRouter.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var sendResp models.FriendRequestResponse
+		err := json.Unmarshal(w.Body.Bytes(), &sendResp)
+		assert.NoError(t, err)
+		assert.True(t, sendResp.Success)
+
+		convData := sendResp.Data.(map[string]interface{})
+		conversationIDStr := convData["id"].(string)
+		conversationID, _ := uuid.Parse(conversationIDStr)
+
+		// 2. 接收方拒绝好友请求（应该成功）
+		handleReq := models.HandleFriendRequestRequest{
+			ConversationID: conversationID,
+			Action:         "reject",
+		}
+
+		body, _ = json.Marshal(handleReq)
+		req, _ = http.NewRequest("POST", "/api/friends/handle", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token2) // 使用接收方的 token
+		w = httptest.NewRecorder()
+		testRouter.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var handleResp models.HandleFriendRequestResponse
+		err = json.Unmarshal(w.Body.Bytes(), &handleResp)
+		assert.NoError(t, err)
+		assert.True(t, handleResp.Success)
 	})
 }

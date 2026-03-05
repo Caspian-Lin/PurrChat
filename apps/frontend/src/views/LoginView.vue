@@ -26,42 +26,27 @@
       </p>
 
       <form @submit.prevent="handleSubmit" class="space-y-6">
-        <n-form-item label="邮箱" :show-feedback="false">
-          <n-input
-            v-model:value="email"
-            placeholder="请输入邮箱"
-            size="large"
-            :minlength="3"
-            required
-          />
-        </n-form-item>
+        <BaseFormItem label="邮箱">
+          <BaseInput v-model="email" type="email" placeholder="请输入邮箱" required />
+        </BaseFormItem>
 
-        <n-form-item label="密码" :show-feedback="false">
-          <n-input
-            v-model:value="password"
-            type="password"
-            placeholder="请输入密码"
-            show-password-on="click"
-            size="large"
-            :minlength="6"
-            required
-          />
-        </n-form-item>
+        <BaseFormItem label="密码">
+          <BaseInput v-model="password" type="password" placeholder="请输入密码" required />
+        </BaseFormItem>
 
-        <n-alert v-if="auth.error" type="error" :bordered="false" class="mb-4">
+        <BaseAlert v-if="auth.error" type="error" class="mb-4">
           {{ auth.error }}
-        </n-alert>
+        </BaseAlert>
 
-        <n-button
+        <BaseButton
           type="primary"
-          size="large"
           block
-          :loading="auth.loading.value"
+          :disabled="auth.loading.value"
           @click="handleSubmit"
           class="!h-12 !font-medium"
         >
           {{ auth.loading.value ? '登录中...' : '登录' }}
-        </n-button>
+        </BaseButton>
       </form>
 
       <div class="text-center mt-6 text-sm" style="color: var(--text-secondary-color)">
@@ -81,10 +66,13 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { NButton, NInput, NFormItem, NAlert } from 'naive-ui';
 import { useAuthController } from '../controllers/authController';
 import ThemeSwitcher from '../components/ThemeSwitcher.vue';
 import DynamicBackground from '../components/DynamicBackground.vue';
+import BaseButton from '../components/common/BaseButton.vue';
+import BaseInput from '../components/common/BaseInput.vue';
+import BaseFormItem from '../components/common/BaseFormItem.vue';
+import BaseAlert from '../components/common/BaseAlert.vue';
 
 const auth = useAuthController();
 const email = ref('');

@@ -98,6 +98,11 @@ export const api = {
     return apiClient.post('/api/conversations', data).then((res) => res.data);
   },
 
+  // 删除会话
+  deleteConversation: (conversationId: string): Promise<ApiResponse<void>> => {
+    return apiClient.delete(`/api/conversations/${conversationId}`).then((res) => res.data);
+  },
+
   // 获取消息列表
   getMessages: (
     conversationId: string,
@@ -107,6 +112,15 @@ export const api = {
     return apiClient
       .get('/api/messages', {
         params: { conversation_id: conversationId, limit, offset },
+      })
+      .then((res) => res.data);
+  },
+
+  // 导出会话的所有消息
+  exportMessages: (conversationId: string): Promise<ApiResponse<Message[]>> => {
+    return apiClient
+      .get('/api/messages/export', {
+        params: { conversation_id: conversationId },
       })
       .then((res) => res.data);
   },

@@ -1,21 +1,88 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
+	"reflect"
 	"syscall"
 
 	"purr-chat-server/internal/handlers"
 	"purr-chat-server/internal/repository"
 	"purr-chat-server/internal/services"
+	"purr-chat-server/internal/websocket"
 	"purr-chat-server/pkg/config"
 	"purr-chat-server/pkg/database"
 	"purr-chat-server/pkg/logger"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 )
 
+// registerUUIDValidator 注册 UUID 验证器
+func registerUUIDValidator(v *validator.Validate) {
+	// 注册自定义 UUID 验证器
+	v.RegisterCustomTypeFunc(func(field reflect.Value) interface{} {
+		if val, ok := field.Interface().(uuid.UUID); ok {
+			return val.String()
+		}
+		return nil
+	})
+
+	// 注册 UUID 验证函数
+	_ = v.RegisterValidation("uuid", func(fl validator.FieldLevel) bool {
+		field := fl.Field()
+		if field.Kind() == reflect.String {
+			_, err := uuid.Parse(field.String())
+			return err == nil
+		}
+		return true
+	})
+}
+
+// runMigrate 执行数据库迁移
+func runMigrate() {
+	// 初始化日志（使用默认配置，输出到控制台）
+	logger.Init()
+
+	logger.Info("Running database migrations...")
+
+	// 初始化数据库连接
+	cfg := config.Load()
+	dsn := config.GetDSN(&cfg.DB)
+	if err := database.Init(dsn); err != nil {
+		logger.Error("Failed to connect to database:", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	// 执行迁移SQL文件
+	migrationFile := "migrations/002_new_conversation_structure.sql"
+	content, err := os.ReadFile(migrationFile)
+	if err != nil {
+		logger.Error("Failed to read migration file:", err)
+		os.Exit(1)
+	}
+
+	// 执行SQL
+	_, err = database.GetPool().Exec(context.Background(), string(content))
+	if err != nil {
+		logger.Error("Failed to execute migration:", err)
+		os.Exit(1)
+	}
+
+	logger.Info("Migration completed successfully")
+}
+
 func main() {
+	// 检查是否是migrate命令
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		runMigrate()
+		return
+	}
+
 	// 加载配置
 	cfg := config.Load()
 	config.Validate(cfg)
@@ -41,6 +108,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer database.Close()
+
+	// 注册自定义 UUID 验证器
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		registerUUIDValidator(v)
+	}
 
 	// 设置 Gin 模式
 	gin.SetMode(cfg.GinMode)
@@ -71,10 +143,15 @@ func main() {
 	conversationRepo := repository.NewConversationRepository()
 	messageRepo := repository.NewMessageRepository()
 	friendshipRepo := repository.NewFriendshipRepository()
+	enrollmentRepo := repository.NewEnrollmentRepository()
+	conversationMessageRepo := repository.NewConversationMessageRepository()
 	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
-	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo)
+	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret)
 	chatHandler := handlers.NewChatHandler(authService, chatService)
+
+	// 初始化WebSocket hub
+	websocket.InitHub()
 
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
@@ -112,6 +189,7 @@ func main() {
 	messages := r.Group("/api/messages")
 	{
 		messages.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetMessages)
+		messages.GET("/export", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.ExportMessages)
 		messages.POST("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SendMessage)
 	}
 
@@ -122,6 +200,9 @@ func main() {
 		friends.POST("/request", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SendFriendRequest)
 		friends.POST("/handle", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.HandleFriendRequest)
 	}
+
+	// WebSocket路由
+	r.GET("/api/ws", handlers.AuthMiddleware(cfg.JWT.Secret), websocket.HandleWebSocket)
 
 	// 启动服务器
 	go func() {

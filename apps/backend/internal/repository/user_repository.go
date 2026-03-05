@@ -219,27 +219,25 @@ func (r *userRepository) FindByPhone(ctx context.Context, phone string) (*models
 	return user, nil
 }
 
-// Search 搜索用户（通过UID、手机号、邮箱或用户名）
+// Search 搜索用户（通过UID、手机号、邮箱的模糊搜索，取并集）
 func (r *userRepository) Search(ctx context.Context, query string) ([]*models.User, error) {
 	logger.InfofWithCaller("Search called with query: '%s'", query)
 
-	// 构建查询：支持UID、手机号、邮箱和用户名的模糊匹配
-	// 使用LIKE进行模糊匹配，可以匹配包含查询字符串的记录
+	// 构建查询：对 uid、手机号、邮箱分别进行模糊搜索（LIKE），然后取并集
 	dbQuery := `
-		SELECT id, uid, username, password_hash, salt, avatar_url, email, email_verified, phone, phone_verified, created_at
+		SELECT DISTINCT id, uid, username, password_hash, salt, avatar_url, email, email_verified, phone, phone_verified, created_at
 		FROM users
 		WHERE
 			CAST(uid AS TEXT) LIKE $1 OR
-			username LIKE $1 OR
 			email LIKE $1 OR
 			phone LIKE $1
 		LIMIT 20
 	`
 
-	// 使用通配符进行模糊匹配
+	// 添加通配符实现模糊搜索
 	searchPattern := "%" + query + "%"
 
-	logger.InfofWithCaller("Executing search query with pattern: '%s'", searchPattern)
+	logger.InfofWithCaller("Executing search query with LIKE pattern: '%s'", searchPattern)
 
 	rows, err := database.GetPool().Query(ctx, dbQuery, searchPattern)
 	if err != nil {

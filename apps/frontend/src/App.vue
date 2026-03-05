@@ -1,43 +1,12 @@
 <template>
-  <n-config-provider :theme="naiveTheme" :theme-overrides="themeOverrides">
-    <n-message-provider>
-      <div id="app">
-        <router-view />
-      </div>
-    </n-message-provider>
-  </n-config-provider>
+  <div id="app">
+    <router-view />
+    <MessageContainer />
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import {
-  NConfigProvider,
-  NMessageProvider,
-  darkTheme,
-  lightTheme as naiveLightTheme,
-} from 'naive-ui';
-import { useThemeStore } from './stores/theme';
-import { themeColors } from './config/theme';
-
-const themeStore = useThemeStore();
-
-// NaiveUI主题
-const naiveTheme = computed(() => {
-  return themeStore.mode === 'dark' ? darkTheme : naiveLightTheme;
-});
-
-// NaiveUI主题覆盖
-const themeOverrides = computed(() => {
-  const colorConfig = themeColors[themeStore.color];
-  return {
-    common: {
-      primaryColor: colorConfig.primary,
-      primaryColorHover: colorConfig.secondary,
-      primaryColorPressed: colorConfig.secondary,
-      primaryColorSuppl: colorConfig.primary,
-    },
-  };
-});
+import MessageContainer from './components/common/MessageContainer.vue';
 </script>
 
 <style>

@@ -558,15 +558,6 @@ docker-compose exec -T postgres psql -U postgres purrchat < backup_20240101_1200
 - 更新相关文档
 - 添加必要的测试
 
-## 许可证
-
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
-
-## 联系方式
-
-- 项目主页: https://github.com/your-org/purrchat
-- 问题反馈: https://github.com/your-org/purrchat/issues
-
 ---
 
 <div align="center">
