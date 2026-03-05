@@ -14,19 +14,27 @@
 
   /* 浅色主题默认值 */
   --background-color: #ffffff;
-  --surface-color: #f5f5f5;
+  --surface-color: #f9f9f9;
   --surface-hover-color: #e8e8e8;
-  --text-color: #333333;
-  --text-secondary-color: #666666;
-  --text-tertiary-color: #999999;
-  --border-color: #e0e0e0;
+  --surface-secondary-color: #f4f4f4;
+  --surface-tertiary-color: #f2f2f2;
+  --text-color: #000000;
+  --text-secondary-color: #000000cc;
+  --text-tertiary-color: #00000099;
+  --border-color: #d9d9d9;
   --shadow-color: rgba(0, 0, 0, 0.1);
   --modal-overlay-color: rgba(0, 0, 0, 0.5);
-  --input-background: #ffffff;
-  --input-border: #dddddd;
-  --message-sent-background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);
-  --message-received-background: #f0f0f0;
-  --card-background: #fafafa;
+  --input-background: #f2f2f2;
+  --input-border: #d9d9d9;
+  --message-sent-background: linear-gradient(
+    135deg,
+    var(--theme-primary) 0%,
+    var(--theme-secondary) 100%
+  );
+  --message-received-background: #fffffffa;
+  --card-background: #f9f9f9;
+  --hover-background: #f2f2f2;
+  --selected-background: #e8f4fd;
 
   color-scheme: light dark;
   color: var(--text-color);
@@ -43,16 +51,20 @@
   --background-color: #1a1a1a;
   --surface-color: #2d2d2d;
   --surface-hover-color: #3d3d3d;
+  --surface-secondary-color: #252525;
+  --surface-tertiary-color: #1f1f1f;
   --text-color: #ffffff;
-  --text-secondary-color: #b0b0b0;
-  --text-tertiary-color: #808080;
+  --text-secondary-color: #e0e0e0;
+  --text-tertiary-color: #b0b0b0;
   --border-color: #404040;
   --shadow-color: rgba(0, 0, 0, 0.3);
   --modal-overlay-color: rgba(0, 0, 0, 0.7);
-  --input-background: #2d2d2d;
+  --input-background: #1f1f1f;
   --input-border: #404040;
   --message-received-background: #3d3d3d;
-  --card-background: #252525;
+  --card-background: #2d2d2d;
+  --hover-background: #3d3d3d;
+  --selected-background: #1e3a5f;
 }
 
 a {
@@ -70,7 +82,8 @@ a:hover {
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   width: 100%;
   height: 100%;
 }
@@ -93,25 +106,29 @@ h1 {
 
 button {
   border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
+  /* border: 1px solid transparent; */
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: var(--surface-color);
+  background-color: var(--theme-primary);
   color: var(--text-color);
   cursor: pointer;
   transition: border-color 0.25s;
 }
 button:hover {
-  border-color: var(--theme-primary);
+  /* border-color: var(--theme-primary); */
 }
 
 button:focus,
 button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  /* outline: 4px auto -webkit-focus-ring-color; */
 }
 
 .card {
   padding: 2em;
+}
+
+/* 圆角矩形样式：圆角大小为长宽中较小值的四分之一 */
+.roundrect {
+  border-radius: 25%;
 }

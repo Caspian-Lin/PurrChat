@@ -1,4 +1,4 @@
-.PHONY: help install dev build test lint lint-fix clean format type-check docker-up docker-down docker-logs docker-build
+.PHONY: help install dev build test lint lint-fix clean format type-check docker-up docker-down docker-logs docker-build migrate
 
 # 默认目标
 help:
@@ -22,6 +22,9 @@ help:
 	@echo ""
 	@echo "清理命令:"
 	@echo "  make clean        - 清理构建产物和依赖"
+	@echo ""
+	@echo "数据库迁移:"
+	@echo "  make migrate      - 执行所有数据库迁移"
 
 ifneq (,$(wildcard ./apps/backend/.env))
     include ./apps/backend/.env
@@ -62,6 +65,11 @@ type-check:
 # 清理
 clean:
 	pnpm run clean
+
+# 数据库迁移
+migrate:
+	@echo "执行数据库迁移..."
+	cd apps/backend && go run cmd/server/main.go migrate
 
 # Docker 启动
 docker-up:

@@ -8,6 +8,21 @@ const routes: RouteRecordRaw[] = [
     name: 'Home',
     component: () => import('../views/HomeView.vue'),
     meta: { requiresAuth: true },
+    redirect: '/chat',
+    children: [
+      {
+        path: 'chat',
+        name: 'Chat',
+        component: () => import('../components/home/panel/ChatPanel.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: 'friends',
+        name: 'Friends',
+        component: () => import('../components/home/panel/FriendsPanel.vue'),
+        meta: { requiresAuth: true },
+      },
+    ],
   },
   {
     path: '/login',

@@ -186,11 +186,7 @@ describe('API Client', () => {
       const mockConversations: Conversation[] = [
         {
           id: '1',
-          conversation_type: 'friend',
-          user1_id: '1',
-          user2_id: '2',
-          has_pending_request: false,
-          request_status: 'accepted',
+          conversation_type: 'direct',
           created_at: '2024-01-01T00:00:00Z',
           updated_at: '2024-01-01T00:00:00Z',
         },
@@ -203,7 +199,6 @@ describe('API Client', () => {
         },
       };
 
-      mockedAxios.create.mockReturnValueOnce(mockedAxios as any);
       mockedAxios.get.mockResolvedValueOnce(mockResponse as any);
 
       const result = await api.getConversations();
@@ -217,11 +212,7 @@ describe('API Client', () => {
     it('should create a conversation', async () => {
       const mockConversation: Conversation = {
         id: '1',
-        conversation_type: 'stranger',
-        user1_id: '1',
-        user2_id: '2',
-        has_pending_request: false,
-        request_status: 'none',
+        conversation_type: 'direct',
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
       };
@@ -233,7 +224,6 @@ describe('API Client', () => {
         },
       };
 
-      mockedAxios.create.mockReturnValueOnce(mockedAxios as any);
       mockedAxios.post.mockResolvedValueOnce(mockResponse as any);
 
       const result = await api.createConversation({
@@ -340,11 +330,7 @@ describe('API Client', () => {
     it('should send a friend request', async () => {
       const mockConversation: Conversation = {
         id: '1',
-        conversation_type: 'friend',
-        user1_id: '1',
-        user2_id: '2',
-        has_pending_request: true,
-        request_status: 'pending',
+        conversation_type: 'direct',
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
       };
@@ -356,7 +342,6 @@ describe('API Client', () => {
         },
       };
 
-      mockedAxios.create.mockReturnValueOnce(mockedAxios as any);
       mockedAxios.post.mockResolvedValueOnce(mockResponse as any);
 
       const result = await api.sendFriendRequest({
@@ -372,11 +357,7 @@ describe('API Client', () => {
     it('should handle a friend request', async () => {
       const mockConversation: Conversation = {
         id: '1',
-        conversation_type: 'friend',
-        user1_id: '1',
-        user2_id: '2',
-        has_pending_request: false,
-        request_status: 'accepted',
+        conversation_type: 'direct',
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
       };
@@ -388,7 +369,6 @@ describe('API Client', () => {
         },
       };
 
-      mockedAxios.create.mockReturnValueOnce(mockedAxios as any);
       mockedAxios.post.mockResolvedValueOnce(mockResponse as any);
 
       const result = await api.handleFriendRequest({

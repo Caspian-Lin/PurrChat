@@ -27,75 +27,49 @@
       </p>
 
       <form @submit.prevent="handleSubmit" class="space-y-5">
-        <n-form-item label="用户名" :show-feedback="false">
-          <n-input
-            v-model:value="username"
-            placeholder="请输入用户名"
-            size="large"
-            :minlength="3"
-            :maxlength="20"
-            required
-          />
-        </n-form-item>
+        <BaseFormItem label="用户名">
+          <BaseInput v-model="username" type="text" placeholder="请输入用户名" required />
+        </BaseFormItem>
 
-        <n-form-item label="邮箱" :show-feedback="false">
-          <n-input
-            v-model:value="email"
-            placeholder="请输入邮箱"
-            size="large"
-            :minlength="3"
-            required
-          />
-        </n-form-item>
+        <BaseFormItem label="邮箱">
+          <BaseInput v-model="email" type="email" placeholder="请输入邮箱" required />
+        </BaseFormItem>
 
-        <n-form-item label="电话号码" :show-feedback="false">
-          <n-input
-            v-model:value="phone"
-            placeholder="请输入电话"
-            size="large"
-            :minlength="11"
-            required
-          />
-        </n-form-item>
+        <BaseFormItem label="电话号码">
+          <BaseInput v-model="phone" type="tel" placeholder="请输入电话" required />
+        </BaseFormItem>
 
-        <n-form-item label="密码" :show-feedback="false">
-          <n-input
-            v-model:value="password"
+        <BaseFormItem label="密码">
+          <BaseInput
+            v-model="password"
             type="password"
             placeholder="请输入密码（至少6位）"
-            show-password-on="click"
-            size="large"
-            :minlength="6"
             required
           />
-        </n-form-item>
+        </BaseFormItem>
 
-        <n-form-item label="确认密码" :show-feedback="false">
-          <n-input
-            v-model:value="confirmPassword"
+        <BaseFormItem label="确认密码">
+          <BaseInput
+            v-model="confirmPassword"
             type="password"
             placeholder="请再次输入密码"
-            show-password-on="click"
-            size="large"
-            :minlength="6"
             required
           />
-        </n-form-item>
+        </BaseFormItem>
 
-        <n-alert v-if="auth.error" type="error" :bordered="false" class="mb-4">
+        <BaseAlert v-if="auth.error" type="error" class="mb-4">
           {{ auth.error }}
-        </n-alert>
+        </BaseAlert>
 
-        <n-button
+        <BaseButton
           type="primary"
-          size="large"
           block
-          :loading="auth.loading.value"
+          :disabled="auth.loading.value"
           @click="handleSubmit"
           class="!h-12 !font-medium"
         >
           {{ auth.loading.value ? '注册中...' : '注册' }}
-        </n-button>
+        </BaseButton>
       </form>
 
       <div class="text-center mt-6 text-sm" style="color: var(--text-secondary-color)">
@@ -114,10 +88,13 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { NButton, NInput, NFormItem, NAlert } from 'naive-ui';
 import { useAuthController } from '../controllers/authController';
 import ThemeSwitcher from '../components/ThemeSwitcher.vue';
 import DynamicBackground from '../components/DynamicBackground.vue';
+import BaseButton from '../components/common/BaseButton.vue';
+import BaseInput from '../components/common/BaseInput.vue';
+import BaseFormItem from '../components/common/BaseFormItem.vue';
+import BaseAlert from '../components/common/BaseAlert.vue';
 
 const auth = useAuthController();
 const username = ref('');

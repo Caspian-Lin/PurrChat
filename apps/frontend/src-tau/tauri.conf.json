@@ -20,7 +20,8 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "dangerousDisableAssetCspModification": false
     }
   },
   "bundle": {
@@ -42,18 +43,21 @@
       "digestAlgorithm": "sha256",
       "timestampUrl": "",
       "nsis": {
-        "displayLanguageSelector": true,
         "languages": ["English", "SimpChinese"],
-        "installerMode": "both",
-        "allowToChangeInstallationDirectory": true,
-        "createDesktopShortcut": true,
-        "createStartMenuShortcut": true,
-        "perMachine": false
+        "displayLanguageSelector": true
       },
       "webviewInstallMode": {
         "type": "embedBootstrapper"
       }
     }
   },
-  "plugins": {}
+  "plugins": {
+    "fs": {
+      "scope": ["**"]
+    },
+    "dialog": {
+      "all": true,
+      "ask": true
+    }
+  }
 }

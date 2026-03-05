@@ -1,12 +1,11 @@
 # PurrChat Frontend
 
-PurrChat 前端应用，基于 Vue 3 + Vite + Naive UI + Tauri 构建。
+PurrChat 前端应用，基于 Vue 3 + Vite + Tauri 构建。
 
 ## 技术栈
 
 - **框架**: Vue 3.5+ (Composition API)
 - **构建工具**: Vite 7.2+
-- **UI 组件库**: Naive UI 2.43+
 - **状态管理**: Pinia 3.0+
 - **路由**: Vue Router 4.6+
 - **桌面应用**: Tauri 2.9+

@@ -68,6 +68,13 @@ export const useThemeStore = defineStore('theme', () => {
     // 设置主题模式
     root.setAttribute('data-theme', mode.value);
 
+    // 设置 Tailwind 深色主题类
+    if (mode.value === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+
     // 设置主题色
     root.style.setProperty('--theme-primary', colorConfig.primary);
     root.style.setProperty('--theme-secondary', colorConfig.secondary);
@@ -77,6 +84,8 @@ export const useThemeStore = defineStore('theme', () => {
     root.style.setProperty('--background-color', theme.background);
     root.style.setProperty('--surface-color', theme.surface);
     root.style.setProperty('--surface-hover-color', theme.surfaceHover);
+    root.style.setProperty('--surface-secondary-color', theme.surfaceSecondary);
+    root.style.setProperty('--surface-tertiary-color', theme.surfaceTertiary);
     root.style.setProperty('--text-color', theme.text);
     root.style.setProperty('--text-secondary-color', theme.textSecondary);
     root.style.setProperty('--text-tertiary-color', theme.textTertiary);
@@ -88,6 +97,8 @@ export const useThemeStore = defineStore('theme', () => {
     root.style.setProperty('--message-sent-background', theme.messageSent);
     root.style.setProperty('--message-received-background', theme.messageReceived);
     root.style.setProperty('--card-background', theme.cardBackground);
+    root.style.setProperty('--hover-background', theme.hoverBackground);
+    root.style.setProperty('--selected-background', theme.selectedBackground);
 
     // 保存到 localStorage
     saveTheme();

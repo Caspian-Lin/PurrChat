@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -16,6 +17,9 @@ import (
 	"purr-chat-server/pkg/logger"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -70,9 +74,35 @@ func SetupTestDB(t *testing.T) {
 
 // CreateTestTables 创建测试表
 func CreateTestTables(t *testing.T, ctx context.Context) {
-	// 创建用户表
+	// 先删除现有的表（注意顺序：先删除有外键约束的表）
+	tables := []string{
+		"enrollments",
+		"messages",
+		"friendships",
+		"conversations",
+		"users",
+	}
+
+	for _, table := range tables {
+		_, err := database.GetPool().Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", table))
+		if err != nil {
+			t.Logf("Warning: Failed to drop table %s: %v", table, err)
+		}
+	}
+
+	// 删除所有conversation_messages表
 	_, err := database.GetPool().Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS users (
+		SELECT 'DROP TABLE IF EXISTS conversation_messages.' || table_name || ' CASCADE'
+		FROM information_schema.tables
+		WHERE table_schema = 'conversation_messages'
+	`)
+	if err != nil {
+		t.Logf("Warning: Failed to drop conversation_messages tables: %v", err)
+	}
+
+	// 创建用户表
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE users (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			uid SERIAL UNIQUE,
 			username VARCHAR(20) UNIQUE NOT NULL,
@@ -90,27 +120,40 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		t.Fatalf("Failed to create users table: %v", err)
 	}
 
-	// 创建会话表
+	// 创建会话表（新结构）
 	_, err = database.GetPool().Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS conversations (
+		CREATE TABLE conversations (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			conversation_type VARCHAR(20) NOT NULL DEFAULT 'stranger',
-			user1_id UUID NOT NULL,
-			user2_id UUID NOT NULL,
-			has_pending_request BOOLEAN DEFAULT FALSE,
-			request_status VARCHAR(20) DEFAULT 'none',
+			conversation_type VARCHAR(20) NOT NULL DEFAULT 'direct',
+			name VARCHAR(100),
+			created_by UUID REFERENCES users(id) ON DELETE SET NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(user1_id, user2_id)
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create conversations table: %v", err)
 	}
 
+	// 创建enrollments表（用户与会话的多对多关系）
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE enrollments (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			conversation_id UUID NOT NULL,
+			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			role VARCHAR(20) DEFAULT 'member',
+			joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			last_read_at TIMESTAMP,
+			UNIQUE(conversation_id, user_id)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create enrollments table: %v", err)
+	}
+
 	// 创建消息表
 	_, err = database.GetPool().Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS messages (
+		CREATE TABLE messages (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			conversation_id UUID NOT NULL,
 			sender_id UUID NOT NULL,
@@ -125,7 +168,7 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 
 	// 创建好友关系表
 	_, err = database.GetPool().Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS friendships (
+		CREATE TABLE friendships (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id UUID NOT NULL,
 			friend_id UUID NOT NULL,
@@ -137,6 +180,110 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	if err != nil {
 		t.Fatalf("Failed to create friendships table: %v", err)
 	}
+
+	// 创建conversation_messages schema
+	_, err = database.GetPool().Exec(ctx, `CREATE SCHEMA IF NOT EXISTS conversation_messages`)
+	if err != nil {
+		t.Fatalf("Failed to create conversation_messages schema: %v", err)
+	}
+
+	// 创建用于会话消息表的PostgreSQL函数
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE OR REPLACE FUNCTION create_conversation_message_table(conversation_uuid UUID)
+		RETURNS VOID AS $$
+		DECLARE
+			table_name TEXT;
+		BEGIN
+			table_name := replace(conversation_uuid::TEXT, '-', '_');
+			EXECUTE format('
+				CREATE TABLE IF NOT EXISTS conversation_messages.%I (
+					id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+					sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+					content TEXT NOT NULL,
+					msg_type VARCHAR(20) NOT NULL DEFAULT ''text'',
+					created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+				)',
+			table_name);
+		END;
+		$$ LANGUAGE plpgsql
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create create_conversation_message_table function: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE OR REPLACE FUNCTION drop_conversation_message_table(conversation_uuid UUID)
+		RETURNS VOID AS $$
+		DECLARE
+			table_name TEXT;
+		BEGIN
+			table_name := replace(conversation_uuid::TEXT, '-', '_');
+			EXECUTE format('DROP TABLE IF EXISTS conversation_messages.%I CASCADE', table_name);
+		END;
+		$$ LANGUAGE plpgsql
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create drop_conversation_message_table function: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE OR REPLACE FUNCTION insert_conversation_message(
+			conversation_uuid UUID,
+			sender_uuid UUID,
+			msg_content TEXT,
+			msg_type VARCHAR(20)
+		)
+		RETURNS UUID AS $$
+		DECLARE
+			new_message_id UUID;
+			table_name TEXT;
+		BEGIN
+			table_name := replace(conversation_uuid::TEXT, '-', '_');
+			EXECUTE format('
+				INSERT INTO conversation_messages.%I (sender_id, content, msg_type)
+				VALUES ($1, $2, $3)
+				RETURNING id
+			', table_name)
+			INTO new_message_id
+			USING sender_uuid, msg_content, msg_type;
+			RETURN new_message_id;
+		END;
+		$$ LANGUAGE plpgsql
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create insert_conversation_message function: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE OR REPLACE FUNCTION get_conversation_messages(
+			conversation_uuid UUID,
+			msg_limit INT DEFAULT 50,
+			msg_offset INT DEFAULT 0
+		)
+		RETURNS TABLE (
+			id UUID,
+			sender_id UUID,
+			content TEXT,
+			msg_type VARCHAR(20),
+			created_at TIMESTAMP
+		) AS $$
+		DECLARE
+			table_name TEXT;
+		BEGIN
+			table_name := replace(conversation_uuid::TEXT, '-', '_');
+			RETURN QUERY EXECUTE format('
+				SELECT id, sender_id, content, msg_type, created_at
+				FROM conversation_messages.%I
+				ORDER BY created_at DESC
+				LIMIT $1 OFFSET $2
+			', table_name)
+			USING msg_limit, msg_offset;
+		END;
+		$$ LANGUAGE plpgsql
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create get_conversation_messages function: %v", err)
+	}
 }
 
 // SetupTestRouter 设置测试路由
@@ -144,14 +291,29 @@ func SetupTestRouter() {
 	gin.SetMode(gin.TestMode)
 	testRouter = gin.New()
 
+	// 注册自定义 UUID 验证器
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		// 注册 UUID 验证函数
+		_ = v.RegisterValidation("uuid", func(fl validator.FieldLevel) bool {
+			field := fl.Field()
+			if field.Kind() == reflect.String {
+				_, err := uuid.Parse(field.String())
+				return err == nil
+			}
+			return true
+		})
+	}
+
 	// 初始化依赖
 	userRepo := repository.NewUserRepository()
 	conversationRepo := repository.NewConversationRepository()
 	messageRepo := repository.NewMessageRepository()
 	friendshipRepo := repository.NewFriendshipRepository()
+	enrollmentRepo := repository.NewEnrollmentRepository()
+	conversationMessageRepo := repository.NewConversationMessageRepository()
 
 	authService := services.NewAuthService(userRepo, jwtSecret)
-	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo)
+	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
 
 	authHandler = handlers.NewAuthHandler(authService, jwtSecret)
 	chatHandler = handlers.NewChatHandler(authService, chatService)
@@ -188,8 +350,19 @@ func CleanupTestDB(t *testing.T) {
 func CleanupTestTables(t *testing.T) {
 	ctx := context.Background()
 
+	// 删除所有conversation_messages表
+	_, err := database.GetPool().Exec(ctx, `
+		SELECT 'DROP TABLE IF EXISTS conversation_messages.' || table_name || ' CASCADE'
+		FROM information_schema.tables
+		WHERE table_schema = 'conversation_messages'
+	`)
+	if err != nil {
+		t.Logf("Warning: Failed to drop conversation_messages tables: %v", err)
+	}
+
 	// 清理表数据（注意顺序：先清理有外键约束的表）
 	tables := []string{
+		"enrollments",
 		"messages",
 		"friendships",
 		"conversations",
@@ -204,7 +377,7 @@ func CleanupTestTables(t *testing.T) {
 	}
 
 	// 重置序列
-	_, err := database.GetPool().Exec(ctx, "ALTER SEQUENCE users_uid_seq RESTART WITH 1")
+	_, err = database.GetPool().Exec(ctx, "ALTER SEQUENCE users_uid_seq RESTART WITH 1")
 	if err != nil {
 		t.Logf("Warning: Failed to reset sequence: %v", err)
 	}
