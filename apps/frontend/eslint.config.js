@@ -47,6 +47,11 @@ export default [
         parser: tsParser,
       },
     },
+    rules: {
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': 'warn',
+      'vue/no-unused-vars': 'warn',
+    },
   },
   {
     files: ['**/*.{ts,mts,tsx}'],
