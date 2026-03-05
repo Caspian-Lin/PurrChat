@@ -5,22 +5,67 @@
 ## 目录
 
 - [概述](#概述)
-- [GitLab CI](#gitlab-ci)
+- [分支策略](#分支策略)
 - [GitHub Actions](#github-actions)
+- [本地 CI/CD](#本地-cicd)
 - [环境变量配置](#环境变量配置)
 - [部署流程](#部署流程)
 - [故障排查](#故障排查)
 
 ## 概述
 
-PurrChat 项目支持两种 CI/CD 平台：
+PurrChat 项目使用 GitHub Actions 作为 CI/CD 平台：
 
-1. **GitLab CI** - 使用 [`.gitlab-ci.yml`](.gitlab-ci.yml:1)
-2. **GitHub Actions** - 使用 [`.github/workflows/ci.yml`](.github/workflows/ci.yml:1)
+- **GitHub Actions** - 使用 [`.github/workflows/ci.yml`](.github/workflows/ci.yml:1)
 
-两个平台提供相同的功能，可以根据团队偏好选择使用。
+## 分支策略
 
-## GitLab CI
+项目采用三分支模型：
+
+```
+main (生产环境)
+  ↑
+test (预发布环境)
+  ↑
+dev (开发环境)
+```
+
+### 分支职责
+
+| 分支 | 用途 | CI/CD | 部署环境 |
+|------|------|-------|----------|
+| [`main`](main:1) | 生产环境，只接受从 [`test`](main:1) 分支的合并 | GitHub Actions | 生产环境 (purrchat.com) |
+| [`test`](main:1) | 预发布环境，运行完整 CI/CD 验证 | GitHub Actions | 测试环境 (test.purrchat.com) |
+| [`dev`](main:1) | 开发环境，日常开发分支 | 本地 CI/CD | 开发环境 |
+
+### 工作流程
+
+1. **开发阶段**
+   - 在 [`dev`](main:1) 分支进行日常开发
+   - 提交代码到 [`dev`](main:1) 分支
+
+2. **合并到 test**
+   - 从 [`dev`](main:1) 分支合并到 [`test`](main:1) 分支
+   - 在 [`test`](main:1) 分支上运行本地 CI/CD
+   - 本地 CI/CD 通过后，推送到远程 [`test`](main:1) 分支
+   - GitHub Actions 自动运行完整 CI/CD 流程
+
+3. **合并到 main**
+   - GitHub Actions CI/CD 通过后，从 [`test`](main:1) 合并到 [`main`](main:1)
+   - GitHub Actions 自动运行生产环境 CI/CD
+   - 自动部署到生产环境
+
+### 快捷命令
+
+```bash
+# 从 dev 合并到 test（自动运行本地 CI/CD）
+bash scripts/merge-dev-to-test.sh
+
+# 手动运行本地 CI/CD
+bash scripts/run-local-ci.sh
+```
+
+## GitHub Actions
 
 ### 流水线阶段
 
@@ -190,8 +235,8 @@ cat ~/.ssh/gitlab_ci_key
 GitHub Actions 工作流包含以下 Jobs：
 
 ```
-lint-frontend → test-frontend → build-frontend → deploy-dev/prod
-lint-backend  → test-backend  → build-backend → deploy-dev/prod
+lint-frontend → test-frontend → build-frontend → deploy-test/prod
+lint-backend  → test-backend  → build-backend → deploy-test/prod
 ```
 
 ### Jobs 说明
@@ -280,56 +325,110 @@ deploy-dev:
 
 | 事件 | 分支 | 触发 |
 |------|------|------|
-| Push | main, develop | ✅ |
-| Pull Request | main, develop | ✅ |
-| Deploy | develop | 手动 |
-| Deploy | main | 手动 |
+| Push | main, dev, test | ✅ |
+| Pull Request | main, dev, test | ✅ |
+| Build & Test | test, main | ✅ |
+| Deploy | test | 自动 |
+| Deploy | main | 自动 |
 
 ### 配置步骤
 
 1. **启用 GitHub Actions**
 
-在 GitHub 仓库设置中，确保 Actions 功能已启用。
+   在 GitHub 仓库设置中，确保 Actions 功能已启用。
 
 2. **配置 Secrets**
 
-在 `Settings > Secrets and variables > Actions` 中添加以下 Secrets：
+   在 `Settings > Secrets and variables > Actions` 中添加以下 Secrets：
 
-| Secret 名称 | 说明 |
-|-------------|------|
-| `DEV_SERVER_HOST` | 开发服务器地址 |
-| `DEV_SERVER_USER` | 开发服务器用户 |
-| `DEV_SSH_PRIVATE_KEY` | 开发服务器 SSH 私钥 |
-| `PROD_SERVER_HOST` | 生产服务器地址 |
-| `PROD_SERVER_USER` | 生产服务器用户 |
-| `PROD_SSH_PRIVATE_KEY` | 生产服务器 SSH 私钥 |
+   | Secret 名称 | 说明 |
+   |-------------|------|
+   | `TEST_SERVER_HOST` | 测试服务器地址 |
+   | `TEST_SERVER_USER` | 测试服务器用户 |
+   | `TEST_SSH_PRIVATE_KEY` | 测试服务器 SSH 私钥 |
+   | `PROD_SERVER_HOST` | 生产服务器地址 |
+   | `PROD_SERVER_USER` | 生产服务器用户 |
+   | `PROD_SSH_PRIVATE_KEY` | 生产服务器 SSH 私钥 |
 
 3. **配置 Environments**
 
-在 `Settings > Environments` 中创建环境：
+   在 `Settings > Environments` 中创建环境：
 
-- **Development**
-  - Name: `development`
-  - URL: `https://dev.purrchat.com`
-  - Protection rules: 无
+   - **Test**
+     - Name: `test`
+     - URL: `https://test.purrchat.com`
+     - Protection rules: 无
 
-- **Production**
-  - Name: `production`
-  - URL: `https://purrchat.com`
-  - Protection rules: 需要审批
+   - **Production**
+     - Name: `production`
+     - URL: `https://purrchat.com`
+     - Protection rules: 需要审批
 
 4. **生成 SSH 密钥**
 
+   ```bash
+   # 生成 SSH 密钥对
+   ssh-keygen -t ed25519 -C "github-actions" -f ~/.ssh/github_actions_key
+
+   # 将公钥添加到服务器
+   ssh-copy-id -i ~/.ssh/github_actions_key.pub user@server
+
+   # 将私钥内容复制到 GitHub Secrets
+   cat ~/.ssh/github_actions_key
+   ```
+
+## 本地 CI/CD
+
+项目提供了本地 CI/CD 脚本，用于在从 [`dev`](main:1) 合并到 [`test`](main:1) 分支前进行验证。
+
+### 脚本说明
+
+#### 1. 运行本地 CI/CD
+
+[`scripts/run-local-ci.sh`](scripts/run-local-ci.sh:1) - 本地运行完整的 CI/CD 流程
+
 ```bash
-# 生成 SSH 密钥对
-ssh-keygen -t ed25519 -C "github-actions" -f ~/.ssh/github_actions_key
-
-# 将公钥添加到服务器
-ssh-copy-id -i ~/.ssh/github_actions_key.pub user@server
-
-# 将私钥内容复制到 GitHub Secrets
-cat ~/.ssh/github_actions_key
+bash scripts/run-local-ci.sh
 ```
+
+该脚本会执行以下步骤：
+- 检查当前分支是否为 [`test`](main:1)
+- 检查工作目录是否干净
+- 安装前端依赖
+- 运行前端和后端 Lint
+- 运行前端和后端测试
+- 构建前端和后端
+
+#### 2. 从 dev 合并到 test
+
+[`scripts/merge-dev-to-test.sh`](scripts/merge-dev-to-test.sh:1) - 自动化从 [`dev`](main:1) 合并到 [`test`](main:1) 的流程
+
+```bash
+bash scripts/merge-dev-to-test.sh
+```
+
+该脚本会执行以下步骤：
+- 检查当前分支是否为 [`dev`](main:1)
+- 拉取最新代码
+- 切换到 [`test`](main:1) 分支
+- 合并 [`dev`](main:1) 分支
+- 运行本地 CI/CD
+- 推送到远程 [`test`](main:1) 分支
+
+### 使用建议
+
+1. **日常开发**
+   - 在 [`dev`](main:1) 分支进行开发
+   - 提交代码到 [`dev`](main:1) 分支
+
+2. **准备发布**
+   - 运行 `bash scripts/merge-dev-to-test.sh`
+   - 等待本地 CI/CD 通过
+   - 等待 GitHub Actions CI/CD 通过
+
+3. **发布到生产**
+   - 从 [`test`](main:1) 合并到 [`main`](main:1)
+   - GitHub Actions 自动部署到生产环境
 
 ## 环境变量配置
 
@@ -365,68 +464,66 @@ cat ~/.ssh/github_actions_key
 
 ## 部署流程
 
-### 开发环境部署
+### 测试环境部署
 
-1. **触发部署**
+测试环境部署是自动的，当 [`test`](main:1) 分支的 CI/CD 通过后自动触发。
 
-   - GitLab: 在 Pipeline 页面点击 `deploy:dev` 的 Play 按钮
-   - GitHub: 在 Actions 页面手动触发 `deploy-dev` workflow
+1. **触发条件**
+
+    - 推送到 [`test`](main:1) 分支
+    - GitHub Actions CI/CD 全部通过
 
 2. **部署步骤**
 
-   ```bash
-   # 1. 拉取最新镜像
-   docker-compose pull backend frontend
-   
-   # 2. 启动服务
-   docker-compose up -d backend frontend
-   
-   # 3. 清理旧镜像
-   docker image prune -f
-   
-   # 4. 运行数据库迁移
-   docker-compose exec -T postgres psql -U postgres -d purrchat -f /docker-entrypoint-initdb.d/001_init_schema.sql
-   ```
+    ```bash
+    # 1. 拉取最新镜像
+    docker-compose pull backend frontend
+
+    # 2. 启动服务
+    docker-compose up -d backend frontend
+
+    # 3. 清理旧镜像
+    docker image prune -f
+    ```
 
 3. **健康检查**
 
-   ```bash
-   curl -f https://dev.purrchat.com/health
-   curl -f https://dev.purrchat.com/
-   ```
+    ```bash
+    curl -f https://test.purrchat.com/health
+    curl -f https://test.purrchat.com/
+    ```
 
 ### 生产环境部署
 
-1. **触发部署**
+生产环境部署是自动的，当 [`main`](main:1) 分支的 CI/CD 通过后自动触发。
 
-   - GitLab: 在 Pipeline 页面点击 `deploy:prod` 的 Play 按钮
-   - GitHub: 在 Actions 页面手动触发 `deploy-prod` workflow
+1. **触发条件**
+
+    - 从 [`test`](main:1) 合并到 [`main`](main:1)
+    - GitHub Actions CI/CD 全部通过
 
 2. **部署步骤**
 
-   ```bash
-   # 1. 备份数据库
-   docker-compose exec -T postgres pg_dump -U postgres purrchat > backup_$(date +%Y%m%d_%H%M%S).sql
-   
-   # 2. 拉取最新镜像
-   docker-compose pull backend frontend
-   
-   # 3. 启动服务
-   docker-compose up -d backend frontend
-   
-   # 4. 清理旧镜像
-   docker image prune -f
-   
-   # 5. 运行数据库迁移
-   docker-compose exec -T postgres psql -U postgres -d purrchat -f /docker-entrypoint-initdb.d/001_init_schema.sql
-   ```
+    ```bash
+    # 1. 备份数据库
+    docker-compose exec -T postgres pg_dump -U postgres purrchat > backup_$(date +%Y%m%d_%H%M%S).sql
+
+    # 2. 拉取最新镜像
+    docker-compose pull backend frontend
+
+    # 3. 启动服务
+    docker-compose up -d backend frontend
+
+    # 4. 清理旧镜像
+    docker image prune -f
+    ```
 
 3. **健康检查**
 
-   ```bash
-   curl -f https://api.purrchat.com/health
-   curl -f https://purrchat.com/
-   ```
+    ```bash
+    curl -f https://api.purrchat.com/health
+    curl -f https://purrchat.com/
+    ```
 
 ### 回滚流程
 
