@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
 import DynamicBackground from '../components/DynamicBackground.vue';
 
 describe('DynamicBackground Component', () => {
   let wrapper: ReturnType<typeof mount>;
 
   beforeEach(() => {
+    // Setup Pinia
+    setActivePinia(createPinia());
+
     // Mock canvas context
     const mockCanvasContext = {
       clearRect: vi.fn(),

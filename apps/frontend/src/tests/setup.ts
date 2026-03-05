@@ -1,9 +1,32 @@
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { vi, beforeEach } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 
 // Type for requestAnimationFrame callback
 // eslint-disable-next-line no-unused-vars
 type FrameRequestCallback = (time: number) => void;
+
+// Mock axios before importing any modules that use it
+vi.mock('axios', () => {
+  const mockAxios = {
+    create: vi.fn(() => mockAxios),
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    interceptors: {
+      request: {
+        use: vi.fn(),
+      },
+      response: {
+        use: vi.fn(),
+      },
+    },
+  };
+  return {
+    default: mockAxios,
+  };
+});
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -57,3 +80,8 @@ globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
 globalThis.cancelAnimationFrame = (id: number) => {
   clearTimeout(id);
 };
+
+// Setup Pinia for all tests
+beforeEach(() => {
+  setActivePinia(createPinia());
+});

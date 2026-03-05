@@ -4,7 +4,26 @@ import { api } from '../models/api';
 import type { User, Conversation, Message, Friendship } from '../models/types';
 
 // Mock axios
-vi.mock('axios');
+vi.mock('axios', () => {
+  const mockAxios = {
+    create: vi.fn(() => mockAxios),
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    interceptors: {
+      request: {
+        use: vi.fn(),
+      },
+      response: {
+        use: vi.fn(),
+      },
+    },
+  };
+  return {
+    default: mockAxios,
+  };
+});
 
 describe('API Client', () => {
   const mockedAxios = vi.mocked(axios);
@@ -12,6 +31,8 @@ describe('API Client', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    // Reset the mock to return itself
+    mockedAxios.create.mockReturnValue(mockedAxios as any);
   });
 
   describe('register', () => {
