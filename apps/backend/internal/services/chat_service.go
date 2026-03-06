@@ -854,11 +854,19 @@ func (s *ChatService) HandleFriendRequest(ctx context.Context, userID, conversat
 	var conversationUUID uuid.UUID
 
 	for _, fs := range friendships {
-		// 检查是否是待处理的请求，并且当前用户是接收方
-		if fs.Status == models.FriendshipStatusPending && fs.FriendID == userUUID {
-			friendship = fs
-			senderUUID = fs.UserID
-			break
+		// 检查是否是待处理的请求
+		if fs.Status == models.FriendshipStatusPending {
+			// 如果当前用户是发送方，则不允许处理自己的好友请求
+			if fs.UserID == userUUID {
+				logger.ErrorfWithCaller("Sender %s is not authorized to handle their own friend request", userID)
+				return errors.New("not authorized to handle this friend request")
+			}
+			// 当前用户是接收方
+			if fs.FriendID == userUUID {
+				friendship = fs
+				senderUUID = fs.UserID
+				break
+			}
 		}
 	}
 
