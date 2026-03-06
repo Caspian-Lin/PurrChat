@@ -1,9 +1,5 @@
 <template>
-  <div
-    ref="containerRef"
-    :class="containerClasses"
-    :style="containerStyle"
-  >
+  <div ref="containerRef" :class="containerClasses" :style="containerStyle">
     <!-- 内容插槽 -->
     <div class="resizable-content" :style="contentStyle">
       <slot></slot>
@@ -93,10 +89,12 @@ const containerStyle = computed(() => {
   if (props.direction === 'horizontal') {
     return {
       width: `${currentSize.value}px`,
+      height: '100%',
       flex: '0 0 auto',
     };
   } else {
     return {
+      width: '100%',
       height: `${currentSize.value}px`,
       flex: '0 0 auto',
     };
@@ -107,7 +105,7 @@ const contentStyle = computed(() => {
   return {
     width: '100%',
     height: '100%',
-    overflow: 'hidden',
+    overflow: 'auto',
   };
 });
 
@@ -133,15 +131,15 @@ const startResize = (clientX: number, clientY: number) => {
   isResizing.value = true;
   startPos.value = props.direction === 'horizontal' ? clientX : clientY;
   startSize.value = currentSize.value;
-  
+
   emit('resizeStart');
-  
+
   // 添加事件监听器
   document.addEventListener('mousemove', handleMouseMove);
   document.addEventListener('mouseup', handleMouseUp);
   document.addEventListener('touchmove', handleTouchMove, { passive: false });
   document.addEventListener('touchend', handleTouchEnd);
-  
+
   // 防止文本选择
   document.body.style.userSelect = 'none';
   document.body.style.cursor = props.direction === 'horizontal' ? 'col-resize' : 'row-resize';
@@ -168,12 +166,12 @@ const handleTouchMove = (e: TouchEvent) => {
 const updateSize = (clientX: number, clientY: number) => {
   const currentPos = props.direction === 'horizontal' ? clientX : clientY;
   const delta = currentPos - startPos.value;
-  
+
   let newSize = startSize.value + delta;
-  
+
   // 限制最小和最大尺寸
   newSize = Math.max(props.minSize, Math.min(props.maxSize, newSize));
-  
+
   currentSize.value = newSize;
   emit('resize', newSize);
 };
@@ -191,21 +189,21 @@ const handleTouchEnd = () => {
 // 结束调整大小
 const endResize = () => {
   if (!isResizing.value) return;
-  
+
   isResizing.value = false;
-  
+
   // 移除事件监听器
   document.removeEventListener('mousemove', handleMouseMove);
   document.removeEventListener('mouseup', handleMouseUp);
   document.removeEventListener('touchmove', handleTouchMove);
   document.removeEventListener('touchend', handleTouchEnd);
-  
+
   // 恢复文本选择
   document.body.style.userSelect = '';
   document.body.style.cursor = '';
-  
+
   emit('resizeEnd');
-  
+
   // 保存尺寸到localStorage
   if (props.storageKey) {
     localStorage.setItem(props.storageKey, currentSize.value.toString());

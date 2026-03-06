@@ -117,17 +117,17 @@ const handleTouchMove = (e: TouchEvent) => {
 const updatePosition = (clientX: number, clientY: number) => {
   const currentPos = props.direction === 'horizontal' ? clientX : clientY;
   const delta = currentPos - startPos.value;
-  
+
   let newPosition = startPosition.value + delta;
-  
+
   // 垂直方向时，拖动方向与高度变化相反
   if (props.direction === 'vertical') {
     newPosition = startPosition.value - delta;
   }
-  
+
   // 限制最小和最大位置
   newPosition = Math.max(props.minPosition, Math.min(props.maxPosition, newPosition));
-  
+
   currentPosition.value = newPosition;
   emit('resize', newPosition);
 };

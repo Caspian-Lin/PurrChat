@@ -19,6 +19,12 @@
             <div class="font-semibold text-lg" style="color: var(--text-color)">
               {{ conversation?.name }}
             </div>
+            <div class="flex items-center gap-2 mt-1">
+              <div class="w-[12px] h-[12px] rounded-full bg-accent-color" />
+              <div class="text-sm" style="color: var(--text-secondary-color)">
+                GID: {{ conversation?.id }}
+              </div>
+            </div>
             <div class="text-sm" style="color: var(--text-secondary-color)">
               {{ members.length }} 位成员
             </div>

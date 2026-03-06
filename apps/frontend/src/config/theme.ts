@@ -64,11 +64,9 @@ export const lightTheme = {
   modalOverlay: 'rgba(0, 0, 0, 0.5)',
   inputBackground: '#f2f2f2',
   inputBorder: '#d9d9d9',
-  messageSent: 'linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%)',
-  messageReceived: '#fffffffa',
   cardBackground: '#f9f9f9',
   hoverBackground: '#f2f2f2',
-  selectedBackground: '#e8f4fd',
+  selectedBackground: '#dcdcdc',
 };
 
 // 深色主题配色
@@ -86,11 +84,9 @@ export const darkTheme = {
   modalOverlay: 'rgba(0, 0, 0, 0.7)',
   inputBackground: '#1f1f1f',
   inputBorder: '#404040',
-  messageSent: 'linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%)',
-  messageReceived: '#3d3d3d',
   cardBackground: '#2d2d2d',
   hoverBackground: '#3d3d3d',
-  selectedBackground: '#1e3a5f',
+  selectedBackground: '#303030',
 };
 
 // 默认主题配置

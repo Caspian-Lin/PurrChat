@@ -21,13 +21,17 @@
         </div>
         <button
           v-if="searchQuery"
-          class="relative p-2 flex items-center justify-center transition-all text-text-tertiary hover:text-text-primary"
+          class="relative p-2 flex items-center justify-center transition-all text-text-primary hover:text-text-primary"
           @click="clearSearch"
         >
           <BsXCircle />
         </button>
-        <button v-else class="relative p-2 flex items-center justify-center transition-all">
-          <BsSearch />
+        <button
+          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-primary hover:text-text-primary"
+          title="创建群聊"
+          @click="handleCreateGroup"
+        >
+          <BsPlusLg />
         </button>
       </div>
 
@@ -115,7 +119,7 @@ import GroupDetailModal from '../GroupDetailModal.vue';
 import NotificationList from '../../common/NotificationList.vue';
 import ResizableContainer from '../../common/ResizableContainer.vue';
 import type { User, Conversation } from '../../../models/types';
-import { BsSearch, BsXCircle } from 'vue-icons-plus/bs';
+import { BsPlusLg, BsXCircle } from 'vue-icons-plus/bs';
 // Auth
 const auth = useAuthController();
 const { currentUser } = auth;
@@ -131,20 +135,11 @@ const {
   sendMessage,
   exportMessages,
   clearMessages,
-  messagesContainer,
 } = useChat();
 const { addMessage: cacheMessage } = useMessageCache();
 const { notifications, addNotification, removeNotification } = useNotification();
 const ws = useWebSocket();
 const messageStore = useMessageStore();
-
-// 滚动到底部
-const scrollToBottom = async () => {
-  await nextTick();
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-  }
-};
 
 // 搜索状态
 const searchQuery = ref('');
@@ -254,15 +249,71 @@ const handleStartChatWithSearchUser = async () => {
 };
 
 const handleSendMessage = async (content: string) => {
-  if (!selectedConversation.value?.id) return;
+  console.log('[ChatPanel] handleSendMessage called with content:', content);
+  if (!selectedConversation.value?.id) {
+    console.log('[ChatPanel] No selected conversation, returning');
+    return;
+  }
 
-  const success = await sendMessage(selectedConversation.value.id, content);
-  if (success) {
-    // 更新会话列表中的最后一条消息
-    const conversation = conversations.value.find((c) => c.id === selectedConversation.value?.id);
-    if (conversation && messages.value.length > 0) {
-      conversation.last_message = messages.value[messages.value.length - 1];
+  console.log(
+    '[ChatPanel] Calling sendMessage with conversationId:',
+    selectedConversation.value.id
+  );
+  try {
+    const success = await sendMessage(selectedConversation.value.id, content);
+    console.log('[ChatPanel] sendMessage returned, success:', success);
+    console.log('[ChatPanel] messages.value.length after sendMessage:', messages.value.length);
+    if (success) {
+    // 更新会话列表中的最后一条消息和更新时间
+    const conversationIndex = conversations.value.findIndex(
+      (c) => c.id === selectedConversation.value?.id
+    );
+    console.log('[ChatPanel] conversationIndex:', conversationIndex);
+    console.log('[ChatPanel] messages.value.length:', messages.value.length);
+    if (conversationIndex !== -1 && messages.value.length > 0) {
+      const lastMessage = messages.value[messages.value.length - 1];
+      console.log('[ChatPanel] lastMessage:', lastMessage);
+      if (lastMessage) {
+        const conversation = conversations.value[conversationIndex];
+        if (conversation) {
+          console.log('[ChatPanel] conversation before update:', {
+            id: conversation.id,
+            lastMessage: conversation.last_message?.content,
+            updatedAt: conversation.updated_at,
+          });
+          // 使用展开运算符触发响应式更新
+          conversations.value[conversationIndex] = {
+            ...conversation,
+            last_message: lastMessage,
+            updated_at: new Date().toISOString(),
+          };
+
+          console.log('[ChatPanel] Updated conversation after send message:', {
+            conversationId: selectedConversation.value.id,
+            lastMessage: lastMessage.content,
+            lastMessageCreatedAt: lastMessage.created_at,
+            updatedAt: conversations.value[conversationIndex].updated_at,
+          });
+
+          // 缓存新消息
+          await cacheMessage(selectedConversation.value.id, lastMessage);
+
+          // 更新message store
+          messageStore.addMessage(selectedConversation.value.id, lastMessage);
+
+          // 强制触发响应式更新
+          console.log('[ChatPanel] Forcing reactive update by reassigning conversations.value');
+          conversations.value = [...conversations.value];
+          console.log(
+            '[ChatPanel] conversations.value after reassign:',
+            conversations.value.length
+          );
+        }
+      }
     }
+  }
+  } catch (error) {
+    console.error('[ChatPanel] Error in handleSendMessage:', error);
   }
 };
 
@@ -358,10 +409,44 @@ onMounted(async () => {
       // 显示通知
       addNotification('info', '新消息', '收到新消息');
 
+      // 更新会话列表中的最后一条消息和更新时间
+      const conversationIndex = conversations.value.findIndex(
+        (c) => c.id === newMessage.conversation_id
+      );
+      console.log('[ChatPanel] conversationIndex for new message:', conversationIndex);
+      if (conversationIndex !== -1) {
+        const conversation = conversations.value[conversationIndex];
+        if (conversation) {
+          console.log('[ChatPanel] conversation before update:', {
+            id: conversation.id,
+            lastMessage: conversation.last_message?.content,
+            updatedAt: conversation.updated_at,
+          });
+          // 使用 Object.assign 触发响应式更新
+          Object.assign(conversation, {
+            last_message: newMessage,
+            updated_at: new Date().toISOString(),
+          });
+
+          console.log('[ChatPanel] Updated conversation after receiving message:', {
+            conversationId: newMessage.conversation_id,
+            lastMessage: newMessage.content,
+            updatedAt: conversation.updated_at,
+          });
+
+          // 强制触发响应式更新
+          console.log('[ChatPanel] Forcing reactive update by reassigning conversations.value');
+          conversations.value = [...conversations.value];
+          console.log(
+            '[ChatPanel] conversations.value after reassign:',
+            conversations.value.length
+          );
+        }
+      }
+
       // 如果是当前会话的消息，添加到消息列表
       if (selectedConversation.value?.id === newMessage.conversation_id) {
         messages.value.push(newMessage);
-        scrollToBottom();
         // 更新message store
         messageStore.addMessage(newMessage.conversation_id, newMessage);
         // 缓存新消息
@@ -370,15 +455,6 @@ onMounted(async () => {
         // 如果不是当前会话，也要更新message store
         messageStore.addMessage(newMessage.conversation_id, newMessage);
       }
-
-      // 更新会话列表中的最后一条消息
-      const conversation = conversations.value.find((c) => c.id === newMessage.conversation_id);
-      if (conversation) {
-        conversation.last_message = newMessage;
-      }
-
-      // 实时更新会话列表
-      await loadConversations();
     });
 
     // 注册新好友请求处理器

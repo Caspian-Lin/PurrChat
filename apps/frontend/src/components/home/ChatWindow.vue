@@ -12,28 +12,28 @@
               : getUserUsername(getOtherUser(conversation, currentUserId))
           }}
         </div>
-        <div
-          v-if="conversation.conversation_type === 'direct'"
-          class="flex items-center gap-2 mt-1"
-        >
+        <div class="flex items-center gap-2 mt-1">
           <div class="w-[12px] h-[12px] rounded-full bg-accent-color" />
           <div class="text-sm text-text-tertiary">
-            UID: {{ getOtherUser(conversation, currentUserId)?.uid }}
+            <template v-if="conversation.conversation_type === 'direct'">
+              UID: {{ getOtherUser(conversation, currentUserId)?.uid }}
+            </template>
+            <template v-else> GID: {{ conversation.id }} </template>
           </div>
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <!-- 群聊创建按钮 -->
+        <!-- 群聊创建按钮
         <button
           class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
           title="创建群聊"
           @click="$emit('create-group')"
         >
           <BsPeopleFill class="text-2xl" />
-        </button>
+        </button> -->
         <!-- 会话详情按钮 -->
         <button
-          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
           title="会话详情"
           @click="handleShowDetail"
         >
@@ -43,7 +43,10 @@
     </div>
 
     <!-- 消息列表 -->
-    <div class="flex-1 overflow-y-auto p-4 space-y-2 bg-bg-quaternary border-b border-border-color">
+    <div
+      ref="messagesContainer"
+      class="flex-1 overflow-y-auto p-4 space-y-2 bg-bg-quaternary border-b border-border-color"
+    >
       <div
         v-for="message in messages"
         :key="message.id"
@@ -81,9 +84,8 @@
               // message.sender_id === currentUserId ? 'rounded-br-none' : 'rounded-bl-none',
             ]"
             :style="{
-              background:
-                message.sender_id === currentUserId ? 'var(--theme-gradient)' : '#fffffffa',
-              color: message.sender_id === currentUserId ? 'white' : '#000000',
+              background: 'var(--strong-background-color)',
+              color: 'var(--text-color)',
             }"
           >
             {{ message.content }}
@@ -114,28 +116,28 @@
       :style="{ height: `${inputAreaHeight}px` }"
     >
       <!-- 文本选项 -->
-      <div class="flex items-center gap-3 px-4 py-4">
+      <div class="flex items-center gap-3 px-4 py-3">
         <button
-          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+          class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
           title="表情"
         >
           <BsEmojiSmile class="text-2xl" />
         </button>
         <button
-          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+          class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
           title="文件"
         >
           <BsPaperclip class="text-2xl" />
         </button>
         <button
-          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+          class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
           title="截图"
         >
           <BsCamera class="text-2xl" />
         </button>
         <div class="h-[18px] w-px bg-border-color" />
         <button
-          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+          class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
           title="视频通话"
         >
           <BsCameraVideo class="text-2xl" />
@@ -153,7 +155,7 @@
       </div>
 
       <!-- 发送按钮 -->
-      <div class="flex justify-end px-8 py-8">
+      <div class="flex justify-end pb-8 pr-8">
         <button
           class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-xl"
           :disabled="!newMessage.trim()"
@@ -167,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, nextTick, watch } from 'vue';
 import { getUserUsername, getOtherUser } from '../../utils/userHelpers';
 import { formatTime, formatTimeWithSeconds } from '../../utils/formatTime';
 import {
@@ -175,7 +177,6 @@ import {
   BsPaperclip,
   BsCamera,
   BsCameraVideo,
-  BsPeopleFill,
   BsInfoCircle,
 } from 'vue-icons-plus/bs';
 import ResizableSplitter from '../common/Splitter.vue';
@@ -200,9 +201,28 @@ const emit = defineEmits<{
 
 const newMessage = ref('');
 const inputAreaHeight = ref(300);
+const messagesContainer = ref<HTMLElement | null>(null);
+
+// 滚动到底部
+const scrollToBottom = async () => {
+  await nextTick();
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+  }
+};
 
 const handleSend = () => {
-  if (!props.conversation?.id || !newMessage.value.trim()) return;
+  console.log(
+    '[ChatWindow] handleSend called, conversation:',
+    props.conversation?.id,
+    'newMessage:',
+    newMessage.value
+  );
+  if (!props.conversation?.id || !newMessage.value.trim()) {
+    console.log('[ChatWindow] handleSend returning early, no conversation or empty message');
+    return;
+  }
+  console.log('[ChatWindow] Emitting send-message event with content:', newMessage.value);
   emit('send-message', newMessage.value);
   newMessage.value = '';
 };
@@ -224,6 +244,15 @@ const handleSplitterResize = (height: number) => {
   inputAreaHeight.value = height;
 };
 
+// 监听消息变化，自动滚动到底部
+watch(
+  () => props.messages,
+  async () => {
+    await scrollToBottom();
+  },
+  { deep: true }
+);
+
 onMounted(() => {
   // 从localStorage恢复输入区高度
   const savedHeight = localStorage.getItem('chat-input-height');
@@ -233,6 +262,13 @@ onMounted(() => {
       inputAreaHeight.value = height;
     }
   }
+  // 组件挂载后滚动到底部
+  scrollToBottom();
+});
+
+// 暴露方法给父组件
+defineExpose({
+  scrollToBottom,
 });
 </script>
 

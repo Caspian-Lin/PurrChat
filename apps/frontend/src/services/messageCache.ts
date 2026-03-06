@@ -36,13 +36,16 @@ class MessageCacheService {
   // 初始化加密密钥
   private async initCryptoKey() {
     try {
+      console.log('[MessageCache] initCryptoKey called');
       // 从localStorage获取加密密钥
       const keyData = localStorage.getItem('message_encryption_key');
       if (keyData) {
+        console.log('[MessageCache] Found existing key in localStorage');
         // 导入现有密钥
         this.cryptoKey = await this.importKey(keyData);
         console.log('[MessageCache] Loaded existing encryption key');
       } else {
+        console.log('[MessageCache] No existing key, generating new one');
         // 生成新的加密密钥
         this.cryptoKey = await this.generateCryptoKey();
         const exportedKey = await this.exportKey(this.cryptoKey);
@@ -50,15 +53,30 @@ class MessageCacheService {
         console.log('[MessageCache] Generated new encryption key');
       }
       this.keyInitialized = true;
+      console.log('[MessageCache] keyInitialized set to true');
     } catch (error) {
       console.error('[MessageCache] Failed to initialize crypto key:', error);
+      // 即使失败，也要设置为 true，避免无限循环
+      this.keyInitialized = true;
+      console.log('[MessageCache] keyInitialized set to true (after error)');
     }
   }
 
   // 等待密钥初始化完成
   private async waitForKeyInitialization() {
-    while (!this.keyInitialized) {
+    console.log('[MessageCache] waitForKeyInitialization called, keyInitialized:', this.keyInitialized);
+    let attempts = 0;
+    const maxAttempts = 1000; // 10秒超时
+    while (!this.keyInitialized && attempts < maxAttempts) {
       await new Promise((resolve) => setTimeout(resolve, 10));
+      attempts++;
+      if (attempts % 100 === 0) {
+        console.log(`[MessageCache] Still waiting for key initialization, attempt ${attempts}`);
+      }
+    }
+    if (!this.keyInitialized) {
+      console.error('[MessageCache] Key initialization timeout, proceeding without encryption');
+      this.keyInitialized = true; // 强制设置为 true，避免无限循环
     }
   }
 
@@ -97,7 +115,9 @@ class MessageCacheService {
 
   // 加密数据
   private async encrypt(data: string): Promise<string> {
+    console.log('[MessageCache] encrypt called, keyInitialized:', this.keyInitialized);
     await this.waitForKeyInitialization();
+    console.log('[MessageCache] waitForKeyInitialization completed');
     if (!this.cryptoKey) {
       console.warn('[MessageCache] No encryption key available, storing data unencrypted');
       return data;
@@ -106,6 +126,7 @@ class MessageCacheService {
     try {
       const encoder = new TextEncoder();
       const iv = crypto.getRandomValues(new Uint8Array(12));
+      console.log('[MessageCache] Starting encryption');
       const encrypted = await crypto.subtle.encrypt(
         {
           name: 'AES-GCM',
@@ -114,13 +135,16 @@ class MessageCacheService {
         this.cryptoKey,
         encoder.encode(data)
       );
+      console.log('[MessageCache] Encryption completed');
 
       // 将IV和加密数据合并
       const combined = new Uint8Array(iv.length + encrypted.byteLength);
       combined.set(iv);
       combined.set(new Uint8Array(encrypted), iv.length);
 
-      return btoa(String.fromCharCode(...combined));
+      const result = btoa(String.fromCharCode(...combined));
+      console.log('[MessageCache] encrypt completed successfully');
+      return result;
     } catch (error) {
       console.error('[MessageCache] Encryption failed:', error);
       return data;
@@ -188,14 +212,19 @@ class MessageCacheService {
 
   // 保存缓存到localStorage
   private async saveCacheToStorage(conversationId: string) {
+    console.log('[MessageCache] saveCacheToStorage called for conversation:', conversationId);
     const cache = this.cache.get(conversationId);
     if (!cache) {
+      console.log('[MessageCache] No cache found for conversation:', conversationId);
       return;
     }
 
     try {
+      console.log('[MessageCache] Stringifying cache data');
       const data = JSON.stringify(cache);
+      console.log('[MessageCache] Calling encrypt');
       const encryptedData = await this.encrypt(data);
+      console.log('[MessageCache] Encrypt completed, saving to localStorage');
       localStorage.setItem(`${this.storageKeyPrefix}${conversationId}`, encryptedData);
       console.log(`[MessageCache] Saved cache for conversation ${conversationId}`);
     } catch (error) {
@@ -222,8 +251,10 @@ class MessageCacheService {
 
   // 添加消息到缓存
   async addMessage(conversationId: string, message: Message | CachedMessage) {
+    console.log('[MessageCache] addMessage called with conversationId:', conversationId, 'messageId:', message.id);
     let cache = this.cache.get(conversationId);
     if (!cache) {
+      console.log('[MessageCache] Creating new cache for conversation:', conversationId);
       cache = {
         conversationId,
         messages: [],
@@ -234,16 +265,25 @@ class MessageCacheService {
 
     // 检查消息是否已存在
     const exists = cache.messages.some((m) => m.id === message.id);
+    console.log('[MessageCache] Message exists check:', exists);
     if (!exists) {
+      console.log('[MessageCache] Adding message to cache');
       cache.messages.push(message as CachedMessage);
       cache.lastUpdated = Date.now();
-      await this.saveCacheToStorage(conversationId);
+      console.log('[MessageCache] Calling saveCacheToStorage');
+      try {
+        await this.saveCacheToStorage(conversationId);
+        console.log('[MessageCache] saveCacheToStorage completed');
+      } catch (error) {
+        console.error('[MessageCache] Error in saveCacheToStorage:', error);
+      }
       console.log(`[MessageCache] Added message ${message.id} to conversation ${conversationId}`);
     } else {
       console.log(
         `[MessageCache] Message ${message.id} already exists in conversation ${conversationId}`
       );
     }
+    console.log('[MessageCache] addMessage completed');
   }
 
   // 批量添加消息到缓存

@@ -26,7 +26,7 @@
           'w-12 h-12 p-0 roundrect flex items-center justify-center transition-all',
           activePanel === 'friends'
             ? 'bg-[var(--theme-primary)]'
-            : 'bg-bg-quaternary hover:bg-hover-bg',
+            : 'bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary',
         ]"
         @click="handlePanelClick('friends')"
       >
@@ -38,7 +38,7 @@
     </div>
 
     <!-- 底部区域 - 主题切换、个人资料 -->
-    <div class="flex flex-col items-center gap-4 mt-auto">
+    <div class="w-12 flex flex-col items-center gap-4 mt-auto">
       <!-- 在线状态指示器（只在离线或连接中时显示） -->
       <div
         v-if="!isOnline"
@@ -56,9 +56,9 @@
             isOffline ? 'bg-red-500' : 'bg-yellow-500',
           ]"
         ></div>
-        <span :class="['text-xs font-medium', isOffline ? 'text-red-400' : 'text-yellow-400']">
+        <!-- <span :class="['text-xs font-medium', isOffline ? 'text-red-400' : 'text-yellow-400']">
           {{ connectionStatusText }}
-        </span>
+        </span> -->
       </div>
 
       <ThemeSwitcher />

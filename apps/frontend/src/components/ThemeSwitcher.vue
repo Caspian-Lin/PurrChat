@@ -1,7 +1,7 @@
 <template>
   <div>
     <button
-      class="relative w-10 h-10 flex items-center justify-center rounded-lg hover:bg-hover-bg transition-colors"
+      class="relative w-10 h-10 flex items-center justify-center rounded-lg bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
       @click="showModal = true"
     >
       <component :is="themeIcon" class="text-text-tertiary" :size="20" />

@@ -35,13 +35,13 @@
       >
         <div class="relative">
           <div
-            class="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold"
-            style="background: var(--theme-gradient)"
+            class="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold"
+            style="background: var(--theme-secondary)"
           >
             🔔
           </div>
           <div
-            class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold"
+            class="absolute -top-1 -right-1 w-5 h-5 bg-[var(--theme-primary)] rounded-full flex items-center justify-center text-primary text-xs font-bold"
           >
             {{ pendingRequests.length }}
           </div>
@@ -154,10 +154,10 @@
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-2xl font-bold text-text-primary">好友申请记录</h2>
           <button
-            class="text-text-tertiary hover:text-text-primary transition-colors"
+            class="bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
             @click="showFriendRequestHistory = false"
           >
-            ✕
+            <BsX class="text-2xl" />
           </button>
         </div>
 
@@ -172,10 +172,10 @@
           <div
             v-for="request in allFriendRequests"
             :key="request.id"
-            class="flex items-center gap-4 p-4 bg-bg-secondary rounded-lg"
+            class="flex items-center gap-4 px-4 py-2 bg-bg-secondary rounded-lg"
           >
             <div
-              class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 cursor-pointer"
+              class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer"
               @click="handleShowUserProfile(request.user!)"
             >
               <img
@@ -202,6 +202,24 @@
               </div>
             </div>
             <div
+              v-if="request.status === 'pending' && isRequestRecipient(request)"
+              class="flex gap-2"
+            >
+              <button
+                class="px-3 py-1 bg-green-500 text-white rounded-md text-sm font-medium hover:bg-green-600 transition-colors"
+                @click="handleAcceptRequest(request)"
+              >
+                接受
+              </button>
+              <button
+                class="px-3 py-1 bg-red-500 text-white rounded-md text-sm font-medium hover:bg-red-600 transition-colors"
+                @click="handleRejectRequest(request)"
+              >
+                忽略
+              </button>
+            </div>
+            <div
+              v-else
               :class="[
                 'px-3 py-1 rounded-md text-sm font-medium',
                 getFriendRequestStatusClass(request.status),
@@ -322,12 +340,12 @@ import FriendInfoModal from '../FriendInfoModal.vue';
 import UserProfileModal from '../UserProfileModal.vue';
 import ResizableContainer from '../../common/ResizableContainer.vue';
 import type { User, Friendship } from '../../../models/types';
-
+import { BsX } from 'vue-icons-plus/bs';
 // Auth
 const auth = useAuthController();
 
 // Composables
-const { friends, pendingRequests, loadFriends, loadPendingRequests, sendFriendRequest } =
+const { friends, pendingRequests, loadFriends, loadPendingRequests, sendFriendRequest, handleFriendRequest } =
   useFriends();
 const { createConversation } = useConversations();
 const { connect, on: onWs, off: offWs } = useWebSocket();
@@ -470,6 +488,38 @@ const handleSendFriendRequest = async () => {
   if (success) {
     showStrangerModal.value = false;
     selectedStranger.value = null;
+  }
+};
+
+// 判断当前用户是否是请求的接收方
+const isRequestRecipient = (request: Friendship): boolean => {
+  // 在后端 SendFriendRequest 中，UserID 是发送者，FriendID 是接收者
+  // 所以接收方应该检查 friendship.FriendID == auth.user?.id
+  return request.friend_id === auth.user?.id;
+};
+
+// 处理接受好友请求
+const handleAcceptRequest = async (request: Friendship) => {
+  console.log('[FriendsPanel] handleAcceptRequest', { requestId: request.id, conversationId: request.conversation_id });
+  
+  const success = await handleFriendRequest(request.conversation_id, 'accept');
+  if (success) {
+    // 重新加载数据
+    await loadFriends();
+    await loadPendingRequests();
+    await loadAllFriendRequests();
+  }
+};
+
+// 处理忽略好友请求
+const handleRejectRequest = async (request: Friendship) => {
+  console.log('[FriendsPanel] handleRejectRequest', { requestId: request.id, conversationId: request.conversation_id });
+  
+  const success = await handleFriendRequest(request.conversation_id, 'reject');
+  if (success) {
+    // 重新加载数据
+    await loadPendingRequests();
+    await loadAllFriendRequests();
   }
 };
 

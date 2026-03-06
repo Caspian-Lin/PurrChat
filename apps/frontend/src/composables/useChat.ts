@@ -114,27 +114,47 @@ export const useChat = () => {
    * @returns 是否发送成功
    */
   const sendMessage = async (conversationId: string, content: string): Promise<boolean> => {
-    if (!content.trim()) return false;
+    console.log(
+      '[useChat] sendMessage called with conversationId:',
+      conversationId,
+      'content:',
+      content
+    );
+    if (!content.trim()) {
+      console.log('[useChat] Content is empty, returning false');
+      return false;
+    }
 
     try {
-      const response = await api.sendMessage({
+      const requestData = {
         conversation_id: conversationId,
         content,
         msg_type: 'text',
-      });
+      };
+      console.log('[useChat] Sending message with data:', JSON.stringify(requestData, null, 2));
+      const response = await api.sendMessage(requestData);
 
+      console.log('[useChat] sendMessage response:', response);
       if (response.success && response.data) {
+        console.log('[useChat] Response successful, adding message to messages.value');
         messages.value.push(response.data);
         scrollToBottom();
 
         // 更新message store
+        console.log('[useChat] Adding message to messageStore');
         messageStore.addMessage(conversationId, response.data);
 
         // 缓存发送的消息
-        await messageCache.addMessage(conversationId, response.data);
-        console.log(`[useChat] Message sent and cached for conversation ${conversationId}`);
+        console.log('[useChat] Caching message');
+        try {
+          await messageCache.addMessage(conversationId, response.data);
+          console.log(`[useChat] Message sent and cached for conversation ${conversationId}`);
+        } catch (error) {
+          console.error('[useChat] Error caching message:', error);
+        }
         return true;
       }
+      console.log('[useChat] sendMessage response not successful or no data');
       return false;
     } catch (error) {
       console.error('[useChat] Failed to send message:', error);
