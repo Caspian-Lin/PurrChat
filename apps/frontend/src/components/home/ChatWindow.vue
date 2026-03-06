@@ -98,9 +98,20 @@
       </div>
     </div>
 
+    <!-- 分割器 -->
+    <ResizableSplitter
+      direction="vertical"
+      :initial-position="inputAreaHeight"
+      :min-position="200"
+      :max-position="600"
+      storage-key="chat-input-height"
+      @resize="handleSplitterResize"
+    />
+
     <!-- 消息输入区 -->
     <div
-      class="flex flex-col min-h-[300px] max-h-[800px] bg-bg-primary border-t border-border-color"
+      class="flex flex-col bg-bg-primary border-t border-border-color"
+      :style="{ height: `${inputAreaHeight}px` }"
     >
       <!-- 文本选项 -->
       <div class="flex items-center gap-3 px-4 py-4">
@@ -156,7 +167,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { getUserUsername, getOtherUser } from '../../utils/userHelpers';
 import { formatTime, formatTimeWithSeconds } from '../../utils/formatTime';
 import {
@@ -167,6 +178,7 @@ import {
   BsPeopleFill,
   BsInfoCircle,
 } from 'vue-icons-plus/bs';
+import ResizableSplitter from '../common/Splitter.vue';
 import type { Conversation, Message } from '../../models/types';
 
 interface Props {
@@ -187,6 +199,7 @@ const emit = defineEmits<{
 }>();
 
 const newMessage = ref('');
+const inputAreaHeight = ref(300);
 
 const handleSend = () => {
   if (!props.conversation?.id || !newMessage.value.trim()) return;
@@ -206,6 +219,21 @@ const handleShowDetail = () => {
     }
   }
 };
+
+const handleSplitterResize = (height: number) => {
+  inputAreaHeight.value = height;
+};
+
+onMounted(() => {
+  // 从localStorage恢复输入区高度
+  const savedHeight = localStorage.getItem('chat-input-height');
+  if (savedHeight) {
+    const height = parseInt(savedHeight, 10);
+    if (!isNaN(height) && height >= 200 && height <= 600) {
+      inputAreaHeight.value = height;
+    }
+  }
+});
 </script>
 
 <style scoped>

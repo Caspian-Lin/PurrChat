@@ -1,8 +1,12 @@
 <template>
   <div class="flex h-full">
     <!-- 会话列表 -->
-    <div
-      class="flex flex-col min-w-[300px] max-w-[400px] bg-bg-primary border-r border-border-color"
+    <ResizableContainer
+      direction="horizontal"
+      :initial-size="320"
+      :min-size="250"
+      :max-size="500"
+      class="bg-bg-primary border-r border-border-color"
     >
       <!-- 搜索用户 -->
       <div class="flex items-center gap-2 p-3 bg-bg-secondary border-b border-border-color">
@@ -36,7 +40,7 @@
         @show-user="handleShowUserProfile"
         @delete-conversation="handleDeleteConversation"
       />
-    </div>
+    </ResizableContainer>
 
     <!-- 聊天窗口 -->
     <div class="flex-1 flex flex-col bg-bg-tertiary">
@@ -109,6 +113,7 @@ import UserActionsModal from '../UserActionsModal.vue';
 import CreateGroupModal from '../CreateGroupModal.vue';
 import GroupDetailModal from '../GroupDetailModal.vue';
 import NotificationList from '../../common/NotificationList.vue';
+import ResizableContainer from '../../common/ResizableContainer.vue';
 import type { User, Conversation } from '../../../models/types';
 import { BsSearch, BsXCircle } from 'vue-icons-plus/bs';
 // Auth

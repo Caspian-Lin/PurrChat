@@ -113,7 +113,7 @@ const activePanel = computed(() => {
 // 连接状态
 const isOnline = computed(() => connectionStore.isOnline);
 const isOffline = computed(() => connectionStore.isOffline);
-const isConnecting = computed(() => connectionStore.isConnecting);
+// const isConnecting = computed(() => connectionStore.isConnecting);
 const connectionStatusText = computed(() => connectionStore.getConnectionStatusText());
 
 const handlePanelClick = (panel: 'chat' | 'friends') => {

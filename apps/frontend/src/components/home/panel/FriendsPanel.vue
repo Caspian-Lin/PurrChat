@@ -1,8 +1,12 @@
 <template>
   <div class="flex h-full">
     <!-- 好友列表 -->
-    <div
-      class="flex flex-col min-w-[300px] max-w-[400px] bg-bg-primary border-r border-border-color"
+    <ResizableContainer
+      direction="horizontal"
+      :initial-size="320"
+      :min-size="250"
+      :max-size="500"
+      class="bg-bg-primary border-r border-border-color"
     >
       <!-- 搜索好友 -->
       <div
@@ -141,7 +145,7 @@
         @select="handleSelectFriend"
         @show-user="handleShowUserProfile"
       />
-    </div>
+    </ResizableContainer>
 
     <!-- 好友信息窗口 -->
     <div class="flex-1 flex flex-col bg-bg-tertiary">
@@ -316,6 +320,7 @@ import { useRouter } from 'vue-router';
 import FriendList from '../FriendList.vue';
 import FriendInfoModal from '../FriendInfoModal.vue';
 import UserProfileModal from '../UserProfileModal.vue';
+import ResizableContainer from '../../common/ResizableContainer.vue';
 import type { User, Friendship } from '../../../models/types';
 
 // Auth
