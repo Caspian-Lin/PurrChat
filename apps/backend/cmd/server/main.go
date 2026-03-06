@@ -152,6 +152,7 @@ func main() {
 
 	// 初始化WebSocket hub
 	websocket.InitHub()
+	websocket.InitJWTSecret(cfg.JWT.Secret)
 
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
@@ -208,8 +209,8 @@ func main() {
 		friends.POST("/handle", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.HandleFriendRequest)
 	}
 
-	// WebSocket路由
-	r.GET("/api/ws", handlers.AuthMiddleware(cfg.JWT.Secret), websocket.HandleWebSocket)
+	// WebSocket路由（不使用AuthMiddleware，因为WebSocket通过查询参数传递token）
+	r.GET("/api/ws", websocket.HandleWebSocket)
 
 	// 启动服务器
 	go func() {

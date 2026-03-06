@@ -1,5 +1,6 @@
 import { ref, onUnmounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
+import { useConnectionStore } from '../stores/connection';
 
 export interface WebSocketMessage {
   type: string;
@@ -66,6 +67,9 @@ class WebSocketService {
   public connected = ref(false);
   public connecting = ref(false);
 
+  // 连接状态 store
+  private connectionStore = useConnectionStore();
+
   constructor() {
     this.setupMessageHandlers();
   }
@@ -90,11 +94,17 @@ class WebSocketService {
     }
 
     this.connecting.value = true;
+    this.connectionStore.setConnecting(true);
     this.isManualClose = false;
 
-    // 构建WebSocket URL
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = import.meta.env.VITE_WS_HOST || window.location.host;
+    // 构建WebSocket URL - 使用与API相同的基础URL
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+    console.log('[WebSocket] API Base URL:', apiBaseUrl);
+    console.log('[WebSocket] VITE_API_BASE_URL env:', import.meta.env.VITE_API_BASE_URL);
+
+    const url = new URL(apiBaseUrl);
+    const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = url.host;
     const wsUrl = `${protocol}//${host}/api/ws?token=${encodeURIComponent(token)}&user_id=${userId}`;
 
     console.log('Connecting to WebSocket:', wsUrl);
@@ -109,6 +119,7 @@ class WebSocketService {
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error);
       this.connecting.value = false;
+      this.connectionStore.setConnecting(false);
       this.scheduleReconnect();
     }
   }
@@ -122,6 +133,8 @@ class WebSocketService {
     }
     this.connected.value = false;
     this.connecting.value = false;
+    this.connectionStore.setConnected(false);
+    this.connectionStore.setConnecting(false);
   }
 
   // 发送消息
@@ -166,6 +179,8 @@ class WebSocketService {
     console.log('WebSocket connected');
     this.connected.value = true;
     this.connecting.value = false;
+    this.connectionStore.setConnected(true);
+    this.connectionStore.setConnecting(false);
     this.reconnectAttempts = 0;
 
     // 发送ping保持连接
@@ -192,6 +207,7 @@ class WebSocketService {
   private handleError(error: Event) {
     console.error('WebSocket error:', error);
     this.connecting.value = false;
+    this.connectionStore.setConnecting(false);
   }
 
   // 处理连接关闭
@@ -199,6 +215,8 @@ class WebSocketService {
     console.log('WebSocket closed:', event.code, event.reason);
     this.connected.value = false;
     this.connecting.value = false;
+    this.connectionStore.setConnected(false);
+    this.connectionStore.setConnecting(false);
 
     if (!this.isManualClose) {
       this.scheduleReconnect();
@@ -213,6 +231,7 @@ class WebSocketService {
     }
 
     this.reconnectAttempts++;
+    this.connectionStore.setReconnectAttempts(this.reconnectAttempts);
     const delay = this.reconnectDelay * this.reconnectAttempts;
 
     console.log(

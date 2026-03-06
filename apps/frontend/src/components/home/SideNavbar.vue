@@ -39,6 +39,28 @@
 
     <!-- 底部区域 - 主题切换、个人资料 -->
     <div class="flex flex-col items-center gap-4 mt-auto">
+      <!-- 在线状态指示器（只在离线或连接中时显示） -->
+      <div
+        v-if="!isOnline"
+        :class="[
+          'flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all',
+          isOffline
+            ? 'bg-red-500/20 border border-red-500/50'
+            : 'bg-yellow-500/20 border border-yellow-500/50',
+        ]"
+        :title="connectionStatusText"
+      >
+        <div
+          :class="[
+            'w-2 h-2 rounded-full animate-pulse',
+            isOffline ? 'bg-red-500' : 'bg-yellow-500',
+          ]"
+        ></div>
+        <span :class="['text-xs font-medium', isOffline ? 'text-red-400' : 'text-yellow-400']">
+          {{ connectionStatusText }}
+        </span>
+      </div>
+
       <ThemeSwitcher />
       <div
         class="flex items-center gap-2 cursor-pointer rounded-lg hover:bg-hover-bg transition-colors"
@@ -69,6 +91,7 @@ import ThemeSwitcher from '../ThemeSwitcher.vue';
 import { usePanelController } from '../../controllers/panelController';
 import { useRoute } from 'vue-router';
 import type { User } from '../../models/types';
+import { useConnectionStore } from '../../stores/connection';
 
 interface Props {
   currentUser: User | null;
@@ -78,6 +101,7 @@ defineProps<Props>();
 
 const route = useRoute();
 const { navigateToPanel } = usePanelController();
+const connectionStore = useConnectionStore();
 
 // 根据当前路由确定activePanel
 const activePanel = computed(() => {
@@ -85,6 +109,12 @@ const activePanel = computed(() => {
   if (route.path === '/friends') return 'friends';
   return 'chat'; // 默认
 });
+
+// 连接状态
+const isOnline = computed(() => connectionStore.isOnline);
+const isOffline = computed(() => connectionStore.isOffline);
+const isConnecting = computed(() => connectionStore.isConnecting);
+const connectionStatusText = computed(() => connectionStore.getConnectionStatusText());
 
 const handlePanelClick = (panel: 'chat' | 'friends') => {
   navigateToPanel(panel);

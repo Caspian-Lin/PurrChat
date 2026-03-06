@@ -6,7 +6,7 @@
         :key="notification.id"
         :class="[
           'p-4 rounded-lg shadow-lg border-l-4 min-w-[300px]',
-          getNotificationClass(notification.type)
+          getNotificationClass(notification.type),
         ]"
         @click="removeNotification(notification.id)"
       >
@@ -45,10 +45,13 @@ const emit = defineEmits<{
 
 const getNotificationClass = (type: Notification['type']): string => {
   const classes = {
-    success: 'bg-green-50 border-green-500 text-green-900 dark:bg-green-900/20 dark:border-green-500 dark:text-green-100',
+    success:
+      'bg-green-50 border-green-500 text-green-900 dark:bg-green-900/20 dark:border-green-500 dark:text-green-100',
     info: 'bg-blue-50 border-blue-500 text-blue-900 dark:bg-blue-900/20 dark:border-blue-500 dark:text-blue-100',
-    warning: 'bg-yellow-50 border-yellow-500 text-yellow-900 dark:bg-yellow-900/20 dark:border-yellow-500 dark:text-yellow-100',
-    error: 'bg-red-50 border-red-500 text-red-900 dark:bg-red-900/20 dark:border-red-500 dark:text-red-100',
+    warning:
+      'bg-yellow-50 border-yellow-500 text-yellow-900 dark:bg-yellow-900/20 dark:border-yellow-500 dark:text-yellow-100',
+    error:
+      'bg-red-50 border-red-500 text-red-900 dark:bg-red-900/20 dark:border-red-500 dark:text-red-100',
   };
   return classes[type] || classes.info;
 };

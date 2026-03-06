@@ -6,9 +6,16 @@
     >
       <div class="flex items-center gap-2">
         <div class="font-semibold text-[28px] text-text-secondary leading-none">
-          {{ conversation.conversation_type === 'group' ? conversation.name : getUserUsername(getOtherUser(conversation, currentUserId)) }}
+          {{
+            conversation.conversation_type === 'group'
+              ? conversation.name
+              : getUserUsername(getOtherUser(conversation, currentUserId))
+          }}
         </div>
-        <div v-if="conversation.conversation_type === 'direct'" class="flex items-center gap-2 mt-1">
+        <div
+          v-if="conversation.conversation_type === 'direct'"
+          class="flex items-center gap-2 mt-1"
+        >
           <div class="w-[12px] h-[12px] rounded-full bg-accent-color" />
           <div class="text-sm text-text-tertiary">
             UID: {{ getOtherUser(conversation, currentUserId)?.uid }}
@@ -152,7 +159,14 @@
 import { ref } from 'vue';
 import { getUserUsername, getOtherUser } from '../../utils/userHelpers';
 import { formatTime, formatTimeWithSeconds } from '../../utils/formatTime';
-import { BsEmojiSmile, BsPaperclip, BsCamera, BsCameraVideo, BsPeopleFill, BsInfoCircle } from 'vue-icons-plus/bs';
+import {
+  BsEmojiSmile,
+  BsPaperclip,
+  BsCamera,
+  BsCameraVideo,
+  BsPeopleFill,
+  BsInfoCircle,
+} from 'vue-icons-plus/bs';
 import type { Conversation, Message } from '../../models/types';
 
 interface Props {
@@ -182,7 +196,7 @@ const handleSend = () => {
 
 const handleShowDetail = () => {
   if (!props.conversation) return;
-  
+
   if (props.conversation.conversation_type === 'group') {
     emit('show-detail');
   } else {

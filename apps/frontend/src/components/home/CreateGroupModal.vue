@@ -153,7 +153,7 @@ const isValid = computed(() => {
     groupNameLength: groupName.value.trim().length,
     selectedMembers: selectedMembers.value,
     selectedMembersLength: selectedMembers.value.length,
-    valid: valid
+    valid: valid,
   });
   return valid;
 });

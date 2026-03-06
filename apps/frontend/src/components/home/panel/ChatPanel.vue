@@ -88,10 +88,7 @@
     />
 
     <!-- 通知列表 -->
-    <NotificationList
-      :notifications="notifications"
-      @remove-notification="removeNotification"
-    />
+    <NotificationList :notifications="notifications" @remove-notification="removeNotification" />
   </div>
 </template>
 
@@ -132,9 +129,9 @@ const {
   messagesContainer,
 } = useChat();
 const { addMessage: cacheMessage } = useMessageCache();
-  const { notifications, addNotification, removeNotification } = useNotification();
-  const ws = useWebSocket();
-  const messageStore = useMessageStore();
+const { notifications, addNotification, removeNotification } = useNotification();
+const ws = useWebSocket();
+const messageStore = useMessageStore();
 
 // 滚动到底部
 const scrollToBottom = async () => {
@@ -442,9 +439,7 @@ onMounted(async () => {
 
       // 如果是当前用户创建的群聊，选中它
       if (data.conversation_id && data.created_by === currentUser?.id) {
-        const newConversation = conversations.value.find(
-          (c) => c.id === data.conversation_id
-        );
+        const newConversation = conversations.value.find((c) => c.id === data.conversation_id);
         if (newConversation) {
           console.log('[ChatPanel] Auto-selecting new group conversation:', newConversation);
           handleSelectConversation(newConversation);
@@ -464,9 +459,7 @@ onMounted(async () => {
       await loadConversations();
       // 如果是当前会话，更新会话信息
       if (selectedConversation.value?.id === data.conversation_id) {
-        const updatedConversation = conversations.value.find(
-          (c) => c.id === data.conversation_id
-        );
+        const updatedConversation = conversations.value.find((c) => c.id === data.conversation_id);
         if (updatedConversation) {
           selectedConversation.value = updatedConversation;
         }
@@ -492,9 +485,7 @@ onMounted(async () => {
       }
       // 如果是当前会话，更新会话信息
       else if (selectedConversation.value?.id === data.conversation_id) {
-        const updatedConversation = conversations.value.find(
-          (c) => c.id === data.conversation_id
-        );
+        const updatedConversation = conversations.value.find((c) => c.id === data.conversation_id);
         if (updatedConversation) {
           selectedConversation.value = updatedConversation;
         }
