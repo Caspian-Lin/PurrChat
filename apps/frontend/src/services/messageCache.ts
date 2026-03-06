@@ -58,7 +58,7 @@ class MessageCacheService {
   // 等待密钥初始化完成
   private async waitForKeyInitialization() {
     while (!this.keyInitialized) {
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }
 
@@ -135,7 +135,7 @@ class MessageCacheService {
     }
 
     try {
-      const combined = Uint8Array.from(atob(encryptedData), c => c.charCodeAt(0));
+      const combined = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0));
       const iv = combined.slice(0, 12);
       const encrypted = combined.slice(12);
 
@@ -171,7 +171,11 @@ class MessageCacheService {
               const cache: ConversationCache = JSON.parse(decryptedData);
               this.cache.set(conversationId, cache);
             } catch (error) {
-              console.error('[MessageCache] Failed to load cache for conversation:', conversationId, error);
+              console.error(
+                '[MessageCache] Failed to load cache for conversation:',
+                conversationId,
+                error
+              );
             }
           }
         }
@@ -236,7 +240,9 @@ class MessageCacheService {
       await this.saveCacheToStorage(conversationId);
       console.log(`[MessageCache] Added message ${message.id} to conversation ${conversationId}`);
     } else {
-      console.log(`[MessageCache] Message ${message.id} already exists in conversation ${conversationId}`);
+      console.log(
+        `[MessageCache] Message ${message.id} already exists in conversation ${conversationId}`
+      );
     }
   }
 

@@ -33,6 +33,26 @@ export interface NewFriendRequestData {
   status: 'pending';
 }
 
+export interface NewGroupConversationData {
+  conversation_id: string;
+  name: string;
+  created_by: string;
+  member_count: number;
+}
+
+export interface ConversationMemberAddedData {
+  conversation_id: string;
+  user_id: string;
+  role: 'owner' | 'admin' | 'member';
+  added_by: string;
+}
+
+export interface ConversationMemberRemovedData {
+  conversation_id: string;
+  user_id: string;
+  removed_by: string;
+}
+
 class WebSocketService {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
@@ -56,6 +76,9 @@ class WebSocketService {
     this.on('new_message', this.handleNewMessage.bind(this));
     this.on('new_friend_request', this.handleNewFriendRequest.bind(this));
     this.on('friend_request_update', this.handleFriendRequestUpdate.bind(this));
+    this.on('new_group_conversation', this.handleNewGroupConversation.bind(this));
+    this.on('conversation_member_added', this.handleConversationMemberAdded.bind(this));
+    this.on('conversation_member_removed', this.handleConversationMemberRemoved.bind(this));
     this.on('pong', this.handlePong.bind(this));
   }
 
@@ -226,6 +249,24 @@ class WebSocketService {
   private handlePong() {
     console.log('Pong received');
     // 可以在这里更新最后活跃时间
+  }
+
+  // 处理新群聊
+  private handleNewGroupConversation(data: NewGroupConversationData) {
+    console.log('New group conversation received:', data);
+    // 这个处理器会在组件中被覆盖
+  }
+
+  // 处理会话成员添加
+  private handleConversationMemberAdded(data: ConversationMemberAddedData) {
+    console.log('Conversation member added:', data);
+    // 这个处理器会在组件中被覆盖
+  }
+
+  // 处理会话成员移除
+  private handleConversationMemberRemoved(data: ConversationMemberRemovedData) {
+    console.log('Conversation member removed:', data);
+    // 这个处理器会在组件中被覆盖
   }
 
   // 发送ping

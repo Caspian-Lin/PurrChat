@@ -56,7 +56,7 @@ router.beforeEach((to, _from, next) => {
     requiresAuth: to.meta.requiresAuth,
     requiresGuest: to.meta.requiresGuest,
     isAuthenticated: auth.isAuthenticated,
-    token: auth.token ? '存在' : '不存在'
+    token: auth.token ? '存在' : '不存在',
   });
 
   // 需要认证的路由

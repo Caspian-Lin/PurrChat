@@ -49,6 +49,8 @@
         @export-messages="handleExportMessages"
         @show-user="handleShowUserProfile"
         @update-conversation="handleUpdateConversation"
+        @create-group="handleCreateGroup"
+        @show-detail="handleShowDetail"
       />
 
       <!-- 空状态 -->
@@ -69,6 +71,27 @@
       @send-friend-request="handleSendFriendRequest"
       @start-chat="handleStartChatWithSearchUser"
     />
+
+    <!-- 创建群聊弹窗 -->
+    <CreateGroupModal
+      v-model:show="showCreateGroupModal"
+      :friends="friends"
+      @group-created="handleGroupCreated"
+    />
+
+    <!-- 群聊详情弹窗 -->
+    <GroupDetailModal
+      v-model:show="showGroupDetailModal"
+      :conversation="selectedConversation"
+      :current-user-id="currentUser?.id"
+      @update="handleGroupUpdated"
+    />
+
+    <!-- 通知列表 -->
+    <NotificationList
+      :notifications="notifications"
+      @remove-notification="removeNotification"
+    />
   </div>
 </template>
 
@@ -81,10 +104,14 @@ import { useFriends } from '../../../composables/useFriends';
 import { useChat } from '../../../composables/useChat';
 import { useMessageCache } from '../../../services/messageCache';
 import { useMessageStore } from '../../../stores/message';
+import { useNotification } from '../../../composables/useNotification';
 import ConversationList from '../ConversationList.vue';
 import ChatWindow from '../ChatWindow.vue';
 import UserProfileModal from '../UserProfileModal.vue';
 import UserActionsModal from '../UserActionsModal.vue';
+import CreateGroupModal from '../CreateGroupModal.vue';
+import GroupDetailModal from '../GroupDetailModal.vue';
+import NotificationList from '../../common/NotificationList.vue';
 import type { User, Conversation } from '../../../models/types';
 import { BsSearch, BsXCircle } from 'vue-icons-plus/bs';
 // Auth
@@ -94,11 +121,10 @@ const { currentUser } = auth;
 // Composables
 const { conversations, loadConversations, createConversation, deleteConversation } =
   useConversations();
-const { loadFriends, sendFriendRequest } = useFriends();
+const { friends, loadFriends, sendFriendRequest } = useFriends();
 const {
   messages,
   loadMessages,
-  loadMessagesIncremental,
   checkAndLoadIncremental,
   sendMessage,
   exportMessages,
@@ -106,8 +132,9 @@ const {
   messagesContainer,
 } = useChat();
 const { addMessage: cacheMessage } = useMessageCache();
-const ws = useWebSocket();
-const messageStore = useMessageStore();
+  const { notifications, addNotification, removeNotification } = useNotification();
+  const ws = useWebSocket();
+  const messageStore = useMessageStore();
 
 // 滚动到底部
 const scrollToBottom = async () => {
@@ -168,10 +195,12 @@ const selectedUser = ref<User | null>(null);
 const showProfileModal = ref(false);
 const showSearchModal = ref(false);
 const selectedSearchUser = ref<User | null>(null);
+const showCreateGroupModal = ref(false);
+const showGroupDetailModal = ref(false);
 
 // Computed
 const displayUser = computed(() => {
-  return selectedUser.value || currentUser.value;
+  return selectedUser.value || currentUser;
 });
 
 // Handlers
@@ -246,13 +275,56 @@ const handleUpdateConversation = async () => {
   await loadFriends();
 };
 
-// Watchers
-watch(currentUser, async () => {
-  if (currentUser.value) {
-    await loadConversations();
-    await loadFriends();
+const handleCreateGroup = () => {
+  showCreateGroupModal.value = true;
+};
+
+const handleShowDetail = () => {
+  if (selectedConversation.value?.conversation_type === 'group') {
+    showGroupDetailModal.value = true;
   }
-});
+};
+
+const handleGroupCreated = async (conversationId: string) => {
+  console.log('[ChatPanel] handleGroupCreated called with conversationId:', conversationId);
+  showCreateGroupModal.value = false;
+  // 重新加载会话列表
+  await loadConversations();
+  console.log('[ChatPanel] Conversations after reload:', conversations.value);
+  // 选中新创建的群聊
+  const newConversation = conversations.value.find((c) => c.id === conversationId);
+  if (newConversation) {
+    console.log('[ChatPanel] Selecting new group conversation:', newConversation);
+    handleSelectConversation(newConversation);
+  } else {
+    console.log('[ChatPanel] New conversation not found in list:', conversationId);
+  }
+};
+
+const handleGroupUpdated = async () => {
+  showGroupDetailModal.value = false;
+  // 重新加载会话列表和当前会话信息
+  await loadConversations();
+  if (selectedConversation.value) {
+    const updatedConversation = conversations.value.find(
+      (c) => c.id === selectedConversation.value?.id
+    );
+    if (updatedConversation) {
+      selectedConversation.value = updatedConversation;
+    }
+  }
+};
+
+// Watchers
+watch(
+  () => currentUser,
+  async () => {
+    if (currentUser) {
+      await loadConversations();
+      await loadFriends();
+    }
+  }
+);
 
 watch(selectedConversation, async (newConv, oldConv) => {
   if (newConv && newConv.id !== oldConv?.id) {
@@ -281,12 +353,20 @@ onMounted(async () => {
       const newMessage = data.message;
       console.log('[ChatPanel] New message received via WebSocket:', newMessage);
 
+      // 显示通知
+      addNotification('info', '新消息', '收到新消息');
+
       // 如果是当前会话的消息，添加到消息列表
       if (selectedConversation.value?.id === newMessage.conversation_id) {
         messages.value.push(newMessage);
         scrollToBottom();
+        // 更新message store
+        messageStore.addMessage(newMessage.conversation_id, newMessage);
         // 缓存新消息
         await cacheMessage(newMessage.conversation_id, newMessage);
+      } else {
+        // 如果不是当前会话，也要更新message store
+        messageStore.addMessage(newMessage.conversation_id, newMessage);
       }
 
       // 更新会话列表中的最后一条消息
@@ -294,11 +374,17 @@ onMounted(async () => {
       if (conversation) {
         conversation.last_message = newMessage;
       }
+
+      // 实时更新会话列表
+      await loadConversations();
     });
 
     // 注册新好友请求处理器
     ws.on('new_friend_request', async (data: any) => {
       console.log('New friend request received:', data);
+
+      // 显示通知
+      addNotification('info', '新好友请求', `收到来自 ${data.sender_id} 的好友请求`);
 
       // 更新会话列表
       await loadConversations();
@@ -307,6 +393,13 @@ onMounted(async () => {
     // 注册好友请求状态更新处理器
     ws.on('friend_request_update', async (data: any) => {
       console.log('Friend request update received:', data);
+
+      // 显示通知
+      if (data.status === 'accepted') {
+        addNotification('success', '好友请求已接受', `${data.sender_id} 接受了你的好友请求`);
+      } else if (data.status === 'rejected') {
+        addNotification('warning', '好友请求已拒绝', `${data.sender_id} 拒绝了你的好友请求`);
+      }
 
       // 更新会话列表
       await loadConversations();
@@ -334,6 +427,78 @@ onMounted(async () => {
 
     ws.on('error', (error: any) => {
       console.error('WebSocket error:', error);
+    });
+
+    // 注册群聊事件处理器
+    ws.on('new_group_conversation', async (data: any) => {
+      console.log('[ChatPanel] New group conversation received via WebSocket:', data);
+
+      // 显示通知
+      addNotification('success', '群聊创建成功', `群聊 ${data.name} 创建成功`);
+
+      // 重新加载会话列表
+      await loadConversations();
+      console.log('[ChatPanel] Conversations after reload:', conversations.value);
+
+      // 如果是当前用户创建的群聊，选中它
+      if (data.conversation_id && data.created_by === currentUser?.id) {
+        const newConversation = conversations.value.find(
+          (c) => c.id === data.conversation_id
+        );
+        if (newConversation) {
+          console.log('[ChatPanel] Auto-selecting new group conversation:', newConversation);
+          handleSelectConversation(newConversation);
+        } else {
+          console.log('[ChatPanel] New conversation not found in list:', data.conversation_id);
+        }
+      }
+    });
+
+    ws.on('conversation_member_added', async (data: any) => {
+      console.log('[ChatPanel] Conversation member added:', data);
+
+      // 显示通知
+      addNotification('info', '成员已添加', `新成员已加入群聊`);
+
+      // 重新加载会话列表
+      await loadConversations();
+      // 如果是当前会话，更新会话信息
+      if (selectedConversation.value?.id === data.conversation_id) {
+        const updatedConversation = conversations.value.find(
+          (c) => c.id === data.conversation_id
+        );
+        if (updatedConversation) {
+          selectedConversation.value = updatedConversation;
+        }
+      }
+    });
+
+    ws.on('conversation_member_removed', async (data: any) => {
+      console.log('[ChatPanel] Conversation member removed:', data);
+
+      // 显示通知
+      if (data.user_id === currentUser?.id) {
+        addNotification('warning', '已移出群聊', '你已被移出群聊');
+      } else {
+        addNotification('info', '成员已移除', `成员已从群聊中移除`);
+      }
+
+      // 重新加载会话列表
+      await loadConversations();
+      // 如果当前用户被移除，清空选中状态
+      if (data.user_id === currentUser?.id) {
+        selectedConversation.value = null;
+        clearMessages();
+      }
+      // 如果是当前会话，更新会话信息
+      else if (selectedConversation.value?.id === data.conversation_id) {
+        const updatedConversation = conversations.value.find(
+          (c) => c.id === data.conversation_id
+        );
+        if (updatedConversation) {
+          selectedConversation.value = updatedConversation;
+        }
+      }
     });
   } else {
     console.log('[ChatPanel] currentUser 不存在，不加载数据');

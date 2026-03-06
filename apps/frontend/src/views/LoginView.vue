@@ -38,12 +38,7 @@
           {{ auth.error }}
         </BaseAlert>
 
-        <button
-          type="submit"
-          class="w-full !h-12 !font-medium"
-          block
-          :disabled="auth.loading"
-        >
+        <button type="submit" class="w-full !h-12 !font-medium" block :disabled="auth.loading">
           {{ auth.loading ? '登录中...' : '登录' }}
         </button>
       </form>
@@ -81,14 +76,14 @@ const handleSubmit = async () => {
   console.log('邮箱:', email.value);
   console.log('密码:', password.value ? '***' : '');
   console.log('auth.loading:', auth.loading);
-  
+
   try {
     const result = await auth.handleLogin(email.value, password.value);
     console.log('登录结果:', result);
   } catch (error) {
     console.error('登录异常:', error);
   }
-  
+
   console.log('=== 登录结束 ===');
 };
 </script>

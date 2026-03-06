@@ -67,9 +67,16 @@ func (s *ChatService) GetConversations(ctx context.Context, userID string) ([]*m
 			for _, member := range members {
 				user, err := s.userRepo.FindByID(ctx, member.UserID)
 				if err == nil {
-					user.PasswordHash = ""
-					user.Salt = ""
-					member.User = user
+					// 验证返回的用户ID是否与enrollment中的user_id一致
+					if user.ID == member.UserID {
+						user.PasswordHash = ""
+						user.Salt = ""
+						member.User = user
+					} else {
+						logger.ErrorfWithCaller("User ID mismatch: enrollment user_id=%s, loaded user id=%s", member.UserID, user.ID)
+					}
+				} else {
+					logger.ErrorfWithCaller("Failed to load user for enrollment user_id=%s: %v", member.UserID, err)
 				}
 			}
 			conv.Members = members
@@ -78,13 +85,19 @@ func (s *ChatService) GetConversations(ctx context.Context, userID string) ([]*m
 		// 为私聊会话设置名称（如果还没有）
 		var otherUserID uuid.UUID
 		if conv.ConversationType == models.ConversationTypeDirect && conv.Name == "" {
-			// 找到另一个用户
+			// 找到另一个用户，使用已加载的member.User信息
 			for _, member := range members {
 				if member.UserID != id {
 					otherUserID = member.UserID
-					user, err := s.userRepo.FindByID(ctx, member.UserID)
-					if err == nil {
-						conv.Name = user.Username
+					// 使用已加载的用户信息，避免重复查询和可能的数据不一致
+					if member.User != nil {
+						conv.Name = member.User.Username
+					} else {
+						// 如果member.User为空，则查询用户信息
+						user, err := s.userRepo.FindByID(ctx, member.UserID)
+						if err == nil {
+							conv.Name = user.Username
+						}
 					}
 					break
 				}
@@ -401,6 +414,7 @@ func (s *ChatService) CreateGroupConversation(ctx context.Context, userID, name 
 	}
 
 	// 为其他成员创建enrollment记录
+	memberUUIDs := []uuid.UUID{userUUID} // 包含创建者
 	for _, memberIDStr := range memberIDs {
 		memberUUID, err := uuid.Parse(memberIDStr)
 		if err != nil {
@@ -419,6 +433,21 @@ func (s *ChatService) CreateGroupConversation(ctx context.Context, userID, name 
 			logger.ErrorfWithCaller("Failed to create member enrollment: %v", err)
 			continue
 		}
+
+		memberUUIDs = append(memberUUIDs, memberUUID)
+	}
+
+	// 通过WebSocket通知所有成员群聊创建成功
+	if websocket.GlobalHub != nil {
+		for _, memberUUID := range memberUUIDs {
+			websocket.GlobalHub.SendToUser(memberUUID, "new_group_conversation", map[string]interface{}{
+				"conversation_id": conversation.ID.String(),
+				"name":            conversation.Name,
+				"created_by":      userID,
+				"member_count":    len(memberUUIDs),
+			})
+		}
+		logger.InfofWithCaller("New group conversation notification sent to %d members", len(memberUUIDs))
 	}
 
 	logger.InfofWithCaller("Group conversation created successfully: ID=%s, Name=%s", conversation.ID, conversation.Name)
@@ -595,7 +624,36 @@ func (s *ChatService) AddMemberToConversation(ctx context.Context, conversationI
 		JoinedAt:       time.Now(),
 	}
 
-	return s.enrollmentRepo.Create(ctx, newEnrollment)
+	err = s.enrollmentRepo.Create(ctx, newEnrollment)
+	if err != nil {
+		return err
+	}
+
+	// 通过WebSocket通知会话的所有成员有新成员加入
+	if websocket.GlobalHub != nil {
+		// 获取会话的所有成员
+		members, err := s.enrollmentRepo.FindByConversationID(ctx, conversationID)
+		if err == nil {
+			// 提取成员ID列表
+			memberIDs := make([]uuid.UUID, 0, len(members))
+			for _, member := range members {
+				memberIDs = append(memberIDs, member.UserID)
+			}
+
+			// 通知所有成员
+			for _, memberID := range memberIDs {
+				websocket.GlobalHub.SendToUser(memberID, "conversation_member_added", map[string]interface{}{
+					"conversation_id": conversationIDStr,
+					"user_id":         targetUserID,
+					"role":            role,
+					"added_by":        userID,
+				})
+			}
+			logger.InfofWithCaller("Member added notification sent to %d members", len(memberIDs))
+		}
+	}
+
+	return nil
 }
 
 // RemoveMemberFromConversation 从会话中移除成员
@@ -636,7 +694,35 @@ func (s *ChatService) RemoveMemberFromConversation(ctx context.Context, conversa
 	}
 
 	// 移除成员
-	return s.enrollmentRepo.DeleteByConversationAndUser(ctx, conversationID, targetUUID)
+	err = s.enrollmentRepo.DeleteByConversationAndUser(ctx, conversationID, targetUUID)
+	if err != nil {
+		return err
+	}
+
+	// 通过WebSocket通知会话的所有成员有成员被移除
+	if websocket.GlobalHub != nil {
+		// 获取会话的所有成员
+		members, err := s.enrollmentRepo.FindByConversationID(ctx, conversationID)
+		if err == nil {
+			// 提取成员ID列表
+			memberIDs := make([]uuid.UUID, 0, len(members))
+			for _, member := range members {
+				memberIDs = append(memberIDs, member.UserID)
+			}
+
+			// 通知所有成员
+			for _, memberID := range memberIDs {
+				websocket.GlobalHub.SendToUser(memberID, "conversation_member_removed", map[string]interface{}{
+					"conversation_id": conversationIDStr,
+					"user_id":         targetUserID,
+					"removed_by":      userID,
+				})
+			}
+			logger.InfofWithCaller("Member removed notification sent to %d members", len(memberIDs))
+		}
+	}
+
+	return nil
 }
 
 // GetConversationMembers 获取会话成员

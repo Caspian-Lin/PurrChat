@@ -14,6 +14,10 @@ import type {
   SendFriendRequest,
   HandleFriendRequest,
   UpdateProfileRequest,
+  CreateGroupRequest,
+  AddMemberRequest,
+  RemoveMemberRequest,
+  Enrollment,
 } from './types';
 
 // API 基础 URL
@@ -197,6 +201,30 @@ export const api = {
   // 处理好友请求
   handleFriendRequest: (data: HandleFriendRequest): Promise<ApiResponse<Conversation>> => {
     return apiClient.post('/api/friends/handle', data).then((res) => res.data);
+  },
+
+  // 创建群聊
+  createGroup: (data: CreateGroupRequest): Promise<ApiResponse<Conversation>> => {
+    return apiClient.post('/api/conversations/group', data).then((res) => res.data);
+  },
+
+  // 获取会话成员
+  getConversationMembers: (conversationId: string): Promise<ApiResponse<Enrollment[]>> => {
+    return apiClient
+      .get('/api/conversations/members', {
+        params: { conversation_id: conversationId },
+      })
+      .then((res) => res.data);
+  },
+
+  // 添加成员到会话
+  addMemberToConversation: (data: AddMemberRequest): Promise<ApiResponse<void>> => {
+    return apiClient.post('/api/conversations/members', data).then((res) => res.data);
+  },
+
+  // 从会话中移除成员
+  removeMemberFromConversation: (data: RemoveMemberRequest): Promise<ApiResponse<void>> => {
+    return apiClient.delete('/api/conversations/members', { data }).then((res) => res.data);
   },
 
   // 健康检查

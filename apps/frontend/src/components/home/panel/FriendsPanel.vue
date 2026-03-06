@@ -328,24 +328,22 @@ const {
   loadFriends,
   loadPendingRequests,
   sendFriendRequest,
-  handleFriendRequest,
 } = useFriends();
 const { createConversation } = useConversations();
-const { connected, connect, on: onWs, off: offWs } = useWebSocket();
-const router = useRouter();
+  const { connect, on: onWs, off: offWs } = useWebSocket();
+  const router = useRouter();
 
 // State
-const selectedFriend = ref<Friendship | null>(null);
-const selectedUser = ref<User | null>(null);
-const showProfileModal = ref(false);
-const showPendingRequests = ref(false);
-const showFriendRequestHistory = ref(false);
-const searchQuery = ref('');
-const showSearchResults = ref(false);
-const searchedUsers = ref<User[]>([]);
-const selectedStranger = ref<User | null>(null);
-const showStrangerModal = ref(false);
-const allFriendRequests = ref<Friendship[]>([]);
+  const selectedFriend = ref<Friendship | null>(null);
+  const selectedUser = ref<User | null>(null);
+  const showProfileModal = ref(false);
+  const showFriendRequestHistory = ref(false);
+  const searchQuery = ref('');
+  const showSearchResults = ref(false);
+  const searchedUsers = ref<User[]>([]);
+  const selectedStranger = ref<User | null>(null);
+  const showStrangerModal = ref(false);
+  const allFriendRequests = ref<Friendship[]>([]);
 
 // Computed
 const displayUser = computed(() => {
@@ -465,37 +463,17 @@ const clearSearch = () => {
 };
 
 const handleSendFriendRequest = async () => {
-  if (!selectedStranger.value?.id) return;
+    if (!selectedStranger.value?.id) return;
 
-  console.log('[FriendsPanel] handleSendFriendRequest', { userId: selectedStranger.value.id });
-  const success = await sendFriendRequest(selectedStranger.value.id);
-  if (success) {
-    showStrangerModal.value = false;
-    selectedStranger.value = null;
-  }
-};
+    console.log('[FriendsPanel] handleSendFriendRequest', { userId: selectedStranger.value.id });
+    const success = await sendFriendRequest(selectedStranger.value.id);
+    if (success) {
+      showStrangerModal.value = false;
+      selectedStranger.value = null;
+    }
+  };
 
-const handleAcceptRequest = async (request: Friendship) => {
-  console.log('[FriendsPanel] handleAcceptRequest', { request });
-  // 获取会话ID（需要从后端返回的conversation中获取）
-  // 这里暂时使用request.id作为conversation_id，实际应该从后端获取
-  // TODO: 需要从后端返回的conversation中获取正确的conversation_id
-  const success = await handleFriendRequest(request.id, 'accept');
-  if (success) {
-    await loadFriends();
-  }
-};
-
-const handleRejectRequest = async (request: Friendship) => {
-  console.log('[FriendsPanel] handleRejectRequest', { request });
-  const success = await handleFriendRequest(request.id, 'reject');
-  if (success) {
-    // 重新加载待处理请求
-    await loadPendingRequests();
-  }
-};
-
-// 辅助函数：获取好友请求文本
+  // 辅助函数：获取好友请求文本
 const getFriendRequestText = (request: Friendship): string => {
   if (request.status === 'pending') {
     // 判断是发送方还是接收方

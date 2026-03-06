@@ -2,16 +2,36 @@
   <div v-if="conversation" class="flex flex-col h-full bg-bg-tertiary">
     <!-- 聊天头部 -->
     <div
-      class="flex items-center justify-start px-4 py-4 gap-2 bg-bg-secondary border-b border-border-color h-[80px]"
+      class="flex items-center justify-between px-4 py-4 gap-2 bg-bg-secondary border-b border-border-color h-[80px]"
     >
-      <div class="font-semibold text-[28px] text-text-secondary leading-none">
-        {{ getUserUsername(getOtherUser(conversation, currentUserId)) }}
-      </div>
-      <div class="flex items-center gap-2 mt-1">
-        <div class="w-[12px] h-[12px] rounded-full bg-accent-color" />
-        <div class="text-sm text-text-tertiary">
-          UID: {{ getOtherUser(conversation, currentUserId)?.uid }}
+      <div class="flex items-center gap-2">
+        <div class="font-semibold text-[28px] text-text-secondary leading-none">
+          {{ conversation.conversation_type === 'group' ? conversation.name : getUserUsername(getOtherUser(conversation, currentUserId)) }}
         </div>
+        <div v-if="conversation.conversation_type === 'direct'" class="flex items-center gap-2 mt-1">
+          <div class="w-[12px] h-[12px] rounded-full bg-accent-color" />
+          <div class="text-sm text-text-tertiary">
+            UID: {{ getOtherUser(conversation, currentUserId)?.uid }}
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <!-- 群聊创建按钮 -->
+        <button
+          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+          title="创建群聊"
+          @click="$emit('create-group')"
+        >
+          <BsPeopleFill class="text-2xl" />
+        </button>
+        <!-- 会话详情按钮 -->
+        <button
+          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+          title="会话详情"
+          @click="handleShowDetail"
+        >
+          <BsInfoCircle class="text-2xl" />
+        </button>
       </div>
     </div>
 
@@ -132,7 +152,7 @@
 import { ref } from 'vue';
 import { getUserUsername, getOtherUser } from '../../utils/userHelpers';
 import { formatTime, formatTimeWithSeconds } from '../../utils/formatTime';
-import { BsEmojiSmile, BsPaperclip, BsCamera, BsCameraVideo } from 'vue-icons-plus/bs';
+import { BsEmojiSmile, BsPaperclip, BsCamera, BsCameraVideo, BsPeopleFill, BsInfoCircle } from 'vue-icons-plus/bs';
 import type { Conversation, Message } from '../../models/types';
 
 interface Props {
@@ -148,6 +168,8 @@ const emit = defineEmits<{
   'export-messages': [];
   'show-user': [user: any];
   'update-conversation': [];
+  'create-group': [];
+  'show-detail': [];
 }>();
 
 const newMessage = ref('');
@@ -156,6 +178,19 @@ const handleSend = () => {
   if (!props.conversation?.id || !newMessage.value.trim()) return;
   emit('send-message', newMessage.value);
   newMessage.value = '';
+};
+
+const handleShowDetail = () => {
+  if (!props.conversation) return;
+  
+  if (props.conversation.conversation_type === 'group') {
+    emit('show-detail');
+  } else {
+    const otherUser = getOtherUser(props.conversation, props.currentUserId);
+    if (otherUser) {
+      emit('show-user', otherUser);
+    }
+  }
 };
 </script>
 

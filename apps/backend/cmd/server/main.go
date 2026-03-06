@@ -183,6 +183,10 @@ func main() {
 	{
 		conversations.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetConversations)
 		conversations.POST("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.CreateConversation)
+		conversations.POST("/group", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.CreateGroupConversation)
+		conversations.GET("/members", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetConversationMembers)
+		conversations.POST("/members", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.AddMemberToConversation)
+		conversations.DELETE("/members", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.RemoveMemberFromConversation)
 	}
 
 	// 消息路由

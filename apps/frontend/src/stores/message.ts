@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { Message, Conversation } from '../models/types';
+import type { Message } from '../models/types';
 import { useMessageCache } from '../services/messageCache';
 
 export const useMessageStore = defineStore('message', () => {
@@ -107,7 +107,7 @@ export const useMessageStore = defineStore('message', () => {
     const currentMessages = messages.value.get(conversationId) || [];
     if (currentMessages.length > 0) {
       const lastMessage = currentMessages[currentMessages.length - 1];
-      if (lastMessage.id !== message.id) {
+      if (lastMessage && lastMessage.id !== message.id) {
         addMessage(conversationId, message);
       }
     }
@@ -118,10 +118,27 @@ export const useMessageStore = defineStore('message', () => {
     console.log(`[MessageStore] Loading messages from cache for conversation ${conversationId}`);
     const cachedMessages = messageCache.getMessages(conversationId);
     if (cachedMessages.length > 0) {
-      setMessages(conversationId, cachedMessages);
+      // 类型转换：CachedMessage[] -> Message[]
+      const messagesAsMessage: Message[] = cachedMessages.map((msg) => ({
+        ...msg,
+        msg_type: msg.msg_type as 'text' | 'image',
+        sender: msg.sender
+          ? {
+              id: msg.sender.id,
+              uid: 0, // 缓存中没有uid，使用默认值
+              username: msg.sender.username,
+              avatar_url: msg.sender.avatar_url || '',
+              email_verified: false,
+              phone_verified: false,
+              created_at: '',
+            }
+          : undefined,
+      }));
+      setMessages(conversationId, messagesAsMessage);
       console.log(`[MessageStore] Loaded ${cachedMessages.length} messages from cache`);
+      return messagesAsMessage;
     }
-    return cachedMessages;
+    return [];
   }
 
   // 检查并加载增量消息

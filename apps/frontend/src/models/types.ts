@@ -137,3 +137,22 @@ export interface UpdateProfileRequest {
   email?: string;
   phone?: string;
 }
+
+// 创建群聊请求
+export interface CreateGroupRequest {
+  name: string;
+  members: string[]; // 成员用户ID列表
+}
+
+// 添加成员请求
+export interface AddMemberRequest {
+  conversation_id: string;
+  user_id: string;
+  role: EnrollmentRole;
+}
+
+// 移除成员请求
+export interface RemoveMemberRequest {
+  conversation_id: string;
+  user_id: string;
+}
