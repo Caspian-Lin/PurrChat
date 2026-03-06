@@ -403,6 +403,142 @@ func TestNewConversation(t *testing.T) {
 			t.Errorf("Expected 2 members, got %d", len(foundConversation.Members))
 		}
 	})
+
+	// 测试7: 非管理员不能添加成员
+	t.Run("NonAdminCannotAddMember", func(t *testing.T) {
+		CleanupTestTables(t)
+		// 创建测试用户
+		owner, err := createTestUser(ctx, userRepo, "owner_perm")
+		if err != nil {
+			t.Fatalf("Failed to create owner: %v", err)
+		}
+
+		member1, err := createTestUser(ctx, userRepo, "member1_perm")
+		if err != nil {
+			t.Fatalf("Failed to create member1: %v", err)
+		}
+
+		member2, err := createTestUser(ctx, userRepo, "member2_perm")
+		if err != nil {
+			t.Fatalf("Failed to create member2: %v", err)
+		}
+
+		// 创建群聊会话
+		conversation, err := chatService.CreateGroupConversation(
+			ctx,
+			owner.ID.String(),
+			"测试群聊权限",
+			[]string{member1.ID.String()},
+		)
+		if err != nil {
+			t.Fatalf("Failed to create group conversation: %v", err)
+		}
+
+		// 尝试用普通成员添加新成员（应该失败）
+		err = chatService.AddMemberToConversation(
+			ctx,
+			conversation.ID.String(),
+			member1.ID.String(),
+			member2.ID.String(),
+			models.EnrollmentRoleMember,
+		)
+		if err == nil {
+			t.Error("Expected error when non-admin tries to add member")
+		}
+	})
+
+	// 测试8: 不能移除owner
+	t.Run("CannotRemoveOwner", func(t *testing.T) {
+		CleanupTestTables(t)
+		// 创建测试用户
+		owner, err := createTestUser(ctx, userRepo, "owner_owner")
+		if err != nil {
+			t.Fatalf("Failed to create owner: %v", err)
+		}
+
+		member1, err := createTestUser(ctx, userRepo, "member1_owner")
+		if err != nil {
+			t.Fatalf("Failed to create member1: %v", err)
+		}
+
+		// 创建群聊会话
+		conversation, err := chatService.CreateGroupConversation(
+			ctx,
+			owner.ID.String(),
+			"测试群聊移除owner",
+			[]string{member1.ID.String()},
+		)
+		if err != nil {
+			t.Fatalf("Failed to create group conversation: %v", err)
+		}
+
+		// 尝试移除owner（应该失败）
+		err = chatService.RemoveMemberFromConversation(
+			ctx,
+			conversation.ID.String(),
+			owner.ID.String(),
+			owner.ID.String(),
+		)
+		if err == nil {
+			t.Error("Expected error when trying to remove owner")
+		}
+	})
+
+	// 测试9: 群聊消息发送
+	t.Run("SendMessageToGroup", func(t *testing.T) {
+		CleanupTestTables(t)
+		// 创建测试用户
+		owner, err := createTestUser(ctx, userRepo, "owner_msg")
+		if err != nil {
+			t.Fatalf("Failed to create owner: %v", err)
+		}
+
+		member1, err := createTestUser(ctx, userRepo, "member1_msg")
+		if err != nil {
+			t.Fatalf("Failed to create member1: %v", err)
+		}
+
+		// 创建群聊会话
+		conversation, err := chatService.CreateGroupConversation(
+			ctx,
+			owner.ID.String(),
+			"测试群聊消息",
+			[]string{member1.ID.String()},
+		)
+		if err != nil {
+			t.Fatalf("Failed to create group conversation: %v", err)
+		}
+
+		// 发送消息
+		sendReq := &models.SendMessageRequest{
+			ConversationID: conversation.ID,
+			Content:        "Hello, group!",
+			MsgType:        "text",
+		}
+		message, err := chatService.SendMessage(ctx, owner.ID.String(), sendReq)
+		if err != nil {
+			t.Fatalf("Failed to send message: %v", err)
+		}
+
+		// 验证消息
+		if message.Content != "Hello, group!" {
+			t.Errorf("Expected message content 'Hello, group!', got '%s'", message.Content)
+		}
+
+		if message.SenderID != owner.ID {
+			t.Error("Expected sender to be owner")
+		}
+
+		// 验证消息已保存
+		messages, err := conversationMessageRepo.FindMessages(ctx, conversation.ID, 10, 0)
+		if err != nil {
+			t.Fatalf("Failed to get messages: %v", err)
+		}
+
+		if len(messages) != 1 {
+			t.Errorf("Expected 1 message, got %d", len(messages))
+		}
+	})
 }
 
 // createTestUser 创建测试用户

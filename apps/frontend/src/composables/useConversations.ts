@@ -9,13 +9,18 @@ export const useConversations = () => {
    * 获取会话列表
    */
   const loadConversations = async () => {
+    console.log('[useConversations] loadConversations 开始');
     try {
       const response = await api.getConversations();
+      console.log('[useConversations] getConversations 响应', response);
       if (response.success && response.data) {
         conversations.value = response.data;
+        console.log('[useConversations] 会话列表加载成功', conversations.value.length, '个会话');
+      } else {
+        console.log('[useConversations] 会话列表加载失败', response.message);
       }
     } catch (error) {
-      console.error('Failed to load conversations:', error);
+      console.error('[useConversations] Failed to load conversations:', error);
     }
   };
 

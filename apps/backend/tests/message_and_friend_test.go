@@ -342,11 +342,13 @@ func TestHandleFriendRequest(t *testing.T) {
 	_, passwordHash, _ := hash.HashPasswordWithSalt("password123")
 	user1 := CreateTestUser(t, "user1", "user1@example.com", passwordHash)
 	user2 := CreateTestUser(t, "user2", "user2@example.com", passwordHash)
+	user3 := CreateTestUser(t, "user3", "user3@example.com", passwordHash)
 
 	token1 := GetAuthToken(t, user1.ID.String())
 	token2 := GetAuthToken(t, user2.ID.String())
+	token3 := GetAuthToken(t, user3.ID.String())
 
-	// 发送好友请求
+	// 发送好友请求（用于接受测试）
 	sendReq := models.FriendRequest{
 		TargetUserID: user2.ID.String(),
 	}
@@ -364,6 +366,25 @@ func TestHandleFriendRequest(t *testing.T) {
 	convData := sendResp.Data.(map[string]interface{})
 	conversationIDStr := convData["id"].(string)
 	conversationID, _ := uuid.Parse(conversationIDStr)
+
+	// 发送另一个好友请求（用于拒绝测试）
+	sendReq2 := models.FriendRequest{
+		TargetUserID: user3.ID.String(),
+	}
+	body2, _ := json.Marshal(sendReq2)
+	req2, _ := http.NewRequest("POST", "/api/friends/request", bytes.NewBuffer(body2))
+	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("Authorization", "Bearer "+token1)
+	w2 := httptest.NewRecorder()
+	testRouter.ServeHTTP(w2, req2)
+
+	var sendResp2 models.FriendRequestResponse
+	if err := json.Unmarshal(w2.Body.Bytes(), &sendResp2); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+	convData2 := sendResp2.Data.(map[string]interface{})
+	conversationIDStr2 := convData2["id"].(string)
+	conversationID2, _ := uuid.Parse(conversationIDStr2)
 
 	tests := []struct {
 		name            string
@@ -385,10 +406,10 @@ func TestHandleFriendRequest(t *testing.T) {
 		{
 			name: "成功拒绝好友请求",
 			requestBody: models.HandleFriendRequestRequest{
-				ConversationID: conversationID,
+				ConversationID: conversationID2,
 				Action:         "reject",
 			},
-			token:           token2,
+			token:           token3,
 			expectedStatus:  http.StatusOK,
 			expectedSuccess: true,
 		},

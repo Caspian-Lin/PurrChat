@@ -1,5 +1,6 @@
 import { ref, onUnmounted } from 'vue';
-import { useAuth } from '../stores/auth';
+import { useAuthStore } from '../stores/auth';
+import { useConnectionStore } from '../stores/connection';
 
 export interface WebSocketMessage {
   type: string;
@@ -33,6 +34,26 @@ export interface NewFriendRequestData {
   status: 'pending';
 }
 
+export interface NewGroupConversationData {
+  conversation_id: string;
+  name: string;
+  created_by: string;
+  member_count: number;
+}
+
+export interface ConversationMemberAddedData {
+  conversation_id: string;
+  user_id: string;
+  role: 'owner' | 'admin' | 'member';
+  added_by: string;
+}
+
+export interface ConversationMemberRemovedData {
+  conversation_id: string;
+  user_id: string;
+  removed_by: string;
+}
+
 class WebSocketService {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
@@ -46,6 +67,9 @@ class WebSocketService {
   public connected = ref(false);
   public connecting = ref(false);
 
+  // 连接状态 store
+  private connectionStore = useConnectionStore();
+
   constructor() {
     this.setupMessageHandlers();
   }
@@ -56,6 +80,9 @@ class WebSocketService {
     this.on('new_message', this.handleNewMessage.bind(this));
     this.on('new_friend_request', this.handleNewFriendRequest.bind(this));
     this.on('friend_request_update', this.handleFriendRequestUpdate.bind(this));
+    this.on('new_group_conversation', this.handleNewGroupConversation.bind(this));
+    this.on('conversation_member_added', this.handleConversationMemberAdded.bind(this));
+    this.on('conversation_member_removed', this.handleConversationMemberRemoved.bind(this));
     this.on('pong', this.handlePong.bind(this));
   }
 
@@ -67,11 +94,17 @@ class WebSocketService {
     }
 
     this.connecting.value = true;
+    this.connectionStore.setConnecting(true);
     this.isManualClose = false;
 
-    // 构建WebSocket URL
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = import.meta.env.VITE_WS_HOST || window.location.host;
+    // 构建WebSocket URL - 使用与API相同的基础URL
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+    console.log('[WebSocket] API Base URL:', apiBaseUrl);
+    console.log('[WebSocket] VITE_API_BASE_URL env:', import.meta.env.VITE_API_BASE_URL);
+
+    const url = new URL(apiBaseUrl);
+    const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = url.host;
     const wsUrl = `${protocol}//${host}/api/ws?token=${encodeURIComponent(token)}&user_id=${userId}`;
 
     console.log('Connecting to WebSocket:', wsUrl);
@@ -86,6 +119,7 @@ class WebSocketService {
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error);
       this.connecting.value = false;
+      this.connectionStore.setConnecting(false);
       this.scheduleReconnect();
     }
   }
@@ -99,6 +133,8 @@ class WebSocketService {
     }
     this.connected.value = false;
     this.connecting.value = false;
+    this.connectionStore.setConnected(false);
+    this.connectionStore.setConnecting(false);
   }
 
   // 发送消息
@@ -143,6 +179,8 @@ class WebSocketService {
     console.log('WebSocket connected');
     this.connected.value = true;
     this.connecting.value = false;
+    this.connectionStore.setConnected(true);
+    this.connectionStore.setConnecting(false);
     this.reconnectAttempts = 0;
 
     // 发送ping保持连接
@@ -169,6 +207,7 @@ class WebSocketService {
   private handleError(error: Event) {
     console.error('WebSocket error:', error);
     this.connecting.value = false;
+    this.connectionStore.setConnecting(false);
   }
 
   // 处理连接关闭
@@ -176,6 +215,8 @@ class WebSocketService {
     console.log('WebSocket closed:', event.code, event.reason);
     this.connected.value = false;
     this.connecting.value = false;
+    this.connectionStore.setConnected(false);
+    this.connectionStore.setConnecting(false);
 
     if (!this.isManualClose) {
       this.scheduleReconnect();
@@ -190,6 +231,7 @@ class WebSocketService {
     }
 
     this.reconnectAttempts++;
+    this.connectionStore.setReconnectAttempts(this.reconnectAttempts);
     const delay = this.reconnectDelay * this.reconnectAttempts;
 
     console.log(
@@ -197,9 +239,9 @@ class WebSocketService {
     );
 
     setTimeout(() => {
-      const auth = useAuth();
-      if (auth.token.value && auth.user.value) {
-        this.connect(auth.token.value, auth.user.value.id);
+      const auth = useAuthStore();
+      if (auth.token && auth.user) {
+        this.connect(auth.token, auth.user.id);
       }
     }, delay);
   }
@@ -228,6 +270,24 @@ class WebSocketService {
     // 可以在这里更新最后活跃时间
   }
 
+  // 处理新群聊
+  private handleNewGroupConversation(data: NewGroupConversationData) {
+    console.log('New group conversation received:', data);
+    // 这个处理器会在组件中被覆盖
+  }
+
+  // 处理会话成员添加
+  private handleConversationMemberAdded(data: ConversationMemberAddedData) {
+    console.log('Conversation member added:', data);
+    // 这个处理器会在组件中被覆盖
+  }
+
+  // 处理会话成员移除
+  private handleConversationMemberRemoved(data: ConversationMemberRemovedData) {
+    console.log('Conversation member removed:', data);
+    // 这个处理器会在组件中被覆盖
+  }
+
   // 发送ping
   ping() {
     this.send({ type: 'ping' });
@@ -248,9 +308,9 @@ export const websocketService = new WebSocketService();
 // Vue composable
 export function useWebSocket() {
   const connect = () => {
-    const auth = useAuth();
-    if (auth.token.value && auth.user.value) {
-      websocketService.connect(auth.token.value, auth.user.value.id);
+    const auth = useAuthStore();
+    if (auth.token && auth.user) {
+      websocketService.connect(auth.token, auth.user.id);
     }
   };
 

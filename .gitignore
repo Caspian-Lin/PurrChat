@@ -26,6 +26,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+# CI/CD test logs (test-*.log, local-ci-*.log)
+test-*.log
+local-ci-*.log
 
 # Environment variables
 .env

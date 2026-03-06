@@ -20,6 +20,7 @@ type MessageRepository interface {
 	CountByConversationID(ctx context.Context, conversationID uuid.UUID) (int, error)
 	CountUnreadByConversationID(ctx context.Context, conversationID, userID uuid.UUID) (int, error)
 	FindLastByConversationID(ctx context.Context, conversationID uuid.UUID) (*models.Message, error)
+	FindByConversationIDSince(ctx context.Context, conversationID uuid.UUID, since time.Time) ([]*models.Message, error)
 }
 
 type messageRepository struct {
@@ -179,12 +180,54 @@ func (r *messageRepository) FindLastByConversationID(ctx context.Context, conver
 	return message, nil
 }
 
+// FindByConversationIDSince 增量获取会话中的消息（从指定时间之后）
+func (r *messageRepository) FindByConversationIDSince(ctx context.Context, conversationID uuid.UUID, since time.Time) ([]*models.Message, error) {
+	logger.InfofWithCaller("Finding messages for conversation %s since %v", conversationID, since)
+
+	query := `
+		SELECT id, conversation_id, sender_id, content, msg_type, created_at
+		FROM messages
+		WHERE conversation_id = $1 AND created_at > $2
+		ORDER BY created_at ASC
+	`
+
+	rows, err := database.GetPool().Query(ctx, query, conversationID, since)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to query messages: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var messages []*models.Message
+	for rows.Next() {
+		message := &models.Message{}
+		err := rows.Scan(
+			&message.ID,
+			&message.ConversationID,
+			&message.SenderID,
+			&message.Content,
+			&message.MsgType,
+			&message.CreatedAt,
+		)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to scan message: %v", err)
+			return nil, err
+		}
+		messages = append(messages, message)
+	}
+
+	logger.InfofWithCaller("Found %d new messages for conversation %s", len(messages), conversationID)
+	return messages, nil
+}
+
 // FriendshipRepository 好友关系仓储接口
 type FriendshipRepository interface {
 	Create(ctx context.Context, friendship *models.Friendship) error
 	FindByID(ctx context.Context, id uuid.UUID) (*models.Friendship, error)
 	FindByUsers(ctx context.Context, userID, friendID uuid.UUID) (*models.Friendship, error)
 	FindByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Friendship, error)
+	FindPendingRequests(ctx context.Context, userID uuid.UUID) ([]*models.Friendship, error)
+	FindAllRequests(ctx context.Context, userID uuid.UUID) ([]*models.Friendship, error)
 	Update(ctx context.Context, friendship *models.Friendship) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
@@ -328,4 +371,82 @@ func (r *friendshipRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 	_, err := database.GetPool().Exec(ctx, query, id)
 	return err
+}
+
+// FindPendingRequests 查找用户的待处理好友请求（接收方）
+func (r *friendshipRepository) FindPendingRequests(ctx context.Context, userID uuid.UUID) ([]*models.Friendship, error) {
+	logger.InfofWithCaller("Finding pending friend requests for user %s", userID)
+
+	query := `
+		SELECT id, user_id, friend_id, status, created_at
+		FROM friendships
+		WHERE friend_id = $1 AND status = 'pending'
+		ORDER BY created_at DESC
+	`
+
+	rows, err := database.GetPool().Query(ctx, query, userID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to find pending friend requests: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var friendships []*models.Friendship
+	for rows.Next() {
+		friendship := &models.Friendship{}
+		err := rows.Scan(
+			&friendship.ID,
+			&friendship.UserID,
+			&friendship.FriendID,
+			&friendship.Status,
+			&friendship.CreatedAt,
+		)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to scan friendship: %v", err)
+			return nil, err
+		}
+		friendships = append(friendships, friendship)
+	}
+
+	logger.InfofWithCaller("Found %d pending friend requests for user %s", len(friendships), userID)
+	return friendships, nil
+}
+
+// FindAllRequests 查找用户的所有好友申请记录（包括已发送、已接收、已接受、已拒绝）
+func (r *friendshipRepository) FindAllRequests(ctx context.Context, userID uuid.UUID) ([]*models.Friendship, error) {
+	logger.InfofWithCaller("Finding all friend requests for user %s", userID)
+
+	query := `
+		SELECT id, user_id, friend_id, status, created_at
+		FROM friendships
+		WHERE user_id = $1 OR friend_id = $1
+		ORDER BY created_at DESC
+	`
+
+	rows, err := database.GetPool().Query(ctx, query, userID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to find all friend requests: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var friendships []*models.Friendship
+	for rows.Next() {
+		friendship := &models.Friendship{}
+		err := rows.Scan(
+			&friendship.ID,
+			&friendship.UserID,
+			&friendship.FriendID,
+			&friendship.Status,
+			&friendship.CreatedAt,
+		)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to scan friendship: %v", err)
+			return nil, err
+		}
+		friendships = append(friendships, friendship)
+	}
+
+	logger.InfofWithCaller("Found %d friend requests for user %s", len(friendships), userID)
+	return friendships, nil
 }

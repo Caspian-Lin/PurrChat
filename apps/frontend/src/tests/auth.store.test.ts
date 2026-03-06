@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useAuth } from '../stores/auth';
+import { createPinia, setActivePinia } from 'pinia';
+import { useAuthStore } from '../stores/auth';
 import type { User } from '../models/types';
 
 // Mock api module
@@ -13,25 +14,27 @@ vi.mock('../models/api', () => ({
 
 describe('Auth Store', () => {
   beforeEach(() => {
+    // Create a fresh pinia instance for each test
+    setActivePinia(createPinia());
     // Clear localStorage before each test
     localStorage.clear();
     // Reset auth state
-    const auth = useAuth();
+    const auth = useAuthStore();
     auth.clearAuth();
   });
 
   describe('Initial State', () => {
     it('should have null token and user initially', () => {
-      const auth = useAuth();
-      expect(auth.token.value).toBeNull();
-      expect(auth.user.value).toBeNull();
-      expect(auth.isAuthenticated.value).toBe(false);
+      const auth = useAuthStore();
+      expect(auth.token).toBeNull();
+      expect(auth.user).toBeNull();
+      expect(auth.isAuthenticated).toBe(false);
     });
   });
 
   describe('setAuth', () => {
     it('should set token and user', () => {
-      const auth = useAuth();
+      const auth = useAuthStore();
       const mockUser: User = {
         id: '1',
         uid: 1,
@@ -46,8 +49,8 @@ describe('Auth Store', () => {
 
       auth.setAuth('test-token', mockUser);
 
-      expect(auth.token.value).toBe('test-token');
-      expect(auth.user.value).toEqual(mockUser);
+      expect(auth.token).toBe('test-token');
+      expect(auth.user).toEqual(mockUser);
       expect(localStorage.getItem('token')).toBe('test-token');
       expect(localStorage.getItem('user')).toBe(JSON.stringify(mockUser));
     });
@@ -55,7 +58,7 @@ describe('Auth Store', () => {
 
   describe('clearAuth', () => {
     it('should clear token and user', () => {
-      const auth = useAuth();
+      const auth = useAuthStore();
       const mockUser: User = {
         id: '1',
         uid: 1,
@@ -69,13 +72,13 @@ describe('Auth Store', () => {
       };
 
       auth.setAuth('test-token', mockUser);
-      expect(auth.isAuthenticated.value).toBe(true);
+      expect(auth.isAuthenticated).toBe(true);
 
       auth.clearAuth();
 
-      expect(auth.token.value).toBeNull();
-      expect(auth.user.value).toBeNull();
-      expect(auth.isAuthenticated.value).toBe(false);
+      expect(auth.token).toBeNull();
+      expect(auth.user).toBeNull();
+      expect(auth.isAuthenticated).toBe(false);
       expect(localStorage.getItem('token')).toBeNull();
       expect(localStorage.getItem('user')).toBeNull();
     });
@@ -101,7 +104,7 @@ describe('Auth Store', () => {
         data: { token: 'test-token', user: mockUser } as any,
       });
 
-      const auth = useAuth();
+      const auth = useAuthStore();
       const result = await auth.register(
         'testuser',
         'password123',
@@ -110,8 +113,8 @@ describe('Auth Store', () => {
       );
 
       expect(result).toBe(true);
-      expect(auth.token.value).toBe('test-token');
-      expect(auth.user.value).toEqual(mockUser);
+      expect(auth.token).toBe('test-token');
+      expect(auth.user).toEqual(mockUser);
       expect(api.register).toHaveBeenCalledWith({
         username: 'testuser',
         password: 'password123',
@@ -128,7 +131,7 @@ describe('Auth Store', () => {
         message: 'Username already exists',
       });
 
-      const auth = useAuth();
+      const auth = useAuthStore();
       const result = await auth.register(
         'testuser',
         'password123',
@@ -137,7 +140,7 @@ describe('Auth Store', () => {
       );
 
       expect(result).toBe(false);
-      expect(auth.error.value).toBe('Username already exists');
+      expect(auth.error).toBe('Username already exists');
     });
 
     it('should handle registration error', async () => {
@@ -151,7 +154,7 @@ describe('Auth Store', () => {
         },
       });
 
-      const auth = useAuth();
+      const auth = useAuthStore();
       const result = await auth.register(
         'testuser',
         'password123',
@@ -160,7 +163,7 @@ describe('Auth Store', () => {
       );
 
       expect(result).toBe(false);
-      expect(auth.error.value).toBe('Network error');
+      expect(auth.error).toBe('Network error');
     });
   });
 
@@ -184,12 +187,12 @@ describe('Auth Store', () => {
         data: { token: 'test-token', user: mockUser } as any,
       });
 
-      const auth = useAuth();
+      const auth = useAuthStore();
       const result = await auth.login('test@example.com', 'password123');
 
       expect(result).toBe(true);
-      expect(auth.token.value).toBe('test-token');
-      expect(auth.user.value).toEqual(mockUser);
+      expect(auth.token).toBe('test-token');
+      expect(auth.user).toEqual(mockUser);
       expect(api.login).toHaveBeenCalledWith({
         email: 'test@example.com',
         password: 'password123',
@@ -204,11 +207,11 @@ describe('Auth Store', () => {
         message: 'Invalid credentials',
       });
 
-      const auth = useAuth();
+      const auth = useAuthStore();
       const result = await auth.login('test@example.com', 'wrongpassword');
 
       expect(result).toBe(false);
-      expect(auth.error.value).toBe('Invalid credentials');
+      expect(auth.error).toBe('Invalid credentials');
     });
   });
 
@@ -232,11 +235,11 @@ describe('Auth Store', () => {
         data: mockUser,
       });
 
-      const auth = useAuth();
+      const auth = useAuthStore();
       const result = await auth.fetchUser();
 
       expect(result).toBe(true);
-      expect(auth.user.value).toEqual(mockUser);
+      expect(auth.user).toEqual(mockUser);
       expect(localStorage.getItem('user')).toBe(JSON.stringify(mockUser));
     });
 
@@ -248,7 +251,7 @@ describe('Auth Store', () => {
         message: 'User not found',
       });
 
-      const auth = useAuth();
+      const auth = useAuthStore();
       const result = await auth.fetchUser();
 
       expect(result).toBe(false);
@@ -257,7 +260,7 @@ describe('Auth Store', () => {
 
   describe('logout', () => {
     it('should clear auth state', () => {
-      const auth = useAuth();
+      const auth = useAuthStore();
       const mockUser: User = {
         id: '1',
         uid: 1,
@@ -271,13 +274,13 @@ describe('Auth Store', () => {
       };
 
       auth.setAuth('test-token', mockUser);
-      expect(auth.isAuthenticated.value).toBe(true);
+      expect(auth.isAuthenticated).toBe(true);
 
       auth.logout();
 
-      expect(auth.token.value).toBeNull();
-      expect(auth.user.value).toBeNull();
-      expect(auth.isAuthenticated.value).toBe(false);
+      expect(auth.token).toBeNull();
+      expect(auth.user).toBeNull();
+      expect(auth.isAuthenticated).toBe(false);
     });
   });
 });

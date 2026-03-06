@@ -42,7 +42,7 @@ export interface ApiResponse<T = any> {
 export type ConversationType = 'direct' | 'group';
 
 // 好友状态
-export type FriendshipStatus = 'pending' | 'accepted' | 'blocked';
+export type FriendshipStatus = 'pending' | 'accepted' | 'rejected' | 'blocked';
 
 // Enrollment角色
 export type EnrollmentRole = 'owner' | 'admin' | 'member';
@@ -77,6 +77,7 @@ export interface Friendship {
   id: string;
   user_id: string;
   friend_id: string;
+  conversation_id: string;
   status: FriendshipStatus;
   created_at: string;
   user?: User;
@@ -136,4 +137,23 @@ export interface UpdateProfileRequest {
   nickname?: string;
   email?: string;
   phone?: string;
+}
+
+// 创建群聊请求
+export interface CreateGroupRequest {
+  name: string;
+  members: string[]; // 成员用户ID列表
+}
+
+// 添加成员请求
+export interface AddMemberRequest {
+  conversation_id: string;
+  user_id: string;
+  role: EnrollmentRole;
+}
+
+// 移除成员请求
+export interface RemoveMemberRequest {
+  conversation_id: string;
+  user_id: string;
 }

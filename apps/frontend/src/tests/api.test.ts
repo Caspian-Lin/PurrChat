@@ -420,4 +420,105 @@ describe('API Client', () => {
       expect(result.message).toBe('Service is healthy');
     });
   });
+
+  describe('createGroup', () => {
+    it('should create a group conversation', async () => {
+      const mockConversation: Conversation = {
+        id: '1',
+        conversation_type: 'group',
+        name: 'Test Group',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      };
+
+      const mockResponse = {
+        data: {
+          success: true,
+          data: mockConversation,
+        },
+      };
+
+      mockedAxios.post.mockResolvedValueOnce(mockResponse as any);
+
+      const result = await api.createGroup({
+        name: 'Test Group',
+        members: ['2', '3'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(mockConversation);
+    });
+  });
+
+  describe('getConversationMembers', () => {
+    it('should get conversation members', async () => {
+      const mockMembers = [
+        {
+          id: '1',
+          conversation_id: '1',
+          user_id: '1',
+          role: 'owner',
+          joined_at: '2024-01-01T00:00:00Z',
+        },
+      ];
+
+      const mockResponse = {
+        data: {
+          success: true,
+          data: mockMembers,
+        },
+      };
+
+      mockedAxios.create.mockReturnValueOnce(mockedAxios as any);
+      mockedAxios.get.mockResolvedValueOnce(mockResponse as any);
+
+      const result = await api.getConversationMembers('1');
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(mockMembers);
+    });
+  });
+
+  describe('addMemberToConversation', () => {
+    it('should add member to conversation', async () => {
+      const mockResponse = {
+        data: {
+          success: true,
+          message: 'Member added successfully',
+        },
+      };
+
+      mockedAxios.post.mockResolvedValueOnce(mockResponse as any);
+
+      const result = await api.addMemberToConversation({
+        conversation_id: '1',
+        user_id: '2',
+        role: 'member',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Member added successfully');
+    });
+  });
+
+  describe('removeMemberFromConversation', () => {
+    it('should remove member from conversation', async () => {
+      const mockResponse = {
+        data: {
+          success: true,
+          message: 'Member removed successfully',
+        },
+      };
+
+      mockedAxios.delete.mockResolvedValueOnce(mockResponse as any);
+
+      const result = await api.removeMemberFromConversation({
+        conversation_id: '1',
+        user_id: '2',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Member removed successfully');
+    });
+  });
 });

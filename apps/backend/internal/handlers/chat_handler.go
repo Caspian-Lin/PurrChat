@@ -279,6 +279,50 @@ func (h *ChatHandler) ExportMessages(c *gin.Context) {
 	})
 }
 
+// GetMessagesIncremental 增量获取会话的消息
+// @Summary 增量获取会话的消息（从指定时间之后）
+// @Tags 聊天
+// @Produce json
+// @Security BearerAuth
+// @Param conversation_id query string true "会话ID"
+// @Param since_timestamp query int64 true "起始时间戳（毫秒）"
+// @Success 200 {object} models.MessagesResponse
+// @Router /api/messages/incremental [get]
+func (h *ChatHandler) GetMessagesIncremental(c *gin.Context) {
+	var req models.GetMessagesIncrementalRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		logger.ErrorfWithCaller("Invalid get incremental messages request: %v", err)
+		c.JSON(http.StatusBadRequest, models.MessagesResponse{
+			Success: false,
+			Message: "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	messages, err := h.chatService.GetMessagesIncremental(c.Request.Context(), req.ConversationID, req.SinceTimestamp)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to get incremental messages for conversation %s: %v", req.ConversationID, err)
+		c.JSON(http.StatusInternalServerError, models.MessagesResponse{
+			Success: false,
+			Message: "Failed to get incremental messages",
+		})
+		return
+	}
+
+	// 转换为切片
+	var msgSlice []models.Message
+	for _, msg := range messages {
+		msgSlice = append(msgSlice, *msg)
+	}
+
+	logger.InfofWithCaller("Retrieved %d incremental messages for conversation %s", len(msgSlice), req.ConversationID)
+
+	c.JSON(http.StatusOK, models.MessagesResponse{
+		Success: true,
+		Data:    msgSlice,
+	})
+}
+
 // SendMessage 发送消息
 // @Summary 发送消息
 // @Tags 聊天
@@ -442,6 +486,110 @@ func (h *ChatHandler) GetFriends(c *gin.Context) {
 	}
 
 	logger.InfofWithCaller("Retrieved %d friends for user %s", len(fsSlice), userIDStr)
+
+	c.JSON(http.StatusOK, models.FriendListResponse{
+		Success: true,
+		Data:    fsSlice,
+	})
+}
+
+// GetPendingFriendRequests 获取待处理的好友请求
+// @Summary 获取待处理的好友请求
+// @Tags 好友
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.FriendListResponse
+// @Router /api/friends/pending [get]
+func (h *ChatHandler) GetPendingFriendRequests(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		logger.ErrorfWithCaller("Unauthorized access attempt for get pending friend requests")
+		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	userIDStr, ok := userID.(string)
+	if !ok {
+		logger.ErrorfWithCaller("Invalid user ID type for get pending friend requests")
+		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	friendships, err := h.chatService.GetPendingFriendRequests(c.Request.Context(), userIDStr)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to get pending friend requests for user %s: %v", userIDStr, err)
+		c.JSON(http.StatusInternalServerError, models.FriendListResponse{
+			Success: false,
+			Message: "Failed to get pending friend requests",
+		})
+		return
+	}
+
+	// 转换为切片
+	var fsSlice []models.Friendship
+	for _, fs := range friendships {
+		fsSlice = append(fsSlice, *fs)
+	}
+
+	logger.InfofWithCaller("Retrieved %d pending friend requests for user %s", len(fsSlice), userIDStr)
+
+	c.JSON(http.StatusOK, models.FriendListResponse{
+		Success: true,
+		Data:    fsSlice,
+	})
+}
+
+// GetAllFriendRequests 获取所有好友申请记录
+// @Summary 获取所有好友申请记录
+// @Tags 好友
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.FriendListResponse
+// @Router /api/friends/requests [get]
+func (h *ChatHandler) GetAllFriendRequests(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		logger.ErrorfWithCaller("Unauthorized access attempt for get all friend requests")
+		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	userIDStr, ok := userID.(string)
+	if !ok {
+		logger.ErrorfWithCaller("Invalid user ID type for get all friend requests")
+		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	friendships, err := h.chatService.GetAllFriendRequests(c.Request.Context(), userIDStr)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to get all friend requests for user %s: %v", userIDStr, err)
+		c.JSON(http.StatusInternalServerError, models.FriendListResponse{
+			Success: false,
+			Message: "Failed to get all friend requests",
+		})
+		return
+	}
+
+	// 转换为切片
+	var fsSlice []models.Friendship
+	for _, fs := range friendships {
+		fsSlice = append(fsSlice, *fs)
+	}
+
+	logger.InfofWithCaller("Retrieved %d friend requests for user %s", len(fsSlice), userIDStr)
 
 	c.JSON(http.StatusOK, models.FriendListResponse{
 		Success: true,
@@ -650,5 +798,223 @@ func (h *ChatHandler) HandleFriendRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, models.HandleFriendRequestResponse{
 		Success: true,
 		Message: "Friend request " + req.Action + "ed successfully",
+	})
+}
+
+// CreateGroupConversation 创建群聊会话
+// @Summary 创建群聊会话
+// @Tags 会话
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body models.CreateGroupRequest true "群聊信息"
+// @Success 200 {object} models.MessageResponse
+// @Router /api/conversations/group [post]
+func (h *ChatHandler) CreateGroupConversation(c *gin.Context) {
+	var req models.CreateGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.ErrorfWithCaller("Invalid create group conversation request: %v", err)
+		c.JSON(http.StatusBadRequest, models.MessageResponse{
+			Success: false,
+			Message: "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		logger.ErrorfWithCaller("Unauthorized access attempt for create group conversation")
+		c.JSON(http.StatusUnauthorized, models.MessageResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	userIDStr, ok := userID.(string)
+	if !ok {
+		logger.ErrorfWithCaller("Invalid user ID type for create group conversation")
+		c.JSON(http.StatusUnauthorized, models.MessageResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	conversation, err := h.chatService.CreateGroupConversation(c.Request.Context(), userIDStr, req.Name, req.Members)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to create group conversation: %v", err)
+		c.JSON(http.StatusBadRequest, models.MessageResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	logger.InfofWithCaller("Group conversation created successfully: ID=%s, Name=%s", conversation.ID, conversation.Name)
+
+	c.JSON(http.StatusOK, models.MessageResponse{
+		Success: true,
+		Message: "Group conversation created successfully",
+		Data:    conversation,
+	})
+}
+
+// AddMemberToConversation 添加成员到会话
+// @Summary 添加成员到会话
+// @Tags 会话
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body models.AddMemberRequest true "添加成员信息"
+// @Success 200 {object} models.MessageResponse
+// @Router /api/conversations/members [post]
+func (h *ChatHandler) AddMemberToConversation(c *gin.Context) {
+	var req models.AddMemberRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.ErrorfWithCaller("Invalid add member request: %v", err)
+		c.JSON(http.StatusBadRequest, models.MessageResponse{
+			Success: false,
+			Message: "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		logger.ErrorfWithCaller("Unauthorized access attempt for add member")
+		c.JSON(http.StatusUnauthorized, models.MessageResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	userIDStr, ok := userID.(string)
+	if !ok {
+		logger.ErrorfWithCaller("Invalid user ID type for add member")
+		c.JSON(http.StatusUnauthorized, models.MessageResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	err := h.chatService.AddMemberToConversation(c.Request.Context(), req.ConversationID.String(), userIDStr, req.UserID.String(), models.EnrollmentRole(req.Role))
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to add member to conversation: %v", err)
+		c.JSON(http.StatusBadRequest, models.MessageResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	logger.InfofWithCaller("Member %s added to conversation %s successfully", req.UserID, req.ConversationID)
+
+	c.JSON(http.StatusOK, models.MessageResponse{
+		Success: true,
+		Message: "Member added successfully",
+	})
+}
+
+// RemoveMemberFromConversation 从会话中移除成员
+// @Summary 从会话中移除成员
+// @Tags 会话
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body models.RemoveMemberRequest true "移除成员信息"
+// @Success 200 {object} models.MessageResponse
+// @Router /api/conversations/members [delete]
+func (h *ChatHandler) RemoveMemberFromConversation(c *gin.Context) {
+	var req models.RemoveMemberRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.ErrorfWithCaller("Invalid remove member request: %v", err)
+		c.JSON(http.StatusBadRequest, models.MessageResponse{
+			Success: false,
+			Message: "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		logger.ErrorfWithCaller("Unauthorized access attempt for remove member")
+		c.JSON(http.StatusUnauthorized, models.MessageResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	userIDStr, ok := userID.(string)
+	if !ok {
+		logger.ErrorfWithCaller("Invalid user ID type for remove member")
+		c.JSON(http.StatusUnauthorized, models.MessageResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	err := h.chatService.RemoveMemberFromConversation(c.Request.Context(), req.ConversationID.String(), userIDStr, req.UserID.String())
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to remove member from conversation: %v", err)
+		c.JSON(http.StatusBadRequest, models.MessageResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	logger.InfofWithCaller("Member %s removed from conversation %s successfully", req.UserID, req.ConversationID)
+
+	c.JSON(http.StatusOK, models.MessageResponse{
+		Success: true,
+		Message: "Member removed successfully",
+	})
+}
+
+// GetConversationMembers 获取会话成员
+// @Summary 获取会话成员
+// @Tags 会话
+// @Produce json
+// @Security BearerAuth
+// @Param conversation_id query string true "会话ID"
+// @Success 200 {object} models.ConversationMemberResponse
+// @Router /api/conversations/members [get]
+func (h *ChatHandler) GetConversationMembers(c *gin.Context) {
+	conversationID := c.Query("conversation_id")
+	if conversationID == "" {
+		logger.ErrorfWithCaller("Missing conversation_id parameter for get conversation members")
+		c.JSON(http.StatusBadRequest, models.ConversationMemberResponse{
+			Success: false,
+			Message: "conversation_id is required",
+		})
+		return
+	}
+
+	members, err := h.chatService.GetConversationMembers(c.Request.Context(), conversationID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to get conversation members: %v", err)
+		c.JSON(http.StatusInternalServerError, models.ConversationMemberResponse{
+			Success: false,
+			Message: "Failed to get conversation members",
+		})
+		return
+	}
+
+	// 转换为切片
+	var memberSlice []models.Enrollment
+	for _, member := range members {
+		memberSlice = append(memberSlice, *member)
+	}
+
+	logger.InfofWithCaller("Retrieved %d members for conversation %s", len(memberSlice), conversationID)
+
+	c.JSON(http.StatusOK, models.ConversationMemberResponse{
+		Success: true,
+		Data:    memberSlice,
 	})
 }

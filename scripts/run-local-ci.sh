@@ -1,9 +1,19 @@
 #!/bin/bash
 
 # 本地 CI/CD 运行脚本
-# 用途：在从 dev 分支合并到 test 分支前，本地运行完整的 CI/CD 流程
+# 用途：在从 dev 分支合并到 beta 分支前，本地运行完整的 CI/CD 流程
 
 set -e  # 遇到错误立即退出
+
+# 日志目录
+LOG_DIR="logs"
+
+# 创建日志目录
+mkdir -p "$LOG_DIR"
+
+# 日志文件名（使用开始时间）
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+LOG_FILE="$LOG_DIR/local-ci-$TIMESTAMP.log"
 
 # 颜色定义
 RED='\033[0;31m'
@@ -12,29 +22,33 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# 打印带颜色的消息
+# 打印带颜色的消息（同时输出到控制台和日志文件）
 print_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    local msg="${BLUE}[INFO]${NC} $1"
+    echo -e "$msg" | tee -a "$LOG_FILE"
 }
 
 print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    local msg="${GREEN}[SUCCESS]${NC} $1"
+    echo -e "$msg" | tee -a "$LOG_FILE"
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    local msg="${YELLOW}[WARNING]${NC} $1"
+    echo -e "$msg" | tee -a "$LOG_FILE"
 }
 
 print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    local msg="${RED}[ERROR]${NC} $1"
+    echo -e "$msg" | tee -a "$LOG_FILE"
 }
 
 # 检查当前分支
 check_branch() {
     local current_branch=$(git branch --show-current)
-    if [ "$current_branch" != "test" ]; then
-        print_error "当前分支是 '$current_branch'，请切换到 test 分支运行此脚本"
-        print_info "运行: git checkout test"
+    if [ "$current_branch" != "beta" ]; then
+        print_error "当前分支是 '$current_branch'，请切换到 beta 分支运行此脚本"
+        print_info "运行: git checkout beta"
         exit 1
     fi
     print_success "当前分支: $current_branch"
@@ -115,11 +129,11 @@ build_backend() {
 
 # 主函数
 main() {
-    echo "======================================"
-    echo "  本地 CI/CD 运行脚本"
-    echo "  分支: dev → test"
-    echo "======================================"
-    echo ""
+    echo "======================================" | tee -a "$LOG_FILE"
+    echo "  本地 CI/CD 运行脚本" | tee -a "$LOG_FILE"
+    echo "  分支: dev → beta" | tee -a "$LOG_FILE"
+    echo "======================================" | tee -a "$LOG_FILE"
+    echo "" | tee -a "$LOG_FILE"
 
     # 检查环境
     check_branch
@@ -136,38 +150,40 @@ main() {
     install_frontend_deps
 
     # Lint 阶段
-    echo ""
-    echo "======================================"
-    echo "  Lint 阶段"
-    echo "======================================"
+    echo "" | tee -a "$LOG_FILE"
+    echo "======================================" | tee -a "$LOG_FILE"
+    echo "  Lint 阶段" | tee -a "$LOG_FILE"
+    echo "======================================" | tee -a "$LOG_FILE"
     lint_frontend
     lint_backend
 
     # Test 阶段
-    echo ""
-    echo "======================================"
-    echo "  Test 阶段"
-    echo "======================================"
+    echo "" | tee -a "$LOG_FILE"
+    echo "======================================" | tee -a "$LOG_FILE"
+    echo "  Test 阶段" | tee -a "$LOG_FILE"
+    echo "======================================" | tee -a "$LOG_FILE"
     test_frontend
     test_backend
 
     # Build 阶段
-    echo ""
-    echo "======================================"
-    echo "  Build 阶段"
-    echo "======================================"
+    echo "" | tee -a "$LOG_FILE"
+    echo "======================================" | tee -a "$LOG_FILE"
+    echo "  Build 阶段" | tee -a "$LOG_FILE"
+    echo "======================================" | tee -a "$LOG_FILE"
     build_frontend
     build_backend
 
     # 完成
-    echo ""
-    echo "======================================"
+    echo "" | tee -a "$LOG_FILE"
+    echo "======================================" | tee -a "$LOG_FILE"
     print_success "本地 CI/CD 全部通过！"
-    echo "======================================"
-    echo ""
-    print_info "现在可以安全地将 test 分支合并到 main 分支"
-    print_info "运行: git checkout main && git merge test"
-    echo ""
+    echo "======================================" | tee -a "$LOG_FILE"
+    echo "" | tee -a "$LOG_FILE"
+    print_info "现在可以安全地将 beta 分支合并到 main 分支"
+    print_info "运行: git checkout main && git merge beta"
+    echo "" | tee -a "$LOG_FILE"
+    print_info "日志文件: $LOG_FILE"
+    echo "" | tee -a "$LOG_FILE"
 }
 
 # 运行主函数

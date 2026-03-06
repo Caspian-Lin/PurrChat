@@ -38,15 +38,9 @@
           {{ auth.error }}
         </BaseAlert>
 
-        <BaseButton
-          type="primary"
-          block
-          :disabled="auth.loading.value"
-          @click="handleSubmit"
-          class="!h-12 !font-medium"
-        >
-          {{ auth.loading.value ? '登录中...' : '登录' }}
-        </BaseButton>
+        <button type="submit" class="w-full !h-12 !font-medium" block :disabled="auth.loading">
+          {{ auth.loading ? '登录中...' : '登录' }}
+        </button>
       </form>
 
       <div class="text-center mt-6 text-sm" style="color: var(--text-secondary-color)">
@@ -69,7 +63,6 @@ import { ref } from 'vue';
 import { useAuthController } from '../controllers/authController';
 import ThemeSwitcher from '../components/ThemeSwitcher.vue';
 import DynamicBackground from '../components/DynamicBackground.vue';
-import BaseButton from '../components/common/BaseButton.vue';
 import BaseInput from '../components/common/BaseInput.vue';
 import BaseFormItem from '../components/common/BaseFormItem.vue';
 import BaseAlert from '../components/common/BaseAlert.vue';
@@ -79,7 +72,19 @@ const email = ref('');
 const password = ref('');
 
 const handleSubmit = async () => {
-  await auth.handleLogin(email.value, password.value);
+  console.log('=== 登录开始 ===');
+  console.log('邮箱:', email.value);
+  console.log('密码:', password.value ? '***' : '');
+  console.log('auth.loading:', auth.loading);
+
+  try {
+    const result = await auth.handleLogin(email.value, password.value);
+    console.log('登录结果:', result);
+  } catch (error) {
+    console.error('登录异常:', error);
+  }
+
+  console.log('=== 登录结束 ===');
 };
 </script>
 

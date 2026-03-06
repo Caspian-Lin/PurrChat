@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
-import { useAuthController } from '../controllers/authController';
+import { useAuthStore } from '../stores/auth';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -50,20 +50,30 @@ const router = createRouter({
 
 // 路由守卫
 router.beforeEach((to, _from, next) => {
-  const auth = useAuthController();
+  const auth = useAuthStore();
+  console.log('[router] 路由守卫', {
+    to: to.path,
+    requiresAuth: to.meta.requiresAuth,
+    requiresGuest: to.meta.requiresGuest,
+    isAuthenticated: auth.isAuthenticated,
+    token: auth.token ? '存在' : '不存在',
+  });
 
   // 需要认证的路由
-  if (to.meta.requiresAuth && !auth.isAuthenticated.value) {
+  if (to.meta.requiresAuth && !auth.isAuthenticated) {
+    console.log('[router] 需要认证但未登录，跳转到登录页');
     next('/login');
     return;
   }
 
   // 需要未认证的路由（已登录用户不能访问）
-  if (to.meta.requiresGuest && auth.isAuthenticated.value) {
+  if (to.meta.requiresGuest && auth.isAuthenticated) {
+    console.log('[router] 已登录用户访问需要未认证的路由，跳转到首页');
     next('/');
     return;
   }
 
+  console.log('[router] 路由守卫通过，继续导航');
   next();
 });
 

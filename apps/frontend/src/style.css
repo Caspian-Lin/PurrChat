@@ -8,13 +8,14 @@
   font-weight: 400;
 
   /* 主题变量 */
-  --theme-primary: #899cf0;
+  --theme-primary: #5171ff;
   --theme-secondary: #764ba2;
-  --theme-gradient: linear-gradient(135deg, #899cf0 0%, #764ba2 100%);
+  --theme-gradient: linear-gradient(135deg, #5171ff 0%, #764ba2 100%);
 
   /* 浅色主题默认值 */
-  --background-color: #ffffff;
-  --surface-color: #f9f9f9;
+  --background-color: #f0f0f0;
+  --surface-color: #ececec;
+  --strong-background-color: rgb(255, 255, 255);
   --surface-hover-color: #e8e8e8;
   --surface-secondary-color: #f4f4f4;
   --surface-tertiary-color: #f2f2f2;
@@ -26,11 +27,6 @@
   --modal-overlay-color: rgba(0, 0, 0, 0.5);
   --input-background: #f2f2f2;
   --input-border: #d9d9d9;
-  --message-sent-background: linear-gradient(
-    135deg,
-    var(--theme-primary) 0%,
-    var(--theme-secondary) 100%
-  );
   --message-received-background: #fffffffa;
   --card-background: #f9f9f9;
   --hover-background: #f2f2f2;
@@ -49,11 +45,12 @@
 /* 深色主题 */
 [data-theme='dark'] {
   --background-color: #1a1a1a;
+  --strong-background-color: rgba(0, 0, 0, 0.503);
   --surface-color: #2d2d2d;
   --surface-hover-color: #3d3d3d;
   --surface-secondary-color: #252525;
   --surface-tertiary-color: #1f1f1f;
-  --text-color: #ffffff;
+  --text-color: #f0efef;
   --text-secondary-color: #e0e0e0;
   --text-tertiary-color: #b0b0b0;
   --border-color: #404040;

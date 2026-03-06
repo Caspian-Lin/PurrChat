@@ -58,22 +58,65 @@ func runMigrate() {
 	}
 	defer database.Close()
 
-	// 执行迁移SQL文件
-	migrationFile := "migrations/002_new_conversation_structure.sql"
-	content, err := os.ReadFile(migrationFile)
-	if err != nil {
-		logger.Error("Failed to read migration file:", err)
-		os.Exit(1)
+	// 执行所有迁移SQL文件
+	migrationFiles := []string{
+		"migrations/001_init_schema.sql",
+		"migrations/002_new_conversation_structure.sql",
+		"migrations/003_add_conversation_id_to_friendships.sql",
+		"migrations/004_add_rejected_status.sql",
 	}
 
-	// 执行SQL
-	_, err = database.GetPool().Exec(context.Background(), string(content))
-	if err != nil {
-		logger.Error("Failed to execute migration:", err)
-		os.Exit(1)
+	for _, migrationFile := range migrationFiles {
+		logger.Info("Executing migration:", migrationFile)
+
+		content, err := os.ReadFile(migrationFile)
+		if err != nil {
+			logger.Error("Failed to read migration file:", err)
+			os.Exit(1)
+		}
+
+		// 执行SQL（使用 IF NOT EXISTS 避免重复创建错误）
+		_, err = database.GetPool().Exec(context.Background(), string(content))
+		if err != nil {
+			// 检查是否是"已存在"错误，如果是则忽略
+			if isAlreadyExistsError(err) {
+				logger.Info("Migration skipped (already exists):", migrationFile)
+				continue
+			}
+			logger.Error("Failed to execute migration:", err)
+			os.Exit(1)
+		}
+
+		logger.Info("Migration completed successfully:", migrationFile)
 	}
 
-	logger.Info("Migration completed successfully")
+	logger.Info("All migrations completed successfully")
+}
+
+// isAlreadyExistsError 检查是否是"已存在"错误
+func isAlreadyExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	// 检查常见的"已存在"错误模式
+	return contains(errStr, "already exists") ||
+		contains(errStr, "duplicate") ||
+		contains(errStr, "42P07") // PostgreSQL 错误码：relation already exists
+}
+
+// contains 检查字符串是否包含子串
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func main() {
@@ -152,6 +195,7 @@ func main() {
 
 	// 初始化WebSocket hub
 	websocket.InitHub()
+	websocket.InitJWTSecret(cfg.JWT.Secret)
 
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
@@ -183,6 +227,10 @@ func main() {
 	{
 		conversations.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetConversations)
 		conversations.POST("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.CreateConversation)
+		conversations.POST("/group", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.CreateGroupConversation)
+		conversations.GET("/members", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetConversationMembers)
+		conversations.POST("/members", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.AddMemberToConversation)
+		conversations.DELETE("/members", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.RemoveMemberFromConversation)
 	}
 
 	// 消息路由
@@ -190,6 +238,7 @@ func main() {
 	{
 		messages.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetMessages)
 		messages.GET("/export", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.ExportMessages)
+		messages.GET("/incremental", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetMessagesIncremental)
 		messages.POST("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SendMessage)
 	}
 
@@ -197,12 +246,14 @@ func main() {
 	friends := r.Group("/api/friends")
 	{
 		friends.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetFriends)
+		friends.GET("/pending", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetPendingFriendRequests)
+		friends.GET("/requests", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetAllFriendRequests)
 		friends.POST("/request", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SendFriendRequest)
 		friends.POST("/handle", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.HandleFriendRequest)
 	}
 
-	// WebSocket路由
-	r.GET("/api/ws", handlers.AuthMiddleware(cfg.JWT.Secret), websocket.HandleWebSocket)
+	// WebSocket路由（不使用AuthMiddleware，因为WebSocket通过查询参数传递token）
+	r.GET("/api/ws", websocket.HandleWebSocket)
 
 	// 启动服务器
 	go func() {

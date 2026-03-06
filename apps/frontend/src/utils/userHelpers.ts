@@ -29,8 +29,22 @@ export const getOtherUser = (
   currentUserId: string | undefined
 ): User | undefined => {
   if (!currentUserId || !conversation.members) return undefined;
+
   // 在members数组中找到不是当前用户的成员
-  return conversation.members.find((m) => m.user_id !== currentUserId)?.user;
+  const otherMember = conversation.members.find((m) => m.user_id !== currentUserId);
+  if (!otherMember) return undefined;
+
+  // 验证user对象的id是否与user_id一致，防止数据不一致导致的错误匹配
+  if (otherMember.user && otherMember.user.id !== otherMember.user_id) {
+    console.error(
+      `[getOtherUser] User ID mismatch detected: member.user_id=${otherMember.user_id}, member.user.id=${otherMember.user.id}`,
+      conversation
+    );
+    // 返回undefined，避免显示错误的用户信息
+    return undefined;
+  }
+
+  return otherMember.user;
 };
 
 /**

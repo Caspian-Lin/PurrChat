@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"purr-chat-server/pkg/jwt"
 	"purr-chat-server/pkg/logger"
 
 	"github.com/gin-gonic/gin"
@@ -23,11 +24,20 @@ var upgrader = websocket.Upgrader{
 // Hub 全局WebSocket Hub实例
 var GlobalHub *Hub
 
+// JWT secret 用于验证WebSocket连接
+var jwtSecret string
+
 // InitHub 初始化全局Hub
 func InitHub() {
 	GlobalHub = NewHub()
 	go GlobalHub.Run()
 	logger.Info("WebSocket Hub initialized")
+}
+
+// InitJWTSecret 初始化JWT secret
+func InitJWTSecret(secret string) {
+	jwtSecret = secret
+	logger.Info("WebSocket JWT secret initialized")
 }
 
 // HandleWebSocket 处理WebSocket连接
@@ -40,12 +50,18 @@ func HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	// TODO: 验证token并获取用户ID
-	// 这里暂时从查询参数获取user_id，实际应该从JWT token中解析
-	userIDStr := c.Query("user_id")
+	// 验证JWT token并获取用户ID
+	userIDStr, err := jwt.ExtractUserID(token, jwtSecret)
+	if err != nil {
+		logger.ErrorfWithCaller("WebSocket connection rejected: invalid token: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
+	// 解析用户ID
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		logger.ErrorfWithCaller("WebSocket connection rejected: invalid user_id")
+		logger.ErrorfWithCaller("WebSocket connection rejected: invalid user_id: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
 		return
 	}

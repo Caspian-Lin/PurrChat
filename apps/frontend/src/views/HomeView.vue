@@ -12,6 +12,7 @@
     <UserProfileModal
       :show="showProfile"
       :user="currentUser"
+      :is-current-user="true"
       @update:show="showProfile = $event"
       @logout="handleLogout"
     />
