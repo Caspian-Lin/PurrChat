@@ -179,6 +179,16 @@ export const api = {
     return apiClient.get('/api/friends').then((res) => res.data);
   },
 
+  // 获取待处理的好友请求
+  getPendingFriendRequests: (): Promise<ApiResponse<Friendship[]>> => {
+    return apiClient.get('/api/friends/pending').then((res) => res.data);
+  },
+
+  // 获取所有好友申请记录
+  getAllFriendRequests: (): Promise<ApiResponse<Friendship[]>> => {
+    return apiClient.get('/api/friends/requests').then((res) => res.data);
+  },
+
   // 发送好友请求
   sendFriendRequest: (data: SendFriendRequest): Promise<ApiResponse<Conversation>> => {
     return apiClient.post('/api/friends/request', data).then((res) => res.data);

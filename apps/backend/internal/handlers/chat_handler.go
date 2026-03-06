@@ -493,6 +493,110 @@ func (h *ChatHandler) GetFriends(c *gin.Context) {
 	})
 }
 
+// GetPendingFriendRequests 获取待处理的好友请求
+// @Summary 获取待处理的好友请求
+// @Tags 好友
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.FriendListResponse
+// @Router /api/friends/pending [get]
+func (h *ChatHandler) GetPendingFriendRequests(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		logger.ErrorfWithCaller("Unauthorized access attempt for get pending friend requests")
+		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	userIDStr, ok := userID.(string)
+	if !ok {
+		logger.ErrorfWithCaller("Invalid user ID type for get pending friend requests")
+		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	friendships, err := h.chatService.GetPendingFriendRequests(c.Request.Context(), userIDStr)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to get pending friend requests for user %s: %v", userIDStr, err)
+		c.JSON(http.StatusInternalServerError, models.FriendListResponse{
+			Success: false,
+			Message: "Failed to get pending friend requests",
+		})
+		return
+	}
+
+	// 转换为切片
+	var fsSlice []models.Friendship
+	for _, fs := range friendships {
+		fsSlice = append(fsSlice, *fs)
+	}
+
+	logger.InfofWithCaller("Retrieved %d pending friend requests for user %s", len(fsSlice), userIDStr)
+
+	c.JSON(http.StatusOK, models.FriendListResponse{
+		Success: true,
+		Data:    fsSlice,
+	})
+}
+
+// GetAllFriendRequests 获取所有好友申请记录
+// @Summary 获取所有好友申请记录
+// @Tags 好友
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.FriendListResponse
+// @Router /api/friends/requests [get]
+func (h *ChatHandler) GetAllFriendRequests(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		logger.ErrorfWithCaller("Unauthorized access attempt for get all friend requests")
+		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	userIDStr, ok := userID.(string)
+	if !ok {
+		logger.ErrorfWithCaller("Invalid user ID type for get all friend requests")
+		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	friendships, err := h.chatService.GetAllFriendRequests(c.Request.Context(), userIDStr)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to get all friend requests for user %s: %v", userIDStr, err)
+		c.JSON(http.StatusInternalServerError, models.FriendListResponse{
+			Success: false,
+			Message: "Failed to get all friend requests",
+		})
+		return
+	}
+
+	// 转换为切片
+	var fsSlice []models.Friendship
+	for _, fs := range friendships {
+		fsSlice = append(fsSlice, *fs)
+	}
+
+	logger.InfofWithCaller("Retrieved %d friend requests for user %s", len(fsSlice), userIDStr)
+
+	c.JSON(http.StatusOK, models.FriendListResponse{
+		Success: true,
+		Data:    fsSlice,
+	})
+}
+
 // GetUserByID 根据ID获取用户信息
 // @Summary 根据ID获取用户信息
 // @Tags 用户

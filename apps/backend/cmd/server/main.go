@@ -198,6 +198,8 @@ func main() {
 	friends := r.Group("/api/friends")
 	{
 		friends.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetFriends)
+		friends.GET("/pending", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetPendingFriendRequests)
+		friends.GET("/requests", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetAllFriendRequests)
 		friends.POST("/request", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SendFriendRequest)
 		friends.POST("/handle", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.HandleFriendRequest)
 	}

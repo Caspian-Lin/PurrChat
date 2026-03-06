@@ -463,6 +463,78 @@ func (s *ChatService) GetFriends(ctx context.Context, userID string) ([]*models.
 	return friendships, nil
 }
 
+// GetPendingFriendRequests 获取用户的待处理好友请求
+func (s *ChatService) GetPendingFriendRequests(ctx context.Context, userID string) ([]*models.Friendship, error) {
+	logger.InfofWithCaller("Getting pending friend requests for user: %s", userID)
+
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to parse user ID %s: %v", userID, err)
+		return nil, err
+	}
+
+	friendships, err := s.friendshipRepo.FindPendingRequests(ctx, id)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to get pending friend requests for user %s: %v", userID, err)
+		return nil, err
+	}
+
+	// 为每个好友请求加载发送者信息
+	for _, fs := range friendships {
+		// 加载发送者信息（UserID是发送方）
+		sender, err := s.userRepo.FindByID(ctx, fs.UserID)
+		if err == nil {
+			sender.PasswordHash = ""
+			sender.Salt = ""
+			fs.User = sender
+		}
+	}
+
+	logger.InfofWithCaller("Retrieved %d pending friend requests for user %s", len(friendships), userID)
+	return friendships, nil
+}
+
+// GetAllFriendRequests 获取用户的所有好友申请记录
+func (s *ChatService) GetAllFriendRequests(ctx context.Context, userID string) ([]*models.Friendship, error) {
+	logger.InfofWithCaller("Getting all friend requests for user: %s", userID)
+
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to parse user ID %s: %v", userID, err)
+		return nil, err
+	}
+
+	friendships, err := s.friendshipRepo.FindAllRequests(ctx, id)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to get all friend requests for user %s: %v", userID, err)
+		return nil, err
+	}
+
+	// 为每个好友请求加载相关用户信息
+	for _, fs := range friendships {
+		if fs.UserID == id {
+			// 当前用户是发送方，加载接收方信息
+			receiver, err := s.userRepo.FindByID(ctx, fs.FriendID)
+			if err == nil {
+				receiver.PasswordHash = ""
+				receiver.Salt = ""
+				fs.Friend = receiver
+			}
+		} else {
+			// 当前用户是接收方，加载发送方信息
+			sender, err := s.userRepo.FindByID(ctx, fs.UserID)
+			if err == nil {
+				sender.PasswordHash = ""
+				sender.Salt = ""
+				fs.User = sender
+			}
+		}
+	}
+
+	logger.InfofWithCaller("Retrieved %d friend requests for user %s", len(friendships), userID)
+	return friendships, nil
+}
+
 // GetUserByID 根据ID获取用户
 func (s *ChatService) GetUserByID(ctx context.Context, userID string) (*models.User, error) {
 	id, err := uuid.Parse(userID)
@@ -756,13 +828,16 @@ func (s *ChatService) HandleFriendRequest(ctx context.Context, userID, conversat
 			logger.InfofWithCaller("Friend request acceptance notification sent to both users %s and %s", userUUID, senderUUID)
 		}
 	} else if action == "reject" {
-		// 删除好友关系
-		err = s.friendshipRepo.Delete(ctx, friendship.ID)
+		// 将好友关系状态设置为 rejected
+		friendship.Status = models.FriendshipStatusRejected
+		logger.InfofWithCaller("Friend request rejected between %s and %s", userID, senderUUID)
+
+		// 更新好友关系状态
+		err = s.friendshipRepo.Update(ctx, friendship)
 		if err != nil {
-			logger.ErrorfWithCaller("Failed to delete friendship: %v", err)
+			logger.ErrorfWithCaller("Failed to update friendship: %v", err)
 			return err
 		}
-		logger.InfofWithCaller("Friend request rejected between %s and %s", userID, senderUUID)
 
 		// 通过WebSocket通知发送者好友请求被拒绝
 		if websocket.GlobalHub != nil {

@@ -42,7 +42,7 @@ export interface ApiResponse<T = any> {
 export type ConversationType = 'direct' | 'group';
 
 // 好友状态
-export type FriendshipStatus = 'pending' | 'accepted' | 'blocked';
+export type FriendshipStatus = 'pending' | 'accepted' | 'rejected' | 'blocked';
 
 // Enrollment角色
 export type EnrollmentRole = 'owner' | 'admin' | 'member';

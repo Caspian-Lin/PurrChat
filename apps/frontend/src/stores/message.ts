@@ -35,7 +35,9 @@ export const useMessageStore = defineStore('message', () => {
 
   // 设置消息
   function setMessages(conversationId: string, newMessages: Message[]) {
-    console.log(`[MessageStore] Setting ${newMessages.length} messages for conversation ${conversationId}`);
+    console.log(
+      `[MessageStore] Setting ${newMessages.length} messages for conversation ${conversationId}`
+    );
     messages.value.set(conversationId, newMessages);
   }
 
@@ -54,13 +56,15 @@ export const useMessageStore = defineStore('message', () => {
 
   // 批量添加消息
   function addMessages(conversationId: string, newMessages: Message[]) {
-    console.log(`[MessageStore] Adding ${newMessages.length} messages to conversation ${conversationId}`);
+    console.log(
+      `[MessageStore] Adding ${newMessages.length} messages to conversation ${conversationId}`
+    );
     const currentMessages = messages.value.get(conversationId) || [];
     // 只添加不存在的消息
-    const messagesToAdd = newMessages.filter((msg) => 
-      !currentMessages.some((m) => m.id === msg.id)
+    const messagesToAdd = newMessages.filter(
+      (msg) => !currentMessages.some((m) => m.id === msg.id)
     );
-    
+
     if (messagesToAdd.length > 0) {
       messages.value.set(conversationId, [...currentMessages, ...messagesToAdd]);
       // 缓存新消息
@@ -121,8 +125,13 @@ export const useMessageStore = defineStore('message', () => {
   }
 
   // 检查并加载增量消息
-  async function checkAndLoadIncremental(conversationId: string, sinceTimestamp: number): Promise<number> {
-    console.log(`[MessageStore] Checking incremental messages for conversation ${conversationId} since ${sinceTimestamp}`);
+  async function checkAndLoadIncremental(
+    conversationId: string,
+    sinceTimestamp: number
+  ): Promise<number> {
+    console.log(
+      `[MessageStore] Checking incremental messages for conversation ${conversationId} since ${sinceTimestamp}`
+    );
     // 检查是否有缓存
     if (messageCache.hasCache(conversationId)) {
       const lastUpdated = messageCache.getLastUpdated(conversationId);
