@@ -37,13 +37,14 @@ const (
 
 // Friendship 好友关系模型
 type Friendship struct {
-	ID        uuid.UUID        `json:"id" db:"id"`
-	UserID    uuid.UUID        `json:"user_id" db:"user_id"`
-	FriendID  uuid.UUID        `json:"friend_id" db:"friend_id"`
-	Status    FriendshipStatus `json:"status" db:"status"`
-	CreatedAt time.Time        `json:"created_at" db:"created_at"`
-	User      *User            `json:"user,omitempty" db:"-"`   // 用户信息
-	Friend    *User            `json:"friend,omitempty" db:"-"` // 好友信息
+	ID             uuid.UUID        `json:"id" db:"id"`
+	UserID         uuid.UUID        `json:"user_id" db:"user_id"`
+	FriendID       uuid.UUID        `json:"friend_id" db:"friend_id"`
+	ConversationID uuid.UUID        `json:"conversation_id" db:"conversation_id"` // 关联的会话ID
+	Status         FriendshipStatus `json:"status" db:"status"`
+	CreatedAt      time.Time        `json:"created_at" db:"created_at"`
+	User           *User            `json:"user,omitempty" db:"-"`   // 用户信息
+	Friend         *User            `json:"friend,omitempty" db:"-"` // 好友信息
 }
 
 // FriendListResponse 好友列表响应

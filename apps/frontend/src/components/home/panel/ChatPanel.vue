@@ -264,54 +264,54 @@ const handleSendMessage = async (content: string) => {
     console.log('[ChatPanel] sendMessage returned, success:', success);
     console.log('[ChatPanel] messages.value.length after sendMessage:', messages.value.length);
     if (success) {
-    // 更新会话列表中的最后一条消息和更新时间
-    const conversationIndex = conversations.value.findIndex(
-      (c) => c.id === selectedConversation.value?.id
-    );
-    console.log('[ChatPanel] conversationIndex:', conversationIndex);
-    console.log('[ChatPanel] messages.value.length:', messages.value.length);
-    if (conversationIndex !== -1 && messages.value.length > 0) {
-      const lastMessage = messages.value[messages.value.length - 1];
-      console.log('[ChatPanel] lastMessage:', lastMessage);
-      if (lastMessage) {
-        const conversation = conversations.value[conversationIndex];
-        if (conversation) {
-          console.log('[ChatPanel] conversation before update:', {
-            id: conversation.id,
-            lastMessage: conversation.last_message?.content,
-            updatedAt: conversation.updated_at,
-          });
-          // 使用展开运算符触发响应式更新
-          conversations.value[conversationIndex] = {
-            ...conversation,
-            last_message: lastMessage,
-            updated_at: new Date().toISOString(),
-          };
+      // 更新会话列表中的最后一条消息和更新时间
+      const conversationIndex = conversations.value.findIndex(
+        (c) => c.id === selectedConversation.value?.id
+      );
+      console.log('[ChatPanel] conversationIndex:', conversationIndex);
+      console.log('[ChatPanel] messages.value.length:', messages.value.length);
+      if (conversationIndex !== -1 && messages.value.length > 0) {
+        const lastMessage = messages.value[messages.value.length - 1];
+        console.log('[ChatPanel] lastMessage:', lastMessage);
+        if (lastMessage) {
+          const conversation = conversations.value[conversationIndex];
+          if (conversation) {
+            console.log('[ChatPanel] conversation before update:', {
+              id: conversation.id,
+              lastMessage: conversation.last_message?.content,
+              updatedAt: conversation.updated_at,
+            });
+            // 使用展开运算符触发响应式更新
+            conversations.value[conversationIndex] = {
+              ...conversation,
+              last_message: lastMessage,
+              updated_at: new Date().toISOString(),
+            };
 
-          console.log('[ChatPanel] Updated conversation after send message:', {
-            conversationId: selectedConversation.value.id,
-            lastMessage: lastMessage.content,
-            lastMessageCreatedAt: lastMessage.created_at,
-            updatedAt: conversations.value[conversationIndex].updated_at,
-          });
+            console.log('[ChatPanel] Updated conversation after send message:', {
+              conversationId: selectedConversation.value.id,
+              lastMessage: lastMessage.content,
+              lastMessageCreatedAt: lastMessage.created_at,
+              updatedAt: conversations.value[conversationIndex].updated_at,
+            });
 
-          // 缓存新消息
-          await cacheMessage(selectedConversation.value.id, lastMessage);
+            // 缓存新消息
+            await cacheMessage(selectedConversation.value.id, lastMessage);
 
-          // 更新message store
-          messageStore.addMessage(selectedConversation.value.id, lastMessage);
+            // 更新message store
+            messageStore.addMessage(selectedConversation.value.id, lastMessage);
 
-          // 强制触发响应式更新
-          console.log('[ChatPanel] Forcing reactive update by reassigning conversations.value');
-          conversations.value = [...conversations.value];
-          console.log(
-            '[ChatPanel] conversations.value after reassign:',
-            conversations.value.length
-          );
+            // 强制触发响应式更新
+            console.log('[ChatPanel] Forcing reactive update by reassigning conversations.value');
+            conversations.value = [...conversations.value];
+            console.log(
+              '[ChatPanel] conversations.value after reassign:',
+              conversations.value.length
+            );
+          }
         }
       }
     }
-  }
   } catch (error) {
     console.error('[ChatPanel] Error in handleSendMessage:', error);
   }

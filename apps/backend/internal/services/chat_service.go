@@ -794,11 +794,19 @@ func (s *ChatService) SendFriendRequest(ctx context.Context, userID, targetUserI
 		// 如果是 blocked 状态，允许重新发送请求
 	}
 
+	// 创建会话
+	conversation, err := s.CreateConversation(ctx, userID, targetUserID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to create conversation: %v", err)
+		return nil, err
+	}
+
 	// 创建好友关系记录（状态为 pending）
 	friendship := &models.Friendship{
-		UserID:   userUUID,
-		FriendID: targetUUID,
-		Status:   models.FriendshipStatusPending,
+		UserID:         userUUID,
+		FriendID:       targetUUID,
+		ConversationID: conversation.ID,
+		Status:         models.FriendshipStatusPending,
 	}
 	err = s.friendshipRepo.Create(ctx, friendship)
 	if err != nil {
@@ -807,13 +815,6 @@ func (s *ChatService) SendFriendRequest(ctx context.Context, userID, targetUserI
 	}
 
 	logger.InfofWithCaller("Friendship created successfully: ID=%s, Status=%s", friendship.ID, friendship.Status)
-
-	// 创建会话
-	conversation, err := s.CreateConversation(ctx, userID, targetUserID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to create conversation: %v", err)
-		return nil, err
-	}
 
 	// 通过WebSocket通知接收者有新的好友请求
 	if websocket.GlobalHub != nil {
@@ -840,50 +841,56 @@ func (s *ChatService) HandleFriendRequest(ctx context.Context, userID, conversat
 		return err
 	}
 
-	conversationUUID, err := uuid.Parse(conversationIDStr)
+	// 查找当前用户的所有好友请求，找到待处理的请求
+	friendships, err := s.friendshipRepo.FindByUserID(ctx, userUUID)
 	if err != nil {
-		logger.ErrorfWithCaller("Failed to parse conversation ID %s: %v", conversationIDStr, err)
-		return err
+		logger.ErrorfWithCaller("Failed to get friendships for user %s: %v", userID, err)
+		return errors.New("failed to get friendships")
 	}
 
-	// 获取会话成员
-	members, err := s.enrollmentRepo.FindByConversationID(ctx, conversationUUID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to get conversation members: %v", err)
-		return errors.New("conversation not found")
-	}
+	// 找到待处理的好友请求（当前用户是接收方）
+	var friendship *models.Friendship
+	var senderUUID uuid.UUID
+	var conversationUUID uuid.UUID
 
-	// 找到另一个用户
-	var targetUUID uuid.UUID
-	for _, member := range members {
-		if member.UserID != userUUID {
-			targetUUID = member.UserID
+	for _, fs := range friendships {
+		// 检查是否是待处理的请求，并且当前用户是接收方
+		if fs.Status == models.FriendshipStatusPending && fs.FriendID == userUUID {
+			friendship = fs
+			senderUUID = fs.UserID
 			break
 		}
 	}
 
-	if targetUUID == uuid.Nil {
-		logger.ErrorfWithCaller("Failed to find target user in conversation %s", conversationIDStr)
-		return errors.New("failed to find target user")
+	if friendship == nil {
+		logger.ErrorfWithCaller("No pending friend request found for user %s", userID)
+		return errors.New("no pending friend request found")
 	}
 
-	// 查找好友关系
-	friendship, err := s.friendshipRepo.FindByUsers(ctx, userUUID, targetUUID)
-	if err != nil {
-		logger.ErrorfWithCaller("Friendship not found between %s and %s: %v", userID, targetUUID, err)
-		return errors.New("friend request not found")
-	}
+	// 如果提供了 conversation_id，使用它；否则查找对应的会话
+	if conversationIDStr != "" {
+		conversationUUID, err = uuid.Parse(conversationIDStr)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to parse conversation ID %s: %v", conversationIDStr, err)
+			return err
+		}
+	} else {
+		// 通过 user_id 和 friend_id 查找对应的会话
+		conversation, err := s.conversationRepo.FindByUsers(ctx, userUUID, senderUUID)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to find conversation between %s and %s: %v", userID, senderUUID, err)
+			return errors.New("conversation not found")
+		}
+		conversationUUID = conversation.ID
 
-	// 检查当前用户是否是好友请求的接收者
-	// 在 SendFriendRequest 中，UserID 是发送者，FriendID 是接收者
-	// 所以接收方应该检查 friendship.FriendID == userUUID
-	if friendship.FriendID != userUUID {
-		logger.ErrorfWithCaller("User %s is not the recipient of the friend request. friendship.UserID=%s, friendship.FriendID=%s", userID, friendship.UserID, friendship.FriendID)
-		return errors.New("not authorized to handle this friend request")
+		// 更新好友关系的 conversation_id
+		friendship.ConversationID = conversationUUID
+		err = s.friendshipRepo.Update(ctx, friendship)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to update friendship conversation_id: %v", err)
+			// 继续处理，不因为更新失败而中断
+		}
 	}
-
-	// 确定发送者（好友请求的发送方）
-	senderUUID := friendship.UserID
 
 	// 根据操作更新状态
 	if action == "accept" {
@@ -901,13 +908,13 @@ func (s *ChatService) HandleFriendRequest(ctx context.Context, userID, conversat
 		if websocket.GlobalHub != nil {
 			// 通知接收者（当前用户）
 			websocket.GlobalHub.SendToUser(userUUID, "friend_request_update", map[string]interface{}{
-				"conversation_id": conversationIDStr,
+				"conversation_id": conversationUUID.String(),
 				"status":          "accepted",
 				"action":          action,
 			})
 			// 通知发送者（另一个用户）
 			websocket.GlobalHub.SendToUser(senderUUID, "friend_request_update", map[string]interface{}{
-				"conversation_id": conversationIDStr,
+				"conversation_id": conversationUUID.String(),
 				"status":          "accepted",
 				"action":          action,
 			})
@@ -928,7 +935,7 @@ func (s *ChatService) HandleFriendRequest(ctx context.Context, userID, conversat
 		// 通过WebSocket通知发送者好友请求被拒绝
 		if websocket.GlobalHub != nil {
 			websocket.GlobalHub.SendToUser(senderUUID, "friend_request_update", map[string]interface{}{
-				"conversation_id": conversationIDStr,
+				"conversation_id": conversationUUID.String(),
 				"status":          "rejected",
 				"action":          action,
 			})

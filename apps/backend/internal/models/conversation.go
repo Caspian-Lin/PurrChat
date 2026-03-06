@@ -89,7 +89,7 @@ type ConversationMemberResponse struct {
 
 // HandleFriendRequestRequest 处理好友请求请求
 type HandleFriendRequestRequest struct {
-	ConversationID uuid.UUID `json:"conversation_id" binding:"required,uuid"`
+	ConversationID uuid.UUID `json:"conversation_id" binding:"omitempty,uuid"`
 	Action         string    `json:"action" binding:"required,oneof=accept reject"`
 }
 

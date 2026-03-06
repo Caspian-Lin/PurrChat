@@ -142,7 +142,9 @@ const sortedConversations = computed(() => {
     const timeB = b.last_message?.created_at || b.updated_at;
     const timestampA = new Date(timeA).getTime();
     const timestampB = new Date(timeB).getTime();
-    console.log(`[ConversationList] Comparing ${a.id} (${timestampA}) and ${b.id} (${timestampB}), diff: ${timestampB - timestampA}`);
+    console.log(
+      `[ConversationList] Comparing ${a.id} (${timestampA}) and ${b.id} (${timestampB}), diff: ${timestampB - timestampA}`
+    );
     return timestampB - timestampA;
   });
   console.log(

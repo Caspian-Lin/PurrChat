@@ -345,8 +345,14 @@ import { BsX } from 'vue-icons-plus/bs';
 const auth = useAuthController();
 
 // Composables
-const { friends, pendingRequests, loadFriends, loadPendingRequests, sendFriendRequest, handleFriendRequest } =
-  useFriends();
+const {
+  friends,
+  pendingRequests,
+  loadFriends,
+  loadPendingRequests,
+  sendFriendRequest,
+  handleFriendRequest,
+} = useFriends();
 const { createConversation } = useConversations();
 const { connect, on: onWs, off: offWs } = useWebSocket();
 const router = useRouter();
@@ -500,8 +506,11 @@ const isRequestRecipient = (request: Friendship): boolean => {
 
 // 处理接受好友请求
 const handleAcceptRequest = async (request: Friendship) => {
-  console.log('[FriendsPanel] handleAcceptRequest', { requestId: request.id, conversationId: request.conversation_id });
-  
+  console.log('[FriendsPanel] handleAcceptRequest', {
+    requestId: request.id,
+    conversationId: request.conversation_id,
+  });
+
   const success = await handleFriendRequest(request.conversation_id, 'accept');
   if (success) {
     // 重新加载数据
@@ -513,8 +522,11 @@ const handleAcceptRequest = async (request: Friendship) => {
 
 // 处理忽略好友请求
 const handleRejectRequest = async (request: Friendship) => {
-  console.log('[FriendsPanel] handleRejectRequest', { requestId: request.id, conversationId: request.conversation_id });
-  
+  console.log('[FriendsPanel] handleRejectRequest', {
+    requestId: request.id,
+    conversationId: request.conversation_id,
+  });
+
   const success = await handleFriendRequest(request.conversation_id, 'reject');
   if (success) {
     // 重新加载数据

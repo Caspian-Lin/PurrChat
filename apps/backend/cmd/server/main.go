@@ -58,22 +58,65 @@ func runMigrate() {
 	}
 	defer database.Close()
 
-	// 执行迁移SQL文件
-	migrationFile := "migrations/002_new_conversation_structure.sql"
-	content, err := os.ReadFile(migrationFile)
-	if err != nil {
-		logger.Error("Failed to read migration file:", err)
-		os.Exit(1)
+	// 执行所有迁移SQL文件
+	migrationFiles := []string{
+		"migrations/001_init_schema.sql",
+		"migrations/002_new_conversation_structure.sql",
+		"migrations/003_add_conversation_id_to_friendships.sql",
+		"migrations/004_add_rejected_status.sql",
 	}
 
-	// 执行SQL
-	_, err = database.GetPool().Exec(context.Background(), string(content))
-	if err != nil {
-		logger.Error("Failed to execute migration:", err)
-		os.Exit(1)
+	for _, migrationFile := range migrationFiles {
+		logger.Info("Executing migration:", migrationFile)
+
+		content, err := os.ReadFile(migrationFile)
+		if err != nil {
+			logger.Error("Failed to read migration file:", err)
+			os.Exit(1)
+		}
+
+		// 执行SQL（使用 IF NOT EXISTS 避免重复创建错误）
+		_, err = database.GetPool().Exec(context.Background(), string(content))
+		if err != nil {
+			// 检查是否是"已存在"错误，如果是则忽略
+			if isAlreadyExistsError(err) {
+				logger.Info("Migration skipped (already exists):", migrationFile)
+				continue
+			}
+			logger.Error("Failed to execute migration:", err)
+			os.Exit(1)
+		}
+
+		logger.Info("Migration completed successfully:", migrationFile)
 	}
 
-	logger.Info("Migration completed successfully")
+	logger.Info("All migrations completed successfully")
+}
+
+// isAlreadyExistsError 检查是否是"已存在"错误
+func isAlreadyExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	// 检查常见的"已存在"错误模式
+	return contains(errStr, "already exists") ||
+		contains(errStr, "duplicate") ||
+		contains(errStr, "42P07") // PostgreSQL 错误码：relation already exists
+}
+
+// contains 检查字符串是否包含子串
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func main() {

@@ -64,7 +64,10 @@ class MessageCacheService {
 
   // 等待密钥初始化完成
   private async waitForKeyInitialization() {
-    console.log('[MessageCache] waitForKeyInitialization called, keyInitialized:', this.keyInitialized);
+    console.log(
+      '[MessageCache] waitForKeyInitialization called, keyInitialized:',
+      this.keyInitialized
+    );
     let attempts = 0;
     const maxAttempts = 1000; // 10秒超时
     while (!this.keyInitialized && attempts < maxAttempts) {
@@ -251,7 +254,12 @@ class MessageCacheService {
 
   // 添加消息到缓存
   async addMessage(conversationId: string, message: Message | CachedMessage) {
-    console.log('[MessageCache] addMessage called with conversationId:', conversationId, 'messageId:', message.id);
+    console.log(
+      '[MessageCache] addMessage called with conversationId:',
+      conversationId,
+      'messageId:',
+      message.id
+    );
     let cache = this.cache.get(conversationId);
     if (!cache) {
       console.log('[MessageCache] Creating new cache for conversation:', conversationId);
