@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   # PostgreSQL 数据库
   postgres:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: purrchat-postgres
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
@@ -33,24 +31,22 @@ services:
       # 服务器配置
       PORT: ${PORT:-8080}
       GIN_MODE: ${GIN_MODE:-release}
-      
+
       # 数据库配置
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_NAME: ${DB_NAME:-purrchat}
-      
+
       # JWT配置
       JWT_SECRET: ${JWT_SECRET:-your_jwt_secret_key_here_change_in_production}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-24h}
-      
+
       # 日志配置
       LOG_DIRECTORY: /app/logs
       LOG_MAX_FILES: ${LOG_MAX_FILES:-10}
       LOG_MAX_LINES: ${LOG_MAX_LINES:-10000}
-    ports:
-      - "${PORT:-8080}:8080"
     volumes:
       - ./apps/backend/logs:/app/logs
     depends_on:
@@ -71,9 +67,9 @@ services:
     build:
       context: ./apps/frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/}
     container_name: purrchat-frontend
-    ports:
-      - "${FRONTEND_PORT:-80}:80"
     depends_on:
       backend:
         condition: service_healthy
@@ -83,6 +79,21 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
+    networks:
+      - purrchat-network
+    restart: unless-stopped
+
+  # Nginx 反向代理
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: purrchat-nginx
+    ports:
+      - "${PROXY_PORT:-80}:80"
+    volumes:
+      - ./nginx-proxy.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
     networks:
       - purrchat-network
     restart: unless-stopped

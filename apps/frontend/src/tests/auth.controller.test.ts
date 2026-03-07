@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useAuthController } from '../controllers/authController';
-import { useRouter } from 'vue-router';
 
 // Mock vue-router
 const mockRouter = {

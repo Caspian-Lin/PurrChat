@@ -40,8 +40,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 创建非root用户
-RUN groupadd -g 1000 appuser && \
-    useradd -r -u 1000 -g appuser appuser
+RUN groupadd -g 1001 appuser && \
+    useradd -r -u 1001 -g appuser appuser
 
 # 设置工作目录
 WORKDIR /app
@@ -51,7 +51,8 @@ COPY --from=builder /app/bin/server /app/server
 
 # 创建必要的目录
 RUN mkdir -p /app/logs /app/migrations && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app && \
+    chmod -R 755 /app/logs
 
 # 复制迁移文件
 COPY migrations/ /app/migrations/

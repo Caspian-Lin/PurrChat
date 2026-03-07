@@ -67,6 +67,8 @@ export const lightTheme = {
   cardBackground: '#f9f9f9',
   hoverBackground: '#f2f2f2',
   selectedBackground: '#dcdcdc',
+  messageSent: '#e3f2fd',
+  messageReceived: '#f5f5f5',
 };
 
 // 深色主题配色
@@ -87,6 +89,8 @@ export const darkTheme = {
   cardBackground: '#2d2d2d',
   hoverBackground: '#3d3d3d',
   selectedBackground: '#303030',
+  messageSent: '#1565c0',
+  messageReceived: '#424242',
 };
 
 // 默认主题配置

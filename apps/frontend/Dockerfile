@@ -4,14 +4,20 @@ FROM node:20-alpine AS builder
 # 设置工作目录
 WORKDIR /app
 
+# 定义构建参数
+ARG VITE_API_BASE_URL=/api
+
 # 复制package文件
 COPY package*.json ./
 
 # 安装依赖
-RUN npm ci
+RUN npm install
 
 # 复制源代码
 COPY . .
+
+# 创建 .env 文件用于构建时
+RUN echo "VITE_API_BASE_URL=${VITE_API_BASE_URL}" > .env
 
 # 构建应用
 RUN npm run build
@@ -30,7 +36,7 @@ EXPOSE 80
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:80/ || exit 1
 
 # 启动nginx
 CMD ["nginx", "-g", "daemon off;"]

@@ -102,10 +102,22 @@ class WebSocketService {
     console.log('[WebSocket] API Base URL:', apiBaseUrl);
     console.log('[WebSocket] VITE_API_BASE_URL env:', import.meta.env.VITE_API_BASE_URL);
 
-    const url = new URL(apiBaseUrl);
-    const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = url.host;
-    const wsUrl = `${protocol}//${host}/api/ws?token=${encodeURIComponent(token)}&user_id=${userId}`;
+    // 处理相对路径和绝对路径
+    let wsUrl: string;
+    if (apiBaseUrl.startsWith('/')) {
+      // 相对路径，使用当前协议和主机
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      // 如果 apiBaseUrl 是 '/' 或空，直接使用 /api/ws
+      const basePath = apiBaseUrl === '/' ? '' : apiBaseUrl;
+      wsUrl = `${protocol}//${host}${basePath}/api/ws?token=${encodeURIComponent(token)}&user_id=${userId}`;
+    } else {
+      // 绝对路径
+      const url = new URL(apiBaseUrl);
+      const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = url.host;
+      wsUrl = `${protocol}//${host}/api/ws?token=${encodeURIComponent(token)}&user_id=${userId}`;
+    }
 
     console.log('Connecting to WebSocket:', wsUrl);
 

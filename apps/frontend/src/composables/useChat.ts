@@ -3,7 +3,7 @@ import { api } from '../models/api';
 import { useMessage } from './useMessage';
 import { useMessageCache } from '../services/messageCache';
 import { useMessageStore } from '../stores/message';
-import type { Message } from '../models/types';
+import type { Message, SendMessageRequest } from '../models/types';
 
 export const useChat = () => {
   const messages = ref<Message[]>([]);
@@ -126,7 +126,7 @@ export const useChat = () => {
     }
 
     try {
-      const requestData = {
+      const requestData: SendMessageRequest = {
         conversation_id: conversationId,
         content,
         msg_type: 'text',
