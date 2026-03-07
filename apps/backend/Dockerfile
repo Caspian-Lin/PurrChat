@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y \
 # 复制go mod文件
 COPY go.mod go.sum ./
 
+# 配置代理
+ENV GOPROXY=https://goproxy.cn,direct
+
 # 下载依赖
 RUN go mod download
 
