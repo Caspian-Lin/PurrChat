@@ -1,7 +1,7 @@
 <template>
   <div class="flex h-screen">
     <!-- 左侧导航栏 -->
-    <SideNavbar :current-user="currentUser" @show-profile="handleShowProfile" />
+    <SideNavbar :current-user="auth.currentUser.value" @show-profile="handleShowProfile" />
 
     <!-- 路由视图 - 显示不同的panel -->
     <div class="flex-1">
@@ -11,7 +11,7 @@
     <!-- 个人资料弹窗 -->
     <UserProfileModal
       :show="showProfile"
-      :user="currentUser"
+      :user="auth.currentUser.value"
       :is-current-user="true"
       @update:show="showProfile = $event"
       @logout="handleLogout"
@@ -31,7 +31,7 @@ import UserProfileModal from '../components/home/UserProfileModal.vue';
 
 // Auth
 const auth = useAuthController();
-const { currentUser, handleLogout } = auth;
+const { handleLogout } = auth;
 
 // Composables
 const { loadConversations } = useConversations();
@@ -99,7 +99,7 @@ const handleConversationMemberAdded = async (data: any) => {
 const handleConversationMemberRemoved = async (data: any) => {
   console.log('[HomeView] Conversation member removed:', data);
   // 显示通知
-  if (data.user_id === currentUser?.id) {
+  if (data.user_id === auth.currentUser.value?.id) {
     addNotification('warning', '已移出群聊', '你已被移出群聊');
   } else {
     addNotification('info', '成员已移除', `成员已从群聊中移除`);
@@ -111,7 +111,7 @@ const handleConversationMemberRemoved = async (data: any) => {
 // Lifecycle
 onMounted(async () => {
   await auth.checkAuth();
-  if (currentUser) {
+  if (auth.currentUser.value) {
     console.log('[HomeView] currentUser 存在，连接 WebSocket');
     // 连接WebSocket
     connect();

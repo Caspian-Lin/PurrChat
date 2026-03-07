@@ -39,7 +39,7 @@
       <ConversationList
         :conversations="filteredConversations"
         :selected-id="selectedConversation?.id"
-        :current-user-id="currentUser?.id"
+        :current-user-id="auth.currentUser.value?.id"
         @select="handleSelectConversation"
         @show-user="handleShowUserProfile"
         @delete-conversation="handleDeleteConversation"
@@ -52,7 +52,7 @@
         v-if="selectedConversation"
         :conversation="selectedConversation"
         :messages="messages"
-        :current-user-id="currentUser?.id"
+        :current-user-id="auth.currentUser.value?.id"
         @send-message="handleSendMessage"
         @export-messages="handleExportMessages"
         @show-user="handleShowUserProfile"
@@ -91,7 +91,7 @@
     <ConversationDetailModal
       v-model:show="showConversationDetailModal"
       :conversation="selectedConversation"
-      :current-user-id="currentUser?.id"
+      :current-user-id="auth.currentUser.value?.id"
       @show-user-profile="handleShowUserProfile"
       @members-changed="handleGroupUpdated"
     />
@@ -122,7 +122,6 @@ import type { User, Conversation } from '../../../models/types';
 import { BsPlusLg, BsXCircle } from 'vue-icons-plus/bs';
 // Auth
 const auth = useAuthController();
-const { currentUser } = auth;
 
 // Composables
 const { conversations, loadConversations, createConversation, deleteConversation } =
@@ -196,7 +195,7 @@ const showConversationDetailModal = ref(false);
 
 // Computed
 const displayUser = computed(() => {
-  return selectedUser.value || currentUser;
+  return selectedUser.value || auth.currentUser.value;
 });
 
 // Handlers
@@ -369,9 +368,9 @@ const handleGroupUpdated = async () => {
 
 // Watchers
 watch(
-  () => currentUser,
+  () => auth.currentUser.value,
   async () => {
-    if (currentUser) {
+    if (auth.currentUser.value) {
       await loadConversations();
       await loadFriends();
     }
@@ -391,8 +390,8 @@ watch(selectedConversation, async (newConv, oldConv) => {
 onMounted(async () => {
   console.log('[ChatPanel] onMounted 开始');
   await auth.checkAuth();
-  console.log('[ChatPanel] checkAuth 完成', { currentUser });
-  if (currentUser) {
+  console.log('[ChatPanel] checkAuth 完成', { currentUser: auth.currentUser.value });
+  if (auth.currentUser.value) {
     console.log('[ChatPanel] currentUser 存在，开始加载数据');
     await loadConversations();
     await loadFriends();

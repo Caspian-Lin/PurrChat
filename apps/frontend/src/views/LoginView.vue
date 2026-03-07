@@ -34,12 +34,17 @@
           <BaseInput v-model="password" type="password" placeholder="请输入密码" required />
         </BaseFormItem>
 
-        <BaseAlert v-if="auth.error" type="error" class="mb-4">
+        <BaseAlert v-if="auth.error && auth.error.value" type="error" class="mb-4">
           {{ auth.error }}
         </BaseAlert>
 
-        <button type="submit" class="w-full !h-12 !font-medium" block :disabled="auth.loading">
-          {{ auth.loading ? '登录中...' : '登录' }}
+        <button
+          type="submit"
+          class="w-full !h-12 !font-medium"
+          block
+          :disabled="auth.loading.value"
+        >
+          {{ auth.loading.value ? '登录中...' : '登录' }}
         </button>
       </form>
 
@@ -72,10 +77,13 @@ const email = ref('');
 const password = ref('');
 
 const handleSubmit = async () => {
+  // 清除之前的错误信息
+  auth.error.value = null;
+
   console.log('=== 登录开始 ===');
   console.log('邮箱:', email.value);
   console.log('密码:', password.value ? '***' : '');
-  console.log('auth.loading:', auth.loading);
+  console.log('auth.loading:', auth.loading.value);
 
   try {
     const result = await auth.handleLogin(email.value, password.value);

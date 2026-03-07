@@ -369,7 +369,7 @@ const allFriendRequests = ref<Friendship[]>([]);
 
 // Computed
 const displayUser = computed(() => {
-  return selectedUser.value || auth.user;
+  return selectedUser.value || auth.currentUser.value;
 });
 
 const filteredFriends = computed(() => {
@@ -472,8 +472,8 @@ const handleSendFriendRequest = async () => {
 // 判断当前用户是否是请求的接收方
 const isRequestRecipient = (request: Friendship): boolean => {
   // 在后端 SendFriendRequest 中，UserID 是发送者，FriendID 是接收者
-  // 所以接收方应该检查 friendship.FriendID == auth.user?.id
-  return request.friend_id === auth.user?.id;
+  // 所以接收方应该检查 friendship.FriendID == auth.currentUser.value?.id
+  return request.friend_id === auth.currentUser.value?.id;
 };
 
 // 处理接受好友请求
@@ -511,7 +511,7 @@ const handleRejectRequest = async (request: Friendship) => {
 const getFriendRequestText = (request: Friendship): string => {
   if (request.status === 'pending') {
     // 判断是发送方还是接收方
-    if (request.user_id === auth.user?.id) {
+    if (request.user_id === auth.currentUser.value?.id) {
       return '已发送好友申请';
     } else {
       return '申请添加你为好友';
@@ -576,7 +576,7 @@ const getFriendRequestStatusText = (status: string): string => {
 
 // Watchers
 watch(
-  () => auth.user,
+  () => auth.currentUser.value,
   async (newValue) => {
     if (newValue) {
       console.log('[FriendsPanel] currentUser changed, 加载数据');
@@ -591,7 +591,7 @@ watch(
 onMounted(async () => {
   console.log('[FriendsPanel] onMounted 开始');
   await auth.checkAuth();
-  const user = auth.user;
+  const user = auth.currentUser.value;
   console.log('[FriendsPanel] checkAuth 完成', { currentUser: user });
   if (user) {
     console.log('[FriendsPanel] currentUser 存在，开始加载数据');
