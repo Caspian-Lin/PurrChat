@@ -215,6 +215,12 @@ func main() {
 			"message": "PurrChat Server is running",
 		})
 	})
+	r.HEAD("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":  "ok",
+			"message": "PurrChat Server is running",
+		})
+	})
 
 	// 认证路由
 	auth := r.Group("/api")

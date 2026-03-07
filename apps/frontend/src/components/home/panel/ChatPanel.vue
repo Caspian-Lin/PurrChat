@@ -101,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAuthController } from '../../../controllers/authController';
 import { useWebSocket } from '../../../services/websocket';
 import { useConversations } from '../../../composables/useConversations';
