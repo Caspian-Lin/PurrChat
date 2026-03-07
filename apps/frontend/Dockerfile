@@ -4,6 +4,9 @@ FROM node:20-alpine AS builder
 # 设置工作目录
 WORKDIR /app
 
+# 定义构建参数
+ARG VITE_API_BASE_URL=/api
+
 # 复制package文件
 COPY package*.json ./
 
@@ -12,6 +15,9 @@ RUN npm install
 
 # 复制源代码
 COPY . .
+
+# 创建 .env 文件用于构建时
+RUN echo "VITE_API_BASE_URL=${VITE_API_BASE_URL}" > .env
 
 # 构建应用
 RUN npm run build

@@ -23,9 +23,18 @@ import type {
 // API 基础 URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
+// 处理相对路径
+const getBaseUrl = (): string => {
+  if (API_BASE_URL.startsWith('/')) {
+    // 相对路径，使用当前协议和主机
+    return `${window.location.protocol}//${window.location.host}${API_BASE_URL}`;
+  }
+  return API_BASE_URL;
+};
+
 // 创建 axios 实例
 const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: getBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
