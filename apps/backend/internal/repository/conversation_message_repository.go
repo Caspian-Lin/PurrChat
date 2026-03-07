@@ -79,7 +79,7 @@ func (r *conversationMessageRepository) InsertMessage(ctx context.Context, conve
 
 	message.ID = uuid.New()
 	message.ConversationID = conversationID
-	message.CreatedAt = time.Now()
+	message.CreatedAt = time.Now().UTC()
 
 	query := `
 		SELECT insert_conversation_message($1, $2, $3, $4)

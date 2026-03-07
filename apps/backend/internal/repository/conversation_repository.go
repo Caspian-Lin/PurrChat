@@ -34,8 +34,8 @@ func (r *conversationRepository) Create(ctx context.Context, conversation *model
 	logger.InfofWithCaller("Creating conversation: %s", conversation.Name)
 
 	conversation.ID = uuid.New()
-	conversation.CreatedAt = time.Now()
-	conversation.UpdatedAt = time.Now()
+	conversation.CreatedAt = time.Now().UTC()
+	conversation.UpdatedAt = time.Now().UTC()
 
 	query := `
 		INSERT INTO conversations (id, conversation_type, name, created_by, created_at, updated_at)
@@ -163,7 +163,7 @@ func (r *conversationRepository) Update(ctx context.Context, conversation *model
 	_, err := database.GetPool().Exec(ctx, query,
 		conversation.ConversationType,
 		conversation.Name,
-		time.Now(),
+		time.Now().UTC(),
 		conversation.ID,
 	)
 

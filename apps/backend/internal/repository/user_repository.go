@@ -37,7 +37,7 @@ func (r *userRepository) Create(ctx context.Context, user *models.User) error {
 	logger.InfofWithCaller("Creating user: %s", user.Username)
 
 	user.ID = uuid.New()
-	user.CreatedAt = time.Now()
+	user.CreatedAt = time.Now().UTC()
 
 	query := `
 		INSERT INTO users (id, username, password_hash, salt,avatar_url, email, email_verified, phone, phone_verified, created_at)

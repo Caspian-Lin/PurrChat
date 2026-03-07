@@ -43,15 +43,36 @@ export const useMessageStore = defineStore('message', () => {
 
   // 添加消息
   function addMessage(conversationId: string, message: Message) {
-    console.log(`[MessageStore] Adding message ${message.id} to conversation ${conversationId}`);
+    console.log(`[MessageStore] ===== 添加消息开始 =====`);
+    console.log(`[MessageStore] 会话ID: ${conversationId}`);
+    console.log(`[MessageStore] 消息ID: ${message.id}`);
+    console.log(`[MessageStore] 消息内容: ${message.content}`);
+    console.log(`[MessageStore] 发送者ID: ${message.sender_id}`);
+    console.log(`[MessageStore] 创建时间: ${message.created_at}`);
+
     const currentMessages = messages.value.get(conversationId) || [];
+    console.log(`[MessageStore] 当前消息数量: ${currentMessages.length}`);
+
     // 检查消息是否已存在
     const exists = currentMessages.some((m) => m.id === message.id);
+    console.log(`[MessageStore] 消息是否已存在: ${exists}`);
+
     if (!exists) {
-      messages.value.set(conversationId, [...currentMessages, message]);
+      const newMessages = [...currentMessages, message];
+      messages.value.set(conversationId, newMessages);
+      console.log(`[MessageStore] 消息已添加，新消息数量: ${newMessages.length}`);
+      console.log(
+        `[MessageStore] 所有消息ID:`,
+        newMessages.map((m) => m.id)
+      );
+
       // 缓存消息
       messageCache.addMessage(conversationId, message);
+      console.log(`[MessageStore] 消息已缓存`);
+    } else {
+      console.log(`[MessageStore] 消息已存在，跳过添加`);
     }
+    console.log(`[MessageStore] ===== 添加消息结束 =====`);
   }
 
   // 批量添加消息
@@ -130,7 +151,7 @@ export const useMessageStore = defineStore('message', () => {
               avatar_url: msg.sender.avatar_url || '',
               email_verified: false,
               phone_verified: false,
-              created_at: '',
+              created_at: msg.created_at || '', // 使用缓存中的created_at
             }
           : undefined,
       }));

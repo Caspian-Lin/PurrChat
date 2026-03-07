@@ -3,6 +3,49 @@ import { ref, computed } from 'vue';
 import type { User } from '../models/types';
 import { api } from '../models/api';
 
+// 错误信息映射：将后端返回的英文错误翻译成中文
+function getErrorMessage(backendError: string): string {
+  const errorMap: Record<string, string> = {
+    // 注册相关错误
+    'username already exists': '用户名已存在，请使用其他用户名',
+    'email already exists': '该邮箱已被注册，请使用其他邮箱或直接登录',
+    'phone already exists': '该手机号已被注册，请使用其他手机号或直接登录',
+    'Invalid request': '请求格式错误，请检查输入信息',
+
+    // 登录相关错误
+    'invalid email or password': '邮箱或密码错误，请检查后重试',
+    'Invalid request: invalid email or password': '邮箱或密码错误，请检查后重试',
+
+    // 通用错误
+    'Registration successful': '注册成功',
+    'Login successful': '登录成功',
+    Unauthorized: '未授权，请重新登录',
+    'User not found': '用户不存在',
+  };
+
+  // 优先进行精确匹配
+  if (errorMap[backendError]) {
+    return errorMap[backendError];
+  }
+
+  // 检查是否包含某些关键词（作为后备方案）
+  if (backendError.toLowerCase().includes('username')) {
+    return '用户名相关错误：' + backendError;
+  }
+  if (backendError.toLowerCase().includes('email')) {
+    return '邮箱相关错误：' + backendError;
+  }
+  if (backendError.toLowerCase().includes('password')) {
+    return '密码相关错误：' + backendError;
+  }
+  if (backendError.toLowerCase().includes('phone')) {
+    return '手机号相关错误：' + backendError;
+  }
+
+  // 如果没有匹配，返回原始错误信息
+  return backendError;
+}
+
 export const useAuthStore = defineStore('auth', () => {
   // 认证状态
   const token = ref<string | null>(localStorage.getItem('token'));
@@ -42,7 +85,8 @@ export const useAuthStore = defineStore('auth', () => {
         setAuth(response.data.token, response.data.user);
         return true;
       }
-      error.value = response.message || '注册失败';
+      // 使用 getErrorMessage 将英文错误转换为中文
+      error.value = getErrorMessage(response.message || '注册失败');
       return false;
     } catch (err: any) {
       error.value = err.response?.data?.message || '注册失败';
@@ -67,11 +111,11 @@ export const useAuthStore = defineStore('auth', () => {
         return true;
       }
       console.log('[auth store] 登录失败', response.message);
-      error.value = response.message || '登录失败';
-      return false;
-    } catch (err: any) {
-      console.error('[auth store] 登录异常', err);
-      error.value = err.response?.data?.message || '登录失败';
+      // 使用 getErrorMessage 将英文错误转换为中文
+      const errorMessage = getErrorMessage(response.message || '登录失败');
+      console.log('[auth store] 转换后的错误信息:', errorMessage);
+      error.value = errorMessage;
+      console.log('[auth store] 设置错误信息后的 auth.error:', error.value);
       return false;
     } finally {
       loading.value = false;

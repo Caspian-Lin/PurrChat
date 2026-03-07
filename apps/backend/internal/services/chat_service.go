@@ -236,14 +236,14 @@ func (s *ChatService) SendMessage(ctx context.Context, senderID string, req *mod
 	}
 	_ = enrollment // 避免未使用变量警告
 
-	// 创建消息
+	// 创建消息（使用UTC时间）
 	message := &models.Message{
 		ID:             uuid.New(),
 		ConversationID: req.ConversationID,
 		SenderID:       senderUUID,
 		Content:        req.Content,
 		MsgType:        models.MsgType(req.MsgType),
-		CreatedAt:      time.Now(),
+		CreatedAt:      time.Now().UTC(),
 	}
 
 	err = s.conversationMessageRepo.InsertMessage(ctx, req.ConversationID, message)
@@ -340,12 +340,12 @@ func (s *ChatService) CreateConversation(ctx context.Context, userID, targetUser
 		return nil, err
 	}
 
-	// 创建enrollment记录
+	// 创建enrollment记录（使用UTC时间）
 	ownerEnrollment := &models.Enrollment{
 		ConversationID: conversation.ID,
 		UserID:         userUUID,
 		Role:           models.EnrollmentRoleOwner,
-		JoinedAt:       time.Now(),
+		JoinedAt:       time.Now().UTC(),
 	}
 	err = s.enrollmentRepo.Create(ctx, ownerEnrollment)
 	if err != nil {
@@ -357,7 +357,7 @@ func (s *ChatService) CreateConversation(ctx context.Context, userID, targetUser
 		ConversationID: conversation.ID,
 		UserID:         targetUUID,
 		Role:           models.EnrollmentRoleMember,
-		JoinedAt:       time.Now(),
+		JoinedAt:       time.Now().UTC(),
 	}
 	err = s.enrollmentRepo.Create(ctx, memberEnrollment)
 	if err != nil {
@@ -400,12 +400,12 @@ func (s *ChatService) CreateGroupConversation(ctx context.Context, userID, name 
 		return nil, err
 	}
 
-	// 创建创建者的enrollment记录
+	// 创建创建者的enrollment记录（使用UTC时间）
 	ownerEnrollment := &models.Enrollment{
 		ConversationID: conversation.ID,
 		UserID:         userUUID,
 		Role:           models.EnrollmentRoleOwner,
-		JoinedAt:       time.Now(),
+		JoinedAt:       time.Now().UTC(),
 	}
 	err = s.enrollmentRepo.Create(ctx, ownerEnrollment)
 	if err != nil {
@@ -426,7 +426,7 @@ func (s *ChatService) CreateGroupConversation(ctx context.Context, userID, name 
 			ConversationID: conversation.ID,
 			UserID:         memberUUID,
 			Role:           models.EnrollmentRoleMember,
-			JoinedAt:       time.Now(),
+			JoinedAt:       time.Now().UTC(),
 		}
 		err = s.enrollmentRepo.Create(ctx, memberEnrollment)
 		if err != nil {
@@ -616,12 +616,12 @@ func (s *ChatService) AddMemberToConversation(ctx context.Context, conversationI
 		return errors.New("user already in conversation")
 	}
 
-	// 添加成员
+	// 添加成员（使用UTC时间）
 	newEnrollment := &models.Enrollment{
 		ConversationID: conversationID,
 		UserID:         targetUUID,
 		Role:           role,
-		JoinedAt:       time.Now(),
+		JoinedAt:       time.Now().UTC(),
 	}
 
 	err = s.enrollmentRepo.Create(ctx, newEnrollment)

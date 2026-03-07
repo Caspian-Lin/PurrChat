@@ -81,11 +81,16 @@ apiClient.interceptors.response.use(
       url: error.config?.url,
     });
     if (error.response?.status === 401) {
-      // Token 过期或无效，清除本地存储
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      // 可以在这里跳转到登录页
-      window.location.href = '/login';
+      const url = error.config?.url || '';
+      // 只有在非登录/注册接口返回 401 时才跳转到登录页
+      // 登录和注册接口返回 401 是正常的业务错误（如密码错误），不应触发页面刷新
+      if (!url.includes('/api/login') && !url.includes('/api/register')) {
+        // Token 过期或无效，清除本地存储
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        // 跳转到登录页
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -95,7 +100,18 @@ apiClient.interceptors.response.use(
 export const api = {
   // 用户注册
   register: (data: RegisterRequest): Promise<ApiResponse<LoginResponse>> => {
-    return apiClient.post('/api/register', data).then((res) => res.data);
+    return apiClient
+      .post('/api/register', data)
+      .then((res) => res.data)
+      .catch((error) => {
+        console.error('[api] 注册请求失败', error);
+        // 返回包含错误信息的响应对象，而不是抛出异常
+        const errorMessage = error.response?.data?.message || error.message || '注册失败';
+        return {
+          success: false,
+          message: errorMessage,
+        };
+      });
   },
 
   // 用户登录
@@ -109,7 +125,12 @@ export const api = {
       })
       .catch((error) => {
         console.error('[api] 登录请求失败', error);
-        throw error;
+        // 返回包含错误信息的响应对象，而不是抛出异常
+        const errorMessage = error.response?.data?.message || error.message || '登录失败';
+        return {
+          success: false,
+          message: errorMessage,
+        };
       });
   },
 

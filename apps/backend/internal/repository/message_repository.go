@@ -36,7 +36,7 @@ func (r *messageRepository) Create(ctx context.Context, message *models.Message)
 	logger.InfofWithCaller("Creating message in conversation %s from user %s", message.ConversationID, message.SenderID)
 
 	message.ID = uuid.New()
-	message.CreatedAt = time.Now()
+	message.CreatedAt = time.Now().UTC()
 
 	query := `
 		INSERT INTO messages (id, conversation_id, sender_id, content, msg_type, created_at)
@@ -243,7 +243,7 @@ func NewFriendshipRepository() FriendshipRepository {
 // Create 创建好友关系
 func (r *friendshipRepository) Create(ctx context.Context, friendship *models.Friendship) error {
 	friendship.ID = uuid.New()
-	friendship.CreatedAt = time.Now()
+	friendship.CreatedAt = time.Now().UTC()
 
 	query := `
 		INSERT INTO friendships (id, user_id, friend_id, status, created_at)

@@ -64,13 +64,24 @@ export function useAuthController() {
     return true;
   };
 
+  // 清空错误信息
+  const clearError = () => {
+    auth.error = null;
+  };
+
+  // 返回响应式属性和方法
   return {
-    ...auth,
+    currentUser: auth.currentUser,
+    isAuthenticated: auth.isAuthenticated,
+    loading: auth.loading,
+    error: auth.error,
+    token: auth.token,
     handleRegister,
     handleLogin,
     handleLogout,
     checkAuth,
     requireAuth,
     requireGuest,
+    clearError,
   };
 }

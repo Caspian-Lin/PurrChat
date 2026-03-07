@@ -328,10 +328,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAuthController } from '../../../controllers/authController';
 import { useFriends } from '../../../composables/useFriends';
 import { useConversations } from '../../../composables/useConversations';
+import { useWebSocketEventManager } from '../../../services/websocketEventManager';
 import { api } from '../../../models/api';
 import { useRouter } from 'vue-router';
 import FriendList from '../FriendList.vue';
@@ -340,6 +341,7 @@ import UserProfileModal from '../UserProfileModal.vue';
 import ResizableContainer from '../../common/ResizableContainer.vue';
 import type { User, Friendship } from '../../../models/types';
 import { BsX } from 'vue-icons-plus/bs';
+
 // Auth
 const auth = useAuthController();
 
@@ -353,6 +355,7 @@ const {
   handleFriendRequest,
 } = useFriends();
 const { createConversation } = useConversations();
+const { onFriendRequest, offFriendRequest } = useWebSocketEventManager();
 const router = useRouter();
 
 // State
@@ -369,7 +372,7 @@ const allFriendRequests = ref<Friendship[]>([]);
 
 // Computed
 const displayUser = computed(() => {
-  return selectedUser.value || auth.user;
+  return selectedUser.value || auth.currentUser;
 });
 
 const filteredFriends = computed(() => {
@@ -396,6 +399,16 @@ const loadAllFriendRequests = async () => {
   } catch (error) {
     console.error('[FriendsPanel] Failed to load all friend requests:', error);
   }
+};
+
+// WebSocket事件处理器
+const handleFriendRequestUpdate = async (friendship: Friendship) => {
+  console.log('[FriendsPanel] 收到好友请求更新事件:', friendship);
+
+  // 重新加载相关数据
+  await loadFriends();
+  await loadPendingRequests();
+  await loadAllFriendRequests();
 };
 
 // Handlers
@@ -472,8 +485,8 @@ const handleSendFriendRequest = async () => {
 // 判断当前用户是否是请求的接收方
 const isRequestRecipient = (request: Friendship): boolean => {
   // 在后端 SendFriendRequest 中，UserID 是发送者，FriendID 是接收者
-  // 所以接收方应该检查 friendship.FriendID == auth.user?.id
-  return request.friend_id === auth.user?.id;
+  // 所以接收方应该检查 friendship.FriendID == auth.currentUser?.id
+  return request.friend_id === auth.currentUser?.id;
 };
 
 // 处理接受好友请求
@@ -511,7 +524,7 @@ const handleRejectRequest = async (request: Friendship) => {
 const getFriendRequestText = (request: Friendship): string => {
   if (request.status === 'pending') {
     // 判断是发送方还是接收方
-    if (request.user_id === auth.user?.id) {
+    if (request.user_id === auth.currentUser?.id) {
       return '已发送好友申请';
     } else {
       return '申请添加你为好友';
@@ -576,7 +589,7 @@ const getFriendRequestStatusText = (status: string): string => {
 
 // Watchers
 watch(
-  () => auth.user,
+  () => auth.currentUser,
   async (newValue) => {
     if (newValue) {
       console.log('[FriendsPanel] currentUser changed, 加载数据');
@@ -591,17 +604,26 @@ watch(
 onMounted(async () => {
   console.log('[FriendsPanel] onMounted 开始');
   await auth.checkAuth();
-  const user = auth.user;
+  const user = auth.currentUser;
   console.log('[FriendsPanel] checkAuth 完成', { currentUser: user });
   if (user) {
     console.log('[FriendsPanel] currentUser 存在，开始加载数据');
     await loadFriends();
     await loadPendingRequests();
     await loadAllFriendRequests();
+
+    // 注册WebSocket事件回调
+    onFriendRequest(handleFriendRequestUpdate);
   } else {
     console.log('[FriendsPanel] currentUser 不存在，不加载数据');
   }
   console.log('[FriendsPanel] onMounted 结束');
+});
+
+onUnmounted(() => {
+  console.log('[FriendsPanel] onUnmounted，清理 WebSocket 事件');
+  // 清理WebSocket事件回调
+  offFriendRequest(handleFriendRequestUpdate);
 });
 </script>
 

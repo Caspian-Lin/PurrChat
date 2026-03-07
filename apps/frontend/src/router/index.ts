@@ -37,6 +37,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresGuest: true },
   },
   {
+    path: '/ws-debug',
+    name: 'WebSocketDebug',
+    component: () => import('../views/WebSocketDebugView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('../views/NotFoundView.vue'),
@@ -49,7 +55,7 @@ const router = createRouter({
 });
 
 // 路由守卫
-router.beforeEach((to, _from, next) => {
+router.beforeEach((to, from, next) => {
   const auth = useAuthStore();
   console.log('[router] 路由守卫', {
     to: to.path,
@@ -58,6 +64,14 @@ router.beforeEach((to, _from, next) => {
     isAuthenticated: auth.isAuthenticated,
     token: auth.token ? '存在' : '不存在',
   });
+
+  // 在登录页面和注册页面之间切换时，清空错误信息
+  if (
+    (to.path === '/login' || to.path === '/register') &&
+    (from.path === '/login' || from.path === '/register')
+  ) {
+    auth.error = null;
+  }
 
   // 需要认证的路由
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
