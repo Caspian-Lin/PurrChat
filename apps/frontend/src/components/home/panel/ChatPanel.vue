@@ -87,12 +87,13 @@
       @group-created="handleGroupCreated"
     />
 
-    <!-- 群聊详情弹窗 -->
-    <GroupDetailModal
-      v-model:show="showGroupDetailModal"
+    <!-- 会话详情弹窗 -->
+    <ConversationDetailModal
+      v-model:show="showConversationDetailModal"
       :conversation="selectedConversation"
       :current-user-id="currentUser?.id"
-      @update="handleGroupUpdated"
+      @show-user-profile="handleShowUserProfile"
+      @members-changed="handleGroupUpdated"
     />
 
     <!-- 通知列表 -->
@@ -115,7 +116,7 @@ import ChatWindow from '../ChatWindow.vue';
 import UserProfileModal from '../UserProfileModal.vue';
 import UserActionsModal from '../UserActionsModal.vue';
 import CreateGroupModal from '../CreateGroupModal.vue';
-import GroupDetailModal from '../GroupDetailModal.vue';
+import ConversationDetailModal from '../ConversationDetailModal.vue';
 import NotificationList from '../../common/NotificationList.vue';
 import ResizableContainer from '../../common/ResizableContainer.vue';
 import type { User, Conversation } from '../../../models/types';
@@ -193,7 +194,7 @@ const showProfileModal = ref(false);
 const showSearchModal = ref(false);
 const selectedSearchUser = ref<User | null>(null);
 const showCreateGroupModal = ref(false);
-const showGroupDetailModal = ref(false);
+const showConversationDetailModal = ref(false);
 
 // Computed
 const displayUser = computed(() => {
@@ -333,8 +334,8 @@ const handleCreateGroup = () => {
 };
 
 const handleShowDetail = () => {
-  if (selectedConversation.value?.conversation_type === 'group') {
-    showGroupDetailModal.value = true;
+  if (selectedConversation.value) {
+    showConversationDetailModal.value = true;
   }
 };
 
@@ -355,7 +356,7 @@ const handleGroupCreated = async (conversationId: string) => {
 };
 
 const handleGroupUpdated = async () => {
-  showGroupDetailModal.value = false;
+  showConversationDetailModal.value = false;
   // 重新加载会话列表和当前会话信息
   await loadConversations();
   if (selectedConversation.value) {

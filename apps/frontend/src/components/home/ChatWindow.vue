@@ -230,14 +230,8 @@ const handleSend = () => {
 const handleShowDetail = () => {
   if (!props.conversation) return;
 
-  if (props.conversation.conversation_type === 'group') {
-    emit('show-detail');
-  } else {
-    const otherUser = getOtherUser(props.conversation, props.currentUserId);
-    if (otherUser) {
-      emit('show-user', otherUser);
-    }
-  }
+  // 总是触发 show-detail 事件，显示会话详情
+  emit('show-detail');
 };
 
 const handleSplitterResize = (height: number) => {
