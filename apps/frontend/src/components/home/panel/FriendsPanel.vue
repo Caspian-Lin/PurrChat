@@ -328,10 +328,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAuthController } from '../../../controllers/authController';
 import { useFriends } from '../../../composables/useFriends';
 import { useConversations } from '../../../composables/useConversations';
+import { useWebSocketEventManager } from '../../../services/websocketEventManager';
 import { api } from '../../../models/api';
 import { useRouter } from 'vue-router';
 import FriendList from '../FriendList.vue';
@@ -340,6 +341,7 @@ import UserProfileModal from '../UserProfileModal.vue';
 import ResizableContainer from '../../common/ResizableContainer.vue';
 import type { User, Friendship } from '../../../models/types';
 import { BsX } from 'vue-icons-plus/bs';
+
 // Auth
 const auth = useAuthController();
 
@@ -353,6 +355,7 @@ const {
   handleFriendRequest,
 } = useFriends();
 const { createConversation } = useConversations();
+const { onFriendRequest, offFriendRequest } = useWebSocketEventManager();
 const router = useRouter();
 
 // State
@@ -396,6 +399,16 @@ const loadAllFriendRequests = async () => {
   } catch (error) {
     console.error('[FriendsPanel] Failed to load all friend requests:', error);
   }
+};
+
+// WebSocket事件处理器
+const handleFriendRequestUpdate = async (friendship: Friendship) => {
+  console.log('[FriendsPanel] 收到好友请求更新事件:', friendship);
+
+  // 重新加载相关数据
+  await loadFriends();
+  await loadPendingRequests();
+  await loadAllFriendRequests();
 };
 
 // Handlers
@@ -598,10 +611,19 @@ onMounted(async () => {
     await loadFriends();
     await loadPendingRequests();
     await loadAllFriendRequests();
+
+    // 注册WebSocket事件回调
+    onFriendRequest(handleFriendRequestUpdate);
   } else {
     console.log('[FriendsPanel] currentUser 不存在，不加载数据');
   }
   console.log('[FriendsPanel] onMounted 结束');
+});
+
+onUnmounted(() => {
+  console.log('[FriendsPanel] onUnmounted，清理 WebSocket 事件');
+  // 清理WebSocket事件回调
+  offFriendRequest(handleFriendRequestUpdate);
 });
 </script>
 

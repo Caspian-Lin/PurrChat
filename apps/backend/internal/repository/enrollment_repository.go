@@ -38,7 +38,7 @@ func (r *enrollmentRepository) Create(ctx context.Context, enrollment *models.En
 	logger.InfofWithCaller("Creating enrollment for user %s in conversation %s", enrollment.UserID, enrollment.ConversationID)
 
 	enrollment.ID = uuid.New()
-	enrollment.JoinedAt = time.Now()
+	enrollment.JoinedAt = time.Now().UTC()
 
 	query := `
 		INSERT INTO enrollments (id, conversation_id, user_id, role, joined_at, last_read_at)
@@ -207,7 +207,7 @@ func (r *enrollmentRepository) Update(ctx context.Context, enrollment *models.En
 
 // UpdateLastReadAt 更新最后阅读时间
 func (r *enrollmentRepository) UpdateLastReadAt(ctx context.Context, conversationID, userID uuid.UUID) error {
-	now := time.Now()
+	now := time.Now().UTC()
 	query := `
 		UPDATE enrollments
 		SET last_read_at = $1

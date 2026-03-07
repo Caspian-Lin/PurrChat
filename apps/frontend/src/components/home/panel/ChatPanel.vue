@@ -49,6 +49,7 @@
     <!-- 聊天窗口 -->
     <div class="flex-1 flex flex-col bg-bg-tertiary">
       <ChatWindow
+        ref="chatWindowRef"
         v-if="selectedConversation"
         :conversation="selectedConversation"
         :messages="messages"
@@ -102,7 +103,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useAuthController } from '../../../controllers/authController';
 import { useConversations } from '../../../composables/useConversations';
 import { useFriends } from '../../../composables/useFriends';
@@ -110,6 +111,7 @@ import { useChat } from '../../../composables/useChat';
 import { useMessageCache } from '../../../services/messageCache';
 import { useMessageStore } from '../../../stores/message';
 import { useNotification } from '../../../composables/useNotification';
+import { useWebSocketEventManager } from '../../../services/websocketEventManager';
 import ConversationList from '../ConversationList.vue';
 import ChatWindow from '../ChatWindow.vue';
 import UserProfileModal from '../UserProfileModal.vue';
@@ -118,8 +120,9 @@ import CreateGroupModal from '../CreateGroupModal.vue';
 import ConversationDetailModal from '../ConversationDetailModal.vue';
 import NotificationList from '../../common/NotificationList.vue';
 import ResizableContainer from '../../common/ResizableContainer.vue';
-import type { User, Conversation } from '../../../models/types';
+import type { User, Conversation, Message } from '../../../models/types';
 import { BsPlusLg, BsXCircle } from 'vue-icons-plus/bs';
+
 // Auth
 const auth = useAuthController();
 
@@ -128,7 +131,6 @@ const { conversations, loadConversations, createConversation, deleteConversation
   useConversations();
 const { friends, loadFriends, sendFriendRequest } = useFriends();
 const {
-  messages,
   loadMessages,
   checkAndLoadIncremental,
   sendMessage,
@@ -138,6 +140,24 @@ const {
 const { addMessage: cacheMessage } = useMessageCache();
 const { notifications, removeNotification } = useNotification();
 const messageStore = useMessageStore();
+const {
+  setCurrentConversation,
+  onMessageUpdate,
+  offMessageUpdate,
+  onConversationUpdate,
+  offConversationUpdate,
+} = useWebSocketEventManager();
+
+// ChatWindow组件引用
+const chatWindowRef = ref<InstanceType<typeof ChatWindow> | null>(null);
+
+// 从messageStore获取当前会话的消息
+const messages = computed(() => {
+  if (!selectedConversation.value?.id) {
+    return [];
+  }
+  return messageStore.getMessages(selectedConversation.value.id);
+});
 
 // 搜索状态
 const searchQuery = ref('');
@@ -207,8 +227,48 @@ const handleShowUserProfile = (user: User) => {
 const handleSelectConversation = async (conversation: Conversation) => {
   selectedConversation.value = conversation;
   selectedUser.value = null;
+  // 设置当前会话ID到WebSocket事件管理器
+  setCurrentConversation(conversation.id);
   // 使用增量加载检查并获取新消息
   await checkAndLoadIncremental(conversation.id);
+};
+
+// WebSocket事件处理器
+const handleMessageUpdate = async (conversationId: string, message: Message) => {
+  console.log('[ChatPanel] ===== 收到消息更新事件 =====');
+  console.log('[ChatPanel] 消息会话ID:', conversationId);
+  console.log('[ChatPanel] 当前选中会话ID:', selectedConversation.value?.id);
+  console.log('[ChatPanel] 消息内容:', message.content);
+  console.log('[ChatPanel] 消息ID:', message.id);
+  console.log('[ChatPanel] 发送者ID:', message.sender_id);
+
+  // 如果是当前会话的消息，自动滚动到底部
+  if (conversationId === selectedConversation.value?.id) {
+    console.log('[ChatPanel] 是当前会话，准备滚动到底部');
+    await nextTick();
+    // 调用ChatWindow的scrollToBottom方法
+    if (chatWindowRef.value) {
+      console.log('[ChatPanel] 调用scrollToBottom');
+      chatWindowRef.value.scrollToBottom();
+    } else {
+      console.log('[ChatPanel] chatWindowRef.value 为空，无法滚动');
+    }
+  } else {
+    console.log('[ChatPanel] 不是当前会话，不滚动');
+  }
+  console.log('[ChatPanel] ===== 消息更新事件处理完成 =====');
+};
+
+const handleConversationUpdate = async (conversation: Conversation) => {
+  console.log('[ChatPanel] ===== 收到会话更新事件 =====');
+  console.log('[ChatPanel] 会话ID:', conversation.id);
+  console.log('[ChatPanel] 会话名称:', conversation.name);
+  console.log('[ChatPanel] 最后消息:', conversation.last_message?.content);
+  console.log('[ChatPanel] 准备重新加载会话列表');
+  // 重新加载会话列表以获取最新数据
+  await loadConversations();
+  console.log('[ChatPanel] 会话列表重新加载完成');
+  console.log('[ChatPanel] ===== 会话更新事件处理完成 =====');
 };
 
 const handleDeleteConversation = async (conversationId: string) => {
@@ -296,9 +356,6 @@ const handleSendMessage = async (content: string) => {
             // 缓存新消息
             await cacheMessage(selectedConversation.value.id, lastMessage);
 
-            // 更新message store
-            messageStore.addMessage(selectedConversation.value.id, lastMessage);
-
             // 强制触发响应式更新
             console.log('[ChatPanel] Forcing reactive update by reassigning conversations.value');
             conversations.value = [...conversations.value];
@@ -379,10 +436,12 @@ watch(
 
 watch(selectedConversation, async (newConv, oldConv) => {
   if (newConv && newConv.id !== oldConv?.id) {
+    console.log('[ChatPanel] selectedConversation changed, loading messages for', newConv.id);
     // 先清空消息列表，避免消息残留
     clearMessages();
     // 然后加载新会话的消息
     await loadMessages(newConv.id);
+    console.log('[ChatPanel] Messages loaded for conversation', newConv.id);
   }
 });
 
@@ -395,10 +454,23 @@ onMounted(async () => {
     console.log('[ChatPanel] currentUser 存在，开始加载数据');
     await loadConversations();
     await loadFriends();
+
+    // 注册WebSocket事件回调
+    onMessageUpdate(handleMessageUpdate);
+    onConversationUpdate(handleConversationUpdate);
   } else {
     console.log('[ChatPanel] currentUser 不存在，不加载数据');
   }
   console.log('[ChatPanel] onMounted 结束');
+});
+
+onUnmounted(() => {
+  console.log('[ChatPanel] onUnmounted，清理 WebSocket 事件');
+  // 清理WebSocket事件回调
+  offMessageUpdate(handleMessageUpdate);
+  offConversationUpdate(handleConversationUpdate);
+  // 清除当前会话ID
+  setCurrentConversation(null);
 });
 </script>
 

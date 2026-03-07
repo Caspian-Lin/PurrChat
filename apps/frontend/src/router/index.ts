@@ -37,6 +37,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresGuest: true },
   },
   {
+    path: '/ws-debug',
+    name: 'WebSocketDebug',
+    component: () => import('../views/WebSocketDebugView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('../views/NotFoundView.vue'),

@@ -143,15 +143,11 @@ func main() {
 		logger.Error("Failed to initialize file logger:", err)
 	}
 
-	// 设置时区为中国标准时间（CST, UTC+8）
-	cstZone, err := time.LoadLocation("Asia/Shanghai")
-	if err != nil {
-		logger.Error("Failed to load CST timezone:", err)
-		// 如果加载失败，使用UTC时区
-		cstZone = time.UTC
-	}
-	time.Local = cstZone
-	logger.Info("Timezone set to:", cstZone.String())
+	// 设置时区为UTC（确保时间戳一致性）
+	// 注意：虽然服务器运行在中国时区，但所有时间戳都应使用UTC存储
+	// 这样可以避免时区转换问题，确保前端显示的时间戳一致
+	time.Local = time.UTC
+	logger.Info("Timezone set to UTC for consistent timestamp handling")
 
 	logger.Info("Starting PurrChat Server...")
 

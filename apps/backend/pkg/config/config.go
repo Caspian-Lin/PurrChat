@@ -73,7 +73,9 @@ func getEnv(key, defaultValue string) string {
 }
 
 func GetDSN(cfg *DBConfig) string {
-	return "postgres://" + cfg.User + ":" + cfg.Password + "@" + cfg.Host + ":" + cfg.Port + "/" + cfg.Name
+	// 添加时区参数，确保数据库使用 UTC 时间存储时间戳
+	// 这可以避免时区转换问题，确保前端显示的时间戳一致
+	return "postgres://" + cfg.User + ":" + cfg.Password + "@" + cfg.Host + ":" + cfg.Port + "/" + cfg.Name + "?timezone=UTC"
 }
 
 func Validate(cfg *Config) {
