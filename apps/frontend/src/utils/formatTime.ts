@@ -93,3 +93,16 @@ export const formatConversationTime = (dateString: string): string => {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
+
+/**
+ * 将日期字符串转换为时间戳（毫秒）
+ * @param dateString - 日期字符串
+ * @returns 时间戳（毫秒）
+ */
+export const dateToTimestamp = (dateString: string): number => {
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) {
+    return Date.now();
+  }
+  return date.getTime();
+};

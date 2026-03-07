@@ -194,8 +194,8 @@ func (s *ChatService) GetMessagesIncremental(ctx context.Context, conversationID
 		return nil, err
 	}
 
-	// 将时间戳转换为time.Time
-	since := time.UnixMilli(sinceTimestamp)
+	// 将时间戳转换为time.Time（使用本地时区，即中国标准时间）
+	since := time.UnixMilli(sinceTimestamp).In(time.Local)
 
 	// 获取增量消息
 	messages, err := s.messageRepo.FindByConversationIDSince(ctx, conversationID, since)

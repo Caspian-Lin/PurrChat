@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"reflect"
 	"syscall"
+	"time"
 
 	"purr-chat-server/internal/handlers"
 	"purr-chat-server/internal/repository"
@@ -141,6 +142,16 @@ func main() {
 		logger.Init()
 		logger.Error("Failed to initialize file logger:", err)
 	}
+
+	// 设置时区为中国标准时间（CST, UTC+8）
+	cstZone, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		logger.Error("Failed to load CST timezone:", err)
+		// 如果加载失败，使用UTC时区
+		cstZone = time.UTC
+	}
+	time.Local = cstZone
+	logger.Info("Timezone set to:", cstZone.String())
 
 	logger.Info("Starting PurrChat Server...")
 
