@@ -328,11 +328,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useAuthController } from '../../../controllers/authController';
 import { useFriends } from '../../../composables/useFriends';
 import { useConversations } from '../../../composables/useConversations';
-import { useWebSocket } from '../../../services/websocket';
 import { api } from '../../../models/api';
 import { useRouter } from 'vue-router';
 import FriendList from '../FriendList.vue';
@@ -354,7 +353,6 @@ const {
   handleFriendRequest,
 } = useFriends();
 const { createConversation } = useConversations();
-const { connect, on: onWs, off: offWs } = useWebSocket();
 const router = useRouter();
 
 // State
@@ -383,32 +381,6 @@ const filteredFriends = computed(() => {
     return friend.username.toLowerCase().includes(query) || friend.uid.toString().includes(query);
   });
 });
-
-// WebSocket handlers
-const handleNewFriendRequest = async (data: any) => {
-  console.log('[FriendsPanel] 收到新的好友请求', data);
-  // 显示提醒
-  alert(`收到来自 ${data.sender_id} 的好友请求`);
-  // 重新加载待处理请求
-  await loadPendingRequests();
-  // 重新加载所有好友申请记录
-  await loadAllFriendRequests();
-};
-
-const handleFriendRequestUpdate = async (data: any) => {
-  console.log('[FriendsPanel] 收到好友请求更新', data);
-  // 根据状态显示提醒
-  if (data.status === 'accepted') {
-    alert('好友请求已被接受');
-  } else if (data.status === 'rejected') {
-    alert('好友请求已被拒绝');
-  }
-  // 重新加载好友列表和待处理请求
-  await loadFriends();
-  await loadPendingRequests();
-  // 重新加载所有好友申请记录
-  await loadAllFriendRequests();
-};
 
 // 加载所有好友申请记录
 const loadAllFriendRequests = async () => {
@@ -629,23 +601,7 @@ onMounted(async () => {
   } else {
     console.log('[FriendsPanel] currentUser 不存在，不加载数据');
   }
-
-  // 连接WebSocket
-  console.log('[FriendsPanel] 连接WebSocket');
-  connect();
-
-  // 注册WebSocket事件处理器
-  onWs('new_friend_request', handleNewFriendRequest);
-  onWs('friend_request_update', handleFriendRequestUpdate);
-
   console.log('[FriendsPanel] onMounted 结束');
-});
-
-onUnmounted(() => {
-  console.log('[FriendsPanel] onUnmounted');
-  // 移除WebSocket事件处理器
-  offWs('new_friend_request', handleNewFriendRequest);
-  offWs('friend_request_update', handleFriendRequestUpdate);
 });
 </script>
 
