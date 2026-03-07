@@ -1,7 +1,7 @@
 <template>
   <div class="flex h-screen">
     <!-- 左侧导航栏 -->
-    <SideNavbar :current-user="auth.currentUser.value" @show-profile="handleShowProfile" />
+    <SideNavbar :current-user="auth.currentUser" @show-profile="handleShowProfile" />
 
     <!-- 路由视图 - 显示不同的panel -->
     <div class="flex-1">
@@ -11,7 +11,7 @@
     <!-- 个人资料弹窗 -->
     <UserProfileModal
       :show="showProfile"
-      :user="auth.currentUser.value"
+      :user="auth.currentUser"
       :is-current-user="true"
       @update:show="showProfile = $event"
       @logout="handleLogout"
@@ -76,11 +76,11 @@ const handleMessageUpdate = (conversationId: string, message: any) => {
   console.log('[HomeView] 消息内容:', message.content);
   console.log('[HomeView] 消息ID:', message.id);
   console.log('[HomeView] 发送者ID:', message.sender_id);
-  console.log('[HomeView] 当前用户ID:', auth.currentUser.value?.id);
+  console.log('[HomeView] 当前用户ID:', auth.currentUser?.id);
 
   // 消息已经通过messageStore更新，这里可以触发额外的UI更新
   // 例如：显示通知
-  if (message.sender_id !== auth.currentUser.value?.id) {
+  if (message.sender_id !== auth.currentUser?.id) {
     console.log('[HomeView] 是他人发送的消息，显示通知');
     addNotification('info', '新消息', message.content);
   } else {
@@ -120,7 +120,7 @@ const handleFriendRequestUpdate = async (friendship: Friendship) => {
 // Lifecycle
 onMounted(async () => {
   await auth.checkAuth();
-  if (auth.currentUser.value) {
+  if (auth.currentUser) {
     console.log('[HomeView] currentUser 存在，连接 WebSocket');
     // 连接WebSocket
     connect();

@@ -61,7 +61,10 @@ export const useMessageStore = defineStore('message', () => {
       const newMessages = [...currentMessages, message];
       messages.value.set(conversationId, newMessages);
       console.log(`[MessageStore] 消息已添加，新消息数量: ${newMessages.length}`);
-      console.log(`[MessageStore] 所有消息ID:`, newMessages.map(m => m.id));
+      console.log(
+        `[MessageStore] 所有消息ID:`,
+        newMessages.map((m) => m.id)
+      );
 
       // 缓存消息
       messageCache.addMessage(conversationId, message);

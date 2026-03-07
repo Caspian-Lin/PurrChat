@@ -102,8 +102,6 @@ export const formatConversationTime = (dateString: string): string => {
   const nowYear = parseInt(nowParts.find((p) => p.type === 'year')?.value || '0');
   const nowMonth = parseInt(nowParts.find((p) => p.type === 'month')?.value || '0') - 1;
   const nowDay = parseInt(nowParts.find((p) => p.type === 'day')?.value || '0');
-  const nowHours = parseInt(nowParts.find((p) => p.type === 'hour')?.value || '0');
-  const nowMinutes = parseInt(nowParts.find((p) => p.type === 'minute')?.value || '0');
 
   const today = new Date(nowYear, nowMonth, nowDay);
   const yesterday = new Date(today);

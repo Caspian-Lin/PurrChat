@@ -1,14 +1,10 @@
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
-import { storeToRefs } from 'pinia';
 
 // 认证控制器
 export function useAuthController() {
   const auth = useAuthStore();
   const router = useRouter();
-
-  // 使用 storeToRefs 保持响应性
-  const { currentUser, isAuthenticated, loading, error, token } = storeToRefs(auth);
 
   // 注册处理
   const handleRegister = async (
@@ -75,11 +71,11 @@ export function useAuthController() {
 
   // 返回响应式属性和方法
   return {
-    currentUser,
-    isAuthenticated,
-    loading,
-    error,
-    token,
+    currentUser: auth.currentUser,
+    isAuthenticated: auth.isAuthenticated,
+    loading: auth.loading,
+    error: auth.error,
+    token: auth.token,
     handleRegister,
     handleLogin,
     handleLogout,

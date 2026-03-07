@@ -88,6 +88,9 @@ export const useAuthStore = defineStore('auth', () => {
       // 使用 getErrorMessage 将英文错误转换为中文
       error.value = getErrorMessage(response.message || '注册失败');
       return false;
+    } catch (err: any) {
+      error.value = err.response?.data?.message || '注册失败';
+      return false;
     } finally {
       loading.value = false;
     }

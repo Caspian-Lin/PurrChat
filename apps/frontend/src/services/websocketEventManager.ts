@@ -63,10 +63,10 @@ export interface UserOnlineStatusEventData {
 }
 
 // 回调函数类型定义
-export type ConversationUpdateCallback = (conversation: Conversation) => void;
-export type MessageUpdateCallback = (conversationId: string, message: Message) => void;
-export type FriendRequestCallback = (request: Friendship) => void;
-export type OnlineStatusCallback = (userId: string, online: boolean) => void;
+export type ConversationUpdateCallback = (_conversation: Conversation) => void;
+export type MessageUpdateCallback = (_conversationId: string, _message: Message) => void;
+export type FriendRequestCallback = (_request: Friendship) => void;
+export type OnlineStatusCallback = (_userId: string, _online: boolean) => void;
 
 /**
  * WebSocket事件管理器
@@ -109,7 +109,10 @@ class WebSocketEventManager {
     websocketService.on('conversation_member_added', this.handleConversationMemberAdded.bind(this));
 
     // 会话成员移除事件
-    websocketService.on('conversation_member_removed', this.handleConversationMemberRemoved.bind(this));
+    websocketService.on(
+      'conversation_member_removed',
+      this.handleConversationMemberRemoved.bind(this)
+    );
 
     // 用户在线状态事件
     websocketService.on('user_online_status', this.handleUserOnlineStatus.bind(this));
@@ -193,7 +196,10 @@ class WebSocketEventManager {
     console.log('[WebSocketEventManager] 新消息事件数据:', JSON.stringify(data, null, 2));
     console.log('[WebSocketEventManager] 当前会话ID:', this.currentConversationId);
     console.log('[WebSocketEventManager] 消息会话ID:', data.conversation_id);
-    console.log('[WebSocketEventManager] 是否是当前会话:', this.currentConversationId === data.conversation_id);
+    console.log(
+      '[WebSocketEventManager] 是否是当前会话:',
+      this.currentConversationId === data.conversation_id
+    );
 
     // 更新消息store
     const messageStore = useMessageStore();

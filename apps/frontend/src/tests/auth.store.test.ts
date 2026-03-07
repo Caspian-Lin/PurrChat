@@ -140,7 +140,7 @@ describe('Auth Store', () => {
       );
 
       expect(result).toBe(false);
-      expect(auth.error).toBe('Username already exists');
+      expect(auth.error).toBe('用户名相关错误：Username already exists');
     });
 
     it('should handle registration error', async () => {

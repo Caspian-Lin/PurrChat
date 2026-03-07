@@ -40,10 +40,7 @@
       >
         断开连接
       </button>
-      <button
-        @click="clearLogs"
-        class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-      >
+      <button @click="clearLogs" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
         清空日志
       </button>
     </div>
@@ -229,7 +226,10 @@ const handleConversationUpdate = (conversation: any) => {
 };
 
 const handleMessageUpdate = (conversationId: string, message: any) => {
-  addLog('success', `消息更新事件: 会话 ${conversationId} - 消息 ${message.id} - ${message.content}`);
+  addLog(
+    'success',
+    `消息更新事件: 会话 ${conversationId} - 消息 ${message.id} - ${message.content}`
+  );
 };
 
 const handleFriendRequest = (friendship: any) => {

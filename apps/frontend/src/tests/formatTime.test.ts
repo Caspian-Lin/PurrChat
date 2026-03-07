@@ -74,11 +74,11 @@ describe('formatConversationTime', () => {
       hour12: false,
     });
     const nowParts = formatter.formatToParts(now);
-    const nowYear = parseInt(nowParts.find(p => p.type === 'year')?.value || '0');
-    const nowMonth = parseInt(nowParts.find(p => p.type === 'month')?.value || '0') - 1;
-    const nowDay = parseInt(nowParts.find(p => p.type === 'day')?.value || '0');
-    const nowHours = parseInt(nowParts.find(p => p.type === 'hour')?.value || '0');
-    const nowMinutes = parseInt(nowParts.find(p => p.type === 'minute')?.value || '0');
+    const nowYear = parseInt(nowParts.find((p) => p.type === 'year')?.value || '0');
+    const nowMonth = parseInt(nowParts.find((p) => p.type === 'month')?.value || '0') - 1;
+    const nowDay = parseInt(nowParts.find((p) => p.type === 'day')?.value || '0');
+    const nowHours = parseInt(nowParts.find((p) => p.type === 'hour')?.value || '0');
+    const nowMinutes = parseInt(nowParts.find((p) => p.type === 'minute')?.value || '0');
 
     // 创建一个今天的中国时区时间（UTC）
     const todayTime = new Date(
@@ -109,11 +109,11 @@ describe('formatConversationTime', () => {
       hour12: false,
     });
     const nowParts = formatter.formatToParts(now);
-    const nowYear = parseInt(nowParts.find(p => p.type === 'year')?.value || '0');
-    const nowMonth = parseInt(nowParts.find(p => p.type === 'month')?.value || '0') - 1;
-    const nowDay = parseInt(nowParts.find(p => p.type === 'day')?.value || '0');
-    const nowHours = parseInt(nowParts.find(p => p.type === 'hour')?.value || '0');
-    const nowMinutes = parseInt(nowParts.find(p => p.type === 'minute')?.value || '0');
+    const nowYear = parseInt(nowParts.find((p) => p.type === 'year')?.value || '0');
+    const nowMonth = parseInt(nowParts.find((p) => p.type === 'month')?.value || '0') - 1;
+    const nowDay = parseInt(nowParts.find((p) => p.type === 'day')?.value || '0');
+    const nowHours = parseInt(nowParts.find((p) => p.type === 'hour')?.value || '0');
+    const nowMinutes = parseInt(nowParts.find((p) => p.type === 'minute')?.value || '0');
 
     // 创建一个昨天的中国时区时间（UTC）
     const yesterdayTime = new Date(
@@ -144,9 +144,9 @@ describe('formatConversationTime', () => {
       hour12: false,
     });
     const nowParts = formatter.formatToParts(now);
-    const nowYear = parseInt(nowParts.find(p => p.type === 'year')?.value || '0');
-    const nowHours = parseInt(nowParts.find(p => p.type === 'hour')?.value || '0');
-    const nowMinutes = parseInt(nowParts.find(p => p.type === 'minute')?.value || '0');
+    const nowYear = parseInt(nowParts.find((p) => p.type === 'year')?.value || '0');
+    const nowHours = parseInt(nowParts.find((p) => p.type === 'hour')?.value || '0');
+    const nowMinutes = parseInt(nowParts.find((p) => p.type === 'minute')?.value || '0');
 
     // 创建一个今年的较早时间（中国时区，UTC）
     const earlierThisYear = new Date(
@@ -193,11 +193,11 @@ describe('formatConversationTime', () => {
       hour12: false,
     });
     const nowParts = formatter.formatToParts(now);
-    const nowYear = parseInt(nowParts.find(p => p.type === 'year')?.value || '0');
-    const nowMonth = parseInt(nowParts.find(p => p.type === 'month')?.value || '0') - 1;
-    const nowDay = parseInt(nowParts.find(p => p.type === 'day')?.value || '0');
-    const nowHours = parseInt(nowParts.find(p => p.type === 'hour')?.value || '0');
-    const nowMinutes = parseInt(nowParts.find(p => p.type === 'minute')?.value || '0');
+    const nowYear = parseInt(nowParts.find((p) => p.type === 'year')?.value || '0');
+    const nowMonth = parseInt(nowParts.find((p) => p.type === 'month')?.value || '0') - 1;
+    const nowDay = parseInt(nowParts.find((p) => p.type === 'day')?.value || '0');
+    const nowHours = parseInt(nowParts.find((p) => p.type === 'hour')?.value || '0');
+    const nowMinutes = parseInt(nowParts.find((p) => p.type === 'minute')?.value || '0');
 
     // 创建一个今天的中国时区时间（UTC）
     const todayTime = new Date(
@@ -244,11 +244,11 @@ describe('中国时区一致性测试', () => {
       hour12: false,
     });
     const nowParts = formatter.formatToParts(now);
-    const nowYear = parseInt(nowParts.find(p => p.type === 'year')?.value || '0');
-    const nowMonth = parseInt(nowParts.find(p => p.type === 'month')?.value || '0') - 1;
-    const nowDay = parseInt(nowParts.find(p => p.type === 'day')?.value || '0');
-    const nowHours = parseInt(nowParts.find(p => p.type === 'hour')?.value || '0');
-    const nowMinutes = parseInt(nowParts.find(p => p.type === 'minute')?.value || '0');
+    const nowYear = parseInt(nowParts.find((p) => p.type === 'year')?.value || '0');
+    const nowMonth = parseInt(nowParts.find((p) => p.type === 'month')?.value || '0') - 1;
+    const nowDay = parseInt(nowParts.find((p) => p.type === 'day')?.value || '0');
+    const nowHours = parseInt(nowParts.find((p) => p.type === 'hour')?.value || '0');
+    const nowMinutes = parseInt(nowParts.find((p) => p.type === 'minute')?.value || '0');
 
     // 创建一个今天的中国时区时间（UTC）
     const todayTime = new Date(

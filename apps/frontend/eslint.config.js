@@ -32,7 +32,13 @@ export default [
     rules: {
       ...configPrettier.rules,
       'prettier/prettier': 'warn',
-      'no-unused-vars': 'warn',
+      'no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
+      ],
       'vue/no-unused-vars': 'warn',
     },
   },

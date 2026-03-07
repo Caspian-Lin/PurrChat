@@ -39,7 +39,7 @@
       <ConversationList
         :conversations="filteredConversations"
         :selected-id="selectedConversation?.id"
-        :current-user-id="auth.currentUser.value?.id"
+        :current-user-id="auth.currentUser?.id"
         @select="handleSelectConversation"
         @show-user="handleShowUserProfile"
         @delete-conversation="handleDeleteConversation"
@@ -53,7 +53,7 @@
         v-if="selectedConversation"
         :conversation="selectedConversation"
         :messages="messages"
-        :current-user-id="auth.currentUser.value?.id"
+        :current-user-id="auth.currentUser?.id"
         @send-message="handleSendMessage"
         @export-messages="handleExportMessages"
         @show-user="handleShowUserProfile"
@@ -92,7 +92,7 @@
     <ConversationDetailModal
       v-model:show="showConversationDetailModal"
       :conversation="selectedConversation"
-      :current-user-id="auth.currentUser.value?.id"
+      :current-user-id="auth.currentUser?.id"
       @show-user-profile="handleShowUserProfile"
       @members-changed="handleGroupUpdated"
     />
@@ -130,13 +130,8 @@ const auth = useAuthController();
 const { conversations, loadConversations, createConversation, deleteConversation } =
   useConversations();
 const { friends, loadFriends, sendFriendRequest } = useFriends();
-const {
-  loadMessages,
-  checkAndLoadIncremental,
-  sendMessage,
-  exportMessages,
-  clearMessages,
-} = useChat();
+const { loadMessages, checkAndLoadIncremental, sendMessage, exportMessages, clearMessages } =
+  useChat();
 const { addMessage: cacheMessage } = useMessageCache();
 const { notifications, removeNotification } = useNotification();
 const messageStore = useMessageStore();
@@ -215,7 +210,7 @@ const showConversationDetailModal = ref(false);
 
 // Computed
 const displayUser = computed(() => {
-  return selectedUser.value || auth.currentUser.value;
+  return selectedUser.value || auth.currentUser;
 });
 
 // Handlers
@@ -425,9 +420,9 @@ const handleGroupUpdated = async () => {
 
 // Watchers
 watch(
-  () => auth.currentUser.value,
+  () => auth.currentUser,
   async () => {
-    if (auth.currentUser.value) {
+    if (auth.currentUser) {
       await loadConversations();
       await loadFriends();
     }
@@ -449,8 +444,8 @@ watch(selectedConversation, async (newConv, oldConv) => {
 onMounted(async () => {
   console.log('[ChatPanel] onMounted 开始');
   await auth.checkAuth();
-  console.log('[ChatPanel] checkAuth 完成', { currentUser: auth.currentUser.value });
-  if (auth.currentUser.value) {
+  console.log('[ChatPanel] checkAuth 完成', { currentUser: auth.currentUser });
+  if (auth.currentUser) {
     console.log('[ChatPanel] currentUser 存在，开始加载数据');
     await loadConversations();
     await loadFriends();
