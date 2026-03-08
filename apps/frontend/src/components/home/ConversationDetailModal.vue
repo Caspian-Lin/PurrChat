@@ -70,48 +70,50 @@
             添加成员
           </button>
         </div>
-        <div class="max-h-64 overflow-y-auto rounded-lg" style="background: var(--surface-color)">
-          <div
-            v-for="member in members"
-            :key="member.id"
-            class="flex items-center gap-3 p-3 border-b"
-            style="border-color: var(--border-color)"
-          >
+        <CustomScrollbar class="max-h-64 rounded-lg" style="background: var(--surface-color)">
+          <div class="h-full">
             <div
-              class="w-10 h-10 roundrect overflow-hidden flex-shrink-0 cursor-pointer"
-              @click="handleShowUserProfile(member.user)"
+              v-for="member in members"
+              :key="member.id"
+              class="flex items-center gap-3 p-3 border-b"
+              style="border-color: var(--border-color)"
             >
-              <img
-                v-if="member.user?.avatar_url"
-                :src="member.user.avatar_url"
-                alt="avatar"
-                class="w-full h-full object-cover"
-              />
               <div
-                v-else
-                class="w-full h-full flex items-center justify-center font-bold text-white"
-                style="background: var(--theme-gradient)"
+                class="w-10 h-10 roundrect overflow-hidden flex-shrink-0 cursor-pointer"
+                @click="handleShowUserProfile(member.user)"
               >
-                {{ member.user?.username?.charAt(0) || 'U' }}
+                <img
+                  v-if="member.user?.avatar_url"
+                  :src="member.user.avatar_url"
+                  alt="avatar"
+                  class="w-full h-full object-cover"
+                />
+                <div
+                  v-else
+                  class="w-full h-full flex items-center justify-center font-bold text-white"
+                  style="background: var(--theme-gradient)"
+                >
+                  {{ member.user?.username?.charAt(0) || 'U' }}
+                </div>
               </div>
+              <div class="flex-1">
+                <div class="font-medium" style="color: var(--text-color)">
+                  {{ member.user?.username }}
+                </div>
+                <div class="text-xs" style="color: var(--text-secondary-color)">
+                  {{ getRoleLabel(member.role) }}
+                </div>
+              </div>
+              <button
+                v-if="canRemoveMember(member)"
+                class="px-3 py-1.5 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                @click="handleRemoveMember(member)"
+              >
+                移除
+              </button>
             </div>
-            <div class="flex-1">
-              <div class="font-medium" style="color: var(--text-color)">
-                {{ member.user?.username }}
-              </div>
-              <div class="text-xs" style="color: var(--text-secondary-color)">
-                {{ getRoleLabel(member.role) }}
-              </div>
-            </div>
-            <button
-              v-if="canRemoveMember(member)"
-              class="px-3 py-1.5 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-              @click="handleRemoveMember(member)"
-            >
-              移除
-            </button>
           </div>
-        </div>
+        </CustomScrollbar>
       </div>
 
       <!-- 导出消息 -->
@@ -151,6 +153,7 @@
 import { ref, computed, watch } from 'vue';
 import BaseModal from '../common/BaseModal.vue';
 import AddMemberModal from './AddMemberModal.vue';
+import CustomScrollbar from '../common/CustomScrollbar.vue';
 import { api } from '../../models/api';
 import { getUserAvatar, getUserUsername, getOtherUser } from '../../utils/userHelpers';
 import type { Conversation, Enrollment } from '../../models/types';

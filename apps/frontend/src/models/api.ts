@@ -19,25 +19,21 @@ import type {
   RemoveMemberRequest,
   Enrollment,
 } from './types';
-
-// API 基础 URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-
-// 处理相对路径
-const getBaseUrl = (): string => {
-  if (API_BASE_URL.startsWith('/')) {
-    // 相对路径，使用当前协议和主机
-    return `${window.location.protocol}//${window.location.host}${API_BASE_URL}`;
-  }
-  return API_BASE_URL;
-};
+import { getApiBaseUrl, logger } from '../config/app';
 
 // 创建 axios 实例
 const apiClient: AxiosInstance = axios.create({
-  baseURL: getBaseUrl(),
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// 记录配置信息
+logger.info('API 配置', {
+  baseURL: getApiBaseUrl(),
+  env: import.meta.env.VITE_APP_ENV,
+  client: import.meta.env.VITE_APP_CLIENT,
 });
 
 // 请求拦截器 - 添加 token

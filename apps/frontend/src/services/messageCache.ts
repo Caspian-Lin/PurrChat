@@ -41,9 +41,23 @@ class MessageCacheService {
       const keyData = localStorage.getItem('message_encryption_key');
       if (keyData) {
         console.log('[MessageCache] Found existing key in localStorage');
-        // 导入现有密钥
-        this.cryptoKey = await this.importKey(keyData);
-        console.log('[MessageCache] Loaded existing encryption key');
+        try {
+          // 导入现有密钥
+          this.cryptoKey = await this.importKey(keyData);
+          console.log('[MessageCache] Loaded existing encryption key');
+        } catch (importError) {
+          console.error(
+            '[MessageCache] Failed to import existing key, clearing and generating new one:',
+            importError
+          );
+          // 清除损坏的密钥和所有缓存数据
+          this.clearEncryptionData();
+          // 生成新的加密密钥
+          this.cryptoKey = await this.generateCryptoKey();
+          const exportedKey = await this.exportKey(this.cryptoKey);
+          localStorage.setItem('message_encryption_key', exportedKey);
+          console.log('[MessageCache] Generated new encryption key after clearing corrupted data');
+        }
       } else {
         console.log('[MessageCache] No existing key, generating new one');
         // 生成新的加密密钥
@@ -56,9 +70,22 @@ class MessageCacheService {
       console.log('[MessageCache] keyInitialized set to true');
     } catch (error) {
       console.error('[MessageCache] Failed to initialize crypto key:', error);
+      // 清除可能损坏的密钥数据和所有缓存
+      this.clearEncryptionData();
+      // 尝试生成新密钥
+      try {
+        this.cryptoKey = await this.generateCryptoKey();
+        const exportedKey = await this.exportKey(this.cryptoKey);
+        localStorage.setItem('message_encryption_key', exportedKey);
+        console.log('[MessageCache] Generated new encryption key after error recovery');
+      } catch (generateError) {
+        console.error('[MessageCache] Failed to generate new key after error:', generateError);
+        // 即使失败，也要设置为 true，避免无限循环
+        this.cryptoKey = null;
+      }
       // 即使失败，也要设置为 true，避免无限循环
       this.keyInitialized = true;
-      console.log('[MessageCache] keyInitialized set to true (after error)');
+      console.log('[MessageCache] keyInitialized set to true (after error recovery)');
     }
   }
 
@@ -203,6 +230,12 @@ class MessageCacheService {
                 conversationId,
                 error
               );
+              // 清除损坏的缓存数据
+              console.log(
+                '[MessageCache] Removing corrupted cache for conversation:',
+                conversationId
+              );
+              localStorage.removeItem(key);
             }
           }
         }
@@ -340,6 +373,19 @@ class MessageCacheService {
         localStorage.removeItem(key);
       }
     });
+  }
+
+  // 清除加密密钥和所有相关缓存
+  clearEncryptionData() {
+    console.log('[MessageCache] Clearing encryption data and all caches');
+    // 清除加密密钥
+    localStorage.removeItem('message_encryption_key');
+    // 清除所有消息缓存
+    this.clearAll();
+    // 重置密钥
+    this.cryptoKey = null;
+    this.keyInitialized = false;
+    console.log('[MessageCache] Encryption data cleared');
   }
 
   // 导出会话消息为JSON文件

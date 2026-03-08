@@ -7,7 +7,7 @@
   >
     <div class="flex flex-col gap-6">
       <div class="flex items-center gap-4 p-4 rounded-lg" style="background: var(--surface-color)">
-        <div class="w-12 h-12 roundrect overflow-hidden flex-shrink-0">
+        <div class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
           <img
             v-if="user?.avatar_url"
             :src="user.avatar_url"
@@ -30,10 +30,8 @@
         </div>
       </div>
       <div class="flex gap-4">
-        <BaseButton class="flex-1" type="primary" block @click="$emit('send-friend-request')">
-          发送好友请求
-        </BaseButton>
-        <BaseButton class="flex-1" block @click="$emit('start-chat')"> 开始聊天 </BaseButton>
+        <button class="flex-1" block @click="$emit('send-friend-request')">发送好友请求</button>
+        <button class="flex-1" block @click="$emit('start-chat')">开始聊天</button>
       </div>
     </div>
   </BaseModal>

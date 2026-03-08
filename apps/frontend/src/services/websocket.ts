@@ -1,6 +1,7 @@
 import { ref, onUnmounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useConnectionStore } from '../stores/connection';
+import { getWebSocketUrl, logger } from '../config/app';
 
 export interface WebSocketMessage {
   type: string;
@@ -89,7 +90,7 @@ class WebSocketService {
   // 连接WebSocket
   connect(token: string, userId: string) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log('WebSocket already connected');
+      logger.log('WebSocket already connected');
       return;
     }
 
@@ -97,29 +98,10 @@ class WebSocketService {
     this.connectionStore.setConnecting(true);
     this.isManualClose = false;
 
-    // 构建WebSocket URL - 使用与API相同的基础URL
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-    console.log('[WebSocket] API Base URL:', apiBaseUrl);
-    console.log('[WebSocket] VITE_API_BASE_URL env:', import.meta.env.VITE_API_BASE_URL);
+    // 构建WebSocket URL - 使用配置工具
+    const wsUrl = getWebSocketUrl(token, userId);
 
-    // 处理相对路径和绝对路径
-    let wsUrl: string;
-    if (apiBaseUrl.startsWith('/')) {
-      // 相对路径，使用当前协议和主机
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
-      // 如果 apiBaseUrl 是 '/' 或空，直接使用 /api/ws
-      const basePath = apiBaseUrl === '/' ? '' : apiBaseUrl;
-      wsUrl = `${protocol}//${host}${basePath}/api/ws?token=${encodeURIComponent(token)}&user_id=${userId}`;
-    } else {
-      // 绝对路径
-      const url = new URL(apiBaseUrl);
-      const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = url.host;
-      wsUrl = `${protocol}//${host}/api/ws?token=${encodeURIComponent(token)}&user_id=${userId}`;
-    }
-
-    console.log('Connecting to WebSocket:', wsUrl);
+    logger.info('Connecting to WebSocket', { url: wsUrl });
 
     try {
       this.ws = new WebSocket(wsUrl);
@@ -129,7 +111,7 @@ class WebSocketService {
       this.ws.onerror = this.handleError.bind(this);
       this.ws.onclose = this.handleClose.bind(this);
     } catch (error) {
-      console.error('Failed to create WebSocket connection:', error);
+      logger.error('Failed to create WebSocket connection', error);
       this.connecting.value = false;
       this.connectionStore.setConnecting(false);
       this.scheduleReconnect();
@@ -152,7 +134,7 @@ class WebSocketService {
   // 发送消息
   send(message: any) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket not connected, cannot send message');
+      logger.warn('WebSocket not connected, cannot send message');
       return false;
     }
 
@@ -160,7 +142,7 @@ class WebSocketService {
       this.ws.send(JSON.stringify(message));
       return true;
     } catch (error) {
-      console.error('Failed to send WebSocket message:', error);
+      logger.error('Failed to send WebSocket message', error);
       return false;
     }
   }
@@ -188,7 +170,7 @@ class WebSocketService {
 
   // 处理连接打开
   private handleOpen() {
-    console.log('WebSocket connected');
+    logger.log('WebSocket connected');
     this.connected.value = true;
     this.connecting.value = false;
     this.connectionStore.setConnected(true);
@@ -203,7 +185,7 @@ class WebSocketService {
   private handleMessage(event: MessageEvent) {
     try {
       const message: WebSocketMessage = JSON.parse(event.data);
-      console.log('WebSocket message received:', message);
+      logger.log('WebSocket message received', message);
 
       // 调用注册的处理器
       const handlers = this.messageHandlers.get(message.type);
@@ -211,20 +193,20 @@ class WebSocketService {
         handlers.forEach((handler) => handler(message.data));
       }
     } catch (error) {
-      console.error('Failed to parse WebSocket message:', error);
+      logger.error('Failed to parse WebSocket message', error);
     }
   }
 
   // 处理连接错误
   private handleError(error: Event) {
-    console.error('WebSocket error:', error);
+    logger.error('WebSocket error', error);
     this.connecting.value = false;
     this.connectionStore.setConnecting(false);
   }
 
   // 处理连接关闭
   private handleClose(event: CloseEvent) {
-    console.log('WebSocket closed:', event.code, event.reason);
+    logger.log('WebSocket closed', { code: event.code, reason: event.reason });
     this.connected.value = false;
     this.connecting.value = false;
     this.connectionStore.setConnected(false);
@@ -238,7 +220,7 @@ class WebSocketService {
   // 安排重连
   private scheduleReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached');
+      logger.error('Max reconnection attempts reached');
       return;
     }
 
@@ -246,7 +228,7 @@ class WebSocketService {
     this.connectionStore.setReconnectAttempts(this.reconnectAttempts);
     const delay = this.reconnectDelay * this.reconnectAttempts;
 
-    console.log(
+    logger.log(
       `Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`
     );
 
@@ -260,43 +242,43 @@ class WebSocketService {
 
   // 处理新消息
   private handleNewMessage(data: NewMessageData) {
-    console.log('New message received:', data);
+    logger.log('New message received', data);
     // 这个处理器会在组件中被覆盖
   }
 
   // 处理新好友请求
   private handleNewFriendRequest(data: NewFriendRequestData) {
-    console.log('New friend request received:', data);
+    logger.log('New friend request received', data);
     // 这个处理器会在组件中被覆盖
   }
 
   // 处理好友请求更新
   private handleFriendRequestUpdate(data: FriendRequestUpdateData) {
-    console.log('Friend request update received:', data);
+    logger.log('Friend request update received', data);
     // 这个处理器会在组件中被覆盖
   }
 
   // 处理pong响应
   private handlePong() {
-    console.log('Pong received');
+    logger.log('Pong received');
     // 可以在这里更新最后活跃时间
   }
 
   // 处理新群聊
   private handleNewGroupConversation(data: NewGroupConversationData) {
-    console.log('New group conversation received:', data);
+    logger.log('New group conversation received', data);
     // 这个处理器会在组件中被覆盖
   }
 
   // 处理会话成员添加
   private handleConversationMemberAdded(data: ConversationMemberAddedData) {
-    console.log('Conversation member added:', data);
+    logger.log('Conversation member added', data);
     // 这个处理器会在组件中被覆盖
   }
 
   // 处理会话成员移除
   private handleConversationMemberRemoved(data: ConversationMemberRemovedData) {
-    console.log('Conversation member removed:', data);
+    logger.log('Conversation member removed', data);
     // 这个处理器会在组件中被覆盖
   }
 

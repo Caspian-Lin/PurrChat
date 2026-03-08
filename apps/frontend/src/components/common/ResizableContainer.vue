@@ -105,7 +105,7 @@ const contentStyle = computed(() => {
   return {
     width: '100%',
     height: '100%',
-    overflow: 'auto',
+    overflow: 'hidden',
   };
 });
 
@@ -249,7 +249,7 @@ onUnmounted(() => {
 }
 
 .resizable-content {
-  overflow: auto;
+  overflow: hidden;
 }
 
 .resizer {

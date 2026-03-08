@@ -1,6 +1,6 @@
 <template>
   <div
-    class="flex flex-col size-full p-8 overflow-y-auto"
+    class="flex flex-col size-full p-8 overflow-y-auto scrollable"
     style="background: var(--background-color)"
   >
     <div class="flex items-center justify-between mb-8">

@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-1 overflow-y-auto">
+  <CustomScrollbar class="flex-1 min-h-0">
     <div
       v-for="friendship in friends"
       :key="friendship.id"
@@ -50,12 +50,13 @@
     >
       <p>暂无好友</p>
     </div>
-  </div>
+  </CustomScrollbar>
 </template>
 
 <script setup lang="ts">
 import { formatFriendshipStatus, getFriendshipStatusColor } from '../../utils/userHelpers';
 import type { Friendship } from '../../models/types';
+import CustomScrollbar from '../common/CustomScrollbar.vue';
 
 interface Props {
   friends: Friendship[];

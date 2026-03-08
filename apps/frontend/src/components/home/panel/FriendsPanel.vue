@@ -8,228 +8,234 @@
       :max-size="500"
       class="bg-bg-primary border-r border-border-color"
     >
-      <!-- 搜索好友 -->
-      <div
-        class="flex items-center gap-2 p-3 bg-bg-secondary border-b border-border-color relative"
-      >
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="搜索好友或用户..."
-          class="flex-1 bg-bg-quaternary rounded-md h-[40px] px-3 text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary"
-          @input="handleSearch"
-          @focus="showSearchResults = true"
-        />
-        <button
-          v-if="searchQuery"
-          class="p-2 text-text-tertiary hover:text-text-primary transition-colors"
-          @click="clearSearch"
-        >
-          ✕
-        </button>
-      </div>
-      <!-- 好友消息条目（待处理好友申请） -->
-      <div
-        class="flex items-center gap-4 p-4 bg-bg-secondary border-b border-border-color cursor-pointer hover:bg-hover-bg transition-colors"
-        @click="showFriendRequestHistory = true"
-      >
-        <div class="relative">
-          <div
-            class="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold"
-            style="background: var(--theme-secondary)"
-          >
-            🔔
-          </div>
-          <div
-            class="absolute -top-1 -right-1 w-5 h-5 bg-[var(--theme-primary)] rounded-full flex items-center justify-center text-primary text-xs font-bold"
-          >
-            {{ pendingRequests.length }}
-          </div>
-        </div>
-        <div class="flex-1 min-w-0">
-          <div class="font-semibold truncate text-text-primary">好友申请</div>
-          <div class="text-sm text-text-secondary">{{ pendingRequests.length }} 条待处理</div>
-        </div>
-        <div class="text-text-tertiary">></div>
-      </div>
-
-      <!-- 搜索结果dropdown -->
-      <div
-        v-if="showSearchResults && (filteredFriends.length > 0 || searchedUsers.length > 0)"
-        class="absolute top-[80px] left-0 right-0 bg-bg-primary border border-border-color rounded-lg shadow-lg z-50 max-h-[400px] overflow-y-auto"
-        style="width: 300px"
-      >
-        <!-- 好友列表 -->
-        <div v-if="filteredFriends.length > 0" class="border-b border-border-color">
-          <div class="px-3 py-2 text-sm font-semibold text-text-secondary bg-bg-secondary">
-            好友
-          </div>
-          <div
-            v-for="friendship in filteredFriends"
-            :key="'friend-' + friendship.id"
-            class="flex items-center gap-3 p-3 hover:bg-hover-bg cursor-pointer transition-colors"
-            @click="handleSelectFriend(friendship)"
-          >
-            <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-              <img
-                v-if="friendship.friend?.avatar_url"
-                :src="friendship.friend.avatar_url"
-                alt="avatar"
-                class="w-full h-full object-cover"
-              />
-              <div
-                v-else
-                class="w-full h-full flex items-center justify-center font-bold text-white"
-                style="background: var(--theme-gradient)"
-              >
-                {{ friendship.friend?.username?.charAt(0) || '?' }}
-              </div>
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="font-semibold truncate text-text-primary">
-                {{ friendship.friend?.username }}
-              </div>
-              <div class="text-sm text-text-secondary">UID: {{ friendship.friend?.uid }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 搜索到的用户列表 -->
-        <div v-if="searchedUsers.length > 0">
-          <div class="px-3 py-2 text-sm font-semibold text-text-secondary bg-bg-secondary">
-            用户
-          </div>
-          <div
-            v-for="user in searchedUsers"
-            :key="'user-' + user.id"
-            class="flex items-center gap-3 p-3 hover:bg-hover-bg cursor-pointer transition-colors"
-            @click="handleSelectUser(user)"
-          >
-            <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-              <img
-                v-if="user.avatar_url"
-                :src="user.avatar_url"
-                alt="avatar"
-                class="w-full h-full object-cover"
-              />
-              <div
-                v-else
-                class="w-full h-full flex items-center justify-center font-bold text-white"
-                style="background: var(--theme-gradient)"
-              >
-                {{ user.username?.charAt(0) || '?' }}
-              </div>
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="font-semibold truncate text-text-primary">{{ user.username }}</span>
-                <span class="text-xs px-2 py-0.5 bg-orange-500 text-white rounded">陌生人</span>
-              </div>
-              <div class="text-sm text-text-secondary">UID: {{ user.uid }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 无结果 -->
+      <div class="flex flex-col h-full relative">
+        <!-- 搜索好友 -->
         <div
-          v-if="filteredFriends.length === 0 && searchedUsers.length === 0"
-          class="p-4 text-center text-text-tertiary"
+          class="flex items-center gap-2 p-3 bg-bg-secondary border-b border-border-color flex-shrink-0 relative"
         >
-          未找到匹配的用户
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜索好友或用户..."
+            class="flex-1 bg-bg-quaternary rounded-md h-[40px] px-3 text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary"
+            @input="handleSearch"
+            @focus="showSearchResults = true"
+          />
+          <button
+            v-if="searchQuery"
+            class="p-2 text-text-tertiary hover:text-text-primary transition-colors"
+            @click="clearSearch"
+          >
+            ✕
+          </button>
+        </div>
+        <!-- 好友消息条目（待处理好友申请） -->
+        <div
+          class="flex items-center gap-4 p-4 bg-bg-secondary border-b border-border-color cursor-pointer hover:bg-hover-bg transition-colors flex-shrink-0"
+          @click="showFriendRequestHistory = true"
+        >
+          <div class="relative">
+            <div
+              class="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold"
+              style="background: var(--theme-secondary)"
+            >
+              🔔
+            </div>
+            <div
+              class="absolute -top-1 -right-1 w-5 h-5 bg-[var(--theme-primary)] rounded-full flex items-center justify-center text-primary text-xs font-bold"
+            >
+              {{ pendingRequests.length }}
+            </div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold truncate text-text-primary">好友申请</div>
+            <div class="text-sm text-text-secondary">{{ pendingRequests.length }} 条待处理</div>
+          </div>
+          <div class="text-text-tertiary">></div>
+        </div>
+
+        <!-- 搜索结果dropdown -->
+        <div
+          v-if="showSearchResults && (filteredFriends.length > 0 || searchedUsers.length > 0)"
+          class="absolute top-[80px] left-0 right-0 bg-bg-primary border border-border-color rounded-lg shadow-lg z-50 max-h-[400px] overflow-y-auto scrollable"
+          style="width: 300px"
+        >
+          <!-- 好友列表 -->
+          <div v-if="filteredFriends.length > 0" class="border-b border-border-color">
+            <div class="px-3 py-2 text-sm font-semibold text-text-secondary bg-bg-secondary">
+              好友
+            </div>
+            <div
+              v-for="friendship in filteredFriends"
+              :key="'friend-' + friendship.id"
+              class="flex items-center gap-3 p-3 hover:bg-hover-bg cursor-pointer transition-colors"
+              @click="handleSelectFriend(friendship)"
+            >
+              <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
+                <img
+                  v-if="friendship.friend?.avatar_url"
+                  :src="friendship.friend.avatar_url"
+                  alt="avatar"
+                  class="w-full h-full object-cover"
+                />
+                <div
+                  v-else
+                  class="w-full h-full flex items-center justify-center font-bold text-white"
+                  style="background: var(--theme-gradient)"
+                >
+                  {{ friendship.friend?.username?.charAt(0) || '?' }}
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold truncate text-text-primary">
+                  {{ friendship.friend?.username }}
+                </div>
+                <div class="text-sm text-text-secondary">UID: {{ friendship.friend?.uid }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 搜索到的用户列表 -->
+          <div v-if="searchedUsers.length > 0">
+            <div class="px-3 py-2 text-sm font-semibold text-text-secondary bg-bg-secondary">
+              用户
+            </div>
+            <div
+              v-for="user in searchedUsers"
+              :key="'user-' + user.id"
+              class="flex items-center gap-3 p-3 hover:bg-hover-bg cursor-pointer transition-colors"
+              @click="handleSelectUser(user)"
+            >
+              <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
+                <img
+                  v-if="user.avatar_url"
+                  :src="user.avatar_url"
+                  alt="avatar"
+                  class="w-full h-full object-cover"
+                />
+                <div
+                  v-else
+                  class="w-full h-full flex items-center justify-center font-bold text-white"
+                  style="background: var(--theme-gradient)"
+                >
+                  {{ user.username?.charAt(0) || '?' }}
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-semibold truncate text-text-primary">{{ user.username }}</span>
+                  <span class="text-xs px-2 py-0.5 bg-orange-500 text-white rounded">陌生人</span>
+                </div>
+                <div class="text-sm text-text-secondary">UID: {{ user.uid }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 无结果 -->
+          <div
+            v-if="filteredFriends.length === 0 && searchedUsers.length === 0"
+            class="p-4 text-center text-text-tertiary"
+          >
+            未找到匹配的用户
+          </div>
+        </div>
+
+        <!-- 好友列表 -->
+        <div class="flex-1 min-h-0">
+          <FriendList
+            :friends="friends"
+            @select="handleSelectFriend"
+            @show-user="handleShowUserProfile"
+          />
         </div>
       </div>
-
-      <!-- 好友列表 -->
-      <FriendList
-        :friends="friends"
-        @select="handleSelectFriend"
-        @show-user="handleShowUserProfile"
-      />
     </ResizableContainer>
 
     <!-- 好友信息窗口 -->
     <div class="flex-1 flex flex-col bg-bg-tertiary">
       <!-- 好友申请历史 -->
-      <div v-if="showFriendRequestHistory" class="flex-1 flex flex-col p-6 overflow-y-auto">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-2xl font-bold text-text-primary">好友申请记录</h2>
-          <button
-            class="bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-            @click="showFriendRequestHistory = false"
-          >
-            <BsX class="text-2xl" />
-          </button>
-        </div>
-
-        <div
-          v-if="allFriendRequests.length === 0"
-          class="flex-1 flex items-center justify-center text-text-tertiary"
-        >
-          <p>暂无好友申请记录</p>
-        </div>
-
-        <div v-else class="space-y-3">
-          <div
-            v-for="request in allFriendRequests"
-            :key="request.id"
-            class="flex items-center gap-4 px-4 py-2 bg-bg-secondary rounded-lg"
-          >
-            <div
-              class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer"
-              @click="handleShowUserProfile(request.user!)"
+      <CustomScrollbar v-if="showFriendRequestHistory" class="flex-1">
+        <div class="flex flex-col p-6 h-full">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-bold text-text-primary">好友申请记录</h2>
+            <button
+              class="bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+              @click="showFriendRequestHistory = false"
             >
-              <img
-                v-if="request.user?.avatar_url"
-                :src="request.user.avatar_url"
-                alt="avatar"
-                class="w-full h-full object-cover"
-              />
+              <BsX class="text-2xl" />
+            </button>
+          </div>
+
+          <div
+            v-if="allFriendRequests.length === 0"
+            class="flex-1 flex items-center justify-center text-text-tertiary"
+          >
+            <p>暂无好友申请记录</p>
+          </div>
+
+          <div v-else class="space-y-3">
+            <div
+              v-for="request in allFriendRequests"
+              :key="request.id"
+              class="flex items-center gap-4 px-4 py-2 bg-bg-secondary rounded-lg"
+            >
+              <div
+                class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer"
+                @click="handleShowUserProfile(request.user!)"
+              >
+                <img
+                  v-if="request.user?.avatar_url"
+                  :src="request.user.avatar_url"
+                  alt="avatar"
+                  class="w-full h-full object-cover"
+                />
+                <div
+                  v-else
+                  class="w-full h-full flex items-center justify-center font-bold text-white"
+                  style="background: var(--theme-gradient)"
+                >
+                  {{ request.user?.username?.charAt(0) || '?' }}
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-text-primary">{{ request.user?.username }}</div>
+                <div class="text-sm text-text-secondary">
+                  {{ getFriendRequestText(request) }}
+                </div>
+                <div class="text-xs text-text-tertiary">
+                  {{ formatTime(request.created_at) }}
+                </div>
+              </div>
+              <div
+                v-if="request.status === 'pending' && isRequestRecipient(request)"
+                class="flex gap-2"
+              >
+                <button
+                  class="px-3 py-1 bg-green-500 text-white rounded-md text-sm font-medium hover:bg-green-600 transition-colors"
+                  @click="handleAcceptRequest(request)"
+                >
+                  接受
+                </button>
+                <button
+                  class="px-3 py-1 bg-red-500 text-white rounded-md text-sm font-medium hover:bg-red-600 transition-colors"
+                  @click="handleRejectRequest(request)"
+                >
+                  忽略
+                </button>
+              </div>
               <div
                 v-else
-                class="w-full h-full flex items-center justify-center font-bold text-white"
-                style="background: var(--theme-gradient)"
+                :class="[
+                  'px-3 py-1 rounded-md text-sm font-medium',
+                  getFriendRequestStatusClass(request.status),
+                ]"
               >
-                {{ request.user?.username?.charAt(0) || '?' }}
+                {{ getFriendRequestStatusText(request.status) }}
               </div>
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="font-semibold text-text-primary">{{ request.user?.username }}</div>
-              <div class="text-sm text-text-secondary">
-                {{ getFriendRequestText(request) }}
-              </div>
-              <div class="text-xs text-text-tertiary">
-                {{ formatTime(request.created_at) }}
-              </div>
-            </div>
-            <div
-              v-if="request.status === 'pending' && isRequestRecipient(request)"
-              class="flex gap-2"
-            >
-              <button
-                class="px-3 py-1 bg-green-500 text-white rounded-md text-sm font-medium hover:bg-green-600 transition-colors"
-                @click="handleAcceptRequest(request)"
-              >
-                接受
-              </button>
-              <button
-                class="px-3 py-1 bg-red-500 text-white rounded-md text-sm font-medium hover:bg-red-600 transition-colors"
-                @click="handleRejectRequest(request)"
-              >
-                忽略
-              </button>
-            </div>
-            <div
-              v-else
-              :class="[
-                'px-3 py-1 rounded-md text-sm font-medium',
-                getFriendRequestStatusClass(request.status),
-              ]"
-            >
-              {{ getFriendRequestStatusText(request.status) }}
             </div>
           </div>
         </div>
-      </div>
+      </CustomScrollbar>
 
       <FriendInfoModal
         v-else-if="selectedFriend"
@@ -247,83 +253,17 @@
     </div>
 
     <!-- 个人资料弹窗 -->
-    <UserProfileModal v-model:show="showProfileModal" :user="displayUser" />
-
-    <!-- 陌生人弹窗（显示申请好友按钮） -->
-    <div
-      v-if="showStrangerModal && selectedStranger"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      @click.self="showStrangerModal = false"
-    >
-      <div class="bg-bg-primary rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-bold text-text-primary">用户信息</h2>
-          <button
-            class="text-text-tertiary hover:text-text-primary transition-colors"
-            @click="showStrangerModal = false"
-          >
-            ✕
-          </button>
-        </div>
-        <div class="flex flex-col items-center gap-4">
-          <div class="w-24 h-24 rounded-full overflow-hidden">
-            <img
-              v-if="selectedStranger.avatar_url"
-              :src="selectedStranger.avatar_url"
-              alt="avatar"
-              class="w-full h-full object-cover"
-            />
-            <div
-              v-else
-              class="w-full h-full flex items-center justify-center font-bold text-white text-4xl"
-              style="background: var(--theme-gradient)"
-            >
-              {{ selectedStranger.username?.charAt(0) || '?' }}
-            </div>
-          </div>
-          <div class="w-full space-y-3">
-            <div class="flex justify-between p-3 rounded-lg bg-bg-secondary">
-              <span class="font-semibold text-text-secondary">昵称:</span>
-              <span class="text-text-primary">{{ selectedStranger.username }}</span>
-            </div>
-            <div class="flex justify-between p-3 rounded-lg bg-bg-secondary">
-              <span class="font-semibold text-text-secondary">UID:</span>
-              <span class="text-text-primary">{{ selectedStranger.uid }}</span>
-            </div>
-            <div
-              v-if="selectedStranger.email"
-              class="flex justify-between p-3 rounded-lg bg-bg-secondary"
-            >
-              <span class="font-semibold text-text-secondary">邮箱:</span>
-              <span class="text-text-primary">
-                {{ selectedStranger.email }}
-                <span v-if="!selectedStranger.email_verified" class="text-text-tertiary text-sm"
-                  >(未验证)</span
-                >
-              </span>
-            </div>
-            <div
-              v-if="selectedStranger.phone"
-              class="flex justify-between p-3 rounded-lg bg-bg-secondary"
-            >
-              <span class="font-semibold text-text-secondary">手机号:</span>
-              <span class="text-text-primary">
-                {{ selectedStranger.phone }}
-                <span v-if="!selectedStranger.phone_verified" class="text-text-tertiary text-sm"
-                  >(未验证)</span
-                >
-              </span>
-            </div>
-          </div>
-          <button
-            class="w-full py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
-            @click="handleSendFriendRequest"
-          >
-            添加好友
-          </button>
-        </div>
-      </div>
-    </div>
+    <UserProfileModal
+      v-model:show="showProfileModal"
+      :user="displayUser"
+      :is-current-user="!selectedUser || selectedUser.id === auth.currentUser?.id"
+      :friendship="getUserFriendship"
+      :loading="isSendingRequest"
+      @send-friend-request="handleSendFriendRequest"
+      @accept-request="handleAcceptRequestFromModal"
+      @reject-request="handleRejectRequestFromModal"
+      @start-chat="handleStartChatFromModal"
+    />
   </div>
 </template>
 
@@ -339,6 +279,7 @@ import FriendList from '../FriendList.vue';
 import FriendInfoModal from '../FriendInfoModal.vue';
 import UserProfileModal from '../UserProfileModal.vue';
 import ResizableContainer from '../../common/ResizableContainer.vue';
+import CustomScrollbar from '../../common/CustomScrollbar.vue';
 import type { User, Friendship } from '../../../models/types';
 import { BsX } from 'vue-icons-plus/bs';
 
@@ -366,9 +307,8 @@ const showFriendRequestHistory = ref(false);
 const searchQuery = ref('');
 const showSearchResults = ref(false);
 const searchedUsers = ref<User[]>([]);
-const selectedStranger = ref<User | null>(null);
-const showStrangerModal = ref(false);
 const allFriendRequests = ref<Friendship[]>([]);
+const isSendingRequest = ref(false);
 
 // Computed
 const displayUser = computed(() => {
@@ -383,6 +323,28 @@ const filteredFriends = computed(() => {
     if (!friend) return false;
     return friend.username.toLowerCase().includes(query) || friend.uid.toString().includes(query);
   });
+});
+
+// 获取用户的好友关系
+const getUserFriendship = computed(() => {
+  if (!selectedUser.value || !auth.currentUser?.id) return null;
+
+  // 检查是否是当前用户自己
+  if (selectedUser.value.id === auth.currentUser.id) return null;
+
+  // 检查是否已经是好友
+  const friendship = friends.value.find(
+    (f) => f.friend?.id === selectedUser.value?.id || f.user?.id === selectedUser.value?.id
+  );
+  if (friendship) return friendship;
+
+  // 检查是否有待处理的好友申请
+  const pendingRequest = allFriendRequests.value.find(
+    (r) => r.user?.id === selectedUser.value?.id || r.friend?.id === selectedUser.value?.id
+  );
+  if (pendingRequest) return pendingRequest;
+
+  return null;
 });
 
 // 加载所有好友申请记录
@@ -428,8 +390,8 @@ const handleSelectFriend = (friendship: Friendship) => {
 
 const handleSelectUser = (user: User) => {
   console.log('[FriendsPanel] handleSelectUser', { user });
-  selectedStranger.value = user;
-  showStrangerModal.value = true;
+  selectedUser.value = user;
+  showProfileModal.value = true;
   showSearchResults.value = false;
   searchQuery.value = '';
 };
@@ -472,13 +434,67 @@ const clearSearch = () => {
 };
 
 const handleSendFriendRequest = async () => {
-  if (!selectedStranger.value?.id) return;
+  if (!selectedUser.value?.id) return;
 
-  console.log('[FriendsPanel] handleSendFriendRequest', { userId: selectedStranger.value.id });
-  const success = await sendFriendRequest(selectedStranger.value.id);
+  console.log('[FriendsPanel] handleSendFriendRequest', { userId: selectedUser.value.id });
+  isSendingRequest.value = true;
+  const success = await sendFriendRequest(selectedUser.value.id);
+  isSendingRequest.value = false;
   if (success) {
-    showStrangerModal.value = false;
-    selectedStranger.value = null;
+    showProfileModal.value = false;
+    selectedUser.value = null;
+    // 重新加载好友申请记录
+    await loadAllFriendRequests();
+  }
+};
+
+// 处理接受好友请求（从 UserProfileModal 触发）
+const handleAcceptRequestFromModal = async () => {
+  if (!getUserFriendship.value?.conversation_id) return;
+
+  console.log('[FriendsPanel] handleAcceptRequestFromModal', {
+    conversationId: getUserFriendship.value.conversation_id,
+  });
+
+  const success = await handleFriendRequest(getUserFriendship.value.conversation_id, 'accept');
+  if (success) {
+    showProfileModal.value = false;
+    selectedUser.value = null;
+    // 重新加载数据
+    await loadFriends();
+    await loadPendingRequests();
+    await loadAllFriendRequests();
+  }
+};
+
+// 处理拒绝好友请求（从 UserProfileModal 触发）
+const handleRejectRequestFromModal = async () => {
+  if (!getUserFriendship.value?.conversation_id) return;
+
+  console.log('[FriendsPanel] handleRejectRequestFromModal', {
+    conversationId: getUserFriendship.value.conversation_id,
+  });
+
+  const success = await handleFriendRequest(getUserFriendship.value.conversation_id, 'reject');
+  if (success) {
+    showProfileModal.value = false;
+    selectedUser.value = null;
+    // 重新加载数据
+    await loadPendingRequests();
+    await loadAllFriendRequests();
+  }
+};
+
+// 处理开始聊天（从 UserProfileModal 触发）
+const handleStartChatFromModal = async () => {
+  if (!selectedUser.value?.id) return;
+
+  const conversation = await createConversation(selectedUser.value.id);
+  if (conversation) {
+    showProfileModal.value = false;
+    selectedUser.value = null;
+    // 跳转到聊天面板
+    router.push('/chat');
   }
 };
 

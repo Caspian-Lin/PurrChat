@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"purr-chat-server/internal/models"
@@ -35,25 +36,19 @@ func NewMessageRepository() MessageRepository {
 func (r *messageRepository) Create(ctx context.Context, message *models.Message) error {
 	logger.InfofWithCaller("Creating message in conversation %s from user %s", message.ConversationID, message.SenderID)
 
-	message.ID = uuid.New()
 	message.CreatedAt = time.Now().UTC()
 
+	// 使用数据库函数插入消息
 	query := `
-		INSERT INTO messages (id, conversation_id, sender_id, content, msg_type, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, created_at
+		SELECT insert_conversation_message($1, $2, $3, $4) as id
 	`
 
-	err := pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, query,
-			message.ID,
-			message.ConversationID,
-			message.SenderID,
-			message.Content,
-			message.MsgType,
-			message.CreatedAt,
-		).Scan(&message.ID, &message.CreatedAt)
-	})
+	err := database.GetPool().QueryRow(ctx, query,
+		message.ConversationID,
+		message.SenderID,
+		message.Content,
+		message.MsgType,
+	).Scan(&message.ID)
 
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to create message: %v", err)
@@ -65,43 +60,24 @@ func (r *messageRepository) Create(ctx context.Context, message *models.Message)
 }
 
 // FindByID 根据ID查找消息
+// 注意：由于消息存储在conversation_messages schema的独立表中，此方法不再支持
+// 请使用FindByConversationID方法来查找消息
 func (r *messageRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Message, error) {
-	query := `
-		SELECT id, conversation_id, sender_id, content, msg_type, created_at
-		FROM messages
-		WHERE id = $1
-	`
-
-	message := &models.Message{}
-	err := database.GetPool().QueryRow(ctx, query, id).Scan(
-		&message.ID,
-		&message.ConversationID,
-		&message.SenderID,
-		&message.Content,
-		&message.MsgType,
-		&message.CreatedAt,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return message, nil
+	// 由于消息存储在conversation_messages schema的独立表中，无法直接按ID查找
+	// 返回错误提示使用其他方法
+	return nil, fmt.Errorf("finding message by ID is not supported. Please use FindByConversationID method instead")
 }
 
 // FindByConversationID 根据会话ID查找消息
 func (r *messageRepository) FindByConversationID(ctx context.Context, conversationID uuid.UUID, limit, offset int) ([]*models.Message, error) {
-	query := `
-		SELECT id, conversation_id, sender_id, content, msg_type, created_at
-		FROM messages
-		WHERE conversation_id = $1
-		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3
-	`
-
 	if limit <= 0 {
 		limit = 50 // 默认限制
 	}
+
+	// 使用数据库函数获取消息
+	query := `
+		SELECT * FROM get_conversation_messages($1, $2, $3)
+	`
 
 	rows, err := database.GetPool().Query(ctx, query, conversationID, limit, offset)
 	if err != nil {
@@ -111,10 +87,11 @@ func (r *messageRepository) FindByConversationID(ctx context.Context, conversati
 
 	var messages []*models.Message
 	for rows.Next() {
-		message := &models.Message{}
+		message := &models.Message{
+			ConversationID: conversationID,
+		}
 		err := rows.Scan(
 			&message.ID,
-			&message.ConversationID,
 			&message.SenderID,
 			&message.Content,
 			&message.MsgType,
@@ -131,10 +108,9 @@ func (r *messageRepository) FindByConversationID(ctx context.Context, conversati
 
 // CountByConversationID 统计会话中的消息数量
 func (r *messageRepository) CountByConversationID(ctx context.Context, conversationID uuid.UUID) (int, error) {
+	// 使用数据库函数获取消息数量
 	query := `
-		SELECT COUNT(*)
-		FROM messages
-		WHERE conversation_id = $1
+		SELECT get_conversation_message_count($1)
 	`
 
 	var count int
@@ -155,18 +131,16 @@ func (r *messageRepository) CountUnreadByConversationID(ctx context.Context, con
 
 // FindLastByConversationID 查找会话中的最后一条消息
 func (r *messageRepository) FindLastByConversationID(ctx context.Context, conversationID uuid.UUID) (*models.Message, error) {
+	// 使用数据库函数获取最后一条消息
 	query := `
-		SELECT id, conversation_id, sender_id, content, msg_type, created_at
-		FROM messages
-		WHERE conversation_id = $1
-		ORDER BY created_at DESC
-		LIMIT 1
+		SELECT * FROM get_conversation_last_message($1)
 	`
 
-	message := &models.Message{}
+	message := &models.Message{
+		ConversationID: conversationID,
+	}
 	err := database.GetPool().QueryRow(ctx, query, conversationID).Scan(
 		&message.ID,
-		&message.ConversationID,
 		&message.SenderID,
 		&message.Content,
 		&message.MsgType,
@@ -184,11 +158,9 @@ func (r *messageRepository) FindLastByConversationID(ctx context.Context, conver
 func (r *messageRepository) FindByConversationIDSince(ctx context.Context, conversationID uuid.UUID, since time.Time) ([]*models.Message, error) {
 	logger.InfofWithCaller("Finding messages for conversation %s since %v", conversationID, since)
 
+	// 使用数据库函数增量获取消息
 	query := `
-		SELECT id, conversation_id, sender_id, content, msg_type, created_at
-		FROM messages
-		WHERE conversation_id = $1 AND created_at > $2
-		ORDER BY created_at ASC
+		SELECT * FROM get_conversation_messages_incremental($1, $2)
 	`
 
 	rows, err := database.GetPool().Query(ctx, query, conversationID, since)
@@ -200,10 +172,11 @@ func (r *messageRepository) FindByConversationIDSince(ctx context.Context, conve
 
 	var messages []*models.Message
 	for rows.Next() {
-		message := &models.Message{}
+		message := &models.Message{
+			ConversationID: conversationID,
+		}
 		err := rows.Scan(
 			&message.ID,
-			&message.ConversationID,
 			&message.SenderID,
 			&message.Content,
 			&message.MsgType,

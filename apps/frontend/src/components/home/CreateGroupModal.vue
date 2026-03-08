@@ -41,7 +41,10 @@
             "
           />
         </div>
-        <div class="max-h-64 overflow-y-auto rounded-lg" style="background: var(--surface-color)">
+        <div
+          class="max-h-64 overflow-y-auto rounded-lg scrollable"
+          style="background: var(--surface-color)"
+        >
           <div
             v-for="friend in filteredFriends"
             :key="friend.friend?.id"
