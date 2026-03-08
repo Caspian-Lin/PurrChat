@@ -72,7 +72,7 @@
           class="flex items-center gap-4 p-4 cursor-pointer transition-colors hover:bg-hover-bg"
           @click="$emit('select-user', user)"
         >
-          <div class="w-10 h-10 roundrect overflow-hidden flex-shrink-0">
+          <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
             <img
               v-if="user.avatar_url"
               :src="user.avatar_url"

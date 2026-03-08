@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-1 h-full overflow-y-auto scrollable">
+  <CustomScrollbar class="flex-1 min-h-0">
     <!-- 统一的会话列表（按时间排序） -->
     <div
       v-for="conversation in sortedConversations"
@@ -99,7 +99,7 @@
     >
       <p>暂无会话</p>
     </div>
-  </div>
+  </CustomScrollbar>
 </template>
 
 <script setup lang="ts">
@@ -114,6 +114,7 @@ import {
 import { formatConversationTime } from '../../utils/formatTime';
 import { BsX } from 'vue-icons-plus/bs';
 import type { Conversation } from '../../models/types';
+import CustomScrollbar from '../common/CustomScrollbar.vue';
 
 interface Props {
   conversations: Conversation[];

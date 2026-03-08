@@ -2,7 +2,7 @@
   <div v-if="conversation" class="flex flex-col h-full bg-bg-tertiary">
     <!-- 聊天头部 -->
     <div
-      class="flex items-center justify-between px-4 py-4 gap-2 bg-bg-secondary border-b border-border-color h-[80px]"
+      class="flex items-center justify-between px-4 py-4 gap-2 bg-bg-secondary border-b border-border-color h-[80px] flex-shrink-0"
     >
       <div class="flex items-center gap-2">
         <div class="font-semibold text-[28px] text-text-secondary leading-none">
@@ -23,14 +23,6 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <!-- 群聊创建按钮
-        <button
-          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-          title="创建群聊"
-          @click="$emit('create-group')"
-        >
-          <BsPeopleFill class="text-2xl" />
-        </button> -->
         <!-- 会话详情按钮 -->
         <button
           class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
@@ -42,130 +34,135 @@
       </div>
     </div>
 
-    <!-- 消息列表 -->
-    <div
-      ref="messagesContainer"
-      class="flex-1 overflow-y-auto p-4 space-y-2 bg-bg-quaternary border-b border-border-color scrollable"
-    >
-      <div
-        v-for="message in messages"
-        :key="message.id"
-        :class="[
-          'flex gap-2 max-w-[75%]',
-          { 'flex-row-reverse ml-auto': message.sender_id === currentUserId },
-        ]"
+    <!-- 可调整大小的容器：包含消息列表和输入区 -->
+    <div class="flex flex-col flex-1 overflow-hidden">
+      <!-- 消息列表 -->
+      <CustomScrollbar
+        ref="messagesContainer"
+        class="flex-1 bg-bg-quaternary border-b border-border-color min-h-0"
       >
-        <div class="size-12 roundrect overflow-hidden flex-shrink-0">
-          <img
-            v-if="message.sender?.avatar_url"
-            :src="message.sender.avatar_url"
-            alt="avatar"
-            class="w-full h-full object-cover"
-          />
+        <div class="p-4 space-y-2">
           <div
-            v-else
-            class="w-full h-full flex items-center justify-center font-bold text-white text-2xl"
-            style="background: var(--theme-gradient)"
-          >
-            {{ message.sender?.username?.charAt(0) || '?' }}
-          </div>
-        </div>
-        <div class="flex flex-col gap-1">
-          <!-- 对方的消息显示昵称，自己的消息不显示昵称 -->
-          <div
-            v-if="message.sender_id !== currentUserId"
-            class="text-lg font-semibold text-text-tertiary"
-          >
-            {{ message.sender?.username }}
-          </div>
-          <div
+            v-for="message in messages"
+            :key="message.id"
             :class="[
-              'px-4 py-2 rounded-2xl',
-              // message.sender_id === currentUserId ? 'rounded-br-none' : 'rounded-bl-none',
+              'flex gap-2 max-w-[75%]',
+              { 'flex-row-reverse ml-auto': message.sender_id === currentUserId },
             ]"
-            :style="{
-              background: 'var(--strong-background-color)',
-              color: 'var(--text-color)',
-              wordBreak: 'break-word',
-              overflowWrap: 'break-word',
-              whiteSpace: 'pre-wrap',
-            }"
           >
-            {{ message.content }}
-          </div>
-          <div
-            class="text-base text-text-tertiary"
-            :title="formatTimeWithSeconds(message.created_at)"
-          >
-            {{ formatTime(message.created_at) }}
+            <div class="size-12 roundrect overflow-hidden flex-shrink-0">
+              <img
+                v-if="message.sender?.avatar_url"
+                :src="message.sender.avatar_url"
+                alt="avatar"
+                class="w-full h-full object-cover"
+              />
+              <div
+                v-else
+                class="w-full h-full flex items-center justify-center font-bold text-white text-2xl"
+                style="background: var(--theme-gradient)"
+              >
+                {{ message.sender?.username?.charAt(0) || '?' }}
+              </div>
+            </div>
+            <div class="flex flex-col gap-1">
+              <!-- 对方的消息显示昵称，自己的消息不显示昵称 -->
+              <div
+                v-if="message.sender_id !== currentUserId"
+                class="text-lg font-semibold text-text-tertiary"
+              >
+                {{ message.sender?.username }}
+              </div>
+              <div
+                :class="[
+                  'px-4 py-2 rounded-2xl',
+                  // message.sender_id === currentUserId ? 'rounded-br-none' : 'rounded-bl-none',
+                ]"
+                :style="{
+                  background: 'var(--strong-background-color)',
+                  color: 'var(--text-color)',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
+                  whiteSpace: 'pre-wrap',
+                }"
+              >
+                {{ message.content }}
+              </div>
+              <div
+                class="text-base text-text-tertiary"
+                :title="formatTimeWithSeconds(message.created_at)"
+              >
+                {{ formatTime(message.created_at) }}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      </CustomScrollbar>
 
-    <!-- 分割器 -->
-    <ResizableSplitter
-      direction="vertical"
-      :initial-position="inputAreaHeight"
-      :min-position="200"
-      :max-position="600"
-      storage-key="chat-input-height"
-      @resize="handleSplitterResize"
-    />
+      <!-- 分割器 -->
+      <ResizableSplitter
+        direction="vertical"
+        :initial-position="inputAreaHeight"
+        :min-position="200"
+        :max-position="600"
+        storage-key="chat-input-height"
+        @resize="handleSplitterResize"
+      />
 
-    <!-- 消息输入区 -->
-    <div
-      class="flex flex-col bg-bg-primary border-t border-border-color"
-      :style="{ height: `${inputAreaHeight}px` }"
-    >
-      <!-- 文本选项 -->
-      <div class="flex items-center gap-3 px-4 py-3">
-        <button
-          class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-          title="表情"
-        >
-          <BsEmojiSmile class="text-2xl" />
-        </button>
-        <button
-          class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-          title="文件"
-        >
-          <BsPaperclip class="text-2xl" />
-        </button>
-        <button
-          class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-          title="截图"
-        >
-          <BsCamera class="text-2xl" />
-        </button>
-        <div class="h-[18px] w-px bg-border-color" />
-        <button
-          class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-          title="视频通话"
-        >
-          <BsCameraVideo class="text-2xl" />
-        </button>
-      </div>
+      <!-- 消息输入区 -->
+      <div
+        class="flex flex-col bg-bg-primary border-t border-border-color flex-shrink-0"
+        :style="{ height: `${inputAreaHeight}px` }"
+      >
+        <!-- 文本选项 -->
+        <div class="flex items-center gap-3 px-4 py-3">
+          <button
+            class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+            title="表情"
+          >
+            <BsEmojiSmile class="text-2xl" />
+          </button>
+          <button
+            class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+            title="文件"
+          >
+            <BsPaperclip class="text-2xl" />
+          </button>
+          <button
+            class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+            title="截图"
+          >
+            <BsCamera class="text-2xl" />
+          </button>
+          <div class="h-[18px] w-px bg-border-color" />
+          <button
+            class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+            title="视频通话"
+          >
+            <BsCameraVideo class="text-2xl" />
+          </button>
+        </div>
 
-      <!-- 文本输入区 -->
-      <div class="flex-1 px-4 overflow-y-auto scrollable">
-        <textarea
-          v-model="newMessage"
-          placeholder="text here..."
-          class="w-full h-full bg-transparent text-xl text-text-tertiary resize-none outline-none"
-          @keydown.enter.prevent="handleSend"
-        />
-      </div>
+        <!-- 文本输入区 -->
+        <div class="flex-1 px-4 min-h-0">
+          <textarea
+            v-model="newMessage"
+            placeholder="text here..."
+            class="w-full h-full bg-transparent text-xl text-text-tertiary resize-none outline-none"
+            @keydown.enter.prevent="handleSend"
+          />
+        </div>
 
-      <!-- 发送按钮 -->
-      <div class="flex justify-end pb-8 pr-8">
-        <button
-          class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-xl"
-          :disabled="!newMessage.trim()"
-          @click="handleSend"
-        >
-          Send
-        </button>
+        <!-- 发送按钮 -->
+        <div class="flex justify-end pb-8 pr-8">
+          <button
+            class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-xl"
+            :disabled="!newMessage.trim()"
+            @click="handleSend"
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -183,6 +180,7 @@ import {
   BsInfoCircle,
 } from 'vue-icons-plus/bs';
 import ResizableSplitter from '../common/Splitter.vue';
+import CustomScrollbar from '../common/CustomScrollbar.vue';
 import type { Conversation, Message } from '../../models/types';
 
 interface Props {
@@ -204,13 +202,13 @@ const emit = defineEmits<{
 
 const newMessage = ref('');
 const inputAreaHeight = ref(300);
-const messagesContainer = ref<HTMLElement | null>(null);
+const messagesContainer = ref<InstanceType<typeof CustomScrollbar> | null>(null);
 
 // 滚动到底部
 const scrollToBottom = async () => {
   await nextTick();
   if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+    messagesContainer.value.scrollToBottom();
   }
 };
 
@@ -237,8 +235,13 @@ const handleShowDetail = () => {
   emit('show-detail');
 };
 
-const handleSplitterResize = (height: number) => {
+const handleSplitterResize = async (height: number) => {
   inputAreaHeight.value = height;
+  // 等待 DOM 更新后更新滚动条
+  await nextTick();
+  if (messagesContainer.value) {
+    messagesContainer.value.updateScrollbar();
+  }
 };
 
 // 监听消息变化，自动滚动到底部

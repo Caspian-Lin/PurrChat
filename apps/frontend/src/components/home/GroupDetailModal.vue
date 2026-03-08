@@ -44,7 +44,10 @@
             添加成员
           </button>
         </div>
-        <div class="max-h-64 overflow-y-auto rounded-lg scrollable" style="background: var(--surface-color)">
+        <div
+          class="max-h-64 overflow-y-auto rounded-lg scrollable"
+          style="background: var(--surface-color)"
+        >
           <div
             v-for="member in members"
             :key="member.id"

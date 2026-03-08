@@ -147,7 +147,9 @@ button:focus-visible {
 ::-webkit-scrollbar-thumb {
   background: rgba(226, 226, 226, 0.4);
   border-radius: 4px;
-  transition: background 0.2s ease, opacity 0.2s ease;
+  transition:
+    background 0.2s ease,
+    opacity 0.2s ease;
 }
 
 /* 滚动条滑块悬停效果 */
@@ -215,4 +217,17 @@ button:focus-visible {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* 隐藏原生滚动条（用于自定义滚动条组件） */
+.hide-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  overflow: auto;
 }

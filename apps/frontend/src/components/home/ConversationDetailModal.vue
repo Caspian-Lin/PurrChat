@@ -70,8 +70,9 @@
             添加成员
           </button>
         </div>
-        <div class="max-h-64 overflow-y-auto rounded-lg scrollable" style="background: var(--surface-color)">
-          <div
+        <CustomScrollbar class="max-h-64 rounded-lg" style="background: var(--surface-color)">
+          <div class="h-full">
+            <div
             v-for="member in members"
             :key="member.id"
             class="flex items-center gap-3 p-3 border-b"
@@ -109,9 +110,10 @@
               @click="handleRemoveMember(member)"
             >
               移除
-            </button>
+              </button>
+            </div>
           </div>
-        </div>
+        </CustomScrollbar>
       </div>
 
       <!-- 导出消息 -->
@@ -151,6 +153,7 @@
 import { ref, computed, watch } from 'vue';
 import BaseModal from '../common/BaseModal.vue';
 import AddMemberModal from './AddMemberModal.vue';
+import CustomScrollbar from '../common/CustomScrollbar.vue';
 import { api } from '../../models/api';
 import { getUserAvatar, getUserUsername, getOtherUser } from '../../utils/userHelpers';
 import type { Conversation, Enrollment } from '../../models/types';

@@ -8,42 +8,48 @@
       :max-size="500"
       class="bg-bg-primary border-r border-border-color"
     >
-      <!-- 搜索用户 -->
-      <div class="flex items-center gap-2 p-3 bg-bg-secondary border-b border-border-color">
-        <div class="flex-1 flex items-center bg-bg-quaternary rounded-md h-[40px] px-3">
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="搜索会话、消息内容、好友名..."
-            class="w-full bg-transparent text-text-tertiary text-base font-normal outline-none"
-            @input="handleSearch"
+      <div class="flex flex-col h-full">
+        <!-- 搜索用户 -->
+        <div
+          class="flex items-center gap-2 p-3 bg-bg-secondary border-b border-border-color flex-shrink-0"
+        >
+          <div class="flex-1 flex items-center bg-bg-quaternary rounded-md h-[40px] px-3">
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="搜索会话、消息内容、好友名..."
+              class="w-full bg-transparent text-text-tertiary text-base font-normal outline-none"
+              @input="handleSearch"
+            />
+          </div>
+          <button
+            v-if="searchQuery"
+            class="relative p-2 flex items-center justify-center transition-all text-text-primary hover:text-text-primary"
+            @click="clearSearch"
+          >
+            <BsXCircle />
+          </button>
+          <button
+            class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-primary hover:text-text-primary"
+            title="创建群聊"
+            @click="handleCreateGroup"
+          >
+            <BsPlusLg />
+          </button>
+        </div>
+
+        <!-- 会话列表 -->
+        <div class="flex-1 min-h-0">
+          <ConversationList
+            :conversations="filteredConversations"
+            :selected-id="selectedConversation?.id"
+            :current-user-id="auth.currentUser?.id"
+            @select="handleSelectConversation"
+            @show-user="handleShowUserProfile"
+            @delete-conversation="handleDeleteConversation"
           />
         </div>
-        <button
-          v-if="searchQuery"
-          class="relative p-2 flex items-center justify-center transition-all text-text-primary hover:text-text-primary"
-          @click="clearSearch"
-        >
-          <BsXCircle />
-        </button>
-        <button
-          class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-primary hover:text-text-primary"
-          title="创建群聊"
-          @click="handleCreateGroup"
-        >
-          <BsPlusLg />
-        </button>
       </div>
-
-      <!-- 会话列表 -->
-      <ConversationList
-        :conversations="filteredConversations"
-        :selected-id="selectedConversation?.id"
-        :current-user-id="auth.currentUser?.id"
-        @select="handleSelectConversation"
-        @show-user="handleShowUserProfile"
-        @delete-conversation="handleDeleteConversation"
-      />
     </ResizableContainer>
 
     <!-- 聊天窗口 -->
