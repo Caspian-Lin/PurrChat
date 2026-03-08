@@ -126,7 +126,7 @@ import { useWebSocketEventManager } from '../services/websocketEventManager';
 import { useAuthStore } from '../stores/auth';
 import { api } from '../models/api';
 
-const { connect: wsConnect, disconnect: wsDisconnect, send: wsSend, connected } = useWebSocket();
+const { connect: wsConnect, disconnect: wsDisconnect, connected } = useWebSocket();
 const {
   setCurrentConversation: setWsCurrentConversation,
   onConversationUpdate,

@@ -34,7 +34,7 @@
           <BaseInput v-model="password" type="password" placeholder="请输入密码" required />
         </BaseFormItem>
 
-        <BaseAlert v-if="auth.error && auth.error.value" type="error" class="mb-4">
+        <BaseAlert v-if="auth.error.value" type="error" class="mb-4">
           {{ auth.error }}
         </BaseAlert>
 
@@ -78,7 +78,7 @@ const password = ref('');
 
 const handleSubmit = async () => {
   // 清除之前的错误信息
-  auth.error.value = null;
+  auth.clearError();
 
   console.log('=== 登录开始 ===');
   console.log('邮箱:', email.value);

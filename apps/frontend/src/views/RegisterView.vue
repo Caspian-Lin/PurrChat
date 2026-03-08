@@ -57,7 +57,7 @@
           />
         </BaseFormItem>
 
-        <BaseAlert v-if="auth.error && auth.error.value" type="error" class="mb-4">
+        <BaseAlert v-if="auth.error.value" type="error" class="mb-4">
           {{ auth.error }}
         </BaseAlert>
 
@@ -98,7 +98,7 @@ const confirmPassword = ref('');
 
 const handleSubmit = async () => {
   // 清除之前的错误信息
-  auth.error.value = null;
+  auth.clearError();
 
   // 验证用户名长度
   if (username.value.length < 3 || username.value.length > 20) {
