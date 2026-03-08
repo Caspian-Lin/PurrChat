@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-1 h-full">
+  <div class="flex-1 h-full overflow-y-auto scrollable">
     <!-- 统一的会话列表（按时间排序） -->
     <div
       v-for="conversation in sortedConversations"

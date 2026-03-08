@@ -26,7 +26,7 @@
       <!-- 搜索结果 -->
       <div
         v-if="searchQuery"
-        class="max-h-64 overflow-y-auto rounded-lg"
+        class="max-h-64 overflow-y-auto rounded-lg scrollable"
         style="background: var(--surface-color)"
       >
         <div
@@ -86,7 +86,7 @@
         <label class="block text-sm font-medium mb-2" style="color: var(--text-color)">
           选择好友
         </label>
-        <div class="max-h-64 overflow-y-auto rounded-lg" style="background: var(--surface-color)">
+        <div class="max-h-64 overflow-y-auto rounded-lg scrollable" style="background: var(--surface-color)">
           <div
             v-for="friend in availableFriends"
             :key="friend.friend?.id"

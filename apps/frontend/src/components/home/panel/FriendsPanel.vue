@@ -56,7 +56,7 @@
       <!-- 搜索结果dropdown -->
       <div
         v-if="showSearchResults && (filteredFriends.length > 0 || searchedUsers.length > 0)"
-        class="absolute top-[80px] left-0 right-0 bg-bg-primary border border-border-color rounded-lg shadow-lg z-50 max-h-[400px] overflow-y-auto"
+        class="absolute top-[80px] left-0 right-0 bg-bg-primary border border-border-color rounded-lg shadow-lg z-50 max-h-[400px] overflow-y-auto scrollable"
         style="width: 300px"
       >
         <!-- 好友列表 -->
@@ -150,7 +150,7 @@
     <!-- 好友信息窗口 -->
     <div class="flex-1 flex flex-col bg-bg-tertiary">
       <!-- 好友申请历史 -->
-      <div v-if="showFriendRequestHistory" class="flex-1 flex flex-col p-6 overflow-y-auto">
+      <div v-if="showFriendRequestHistory" class="flex-1 flex flex-col p-6 overflow-y-auto scrollable">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-2xl font-bold text-text-primary">好友申请记录</h2>
           <button

@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-1 overflow-y-auto">
+  <div class="flex-1 overflow-y-auto scrollable">
     <div
       v-for="friendship in friends"
       :key="friendship.id"

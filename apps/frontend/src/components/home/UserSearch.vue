@@ -13,7 +13,7 @@
     <!-- 搜索结果弹窗 -->
     <div
       v-if="showSearchResults && searchResults.length > 0"
-      class="absolute top-full left-4 right-4 mt-1 z-50 rounded-lg shadow-xl max-h-96 overflow-y-auto"
+      class="absolute top-full left-4 right-4 mt-1 z-50 rounded-lg shadow-xl max-h-96 overflow-y-auto scrollable"
       style="background: var(--card-background); border: 1px solid var(--border-color)"
     >
       <!-- 按UID匹配的用户 -->

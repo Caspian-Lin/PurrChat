@@ -129,3 +129,90 @@ button:focus-visible {
 .roundrect {
   border-radius: 25%;
 }
+
+/* 半透明滚动条样式 */
+/* Webkit 浏览器滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+/* 滚动条轨道 - 半透明背景 */
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+/* 滚动条滑块 - 半透明主题色 */
+::-webkit-scrollbar-thumb {
+  background: rgba(226, 226, 226, 0.4);
+  border-radius: 4px;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+/* 滚动条滑块悬停效果 */
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(177, 177, 177, 0.418);
+}
+
+/* 滚动条滑块激活效果 */
+::-webkit-scrollbar-thumb:active {
+  background: rgba(193, 193, 193, 0.9);
+}
+
+/* 滚动条角落 */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox 滚动条样式 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(145, 145, 145, 0.286) transparent;
+}
+
+/* 深色主题下的滚动条样式 */
+[data-theme='dark']::-webkit-scrollbar-thumb {
+  background: rgba(115, 115, 115, 0.5);
+}
+
+[data-theme='dark']::-webkit-scrollbar-thumb:hover {
+  background: rgba(202, 202, 202, 0.8);
+}
+
+[data-theme='dark']::-webkit-scrollbar-thumb:active {
+  background: rgb(211, 211, 211);
+}
+
+[data-theme='dark'] * {
+  scrollbar-color: rgba(214, 214, 214, 0.5) transparent;
+}
+
+/* 可滚动区域的通用样式 */
+.scrollable {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scrollable-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scrollable-both {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 隐藏滚动条但保留滚动功能 */
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
