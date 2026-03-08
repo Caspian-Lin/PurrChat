@@ -40,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 
 interface Props {
   thumbWidth?: number;
@@ -54,7 +54,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const wrapperRef = ref<HTMLElement | null>(null);
 const containerRef = ref<HTMLElement | null>(null);
-const scrollbarThumbRef = ref<HTMLElement | null>(null);
+// const scrollbarThumbRef = ref<HTMLElement | null>(null);
 const scrollbarTrackRef = ref<HTMLElement | null>(null);
 
 // 状态
@@ -303,7 +303,8 @@ defineExpose({
 /* 轨道hover效果 */
 .custom-scrollbar-track:hover,
 .custom-scrollbar-track-hover {
-  background: rgba(226, 226, 226, 0.4);
+  background: rgba(145, 145, 145, 0.4);
+  width: 10px;
 }
 
 /* 自定义滚动条滑块 */

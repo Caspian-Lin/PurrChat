@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     :show="show"
-    title="个人资料"
+    title="用户信息"
     class="max-w-md"
     @update:show="emit('update:show', $event)"
   >
@@ -53,31 +53,138 @@
           </span>
         </div>
       </div>
-      <button
-        v-if="isCurrentUser"
-        class="w-full py-3 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-semibold"
-        @click="emit('logout')"
-      >
-        退出登录
-      </button>
+
+      <!-- 好友状态操作按钮 -->
+      <div class="w-full space-y-3">
+        <!-- 陌生人：显示添加好友按钮 -->
+        <button
+          v-if="friendshipStatus === 'stranger'"
+          class="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors font-semibold"
+          :disabled="loading"
+          @click="handleSendFriendRequest"
+        >
+          {{ loading ? '发送中...' : '添加好友' }}
+        </button>
+
+        <!-- 已发送好友申请：显示已发送状态 -->
+        <div
+          v-else-if="friendshipStatus === 'sent'"
+          class="w-full py-3 bg-yellow-500 text-white rounded-lg text-center font-semibold"
+        >
+          已发送好友申请
+        </div>
+
+        <!-- 待处理好友申请：显示接受和忽略按钮 -->
+        <div v-else-if="friendshipStatus === 'pending'" class="flex gap-3">
+          <button
+            class="flex-1 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold"
+            :disabled="loading"
+            @click="handleAcceptRequest"
+          >
+            {{ loading ? '处理中...' : '接受' }}
+          </button>
+          <button
+            class="flex-1 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-semibold"
+            :disabled="loading"
+            @click="handleRejectRequest"
+          >
+            {{ loading ? '处理中...' : '忽略' }}
+          </button>
+        </div>
+
+        <!-- 已是好友：显示开始聊天按钮 -->
+        <button
+          v-else-if="friendshipStatus === 'accepted'"
+          class="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors font-semibold"
+          @click="emit('start-chat')"
+        >
+          开始聊天
+        </button>
+
+        <!-- 已拒绝：显示重新添加好友按钮 -->
+        <button
+          v-else-if="friendshipStatus === 'rejected'"
+          class="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors font-semibold"
+          :disabled="loading"
+          @click="handleSendFriendRequest"
+        >
+          {{ loading ? '发送中...' : '重新添加好友' }}
+        </button>
+
+        <!-- 当前用户：显示退出登录按钮 -->
+        <button
+          v-if="isCurrentUser"
+          class="w-full py-3 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-semibold"
+          @click="emit('logout')"
+        >
+          退出登录
+        </button>
+      </div>
     </div>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import BaseModal from '../common/BaseModal.vue';
-import type { User } from '../../models/types';
+import type { User, Friendship } from '../../models/types';
 
 interface Props {
   show: boolean;
   user: User | null;
   isCurrentUser?: boolean;
+  friendship?: Friendship | null;
+  loading?: boolean;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
   'update:show': [value: boolean];
   logout: [];
+  'send-friend-request': [];
+  'accept-request': [];
+  'reject-request': [];
+  'start-chat': [];
 }>();
+
+// 计算好友状态
+const friendshipStatus = computed(() => {
+  if (!props.user || props.isCurrentUser) return 'none';
+
+  if (!props.friendship) return 'stranger';
+
+  const status = props.friendship.status;
+  const currentUserId = props.user.id;
+
+  // 如果当前用户是发送方
+  if (props.friendship.user_id === currentUserId) {
+    if (status === 'pending') return 'sent';
+    if (status === 'rejected') return 'rejected';
+    if (status === 'accepted') return 'accepted';
+  }
+
+  // 如果当前用户是接收方
+  if (props.friendship.friend_id === currentUserId) {
+    if (status === 'pending') return 'pending';
+    if (status === 'accepted') return 'accepted';
+  }
+
+  return 'stranger';
+});
+
+// 处理发送好友请求
+const handleSendFriendRequest = () => {
+  emit('send-friend-request');
+};
+
+// 处理接受好友请求
+const handleAcceptRequest = () => {
+  emit('accept-request');
+};
+
+// 处理拒绝好友请求
+const handleRejectRequest = () => {
+  emit('reject-request');
+};
 </script>
