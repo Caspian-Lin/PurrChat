@@ -37,14 +37,15 @@ func (r *conversationRepository) Create(ctx context.Context, conversation *model
 	conversation.CreatedAt = time.Now().UTC()
 	conversation.UpdatedAt = time.Now().UTC()
 
-	query := `
-		INSERT INTO conversations (id, conversation_type, name, created_by, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, created_at, updated_at
-	`
-
 	err := pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, query,
+		// 插入会话
+		query := `
+			INSERT INTO conversations (id, conversation_type, name, created_by, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING id, created_at, updated_at
+		`
+
+		err := tx.QueryRow(ctx, query,
 			conversation.ID,
 			conversation.ConversationType,
 			conversation.Name,
@@ -52,6 +53,19 @@ func (r *conversationRepository) Create(ctx context.Context, conversation *model
 			conversation.CreatedAt,
 			conversation.UpdatedAt,
 		).Scan(&conversation.ID, &conversation.CreatedAt, &conversation.UpdatedAt)
+
+		if err != nil {
+			return err
+		}
+
+		// 创建会话的消息表
+		_, err = tx.Exec(ctx, "SELECT create_conversation_message_table($1)", conversation.ID)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to create conversation message table: %v", err)
+			return err
+		}
+
+		return nil
 	})
 
 	if err != nil {

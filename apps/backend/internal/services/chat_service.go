@@ -333,13 +333,6 @@ func (s *ChatService) CreateConversation(ctx context.Context, userID, targetUser
 		return nil, err
 	}
 
-	// 为会话创建消息表
-	err = s.conversationMessageRepo.CreateMessageTable(ctx, conversation.ID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to create message table: %v", err)
-		return nil, err
-	}
-
 	// 创建enrollment记录（使用UTC时间）
 	ownerEnrollment := &models.Enrollment{
 		ConversationID: conversation.ID,
@@ -390,13 +383,6 @@ func (s *ChatService) CreateGroupConversation(ctx context.Context, userID, name 
 	err = s.conversationRepo.Create(ctx, conversation)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to create conversation: %v", err)
-		return nil, err
-	}
-
-	// 为会话创建消息表
-	err = s.conversationMessageRepo.CreateMessageTable(ctx, conversation.ID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to create message table: %v", err)
 		return nil, err
 	}
 
