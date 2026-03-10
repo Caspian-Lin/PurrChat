@@ -4,10 +4,10 @@
 # PurrChat 数据库清理脚本
 # ======================================
 #
-# 此脚本用于清理现有的 PurrChat 数据库，
-# 删除旧的表和 schema，以便重新初始化数据库。
+# 此脚本用于删除并重建 PurrChat 数据库。
+# 这是最彻底的清理方式，不依赖于现有的数据库结构。
 #
-# 警告：此脚本将删除所有数据，请谨慎使用！
+# 警告：此脚本将删除整个数据库！请谨慎使用！
 #
 # 使用方法：
 #   ./scripts/cleanup_database.sh [options]
@@ -32,9 +32,10 @@ BACKUP=false
 SKIP_CONFIRM=false
 
 # 数据库配置（从环境变量读取，如果没有则使用默认值）
+# 注意：清理脚本需要连接到 postgres 数据库，而不是 purrchat 数据库
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
-DB_NAME="${DB_NAME:-purrchat}"
+DB_NAME="${DB_NAME:-postgres}"  # 连接到 postgres 数据库以删除 purrchat 数据库
 DB_USER="${DB_USER:-postgres}"
 DB_PASSWORD="${DB_PASSWORD:-}"
 
@@ -52,6 +53,9 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             echo "PurrChat 数据库清理脚本"
             echo ""
+            echo "此脚本将删除并重建整个 PurrChat 数据库。"
+            echo "这是最彻底的清理方式，不依赖于现有的数据库结构。"
+            echo ""
             echo "使用方法："
             echo "  $0 [options]"
             echo ""
@@ -63,13 +67,16 @@ while [[ $# -gt 0 ]]; do
             echo "环境变量："
             echo "  DB_HOST         数据库主机 (默认: localhost)"
             echo "  DB_PORT         数据库端口 (默认: 5432)"
-            echo "  DB_NAME         数据库名称 (默认: purrchat)"
+            echo "  DB_NAME         连接的数据库名称 (默认: postgres)"
+            echo "                  注意：需要连接到 postgres 数据库以删除 purrchat 数据库"
             echo "  DB_USER         数据库用户 (默认: postgres)"
             echo "  DB_PASSWORD     数据库密码"
             echo ""
             echo "示例："
             echo "  $0 --backup --yes"
             echo "  DB_USER=myuser DB_PASSWORD=mypass $0"
+            echo ""
+            echo "警告：此操作将删除整个 purrchat 数据库及其所有数据！"
             exit 0
             ;;
         *)
@@ -98,7 +105,8 @@ echo ""
 echo "数据库配置："
 echo "  主机: $DB_HOST"
 echo "  端口: $DB_PORT"
-echo "  数据库: $DB_NAME"
+echo "  连接数据库: $DB_NAME (用于删除 purrchat 数据库)"
+echo "  要删除的数据库: purrchat"
 echo "  用户: $DB_USER"
 echo ""
 echo "选项："
@@ -136,7 +144,7 @@ fi
 # 确认操作
 if [ "$SKIP_CONFIRM" = false ]; then
     echo -e "${RED}========================================${NC}"
-    echo -e "${RED}警告：此操作将删除所有数据！${NC}"
+    echo -e "${RED}警告：此操作将删除整个 purrchat 数据库！${NC}"
     echo -e "${RED}========================================${NC}"
     echo ""
     read -p "确认要继续吗？(yes/no): " confirm
@@ -148,19 +156,19 @@ if [ "$SKIP_CONFIRM" = false ]; then
 fi
 
 # 执行清理脚本
-echo -e "${YELLOW}正在清理数据库...${NC}"
+echo -e "${YELLOW}正在删除并重建 purrchat 数据库...${NC}"
 echo ""
 
 # 设置 PGPASSWORD 环境变量
 export PGPASSWORD="$DB_PASSWORD"
 
-# 执行 SQL 脚本
+# 执行 SQL 脚本（连接到 postgres 数据库）
 if psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$SQL_FILE"; then
     echo ""
-    echo -e "${GREEN}✓ 数据库清理成功${NC}"
+    echo -e "${GREEN}✓ 数据库重建成功${NC}"
 else
     echo ""
-    echo -e "${RED}✗ 数据库清理失败${NC}"
+    echo -e "${RED}✗ 数据库重建失败${NC}"
     exit 1
 fi
 
@@ -172,10 +180,10 @@ echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}下一步操作：${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
-echo "运行新的迁移脚本以初始化数据库："
-echo "  psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f migrations/001_init_schema.sql"
-echo ""
-echo "或者使用 Makefile："
+echo "运行迁移脚本以初始化数据库："
 echo "  make migrate"
+echo ""
+echo "或者直接运行："
+echo "  cd apps/backend && go run cmd/server/main.go migrate"
 echo ""
 echo -e "${BLUE}========================================${NC}"

@@ -2,23 +2,20 @@
 -- PurrChat 数据库清理脚本
 -- ======================================
 -- 
--- 此脚本用于清理现有的 PurrChat 数据库，
--- 删除旧的表和 schema，以便重新初始化数据库。
+-- 此脚本用于删除并重建 PurrChat 数据库。
+-- 这是最彻底的清理方式，不依赖于现有的数据库结构。
 --
--- 警告：此脚本将删除所有数据，请谨慎使用！
+-- 警告：此脚本将删除整个数据库！请谨慎使用！
 --
 -- 使用方法：
---   psql -U your_username -d purrchat -f scripts/cleanup_database.sql
+--   psql -U postgres -d postgres -f scripts/cleanup_database.sql
 -- ======================================
-
--- 开始事务
-BEGIN;
 
 -- 显示警告信息
 DO $$
 BEGIN
     RAISE NOTICE '========================================';
-    RAISE NOTICE '警告：此脚本将删除所有数据！';
+    RAISE NOTICE '警告：此脚本将删除整个数据库！';
     RAISE NOTICE '========================================';
     RAISE NOTICE '5秒后开始清理...';
     RAISE NOTICE '按 Ctrl+C 取消操作';
@@ -29,100 +26,61 @@ END $$;
 SELECT pg_sleep(5);
 
 -- ======================================
--- 1. 删除 conversation_messages schema 及其所有表
+-- 1. 终止所有连接到 purrchat 数据库的会话
 -- ======================================
 DO $$
 DECLARE
-    table_name TEXT;
+    pid INTEGER;
 BEGIN
-    -- 删除 schema 中的所有表
-    FOR table_name IN
-        SELECT tablename
-        FROM pg_tables
-        WHERE schemaname = 'conversation_messages'
+    FOR pid IN
+        SELECT pg_terminate_backend(pid)
+        FROM pg_stat_activity
+        WHERE datname = 'purrchat'
+          AND pid <> pg_backend_pid()
     LOOP
-        EXECUTE format('DROP TABLE IF EXISTS conversation_messages.%I CASCADE', table_name);
-        RAISE NOTICE '已删除表: conversation_messages.%', table_name;
+        RAISE NOTICE '已终止连接: PID %', pid;
     END LOOP;
 END $$;
 
--- 删除 conversation_messages schema
-DROP SCHEMA IF EXISTS conversation_messages CASCADE;
-RAISE NOTICE '已删除 schema: conversation_messages';
+-- ======================================
+-- 2. 删除 purrchat 数据库
+-- ======================================
+DROP DATABASE IF EXISTS purrchat;
+RAISE NOTICE '已删除数据库: purrchat';
 
 -- ======================================
--- 2. 删除旧的表
+-- 3. 创建新的 purrchat 数据库
 -- ======================================
-
--- 删除 groups 表
-DROP TABLE IF EXISTS groups CASCADE;
-RAISE NOTICE '已删除表: groups';
-
--- 删除 group_members 表
-DROP TABLE IF EXISTS group_members CASCADE;
-RAISE NOTICE '已删除表: group_members';
-
--- 删除 messages 表
-DROP TABLE IF EXISTS messages CASCADE;
-RAISE NOTICE '已删除表: messages';
+CREATE DATABASE purrchat;
+RAISE NOTICE '已创建数据库: purrchat';
 
 -- ======================================
--- 3. 删除旧的迁移记录（可选）
+-- 4. 连接到新数据库并设置权限
 -- ======================================
-
--- 如果存在迁移表，删除旧的迁移记录
-DELETE FROM schema_migrations WHERE version IN ('002', '003', '004');
-RAISE NOTICE '已删除旧的迁移记录';
+\c purrchat
 
 -- ======================================
--- 4. 清理其他可能的残留
+-- 5. 创建扩展（如果需要）
 -- ======================================
-
--- 删除可能存在的序列
-DROP SEQUENCE IF EXISTS user_uid_seq CASCADE;
-RAISE NOTICE '已删除序列: user_uid_seq';
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+RAISE NOTICE '已创建扩展: uuid-ossp';
 
 -- ======================================
--- 5. 验证清理结果
+-- 6. 验证结果
 -- ======================================
-
 DO $$
 BEGIN
     RAISE NOTICE '========================================';
-    RAISE NOTICE '清理完成！';
+    RAISE NOTICE '数据库重建完成！';
     RAISE NOTICE '========================================';
-    RAISE NOTICE '剩余的表：';
-    
-    FOR tbl IN
-        SELECT tablename
-        FROM pg_tables
-        WHERE schemaname = 'public'
-        ORDER BY tablename
-    LOOP
-        RAISE NOTICE '  - %', tbl;
-    END LOOP;
-    
+    RAISE NOTICE '数据库名称: %', current_database();
     RAISE NOTICE '========================================';
-    RAISE NOTICE '剩余的 schema：';
-    
-    FOR sch IN
-        SELECT nspname
-        FROM pg_namespace
-        WHERE nspname NOT LIKE 'pg_%'
-          AND nspname != 'information_schema'
-        ORDER BY nspname
-    LOOP
-        RAISE NOTICE '  - %', sch;
-    END LOOP;
-    
-    RAISE NOTICE '========================================';
-    RAISE NOTICE '现在可以运行新的迁移脚本：';
-    RAISE NOTICE '  psql -U your_username -d purrchat -f migrations/001_init_schema.sql';
+    RAISE NOTICE '现在可以运行迁移脚本：';
+    RAISE NOTICE '  make migrate';
+    RAISE NOTICE '或直接运行:';
+    RAISE NOTICE '  cd apps/backend && go run cmd/server/main.go migrate';
     RAISE NOTICE '========================================';
 END $$;
-
--- 提交事务
-COMMIT;
 
 -- ======================================
 -- 清理完成

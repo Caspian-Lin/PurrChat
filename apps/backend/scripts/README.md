@@ -4,35 +4,36 @@
 
 ## 警告
 
-⚠️ **重要提示**：这些脚本将删除所有数据库数据，请谨慎使用！
+⚠️ **重要提示**：这些脚本将删除整个数据库，请谨慎使用！
 
 ## 脚本说明
 
 ### 1. cleanup_database.sql
 
-纯 SQL 脚本，用于清理数据库中的旧表和 schema。
+纯 SQL 脚本，用于删除并重建整个 PurrChat 数据库。
 
 #### 功能
-- 删除 `conversation_messages` schema 及其所有表
-- 删除旧的表：`groups`、`group_members`、`messages`
-- 删除旧的迁移记录
-- 清理残留的序列
-- 显示清理后的数据库状态
+- 终止所有连接到 purrchat 数据库的会话
+- 删除整个 purrchat 数据库
+- 创建新的 purrchat 数据库
+- 创建必要的扩展（如 uuid-ossp）
+- 显示重建后的数据库状态
 
 #### 使用方法
 
 ```bash
-# 直接使用 psql 执行
-psql -U postgres -d purrchat -f scripts/cleanup_database.sql
+# 直接使用 psql 执行（需要连接到 postgres 数据库）
+psql -U postgres -d postgres -f scripts/cleanup_database.sql
 
 # 或者指定主机和端口
-psql -h localhost -p 5432 -U postgres -d purrchat -f scripts/cleanup_database.sql
+psql -h localhost -p 5432 -U postgres -d postgres -f scripts/cleanup_database.sql
 ```
 
 #### 安全特性
 - 执行前显示 5 秒倒计时，允许取消操作
-- 使用事务，失败时自动回滚
-- 详细的日志输出，显示每个删除操作
+- 自动终止所有连接，避免删除失败
+- 详细的日志输出，显示每个操作步骤
+- 不依赖于现有的数据库结构
 
 ### 2. cleanup_database.sh
 
@@ -44,6 +45,7 @@ Shell 包装脚本，提供更友好的用户界面和额外功能。
 - ✅ 彩色输出，易于阅读
 - ✅ 支持环境变量配置
 - ✅ 详细的错误处理
+- ✅ 自动连接到 postgres 数据库以删除 purrchat 数据库
 
 #### 使用方法
 
@@ -57,7 +59,7 @@ Shell 包装脚本，提供更友好的用户界面和额外功能。
 # 使用环境变量配置数据库连接
 DB_HOST=localhost \
 DB_PORT=5432 \
-DB_NAME=purrchat \
+DB_NAME=postgres \
 DB_USER=postgres \
 DB_PASSWORD=mypassword \
 ./scripts/cleanup_database.sh --backup --yes
@@ -80,7 +82,7 @@ DB_PASSWORD=mypassword \
 |--------|------|---------|
 | `DB_HOST` | 数据库主机 | `localhost` |
 | `DB_PORT` | 数据库端口 | `5432` |
-| `DB_NAME` | 数据库名称 | `purrchat` |
+| `DB_NAME` | 连接的数据库名称（用于删除 purrchat 数据库） | `postgres` |
 | `DB_USER` | 数据库用户 | `postgres` |
 | `DB_PASSWORD` | 数据库密码 | （空） |
 
@@ -133,9 +135,16 @@ make migrate
 # 方法 1：使用 psql
 psql -U postgres -d purrchat -f migrations/001_init_schema.sql
 
-# 方法 2：使用 Makefile（如果已配置）
+# 方法 2：使用 Makefile（推荐）
 make migrate
+
+# 方法 3：直接运行 Go 程序
+cd apps/backend && go run cmd/server/main.go migrate
 ```
+
+## 迁移脚本自动执行
+
+新的迁移系统会自动执行 `migrations` 目录下的所有 SQL 文件，按文件名排序执行（如 001、002、003...）。添加新的迁移文件时，只需在 `migrations` 目录下添加新的 `.sql` 文件即可，无需修改代码。
 
 ## 备份恢复
 
@@ -189,6 +198,7 @@ ls -ld scripts/backups/
 3. **停机时间**：清理过程可能导致短暂的服务中断
 4. **依赖关系**：确保清理后立即运行新的迁移脚本
 5. **测试验证**：清理后运行测试验证数据库结构
+6. **数据库连接**：清理脚本需要连接到 `postgres` 数据库，而不是 `purrchat` 数据库
 
 ## 相关文档
 
