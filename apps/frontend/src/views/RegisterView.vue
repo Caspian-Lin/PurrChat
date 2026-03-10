@@ -61,7 +61,12 @@
           {{ auth.error }}
         </BaseAlert>
 
-        <button type="submit" block :disabled="auth.loading.value" class="!h-12 !font-medium">
+        <button
+          type="submit"
+          block
+          :disabled="auth.loading.value"
+          class="!h-12 w-full !font-medium"
+        >
           {{ auth.loading.value ? '注册中...' : '注册' }}
         </button>
       </form>

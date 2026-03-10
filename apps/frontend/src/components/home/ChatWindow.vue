@@ -116,12 +116,7 @@
       >
         <!-- 文本选项 -->
         <div class="flex items-center gap-3 px-4 py-3">
-          <button
-            class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-            title="表情"
-          >
-            <BsEmojiSmile class="text-2xl" />
-          </button>
+          <EmojiPicker v-model="newMessage" @select="handleEmojiSelect" />
           <button
             class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
             title="文件"
@@ -172,15 +167,10 @@
 import { ref, onMounted, nextTick, watch } from 'vue';
 import { getUserUsername, getOtherUser } from '../../utils/userHelpers';
 import { formatTime, formatTimeWithSeconds } from '../../utils/formatTime';
-import {
-  BsEmojiSmile,
-  BsPaperclip,
-  BsCamera,
-  BsCameraVideo,
-  BsInfoCircle,
-} from 'vue-icons-plus/bs';
+import { BsPaperclip, BsCamera, BsCameraVideo, BsInfoCircle } from 'vue-icons-plus/bs';
 import ResizableSplitter from '../common/Splitter.vue';
 import CustomScrollbar from '../common/CustomScrollbar.vue';
+import EmojiPicker from '../common/EmojiPicker.vue';
 import type { Conversation, Message } from '../../models/types';
 
 interface Props {
@@ -226,6 +216,12 @@ const handleSend = () => {
   console.log('[ChatWindow] Emitting send-message event with content:', newMessage.value);
   emit('send-message', newMessage.value);
   newMessage.value = '';
+};
+
+const handleEmojiSelect = (emoji: string) => {
+  console.log('[ChatWindow] Emoji selected:', emoji);
+  // Emoji 已经通过 v-model 自动添加到 newMessage
+  // 这里可以添加额外的逻辑，比如聚焦到输入框
 };
 
 const handleShowDetail = () => {
