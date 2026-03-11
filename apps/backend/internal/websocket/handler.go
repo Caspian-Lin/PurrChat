@@ -3,6 +3,7 @@ package websocket
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"purr-chat-server/pkg/jwt"
@@ -29,15 +30,49 @@ var jwtSecret string
 
 // InitHub 初始化全局Hub
 func InitHub() {
-	GlobalHub = NewHub()
+	GlobalHub = NewHub(20000, 3) // 默认最大连接数20000，每用户最大连接数3
 	go GlobalHub.Run()
 	logger.Info("WebSocket Hub initialized")
+}
+
+// InitHubWithConfig 使用配置初始化全局Hub
+func InitHubWithConfig(maxConnections, maxUserConnections int) {
+	GlobalHub = NewHub(maxConnections, maxUserConnections)
+	go GlobalHub.Run()
+	logger.Infof("WebSocket Hub initialized with maxConnections=%d, maxUserConnections=%d",
+		maxConnections, maxUserConnections)
 }
 
 // InitJWTSecret 初始化JWT secret
 func InitJWTSecret(secret string) {
 	jwtSecret = secret
 	logger.Info("WebSocket JWT secret initialized")
+}
+
+// detectDeviceType 根据User-Agent检测设备类型
+func detectDeviceType(userAgent string) DeviceType {
+	userAgent = strings.ToLower(userAgent)
+
+	// 检测平板设备（优先检测，因为iPad的UA中可能包含mobile）
+	if strings.Contains(userAgent, "ipad") || strings.Contains(userAgent, "tablet") {
+		return DeviceTypeTablet
+	}
+
+	// 检测移动设备
+	if strings.Contains(userAgent, "mobile") || strings.Contains(userAgent, "android") ||
+		strings.Contains(userAgent, "iphone") {
+		return DeviceTypeMobile
+	}
+
+	// 检测桌面浏览器
+	if strings.Contains(userAgent, "mozilla") || strings.Contains(userAgent, "chrome") ||
+		strings.Contains(userAgent, "safari") || strings.Contains(userAgent, "firefox") ||
+		strings.Contains(userAgent, "edge") {
+		return DeviceTypeWeb
+	}
+
+	// 默认返回未知设备类型
+	return DeviceTypeUnknown
 }
 
 // HandleWebSocket 处理WebSocket连接
@@ -73,16 +108,30 @@ func HandleWebSocket(c *gin.Context) {
 		return
 	}
 
+	// 获取User-Agent并检测设备类型
+	userAgent := c.Request.Header.Get("User-Agent")
+	deviceType := detectDeviceType(userAgent)
+
 	// 创建客户端
 	client := &Client{
-		ID:     uuid.New(),
-		UserID: userID,
-		Conn:   conn,
-		Send:   make(chan []byte, 256),
+		ID:          uuid.New(),
+		UserID:      userID,
+		Conn:        conn,
+		Send:        make(chan []byte, 256),
+		DeviceType:  deviceType,
+		ConnectedAt: time.Now(),
+		UserAgent:   userAgent,
 	}
 
 	// 注册客户端
-	GlobalHub.register <- client
+	err = GlobalHub.RegisterClient(client)
+	if err != nil {
+		// 如果注册失败（例如超过最大连接数），关闭连接
+		conn.Close()
+		logger.InfofWithCaller("Failed to register client: %v", err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		return
+	}
 
 	// 启动读写协程
 	go client.writePump()

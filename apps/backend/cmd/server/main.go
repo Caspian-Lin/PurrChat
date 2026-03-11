@@ -223,7 +223,7 @@ func main() {
 	chatHandler := handlers.NewChatHandler(authService, chatService)
 
 	// 初始化WebSocket hub
-	websocket.InitHub()
+	websocket.InitHubWithConfig(cfg.WebSocket.MaxConnections, cfg.WebSocket.MaxUserConnections)
 	websocket.InitJWTSecret(cfg.JWT.Secret)
 
 	// 健康检查

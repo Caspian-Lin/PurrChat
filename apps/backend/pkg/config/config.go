@@ -1,16 +1,18 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
 )
 
 type Config struct {
-	Port    string
-	GinMode string
-	DB      DBConfig
-	JWT     JWTConfig
-	Log     LogConfig
+	Port      string
+	GinMode   string
+	DB        DBConfig
+	JWT       JWTConfig
+	Log       LogConfig
+	WebSocket WebSocketConfig
 }
 
 type LogConfig struct {
@@ -30,6 +32,11 @@ type DBConfig struct {
 type JWTConfig struct {
 	Secret     string
 	Expiration string
+}
+
+type WebSocketConfig struct {
+	MaxConnections     int
+	MaxUserConnections int
 }
 
 func Load() *Config {
@@ -52,6 +59,10 @@ func Load() *Config {
 			MaxFiles:  getEnvInt("LOG_MAX_FILES", 10),
 			MaxLines:  getEnvInt("LOG_MAX_LINES", 100000),
 		},
+		WebSocket: WebSocketConfig{
+			MaxConnections:     getEnvInt("MAX_CONNECTIONS", 20000),
+			MaxUserConnections: getEnvInt("MAX_USER_CONNECTIONS", 3),
+		},
 	}
 }
 
@@ -60,8 +71,12 @@ func getEnvInt(key string, defaultValue int) int {
 	if value == "" {
 		return defaultValue
 	}
-	// 这里简单处理，实际应用中应该更健壮地处理字符串转整数
-	return defaultValue
+	var result int
+	_, err := fmt.Sscanf(value, "%d", &result)
+	if err != nil {
+		return defaultValue
+	}
+	return result
 }
 
 func getEnv(key, defaultValue string) string {
