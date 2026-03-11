@@ -22,8 +22,8 @@
           display: showScrollbar ? 'block' : 'none',
         }"
         @mousedown="startDrag"
-        @mouseenter="isHovering = true"
-        @mouseleave="isHovering = false"
+        @mouseenter="((isTrackHovering = true), (isHovering = true))"
+        @mouseleave="((isTrackHovering = false), (isHovering = false))"
       ></div>
       <!-- 滚动条轨道（用于点击滚动） -->
       <div
@@ -32,8 +32,8 @@
         :class="{ 'custom-scrollbar-track-hover': isTrackHovering || isHovering || isDragging }"
         :style="{ display: showScrollbar ? 'block' : 'none' }"
         @mousedown="handleTrackClick"
-        @mouseenter="isTrackHovering = true"
-        @mouseleave="isTrackHovering = false"
+        @mouseenter="((isTrackHovering = true), (isHovering = true))"
+        @mouseleave="((isTrackHovering = false), (isHovering = false))"
       ></div>
     </div>
   </div>
@@ -312,7 +312,7 @@ defineExpose({
   position: absolute;
   right: 1px;
   width: 6px; /* 默认细滚动条 */
-  background: rgba(226, 226, 226, 0.4);
+  background: rgba(106, 106, 106, 0.4);
   border-radius: 4px;
   cursor: pointer;
   z-index: 10000;
@@ -329,11 +329,11 @@ defineExpose({
 }
 
 .custom-scrollbar-thumb:hover {
-  background: rgba(177, 177, 177, 0.6);
+  background: rgba(64, 64, 64, 0.6);
 }
 
 .custom-scrollbar-thumb:active {
-  background: rgba(193, 193, 193, 0.9);
+  background: rgba(64, 64, 64, 0.6);
 }
 
 /* 深色主题 */

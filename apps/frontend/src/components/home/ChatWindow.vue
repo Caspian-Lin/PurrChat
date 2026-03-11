@@ -2,10 +2,10 @@
   <div v-if="conversation" class="flex flex-col h-full bg-bg-tertiary">
     <!-- 聊天头部 -->
     <div
-      class="flex items-center justify-between px-4 py-4 gap-2 bg-bg-secondary border-b border-border-color h-[80px] flex-shrink-0"
+      class="flex items-center justify-between p-3 pt-5 gap-2 bg-bg-secondary border-b border-border-color flex-shrink-0"
     >
       <div class="flex items-center gap-2">
-        <div class="font-semibold text-[28px] text-text-secondary leading-none">
+        <div class="font-semibold text-2xl text-text-secondary leading-none">
           {{
             conversation.conversation_type === 'group'
               ? conversation.name
@@ -65,7 +65,7 @@
                 {{ message.sender?.username?.charAt(0) || '?' }}
               </div>
             </div>
-            <div class="flex flex-col gap-1">
+            <div class="gap-1">
               <!-- 对方的消息显示昵称，自己的消息不显示昵称 -->
               <div
                 v-if="message.sender_id !== currentUserId"
@@ -74,10 +74,7 @@
                 {{ message.sender?.username }}
               </div>
               <div
-                :class="[
-                  'px-4 py-2 rounded-2xl',
-                  // message.sender_id === currentUserId ? 'rounded-br-none' : 'rounded-bl-none',
-                ]"
+                :class="['px-4 py-2 relative rounded-2xl']"
                 :style="{
                   background: 'var(--strong-background-color)',
                   color: 'var(--text-color)',

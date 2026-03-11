@@ -1,6 +1,6 @@
 <template>
   <div
-    class="flex flex-col items-center justify-between px-4 py-6 gap-4 bg-bg-primary border-r border-border-color relative overflow-hidden"
+    class="flex flex-col items-center justify-between px-4 py-5 gap-4 bg-bg-primary border-r border-border-color relative overflow-hidden"
   >
     <!-- 标题 -->
     <div class="flex-0 text-xl font-bold text-text-primary">Purr <br />Chat</div>

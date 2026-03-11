@@ -11,7 +11,7 @@
       <div class="flex flex-col h-full">
         <!-- 搜索用户 -->
         <div
-          class="flex items-center gap-2 p-3 bg-bg-secondary border-b border-border-color flex-shrink-0"
+          class="flex items-center gap-2 px-3 pt-5 pb-3 bg-bg-secondary border-b border-border-color flex-shrink-0"
         >
           <div class="flex-1 flex items-center bg-bg-quaternary rounded-md h-[40px] px-3">
             <input
