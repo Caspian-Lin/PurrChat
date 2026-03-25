@@ -81,14 +81,24 @@
           <div class="text-base truncate text-text-tertiary">
             {{ conversation.last_message?.content || '暂无消息' }}
           </div>
-          <!-- 删除按钮 -->
-          <button
-            class="size-5 aspect-1 rounded-full flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary flex-shrink-0 ml-2"
-            @click.stop="$emit('delete-conversation', conversation.id)"
-            title="删除会话"
-          >
-            <BsX />
-          </button>
+          <div class="flex items-center gap-2">
+            <!-- 未读消息提示气泡 -->
+            <div
+              v-if="conversation.unread_count && conversation.unread_count > 0"
+              class="min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+              style="background: var(--theme-primary)"
+            >
+              {{ conversation.unread_count > 99 ? '99+' : conversation.unread_count }}
+            </div>
+            <!-- 删除按钮 -->
+            <button
+              class="size-5 aspect-1 rounded-full flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary flex-shrink-0"
+              @click.stop="$emit('delete-conversation', conversation.id)"
+              title="删除会话"
+            >
+              <BsX />
+            </button>
+          </div>
         </div>
       </div>
     </div>

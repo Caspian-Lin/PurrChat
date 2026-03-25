@@ -93,6 +93,7 @@ export interface Message {
   msg_type: 'text' | 'image';
   created_at: string;
   sender?: User;
+  is_read?: boolean; // 消息是否已读
 }
 
 // 群组类型

@@ -10,7 +10,7 @@
         <Transition name="modal-content">
           <div
             v-if="show"
-            class="rounded-lg shadow-xl max-w-md w-full mx-4"
+            :class="['rounded-lg shadow-xl max-w-md w-full mx-4', props.class]"
             style="background: var(--background-color)"
           >
             <div
@@ -54,6 +54,7 @@ interface Props {
   title?: string;
   closable?: boolean;
   closeOnOverlayClick?: boolean;
+  class?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {

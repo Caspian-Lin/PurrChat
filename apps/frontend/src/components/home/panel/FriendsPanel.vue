@@ -56,7 +56,10 @@
 
         <!-- 搜索结果dropdown -->
         <div
-          v-if="showSearchResults && (filteredFriends.length > 0 || searchedUsers.length > 0)"
+          v-if="
+            showSearchResults &&
+            (filteredFriends.length > 0 || searchedUsers.length > 0 || filteredGroups.length > 0)
+          "
           class="absolute top-[80px] left-0 right-0 bg-bg-primary border border-border-color rounded-lg shadow-lg z-50 max-h-[400px] overflow-y-auto scrollable"
           style="width: 300px"
         >
@@ -91,6 +94,34 @@
                   {{ friendship.friend?.username }}
                 </div>
                 <div class="text-sm text-text-secondary">UID: {{ friendship.friend?.uid }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 群聊列表 -->
+          <div v-if="filteredGroups.length > 0" class="border-b border-border-color">
+            <div class="px-3 py-2 text-sm font-semibold text-text-secondary bg-bg-secondary">
+              群聊
+            </div>
+            <div
+              v-for="conversation in filteredGroups"
+              :key="'group-' + conversation.id"
+              class="flex items-center gap-3 p-3 hover:bg-hover-bg cursor-pointer transition-colors"
+              @click="handleSelectGroup(conversation)"
+            >
+              <div
+                class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0"
+                style="background: var(--theme-gradient)"
+              >
+                <div class="w-full h-full flex items-center justify-center font-bold text-white">
+                  {{ conversation.name?.charAt(0) || 'G' }}
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold truncate text-text-primary">
+                  {{ conversation.name }}
+                </div>
+                <div class="text-sm text-text-secondary">群聊</div>
               </div>
             </div>
           </div>
@@ -133,7 +164,11 @@
 
           <!-- 无结果 -->
           <div
-            v-if="filteredFriends.length === 0 && searchedUsers.length === 0"
+            v-if="
+              filteredFriends.length === 0 &&
+              searchedUsers.length === 0 &&
+              filteredGroups.length === 0
+            "
             class="p-4 text-center text-text-tertiary"
           >
             未找到匹配的用户
@@ -142,11 +177,77 @@
 
         <!-- 好友列表 -->
         <div class="flex-1 min-h-0">
+          <!-- 标签切换 -->
+          <div class="flex gap-2 p-3 bg-bg-secondary border-b border-border-color">
+            <button
+              :class="[
+                'flex-1 py-2 px-4 rounded-md font-medium transition-colors',
+                activeTab === 'friends'
+                  ? 'bg-primary text-white'
+                  : 'bg-bg-quaternary text-text-secondary hover:text-text-primary',
+              ]"
+              @click="activeTab = 'friends'"
+            >
+              好友
+            </button>
+            <button
+              :class="[
+                'flex-1 py-2 px-4 rounded-md font-medium transition-colors',
+                activeTab === 'groups'
+                  ? 'bg-primary text-white'
+                  : 'bg-bg-quaternary text-text-secondary hover:text-text-primary',
+              ]"
+              @click="activeTab = 'groups'"
+            >
+              群聊
+            </button>
+          </div>
+
+          <!-- 好友列表 -->
           <FriendList
+            v-if="activeTab === 'friends'"
             :friends="friends"
             @select="handleSelectFriend"
             @show-user="handleShowUserProfile"
           />
+
+          <!-- 群聊列表 -->
+          <CustomScrollbar v-else class="flex-1 min-h-0">
+            <div
+              v-for="conversation in filteredGroups"
+              :key="conversation.id"
+              class="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b hover:bg-hover-bg"
+              @click="handleSelectGroup(conversation)"
+            >
+              <div
+                class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0"
+                style="background: var(--theme-gradient)"
+              >
+                <div
+                  class="w-full h-full flex items-center justify-center font-bold text-white text-2xl"
+                >
+                  {{ conversation.name?.charAt(0) || 'G' }}
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-semibold truncate text-text-primary">
+                    {{ conversation.name }}
+                  </span>
+                  <span class="text-xs px-1 rounded bg-bg-secondary">群聊</span>
+                </div>
+                <div class="text-sm text-text-secondary">
+                  {{ conversation.last_message?.content || '暂无消息' }}
+                </div>
+              </div>
+            </div>
+            <div
+              v-if="filteredGroups.length === 0"
+              class="flex flex-col items-center justify-center h-full text-center p-8 text-text-tertiary"
+            >
+              <p>暂无群聊</p>
+            </div>
+          </CustomScrollbar>
         </div>
       </div>
     </ResizableContainer>
@@ -273,6 +374,7 @@ import { useAuthController } from '../../../controllers/authController';
 import { useFriends } from '../../../composables/useFriends';
 import { useConversations } from '../../../composables/useConversations';
 import { useWebSocketEventManager } from '../../../services/websocketEventManager';
+import { useConversationStateCache } from '../../../services/conversationStateCache';
 import { api } from '../../../models/api';
 import { useRouter } from 'vue-router';
 import FriendList from '../FriendList.vue';
@@ -280,7 +382,7 @@ import FriendInfoModal from '../FriendInfoModal.vue';
 import UserProfileModal from '../UserProfileModal.vue';
 import ResizableContainer from '../../common/ResizableContainer.vue';
 import CustomScrollbar from '../../common/CustomScrollbar.vue';
-import type { User, Friendship } from '../../../models/types';
+import type { User, Friendship, Conversation } from '../../../models/types';
 import { BsX } from 'vue-icons-plus/bs';
 
 // Auth
@@ -295,8 +397,9 @@ const {
   sendFriendRequest,
   handleFriendRequest,
 } = useFriends();
-const { createConversation } = useConversations();
+const { conversations, loadConversations, createConversation } = useConversations();
 const { onFriendRequest, offFriendRequest } = useWebSocketEventManager();
+const { showConversation } = useConversationStateCache();
 const router = useRouter();
 
 // State
@@ -309,6 +412,7 @@ const showSearchResults = ref(false);
 const searchedUsers = ref<User[]>([]);
 const allFriendRequests = ref<Friendship[]>([]);
 const isSendingRequest = ref(false);
+const activeTab = ref<'friends' | 'groups'>('friends'); // 标签切换状态
 
 // Computed
 const displayUser = computed(() => {
@@ -322,6 +426,26 @@ const filteredFriends = computed(() => {
     const friend = friendship.friend;
     if (!friend) return false;
     return friend.username.toLowerCase().includes(query) || friend.uid.toString().includes(query);
+  });
+});
+
+// 群聊列表（按名称排序）
+const groupConversations = computed(() => {
+  return conversations.value
+    .filter((conv) => conv.conversation_type === 'group')
+    .sort((a, b) => {
+      const nameA = a.name || '';
+      const nameB = b.name || '';
+      return nameA.localeCompare(nameB, 'zh-CN');
+    });
+});
+
+// 过滤后的群聊列表
+const filteredGroups = computed(() => {
+  if (!searchQuery.value) return groupConversations.value;
+  const query = searchQuery.value.toLowerCase();
+  return groupConversations.value.filter((conv) => {
+    return conv.name?.toLowerCase().includes(query);
   });
 });
 
@@ -396,13 +520,23 @@ const handleSelectUser = (user: User) => {
   searchQuery.value = '';
 };
 
+const handleSelectGroup = async (conversation: Conversation) => {
+  console.log('[FriendsPanel] handleSelectGroup', { conversation });
+  // 显示会话（如果被隐藏）
+  showConversation(conversation.id);
+  // 跳转到聊天面板并选中对应会话
+  router.push({ path: '/chat', query: { conversationId: conversation.id } });
+};
+
 const handleStartChatWithFriend = async () => {
   if (!selectedFriend.value?.friend?.id) return;
 
   const conversation = await createConversation(selectedFriend.value.friend.id);
   if (conversation) {
-    // 跳转到聊天面板
-    router.push('/chat');
+    // 显示会话（如果被隐藏）
+    showConversation(conversation.id);
+    // 跳转到聊天面板并选中对应会话
+    router.push({ path: '/chat', query: { conversationId: conversation.id } });
   }
 };
 
@@ -491,10 +625,12 @@ const handleStartChatFromModal = async () => {
 
   const conversation = await createConversation(selectedUser.value.id);
   if (conversation) {
+    // 显示会话（如果被隐藏）
+    showConversation(conversation.id);
     showProfileModal.value = false;
     selectedUser.value = null;
-    // 跳转到聊天面板
-    router.push('/chat');
+    // 跳转到聊天面板并选中对应会话
+    router.push({ path: '/chat', query: { conversationId: conversation.id } });
   }
 };
 
@@ -612,6 +748,7 @@ watch(
       await loadFriends();
       await loadPendingRequests();
       await loadAllFriendRequests();
+      await loadConversations();
     }
   }
 );
@@ -627,6 +764,7 @@ onMounted(async () => {
     await loadFriends();
     await loadPendingRequests();
     await loadAllFriendRequests();
+    await loadConversations();
 
     // 注册WebSocket事件回调
     onFriendRequest(handleFriendRequestUpdate);

@@ -56,6 +56,21 @@
             <div v-else class="text-sm" style="color: var(--text-secondary-color)">私聊</div>
           </div>
         </div>
+
+        <!-- 群聊额外信息（仅群聊显示） -->
+        <div
+          v-if="conversation?.conversation_type === 'group'"
+          class="mt-4 p-4 rounded-lg"
+          style="background: var(--surface-color)"
+        >
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-[12px] h-[12px] rounded-full bg-accent-color" />
+            <div class="text-sm font-medium" style="color: var(--text-secondary-color)">群主</div>
+            <div class="text-sm" style="color: var(--text-color)">
+              {{ groupOwner?.user?.username || '未知' }}
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 成员列表（仅群聊显示） -->
@@ -116,10 +131,20 @@
         </CustomScrollbar>
       </div>
 
-      <!-- 导出消息 -->
+      <!-- 发送消息按钮 -->
       <div>
         <button
           class="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+          @click="handleSendMessage"
+        >
+          发送消息
+        </button>
+      </div>
+
+      <!-- 导出消息 -->
+      <div>
+        <button
+          class="w-full px-4 py-2 bg-bg-secondary text-text-primary rounded-md hover:bg-hover-bg transition-colors"
           @click="handleExportMessages"
         >
           导出历史消息
@@ -170,6 +195,7 @@ const emit = defineEmits<{
   'update:show': [value: boolean];
   'show-user-profile': [user: any];
   'members-changed': [];
+  'start-chat': [conversation: Conversation];
 }>();
 
 const showAddMemberModal = ref(false);
@@ -204,6 +230,14 @@ const canManageMembers = computed(() => {
 
   const currentMember = members.value.find((m) => m.user_id === props.currentUserId);
   return currentMember?.role === 'owner' || currentMember?.role === 'admin';
+});
+
+// 获取群主（仅群聊）
+const groupOwner = computed(() => {
+  if (!props.conversation || props.conversation.conversation_type !== 'group') {
+    return null;
+  }
+  return members.value.find((m) => m.role === 'owner') || null;
 });
 
 // 检查是否可以移除某个成员（仅群聊）
@@ -285,6 +319,14 @@ const handleRemoveMember = async (member: Enrollment) => {
 const handleMemberAdded = async () => {
   await loadMembers();
   emit('members-changed');
+};
+
+// 发送消息
+const handleSendMessage = () => {
+  if (props.conversation) {
+    emit('start-chat', props.conversation);
+    emit('update:show', false);
+  }
 };
 
 // 导出消息

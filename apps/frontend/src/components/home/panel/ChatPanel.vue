@@ -101,6 +101,7 @@
       :current-user-id="auth.currentUser?.id"
       @show-user-profile="handleShowUserProfile"
       @members-changed="handleGroupUpdated"
+      @start-chat="handleStartChatFromDetail"
     />
 
     <!-- 通知列表 -->
@@ -118,6 +119,8 @@ import { useMessageCache } from '../../../services/messageCache';
 import { useMessageStore } from '../../../stores/message';
 import { useNotification } from '../../../composables/useNotification';
 import { useWebSocketEventManager } from '../../../services/websocketEventManager';
+import { useConversationStateCache } from '../../../services/conversationStateCache';
+import { useRoute, useRouter } from 'vue-router';
 import ConversationList from '../ConversationList.vue';
 import ChatWindow from '../ChatWindow.vue';
 import UserProfileModal from '../UserProfileModal.vue';
@@ -131,10 +134,11 @@ import { BsPlusLg, BsXCircle } from 'vue-icons-plus/bs';
 
 // Auth
 const auth = useAuthController();
+const route = useRoute();
+const router = useRouter();
 
 // Composables
-const { conversations, loadConversations, createConversation, deleteConversation } =
-  useConversations();
+const { conversations, loadConversations, createConversation } = useConversations();
 const { friends, loadFriends, sendFriendRequest } = useFriends();
 const { loadMessages, checkAndLoadIncremental, sendMessage, exportMessages, clearMessages } =
   useChat();
@@ -148,6 +152,14 @@ const {
   onConversationUpdate,
   offConversationUpdate,
 } = useWebSocketEventManager();
+const {
+  isHidden,
+  hideConversation,
+  showConversation,
+  getUnreadCount,
+  incrementUnreadCount,
+  clearUnreadCount,
+} = useConversationStateCache();
 
 // ChatWindow组件引用
 const chatWindowRef = ref<InstanceType<typeof ChatWindow> | null>(null);
@@ -163,35 +175,49 @@ const messages = computed(() => {
 // 搜索状态
 const searchQuery = ref('');
 
-// 过滤后的会话列表
+// 过滤后的会话列表（排除隐藏的会话，并添加未读计数）
 const filteredConversations = computed(() => {
+  // 使用conversations.value的所有会话，包括隐藏的
+  const allConversations = conversations.value;
+
+  // 过滤掉隐藏的会话
+  const visibleConversations = allConversations.filter((conv) => !isHidden(conv.id));
+
   if (!searchQuery.value.trim()) {
-    return conversations.value;
+    return visibleConversations.map((conv) => ({
+      ...conv,
+      unread_count: getUnreadCount(conv.id),
+    }));
   }
 
   const query = searchQuery.value.toLowerCase();
-  return conversations.value.filter((conv) => {
-    // 搜索会话名称
-    if (conv.name && conv.name.toLowerCase().includes(query)) {
-      return true;
-    }
+  return visibleConversations
+    .filter((conv) => {
+      // 搜索会话名称
+      if (conv.name && conv.name.toLowerCase().includes(query)) {
+        return true;
+      }
 
-    // 搜索好友名称
-    if (conv.members) {
-      for (const member of conv.members) {
-        if (member.user && member.user.username.toLowerCase().includes(query)) {
-          return true;
+      // 搜索好友名称
+      if (conv.members) {
+        for (const member of conv.members) {
+          if (member.user && member.user.username.toLowerCase().includes(query)) {
+            return true;
+          }
         }
       }
-    }
 
-    // 搜索最后一条消息内容
-    if (conv.last_message && conv.last_message.content.toLowerCase().includes(query)) {
-      return true;
-    }
+      // 搜索最后一条消息内容
+      if (conv.last_message && conv.last_message.content.toLowerCase().includes(query)) {
+        return true;
+      }
 
-    return false;
-  });
+      return false;
+    })
+    .map((conv) => ({
+      ...conv,
+      unread_count: getUnreadCount(conv.id),
+    }));
 });
 
 // 搜索处理
@@ -230,6 +256,8 @@ const handleSelectConversation = async (conversation: Conversation) => {
   selectedUser.value = null;
   // 设置当前会话ID到WebSocket事件管理器
   setCurrentConversation(conversation.id);
+  // 清除未读计数
+  clearUnreadCount(conversation.id);
   // 使用增量加载检查并获取新消息
   await checkAndLoadIncremental(conversation.id);
 };
@@ -242,6 +270,20 @@ const handleMessageUpdate = async (conversationId: string, message: Message) => 
   console.log('[ChatPanel] 消息内容:', message.content);
   console.log('[ChatPanel] 消息ID:', message.id);
   console.log('[ChatPanel] 发送者ID:', message.sender_id);
+
+  // 如果会话被隐藏，显示它
+  if (isHidden(conversationId)) {
+    console.log('[ChatPanel] 会话被隐藏，现在显示它');
+    showConversation(conversationId);
+    // 强制触发响应式更新
+    conversations.value = [...conversations.value];
+  }
+
+  // 如果不是当前会话的消息，增加未读计数
+  if (conversationId !== selectedConversation.value?.id) {
+    console.log('[ChatPanel] 不是当前会话，增加未读计数');
+    incrementUnreadCount(conversationId);
+  }
 
   // 如果是当前会话的消息，自动滚动到底部
   if (conversationId === selectedConversation.value?.id) {
@@ -273,15 +315,16 @@ const handleConversationUpdate = async (conversation: Conversation) => {
 };
 
 const handleDeleteConversation = async (conversationId: string) => {
-  const success = await deleteConversation(conversationId);
-  if (success) {
-    // 如果删除的是当前选中的会话，清空选中状态
-    if (selectedConversation.value?.id === conversationId) {
-      selectedConversation.value = null;
-      clearMessages();
-    }
-    // 重新加载会话列表
-    await loadConversations();
+  // 前端隐藏会话，不删除后端数据
+  hideConversation(conversationId);
+
+  // 强制触发响应式更新
+  conversations.value = [...conversations.value];
+
+  // 如果删除的是当前选中的会话，清空选中状态
+  if (selectedConversation.value?.id === conversationId) {
+    selectedConversation.value = null;
+    clearMessages();
   }
 };
 
@@ -312,6 +355,14 @@ const handleSendMessage = async (content: string) => {
   if (!selectedConversation.value?.id) {
     console.log('[ChatPanel] No selected conversation, returning');
     return;
+  }
+
+  // 如果会话被隐藏，显示它
+  if (isHidden(selectedConversation.value.id)) {
+    console.log('[ChatPanel] 会话被隐藏，现在显示它');
+    showConversation(selectedConversation.value.id);
+    // 强制触发响应式更新
+    conversations.value = [...conversations.value];
   }
 
   console.log(
@@ -424,6 +475,16 @@ const handleGroupUpdated = async () => {
   }
 };
 
+const handleStartChatFromDetail = (conversation: Conversation) => {
+  console.log('[ChatPanel] handleStartChatFromDetail', { conversation });
+  // 选中会话
+  selectedConversation.value = conversation;
+  // 清除未读计数
+  clearUnreadCount(conversation.id);
+  // 使用增量加载检查并获取新消息
+  checkAndLoadIncremental(conversation.id);
+};
+
 // Watchers
 watch(
   () => auth.currentUser,
@@ -431,6 +492,33 @@ watch(
     if (auth.currentUser) {
       await loadConversations();
       await loadFriends();
+    }
+  }
+);
+
+// 监听路由参数，如果有conversationId参数，选中对应的会话
+watch(
+  () => route.query.conversationId,
+  async (conversationId) => {
+    if (conversationId && typeof conversationId === 'string') {
+      console.log('[ChatPanel] 路由参数中的会话ID:', conversationId);
+      // 等待会话列表加载完成
+      await loadConversations();
+      // 查找对应的会话
+      const conversation = conversations.value.find((c) => c.id === conversationId);
+      if (conversation) {
+        console.log('[ChatPanel] 找到会话，选中它:', conversation);
+        // 显示会话（如果被隐藏）
+        showConversation(conversation.id);
+        // 强制触发响应式更新
+        conversations.value = [...conversations.value];
+        // 选中会话
+        selectedConversation.value = conversation;
+        // 清除路由参数
+        router.replace({ path: '/chat', query: {} });
+      } else {
+        console.log('[ChatPanel] 未找到会话:', conversationId);
+      }
     }
   }
 );
