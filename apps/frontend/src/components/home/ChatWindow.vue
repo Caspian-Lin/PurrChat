@@ -84,6 +84,25 @@
                 }"
               >
                 {{ message.content }}
+                <!-- 消息发送状态指示器（仅显示自己的消息） -->
+                <div
+                  v-if="message.sender_id === currentUserId && message.sendStatus"
+                  :class="[
+                    'absolute top-2 right-2 w-2 h-2 rounded-full',
+                    {
+                      'bg-yellow-500': message.sendStatus === 'sending',
+                      'bg-green-500': message.sendStatus === 'sent',
+                      'bg-red-500': message.sendStatus === 'failed',
+                    },
+                  ]"
+                  :title="
+                    {
+                      sending: '发送中',
+                      sent: '已发送',
+                      failed: '发送失败',
+                    }[message.sendStatus]
+                  "
+                />
               </div>
               <div
                 class="text-base text-text-tertiary"

@@ -183,6 +183,25 @@ export const useMessageStore = defineStore('message', () => {
     }
   }
 
+  // 更新消息状态
+  function updateMessageStatus(
+    conversationId: string,
+    messageId: string,
+    status: 'sending' | 'sent' | 'failed'
+  ) {
+    console.log(
+      `[MessageStore] Updating message status for conversation ${conversationId}, message ${messageId} to ${status}`
+    );
+    const currentMessages = messages.value.get(conversationId);
+    if (currentMessages) {
+      const messageIndex = currentMessages.findIndex((m) => m.id === messageId);
+      if (messageIndex !== -1 && currentMessages[messageIndex]) {
+        currentMessages[messageIndex].sendStatus = status;
+        console.log(`[MessageStore] Message status updated to ${status}`);
+      }
+    }
+  }
+
   return {
     // 状态
     messages,
@@ -204,5 +223,6 @@ export const useMessageStore = defineStore('message', () => {
     updateLastMessage,
     loadFromCache,
     checkAndLoadIncremental,
+    updateMessageStatus,
   };
 });

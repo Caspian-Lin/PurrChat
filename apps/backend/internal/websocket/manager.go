@@ -275,7 +275,7 @@ func (h *Hub) sendPrivateMessage(privateMsg *PrivateMessage) {
 	logger.InfofWithCaller("Message sent to %d clients for user %s", sentCount, privateMsg.RecipientID)
 }
 
-// SendToConversation 发送消息给会话中的所有成员（不包括发送者），发送到所有在线设备
+// SendToConversation 发送消息给会话中的所有成员（包括发送者），发送到所有在线设备
 func (h *Hub) SendToConversation(conversationID uuid.UUID, senderID uuid.UUID, message models.Message, memberIDs []uuid.UUID) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -291,12 +291,8 @@ func (h *Hub) SendToConversation(conversationID uuid.UUID, senderID uuid.UUID, m
 		return
 	}
 
-	// 发送给会话中的所有成员（不包括发送者）
+	// 发送给会话中的所有成员（包括发送者）
 	for _, memberID := range memberIDs {
-		if memberID == senderID {
-			continue // 跳过发送者
-		}
-
 		clients, ok := h.userClients[memberID]
 		if !ok {
 			continue

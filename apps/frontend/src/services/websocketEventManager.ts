@@ -221,11 +221,35 @@ class WebSocketEventManager {
             created_at: '',
           }
         : undefined,
+      sendStatus: 'sent', // WebSocket收到的消息都是已发送状态
     };
 
     console.log('[WebSocketEventManager] 准备添加消息到messageStore:', message);
-    // 添加消息到store
-    messageStore.addMessage(data.conversation_id, message);
+
+    // 检查是否有对应的临时消息（发送中的消息）
+    // 通过比较消息内容和发送者ID来匹配
+    const currentMessages = messageStore.getMessages(data.conversation_id);
+    const tempMessageIndex = currentMessages.findIndex(
+      (m) =>
+        m.id.startsWith('temp-') &&
+        m.content === data.content &&
+        m.sendStatus === 'sending' &&
+        // 检查发送时间是否在合理范围内（比如5秒内）
+        Math.abs(new Date(m.created_at).getTime() - new Date(data.created_at).getTime()) < 5000
+    );
+
+    if (tempMessageIndex !== -1) {
+      console.log('[WebSocketEventManager] 找到对应的临时消息，将替换为完整消息');
+      // 替换临时消息为完整消息
+      const updatedMessages = [...currentMessages];
+      updatedMessages[tempMessageIndex] = message;
+      messageStore.setMessages(data.conversation_id, updatedMessages);
+    } else {
+      console.log('[WebSocketEventManager] 没有找到对应的临时消息，直接添加新消息');
+      // 添加消息到store
+      messageStore.addMessage(data.conversation_id, message);
+    }
+
     console.log('[WebSocketEventManager] 消息已添加到messageStore');
 
     // 如果是当前会话，触发消息更新回调

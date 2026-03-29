@@ -126,6 +126,28 @@ export const useChat = () => {
     }
 
     try {
+      // 创建临时消息ID（用于匹配WebSocket返回的消息）
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      // 先添加一条带"发送中"状态的消息到列表
+      const tempMessage: Message = {
+        id: tempId,
+        conversation_id: conversationId,
+        sender_id: '', // 临时值，稍后会更新
+        content: content,
+        msg_type: 'text',
+        created_at: new Date().toISOString(),
+        sendStatus: 'sending', // 设置为发送中状态
+      };
+
+      console.log('[useChat] Adding temporary message with sending status:', tempMessage);
+      messages.value.push(tempMessage);
+      scrollToBottom();
+
+      // 更新message store
+      messageStore.addMessage(conversationId, tempMessage);
+
+      // 发送API请求
       const requestData: SendMessageRequest = {
         conversation_id: conversationId,
         content,
@@ -136,13 +158,18 @@ export const useChat = () => {
 
       console.log('[useChat] sendMessage response:', response);
       if (response.success && response.data) {
-        console.log('[useChat] Response successful, adding message to messages.value');
-        messages.value.push(response.data);
-        scrollToBottom();
+        console.log('[useChat] Response successful, updating message status to sent');
+        // 更新临时消息的状态为"已发送"
+        const tempMessageIndex = messages.value.findIndex((m) => m.id === tempId);
+        if (tempMessageIndex !== -1 && messages.value[tempMessageIndex]) {
+          messages.value[tempMessageIndex].sendStatus = 'sent';
+          // 更新message store
+          messageStore.updateMessageStatus(conversationId, tempId, 'sent');
+        }
 
-        // 更新message store
-        console.log('[useChat] Adding message to messageStore');
-        messageStore.addMessage(conversationId, response.data);
+        // 注意：这里不直接替换临时消息，而是等待WebSocket事件来更新
+        // WebSocket事件会携带完整的消息信息，包括正确的sender_id和created_at
+        // 当收到WebSocket事件时，我们会用完整消息替换临时消息
 
         // 缓存发送的消息
         console.log('[useChat] Caching message');
@@ -155,10 +182,26 @@ export const useChat = () => {
         return true;
       }
       console.log('[useChat] sendMessage response not successful or no data');
+      // 更新临时消息的状态为"发送失败"
+      const tempMessageIndex = messages.value.findIndex((m) => m.id === tempId);
+      if (tempMessageIndex !== -1 && messages.value[tempMessageIndex]) {
+        messages.value[tempMessageIndex].sendStatus = 'failed';
+        messageStore.updateMessageStatus(conversationId, tempId, 'failed');
+      }
       return false;
     } catch (error) {
       console.error('[useChat] Failed to send message:', error);
       message.error('发送消息失败');
+      // 更新临时消息的状态为"发送失败"
+      const tempMessageIndex = messages.value.findIndex((m) => m.id.startsWith('temp-'));
+      if (tempMessageIndex !== -1 && messages.value[tempMessageIndex]) {
+        messages.value[tempMessageIndex].sendStatus = 'failed';
+        messageStore.updateMessageStatus(
+          conversationId,
+          messages.value[tempMessageIndex].id,
+          'failed'
+        );
+      }
       return false;
     }
   };

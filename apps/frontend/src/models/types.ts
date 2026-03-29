@@ -94,6 +94,7 @@ export interface Message {
   created_at: string;
   sender?: User;
   is_read?: boolean; // 消息是否已读
+  sendStatus?: 'sending' | 'sent' | 'failed'; // 消息发送状态：发送中、已发送、发送失败
 }
 
 // 群组类型
