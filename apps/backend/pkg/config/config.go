@@ -13,6 +13,7 @@ type Config struct {
 	JWT       JWTConfig
 	Log       LogConfig
 	WebSocket WebSocketConfig
+	MinIO     MinIOConfig
 }
 
 type LogConfig struct {
@@ -39,6 +40,15 @@ type WebSocketConfig struct {
 	MaxUserConnections int
 }
 
+type MinIOConfig struct {
+	Endpoint        string
+	AccessKeyID     string
+	SecretAccessKey string
+	Bucket          string
+	UseSSL          bool
+	PublicURL       string // 外部访问地址（客户端下载用）
+}
+
 func Load() *Config {
 	return &Config{
 		Port:    getEnv("PORT", "8080"),
@@ -62,6 +72,14 @@ func Load() *Config {
 		WebSocket: WebSocketConfig{
 			MaxConnections:     getEnvInt("MAX_CONNECTIONS", 20000),
 			MaxUserConnections: getEnvInt("MAX_USER_CONNECTIONS", 3),
+		},
+		MinIO: MinIOConfig{
+			Endpoint:        getEnv("MINIO_ENDPOINT", "localhost:9000"),
+			AccessKeyID:     getEnv("MINIO_ACCESS_KEY", "minioadmin"),
+			SecretAccessKey: getEnv("MINIO_SECRET_KEY", "minioadmin"),
+			Bucket:          getEnv("MINIO_BUCKET", "purrchat"),
+			UseSSL:          getEnv("MINIO_USE_SSL", "false") == "true",
+			PublicURL:       getEnv("MINIO_PUBLIC_URL", "http://localhost:9000"),
 		},
 	}
 }

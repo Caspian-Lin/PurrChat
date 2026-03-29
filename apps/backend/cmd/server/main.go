@@ -17,6 +17,7 @@ import (
 	"purr-chat-server/pkg/config"
 	"purr-chat-server/pkg/database"
 	"purr-chat-server/pkg/logger"
+	minioclient "purr-chat-server/pkg/minio"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -181,6 +182,12 @@ func main() {
 	}
 	defer database.Close()
 
+	// 初始化 MinIO 客户端
+	if err := minioclient.Init(cfg.MinIO); err != nil {
+		logger.Error("Failed to initialize MinIO:", err)
+		os.Exit(1)
+	}
+
 	// 注册自定义 UUID 验证器
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		registerUUIDValidator(v)
@@ -217,10 +224,13 @@ func main() {
 	friendshipRepo := repository.NewFriendshipRepository()
 	enrollmentRepo := repository.NewEnrollmentRepository()
 	conversationMessageRepo := repository.NewConversationMessageRepository()
+	fileRepo := repository.NewFileRepository()
 	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
 	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
+	fileService := services.NewFileService(fileRepo)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret)
 	chatHandler := handlers.NewChatHandler(authService, chatService)
+	fileHandler := handlers.NewFileHandler(fileService)
 
 	// 初始化WebSocket hub
 	websocket.InitHubWithConfig(cfg.WebSocket.MaxConnections, cfg.WebSocket.MaxUserConnections)
@@ -285,6 +295,15 @@ func main() {
 		friends.GET("/requests", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetAllFriendRequests)
 		friends.POST("/request", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SendFriendRequest)
 		friends.POST("/handle", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.HandleFriendRequest)
+	}
+
+	// 文件路由
+	files := r.Group("/api/files")
+	{
+		files.POST("/upload/request", handlers.AuthMiddleware(cfg.JWT.Secret), fileHandler.RequestUpload)
+		files.POST("/upload/confirm", handlers.AuthMiddleware(cfg.JWT.Secret), fileHandler.ConfirmUpload)
+		files.GET("/download/url", handlers.AuthMiddleware(cfg.JWT.Secret), fileHandler.GetDownloadURL)
+		files.DELETE("/:file_id", handlers.AuthMiddleware(cfg.JWT.Secret), fileHandler.DeleteFile)
 	}
 
 	// WebSocket路由（不使用AuthMiddleware，因为WebSocket通过查询参数传递token）
