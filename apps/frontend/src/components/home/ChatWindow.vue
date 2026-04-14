@@ -44,12 +44,12 @@
         <div class="p-4 space-y-2">
           <template v-for="(message, index) in messages" :key="message.id">
             <!-- 时间分割线 -->
-            <div v-if="timeDividers.has(index)" class="flex items-center py-2">
-              <div class="flex-1 h-px" style="background: var(--border-color)"></div>
+            <div v-if="timeDividers.has(index)" class="flex justify-center py-2">
+              <!-- <div class="flex-1 h-px" style="background: var(--border-color)"></div> -->
               <span class="px-3 text-xs text-text-tertiary whitespace-nowrap">
                 {{ timeDividers.get(index) }}
               </span>
-              <div class="flex-1 h-px" style="background: var(--border-color)"></div>
+              <!-- <div class="flex-1 h-px" style="background: var(--border-color)"></div> -->
             </div>
 
             <!-- 消息行 -->
