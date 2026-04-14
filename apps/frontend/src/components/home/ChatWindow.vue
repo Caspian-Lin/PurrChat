@@ -41,7 +41,7 @@
         ref="messagesContainer"
         class="flex-1 bg-bg-quaternary border-b border-border-color min-h-0"
       >
-        <div class="p-4 space-y-2">
+        <div class="p-4 space-y-4">
           <template v-for="(message, index) in messages" :key="message.id">
             <!-- 时间分割线 -->
             <div v-if="timeDividers.has(index)" class="flex justify-center py-2">
@@ -57,7 +57,7 @@
               :class="['flex gap-3', { 'flex-row-reverse': message.sender_id === currentUserId }]"
             >
               <!-- 头像 -->
-              <div class="size-12 roundrect overflow-hidden flex-shrink-0">
+              <div class="size-10 roundrect overflow-hidden flex-shrink-0">
                 <img
                   v-if="message.sender?.avatar_url"
                   :src="message.sender.avatar_url"
@@ -78,7 +78,7 @@
                 <!-- 对方的消息显示昵称 -->
                 <div
                   v-if="message.sender_id !== currentUserId"
-                  class="text-lg font-semibold text-text-tertiary mb-0.5"
+                  class="text-md font-semibold text-text-tertiary mb-0.5"
                 >
                   {{ message.sender?.username }}
                 </div>
@@ -120,7 +120,10 @@
                     <div
                       v-if="activeTooltipId === message.id"
                       class="absolute -bottom-7 left-1/2 -translate-x-1/2 text-xs text-text-tertiary whitespace-nowrap px-2 py-0.5 rounded-md z-10 pointer-events-none"
-                      style="background: var(--surface-color); border: 1px solid var(--border-color)"
+                      style="
+                        background: var(--surface-color);
+                        border: 1px solid var(--border-color);
+                      "
                     >
                       {{ formatTimeWithSeconds(message.created_at) }}
                     </div>
@@ -131,7 +134,10 @@
           </template>
 
           <!-- 空状态 -->
-          <div v-if="messages.length === 0" class="flex flex-col items-center justify-center text-text-tertiary">
+          <div
+            v-if="messages.length === 0"
+            class="flex flex-col items-center justify-center text-text-tertiary"
+          >
             <div class="text-6xl mb-4">💬</div>
             <h3 class="text-2xl font-semibold mb-2 text-text-primary">欢迎来到 PurrChat</h3>
             <p>选择一个会话开始聊天</p>
@@ -184,7 +190,7 @@
             v-model="newMessage"
             placeholder="text here..."
             class="w-full h-full bg-transparent text-xl text-text-tertiary resize-none outline-none"
-            @keydown.enter.prevent="handleSend"
+            @keydown="handleKeyDown"
           />
         </div>
 
@@ -285,6 +291,13 @@ const handleSend = () => {
   console.log('[ChatWindow] Emitting send-message event with content:', newMessage.value);
   emit('send-message', newMessage.value);
   newMessage.value = '';
+};
+
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    handleSend();
+  }
 };
 
 const handleEmojiSelect = (emoji: string) => {
