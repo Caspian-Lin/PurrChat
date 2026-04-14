@@ -64,3 +64,5 @@ Cargo.lock
 .cache/
 .temp/
 tmp/
+
+CLAUDE.md

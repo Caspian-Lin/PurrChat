@@ -151,7 +151,8 @@ const router = useRouter();
 
 // Composables
 const { conversations, loadConversations, createConversation } = useConversations();
-const { friends, loadFriends, sendFriendRequest, handleFriendRequest, loadPendingRequests } = useFriends();
+const { friends, loadFriends, sendFriendRequest, handleFriendRequest, loadPendingRequests } =
+  useFriends();
 const { loadMessages, checkAndLoadIncremental, sendMessage, exportMessages, clearMessages } =
   useChat();
 const { addMessage: cacheMessage } = useMessageCache();

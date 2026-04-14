@@ -56,9 +56,14 @@ export const useChat = () => {
         const serverMessageIds = new Set(response.data.map((msg) => msg.id));
 
         // 校准本地缓存：移除服务器上不存在的消息（被撤回/删除的）
-        const removedCount = await messageCache.reconcileWithServer(conversationId, serverMessageIds);
+        const removedCount = await messageCache.reconcileWithServer(
+          conversationId,
+          serverMessageIds
+        );
         if (removedCount > 0) {
-          console.log(`[useChat] Reconciled ${removedCount} removed messages for conversation ${conversationId}`);
+          console.log(
+            `[useChat] Reconciled ${removedCount} removed messages for conversation ${conversationId}`
+          );
           // 同步从内存消息列表中移除
           messages.value = messages.value.filter((m) => serverMessageIds.has(m.id));
           messageStore.setMessages(conversationId, messages.value);
