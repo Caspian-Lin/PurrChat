@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"purr-chat-server/internal/models"
-	"purr-chat-server/pkg/database"
+	"purr-chat-storage/internal/models"
+	"purr-chat-storage/pkg/database"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -34,7 +34,7 @@ func NewFileRepository() FileRepository {
 func (r *fileRepository) Create(ctx context.Context, meta *models.FileMetadata) error {
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO file_metadata (id, object_key, file_name, file_size, content_type, category, usage, uploader_id, confirmed)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)`,
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)`,
 		meta.ID, meta.ObjectKey, meta.FileName, meta.FileSize, meta.ContentType, meta.Category, meta.Usage, meta.UploaderID)
 	return err
 }
@@ -43,8 +43,8 @@ func (r *fileRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Fil
 	var meta models.FileMetadata
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, object_key, file_name, file_size, content_type, category, usage, uploader_id,
-		        public_url, etag, confirmed, created_at, confirmed_at
-		 FROM file_metadata WHERE id = $1`, id).Scan(
+			        public_url, etag, confirmed, created_at, confirmed_at
+			 FROM file_metadata WHERE id = $1`, id).Scan(
 		&meta.ID, &meta.ObjectKey, &meta.FileName, &meta.FileSize, &meta.ContentType,
 		&meta.Category, &meta.Usage, &meta.UploaderID, &meta.PublicURL, &meta.ETag,
 		&meta.Confirmed, &meta.CreatedAt, &meta.ConfirmedAt)
@@ -61,8 +61,8 @@ func (r *fileRepository) GetByObjectKey(ctx context.Context, objectKey string) (
 	var meta models.FileMetadata
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, object_key, file_name, file_size, content_type, category, usage, uploader_id,
-		        public_url, etag, confirmed, created_at, confirmed_at
-		 FROM file_metadata WHERE object_key = $1`, objectKey).Scan(
+			        public_url, etag, confirmed, created_at, confirmed_at
+			 FROM file_metadata WHERE object_key = $1`, objectKey).Scan(
 		&meta.ID, &meta.ObjectKey, &meta.FileName, &meta.FileSize, &meta.ContentType,
 		&meta.Category, &meta.Usage, &meta.UploaderID, &meta.PublicURL, &meta.ETag,
 		&meta.Confirmed, &meta.CreatedAt, &meta.ConfirmedAt)
@@ -78,7 +78,7 @@ func (r *fileRepository) GetByObjectKey(ctx context.Context, objectKey string) (
 func (r *fileRepository) ConfirmUpload(ctx context.Context, id uuid.UUID, etag string, publicURL string) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE file_metadata SET confirmed = true, etag = $1, public_url = $2, confirmed_at = $3
-		 WHERE id = $4 AND confirmed = false`,
+			 WHERE id = $4 AND confirmed = false`,
 		etag, publicURL, time.Now().UTC(), id)
 	return err
 }

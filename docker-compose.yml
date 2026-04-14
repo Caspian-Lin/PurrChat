@@ -62,6 +62,63 @@ services:
       - purrchat-network
     restart: unless-stopped
 
+  # PurrChat 存储服务
+  storage:
+    build:
+      context: ./apps/storage
+      dockerfile: Dockerfile
+    container_name: purrchat-storage
+    environment:
+      # 服务器配置
+      STORAGE_PORT: 8081
+      GIN_MODE: ${GIN_MODE:-release}
+
+      # 数据库配置（与后端共享）
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-purrchat}
+
+      # JWT配置（与后端共享，用于验证 token）
+      JWT_SECRET: ${JWT_SECRET:-your_jwt_secret_key_here_change_in_production}
+
+      # 存储提供者: "minio" 或 "r2"
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-minio}
+
+      # MinIO 配置
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-purrchat}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
+
+      # R2 配置
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-purrchat}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      R2_REGION: ${R2_REGION:-auto}
+
+      # 日志配置
+      LOG_DIR: /app/logs
+    volumes:
+      - ./apps/storage/logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - purrchat-network
+    restart: unless-stopped
+
   # PurrChat 前端服务
   frontend:
     build:
@@ -94,6 +151,7 @@ services:
     depends_on:
       - frontend
       - backend
+      - storage
     networks:
       - purrchat-network
     restart: unless-stopped

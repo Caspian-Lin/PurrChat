@@ -1,0 +1,21 @@
+{
+  "name": "storage",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PurrChat Storage - File Storage Service",
+  "scripts": {
+    "dev": "go run cmd/server/main.go",
+    "build": "go build -o bin/storage cmd/server/main.go",
+    "test": "go test -v -race -coverprofile=coverage.out -covermode=atomic ./...",
+    "test:coverage": "go test -v -race -coverprofile=coverage.out -covermode=atomic ./... && go tool cover -html=coverage.out -o coverage.html",
+    "lint": "which golangci-lint && golangci-lint run --timeout=5m || go vet ./...",
+    "type-check": "go vet ./...",
+    "clean": "rm -rf bin coverage.out coverage.html logs/*.log",
+    "migrate:up": "go run cmd/migrate/main.go up",
+    "migrate:down": "go run cmd/migrate/main.go down"
+  },
+  "devDependencies": {},
+  "engines": {
+    "go": ">=1.24"
+  }
+}

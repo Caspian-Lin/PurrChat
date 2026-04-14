@@ -12,7 +12,7 @@ type Config struct {
 	DB        DBConfig
 	JWT       JWTConfig
 	Log       LogConfig
-	WebSocket WebSocketConfig
+	Storage   StorageConfig
 }
 
 type LogConfig struct {
@@ -30,18 +30,24 @@ type DBConfig struct {
 }
 
 type JWTConfig struct {
-	Secret     string
-	Expiration string
+	Secret string
 }
 
-type WebSocketConfig struct {
-	MaxConnections     int
-	MaxUserConnections int
+type StorageConfig struct {
+	Provider string // "minio" or "r2"
+	Endpoint string
+	AccessKeyID     string
+	SecretAccessKey string
+	Bucket          string
+	UseSSL          bool
+	PublicURL       string
+	Region          string // R2 专用
 }
 
 func Load() *Config {
-	return &Config{
-		Port:    getEnv("PORT", "8080"),
+	provider := getEnv("STORAGE_PROVIDER", "minio")
+	cfg := &Config{
+		Port:    getEnv("STORAGE_PORT", "8081"),
 		GinMode: getEnv("GIN_MODE", "debug"),
 		DB: DBConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
@@ -51,19 +57,44 @@ func Load() *Config {
 			Name:     getEnv("DB_NAME", "purrchat"),
 		},
 		JWT: JWTConfig{
-			Secret:     getEnv("JWT_SECRET", "default_secret_change_me"),
-			Expiration: getEnv("JWT_EXPIRATION", "24h"),
+			Secret: getEnv("JWT_SECRET", "default_secret_change_me"),
 		},
 		Log: LogConfig{
 			Directory: getEnv("LOG_DIR", "logs"),
 			MaxFiles:  getEnvInt("LOG_MAX_FILES", 10),
 			MaxLines:  getEnvInt("LOG_MAX_LINES", 100000),
 		},
-		WebSocket: WebSocketConfig{
-			MaxConnections:     getEnvInt("MAX_CONNECTIONS", 20000),
-			MaxUserConnections: getEnvInt("MAX_USER_CONNECTIONS", 3),
-		},
 	}
+
+	switch provider {
+	case "r2":
+		accountID := getEnv("R2_ACCOUNT_ID", "")
+		if accountID == "" {
+			log.Fatal("R2_ACCOUNT_ID is required when STORAGE_PROVIDER=r2")
+		}
+		cfg.Storage = StorageConfig{
+			Provider:        "r2",
+			Endpoint:        fmt.Sprintf("%s.r2.cloudflarestorage.com", accountID),
+			AccessKeyID:     getEnv("R2_ACCESS_KEY_ID", ""),
+			SecretAccessKey: getEnv("R2_SECRET_ACCESS_KEY", ""),
+			Bucket:          getEnv("R2_BUCKET", "purrchat"),
+			UseSSL:          true,
+			PublicURL:       getEnv("R2_PUBLIC_URL", ""),
+			Region:          getEnv("R2_REGION", "auto"),
+		}
+	default:
+		cfg.Storage = StorageConfig{
+			Provider:        "minio",
+			Endpoint:        getEnv("MINIO_ENDPOINT", "localhost:9000"),
+			AccessKeyID:     getEnv("MINIO_ACCESS_KEY", "minioadmin"),
+			SecretAccessKey: getEnv("MINIO_SECRET_KEY", "minioadmin"),
+			Bucket:          getEnv("MINIO_BUCKET", "purrchat"),
+			UseSSL:          getEnv("MINIO_USE_SSL", "false") == "true",
+			PublicURL:       getEnv("MINIO_PUBLIC_URL", "http://localhost:9000"),
+		}
+	}
+
+	return cfg
 }
 
 func getEnvInt(key string, defaultValue int) int {

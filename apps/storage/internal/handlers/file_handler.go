@@ -3,9 +3,9 @@ package handlers
 import (
 	"net/http"
 
-	"purr-chat-server/internal/models"
-	"purr-chat-server/internal/services"
-	"purr-chat-server/pkg/logger"
+	"purr-chat-storage/internal/models"
+	"purr-chat-storage/internal/services"
+	"purr-chat-storage/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 )
