@@ -77,7 +77,18 @@
     </div>
 
     <!-- 个人资料弹窗 -->
-    <UserProfileModal v-model:show="showProfileModal" :user="displayUser" />
+    <UserProfileModal
+      v-model:show="showProfileModal"
+      :user="displayUser"
+      :is-current-user="!selectedUser || selectedUser.id === auth.currentUser?.id"
+      :friendship="getUserFriendship"
+      :loading="isSendingRequest"
+      :current-user-id="auth.currentUser?.id"
+      @send-friend-request="handleSendFriendRequestFromModal"
+      @accept-request="handleAcceptRequestFromModal"
+      @reject-request="handleRejectRequestFromModal"
+      @start-chat="handleStartChatFromModal"
+    />
 
     <!-- 搜索用户操作弹窗 -->
     <UserActionsModal
@@ -121,6 +132,7 @@ import { useNotification } from '../../../composables/useNotification';
 import { useWebSocketEventManager } from '../../../services/websocketEventManager';
 import { useConversationStateCache } from '../../../services/conversationStateCache';
 import { useRoute, useRouter } from 'vue-router';
+import { api } from '../../../models/api';
 import ConversationList from '../ConversationList.vue';
 import ChatWindow from '../ChatWindow.vue';
 import UserProfileModal from '../UserProfileModal.vue';
@@ -129,7 +141,7 @@ import CreateGroupModal from '../CreateGroupModal.vue';
 import ConversationDetailModal from '../ConversationDetailModal.vue';
 import NotificationList from '../../common/NotificationList.vue';
 import ResizableContainer from '../../common/ResizableContainer.vue';
-import type { User, Conversation, Message } from '../../../models/types';
+import type { User, Conversation, Message, Friendship } from '../../../models/types';
 import { BsPlusLg, BsXCircle } from 'vue-icons-plus/bs';
 
 // Auth
@@ -139,7 +151,7 @@ const router = useRouter();
 
 // Composables
 const { conversations, loadConversations, createConversation } = useConversations();
-const { friends, loadFriends, sendFriendRequest } = useFriends();
+const { friends, loadFriends, sendFriendRequest, handleFriendRequest, loadPendingRequests } = useFriends();
 const { loadMessages, checkAndLoadIncremental, sendMessage, exportMessages, clearMessages } =
   useChat();
 const { addMessage: cacheMessage } = useMessageCache();
@@ -239,16 +251,99 @@ const showSearchModal = ref(false);
 const selectedSearchUser = ref<User | null>(null);
 const showCreateGroupModal = ref(false);
 const showConversationDetailModal = ref(false);
+const isSendingRequest = ref(false);
+const allFriendRequests = ref<Friendship[]>([]);
 
 // Computed
 const displayUser = computed(() => {
   return selectedUser.value || auth.currentUser;
 });
 
+// 获取用户的好友关系（用于 UserProfileModal）
+const getUserFriendship = computed(() => {
+  if (!selectedUser.value || !auth.currentUser?.id) return null;
+  if (selectedUser.value.id === auth.currentUser.id) return null;
+  // 检查是否已经是好友
+  const friendship = friends.value.find(
+    (f) => f.friend?.id === selectedUser.value?.id || f.user?.id === selectedUser.value?.id
+  );
+  if (friendship) return friendship;
+  // 检查是否有待处理的好友申请
+  const pendingRequest = allFriendRequests.value.find(
+    (r) => r.user?.id === selectedUser.value?.id || r.friend?.id === selectedUser.value?.id
+  );
+  if (pendingRequest) return pendingRequest;
+  return null;
+});
+
+// 加载所有好友申请记录
+const loadAllFriendRequests = async () => {
+  try {
+    const response = await api.getAllFriendRequests();
+    if (response.success && response.data) {
+      allFriendRequests.value = response.data;
+    }
+  } catch (error) {
+    console.error('[ChatPanel] Failed to load all friend requests:', error);
+  }
+};
+
 // Handlers
 const handleShowUserProfile = (user: User) => {
   selectedUser.value = user;
   showProfileModal.value = true;
+};
+
+// 处理从 UserProfileModal 发送好友请求
+const handleSendFriendRequestFromModal = async () => {
+  if (!selectedUser.value?.id) return;
+  isSendingRequest.value = true;
+  const success = await sendFriendRequest(selectedUser.value.id);
+  isSendingRequest.value = false;
+  if (success) {
+    showProfileModal.value = false;
+    selectedUser.value = null;
+    await loadAllFriendRequests();
+  }
+};
+
+// 处理从 UserProfileModal 接受好友请求
+const handleAcceptRequestFromModal = async () => {
+  if (!getUserFriendship.value?.conversation_id) return;
+  const success = await handleFriendRequest(getUserFriendship.value.conversation_id, 'accept');
+  if (success) {
+    showProfileModal.value = false;
+    selectedUser.value = null;
+    await loadFriends();
+    await loadPendingRequests();
+    await loadAllFriendRequests();
+  }
+};
+
+// 处理从 UserProfileModal 拒绝好友请求
+const handleRejectRequestFromModal = async () => {
+  if (!getUserFriendship.value?.conversation_id) return;
+  const success = await handleFriendRequest(getUserFriendship.value.conversation_id, 'reject');
+  if (success) {
+    showProfileModal.value = false;
+    selectedUser.value = null;
+    await loadPendingRequests();
+    await loadAllFriendRequests();
+  }
+};
+
+// 处理从 UserProfileModal 开始聊天
+const handleStartChatFromModal = async () => {
+  if (!selectedUser.value?.id) return;
+  const conversation = await createConversation(selectedUser.value.id);
+  if (conversation) {
+    if (isHidden(conversation.id)) {
+      showConversation(conversation.id);
+    }
+    showProfileModal.value = false;
+    selectedUser.value = null;
+    handleSelectConversation(conversation);
+  }
 };
 
 const handleSelectConversation = async (conversation: Conversation) => {
@@ -543,6 +638,7 @@ onMounted(async () => {
     console.log('[ChatPanel] currentUser 存在，开始加载数据');
     await loadConversations();
     await loadFriends();
+    await loadAllFriendRequests();
 
     // 注册WebSocket事件回调
     onMessageUpdate(handleMessageUpdate);

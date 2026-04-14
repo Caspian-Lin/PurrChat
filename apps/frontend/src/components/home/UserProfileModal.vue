@@ -135,6 +135,7 @@ interface Props {
   isCurrentUser?: boolean;
   friendship?: Friendship | null;
   loading?: boolean;
+  currentUserId?: string;
 }
 
 const props = defineProps<Props>();
@@ -155,17 +156,16 @@ const friendshipStatus = computed(() => {
   if (!props.friendship) return 'stranger';
 
   const status = props.friendship.status;
-  const currentUserId = props.user.id;
 
-  // 如果当前用户是发送方
-  if (props.friendship.user_id === currentUserId) {
+  // 如果当前用户是发送方（当前登录用户是 user_id）
+  if (props.friendship.user_id === props.currentUserId) {
     if (status === 'pending') return 'sent';
     if (status === 'rejected') return 'rejected';
     if (status === 'accepted') return 'accepted';
   }
 
-  // 如果当前用户是接收方
-  if (props.friendship.friend_id === currentUserId) {
+  // 如果当前用户是接收方（当前登录用户是 friend_id）
+  if (props.friendship.friend_id === props.currentUserId) {
     if (status === 'pending') return 'pending';
     if (status === 'accepted') return 'accepted';
   }

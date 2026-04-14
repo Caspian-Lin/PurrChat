@@ -360,6 +360,7 @@
       :is-current-user="!selectedUser || selectedUser.id === auth.currentUser?.id"
       :friendship="getUserFriendship"
       :loading="isSendingRequest"
+      :current-user-id="auth.currentUser?.id"
       @send-friend-request="handleSendFriendRequest"
       @accept-request="handleAcceptRequestFromModal"
       @reject-request="handleRejectRequestFromModal"
