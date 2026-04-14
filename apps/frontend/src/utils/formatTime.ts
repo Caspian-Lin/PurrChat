@@ -158,3 +158,43 @@ export const dateToTimestamp = (dateString: string): number => {
   }
   return date.getTime();
 };
+
+/**
+ * 格式化消息分割线时间（用于消息之间的时间提示）
+ * @param dateString - 日期字符串
+ * @returns 格式化后的时间字符串（如：14:30、昨天 09:15、12-25 18:00）
+ */
+export const formatTimeDivider = (dateString: string): string => {
+  return formatConversationTime(dateString);
+};
+
+/**
+ * 计算哪些消息索引前需要显示时间分割线
+ * 规则：
+ * 1. 与上一条消息超过5分钟则显示时间
+ * 2. 距离上一次时间提示超过30条消息且超过15分钟则显示时间
+ * @param messages - 消息列表，每条消息需要有 created_at 字段
+ * @returns Map<messageIndex, formattedTime>
+ */
+export const computeTimeDividers = (
+  messages: Array<{ id: string; created_at: string }>
+): Map<number, string> => {
+  const dividers = new Map<number, string>();
+  if (messages.length === 0) return dividers;
+
+  let lastDividerIndex = -1;
+
+  for (let i = 1; i < messages.length; i++) {
+    const prevTime = new Date(messages[i - 1].created_at).getTime();
+    const currTime = new Date(messages[i].created_at).getTime();
+    const diffMinutes = (currTime - prevTime) / 60000;
+    const messagesSinceDivider = i - lastDividerIndex - 1;
+
+    if (diffMinutes > 5 || (messagesSinceDivider >= 30 && diffMinutes > 15)) {
+      dividers.set(i, formatTimeDivider(messages[i].created_at));
+      lastDividerIndex = i;
+    }
+  }
+
+  return dividers;
+};

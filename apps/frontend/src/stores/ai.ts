@@ -88,12 +88,16 @@ export const useAiStore = defineStore('ai', () => {
   // ===== 会话管理 =====
   const conversations = ref<AiConversation[]>([]);
   const activeConversationId = ref<string | null>(null);
+  // 流式更新版本号，每次流式更新时递增以触发 computed 重新计算
+  const streamingVersion = ref(0);
 
   const activeConversation = computed(() => {
     return conversations.value.find((c) => c.id === activeConversationId.value) || null;
   });
 
   const activeMessages = computed(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    streamingVersion.value;
     return activeConversation.value?.messages || [];
   });
 
@@ -151,7 +155,7 @@ export const useAiStore = defineStore('ai', () => {
       const msg = conv.messages.find((m) => m.id === messageId);
       if (msg) {
         msg.content = content;
-        // 不频繁保存，由外部控制
+        streamingVersion.value++;
       }
     }
   };

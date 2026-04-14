@@ -24,54 +24,74 @@
     <div class="flex flex-col flex-1 overflow-hidden">
       <!-- 消息列表 -->
       <CustomScrollbar ref="messagesContainer" class="flex-1 bg-bg-quaternary border-b border-border-color min-h-0">
-        <div class="p-4 space-y-4">
-          <div
-            v-for="message in messages"
-            :key="message.id"
-            :class="['flex gap-3', { 'flex-row-reverse': message.role === 'user' }]"
-          >
-            <!-- 头像 -->
-            <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
-              <div
-                v-if="message.role === 'assistant'"
-                class="w-full h-full flex items-center justify-center"
-                style="background: var(--theme-gradient)"
-              >
-                <BsRobot class="text-white" :size="20" />
-              </div>
-              <div
-                v-else
-                class="w-full h-full flex items-center justify-center font-bold text-white"
-                style="background: var(--theme-secondary, var(--theme-primary))"
-              >
-                U
-              </div>
+        <div class="p-4 space-y-2">
+          <template v-for="(message, index) in messages" :key="message.id">
+            <!-- 时间分割线 -->
+            <div v-if="timeDividers.has(index)" class="flex items-center py-2">
+              <div class="flex-1 h-px" style="background: var(--border-color)"></div>
+              <span class="px-3 text-xs text-text-tertiary whitespace-nowrap">
+                {{ timeDividers.get(index) }}
+              </span>
+              <div class="flex-1 h-px" style="background: var(--border-color)"></div>
             </div>
 
-            <!-- 消息内容 -->
-            <div class="flex-1 min-w-0 max-w-[80%]">
-              <div
-                :class="['px-4 py-2.5 rounded-2xl', message.role === 'user' ? 'rounded-tr-md' : 'rounded-tl-md']"
-                :style="{
-                  background: message.role === 'user' ? 'var(--theme-primary)' : 'var(--strong-background-color)',
-                  color: message.role === 'user' ? '#ffffff' : 'var(--text-color)',
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
-                  whiteSpace: 'pre-wrap',
-                }"
-              >
-                {{ message.content }}
-                <!-- 流式输出光标 -->
-                <span
-                  v-if="message.isStreaming"
-                  class="inline-block w-2 h-5 ml-0.5 align-middle bg-current opacity-70 streaming-cursor"
-                ></span>
+            <!-- 消息行 -->
+            <div
+              :class="['flex gap-3', { 'flex-row-reverse': message.role === 'user' }]"
+            >
+              <!-- 头像 -->
+              <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
+                <div
+                  v-if="message.role === 'assistant'"
+                  class="w-full h-full flex items-center justify-center"
+                  style="background: var(--theme-gradient)"
+                >
+                  <BsRobot class="text-white" :size="20" />
+                </div>
+                <div
+                  v-else
+                  class="w-full h-full flex items-center justify-center font-bold text-white"
+                  style="background: var(--theme-secondary, var(--theme-primary))"
+                >
+                  U
+                </div>
               </div>
-              <div class="text-xs text-text-tertiary mt-1" :title="message.createdAt">
-                {{ formatTime(message.createdAt) }}
+
+              <!-- 消息内容 -->
+              <div class="w-fit max-w-[75%]">
+                <div
+                  class="relative px-4 py-2.5 rounded-2xl cursor-default"
+                  :style="{
+                    background: message.role === 'user' ? 'var(--theme-primary)' : 'var(--strong-background-color)',
+                    color: message.role === 'user' ? '#ffffff' : 'var(--text-color)',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
+                    whiteSpace: 'pre-wrap',
+                  }"
+                  @mouseenter="onBubbleMouseEnter(message.id)"
+                  @mouseleave="onBubbleMouseLeave"
+                  @dblclick="onBubbleDoubleClick(message.id)"
+                >
+                  {{ message.content }}
+                  <!-- 流式输出光标 -->
+                  <span
+                    v-if="message.isStreaming"
+                    class="inline-block w-2 h-5 ml-0.5 align-middle bg-current opacity-70 streaming-cursor"
+                  ></span>
+                  <!-- 精确时间提示 -->
+                  <Transition name="tooltip">
+                    <div
+                      v-if="activeTooltipId === message.id"
+                      class="absolute -bottom-7 left-1/2 -translate-x-1/2 text-xs text-text-tertiary whitespace-nowrap px-2 py-0.5 rounded-md z-10 pointer-events-none"
+                      style="background: var(--surface-color); border: 1px solid var(--border-color)"
+                    >
+                      {{ formatTimeWithSeconds(message.createdAt) }}
+                    </div>
+                  </Transition>
+                </div>
               </div>
             </div>
-          </div>
+          </template>
 
           <!-- 空状态 -->
           <div v-if="messages.length === 0" class="flex flex-col items-center justify-center py-16 text-text-tertiary">
@@ -140,11 +160,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { BsRobot, BsStars, BsStopFill, BsExclamationTriangle } from 'vue-icons-plus/bs';
 import ResizableSplitter from '../common/Splitter.vue';
 import CustomScrollbar from '../common/CustomScrollbar.vue';
-import { formatTime } from '../../utils/formatTime';
+import { formatTimeWithSeconds, computeTimeDividers } from '../../utils/formatTime';
 import type { AiConfig, AiConversation, AiMessage } from '../../models/types';
 
 interface Props {
@@ -167,6 +187,35 @@ const newMessage = ref('');
 const inputAreaHeight = ref(200);
 const messagesContainer = ref<InstanceType<typeof CustomScrollbar> | null>(null);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
+
+// ===== 时间分割线 =====
+const timeDividers = computed(() => computeTimeDividers(props.messages));
+
+// ===== 精确时间提示 =====
+const activeTooltipId = ref<string | null>(null);
+let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+
+const onBubbleMouseEnter = (messageId: string) => {
+  hoverTimer = setTimeout(() => {
+    activeTooltipId.value = messageId;
+  }, 2000);
+};
+
+const onBubbleMouseLeave = () => {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
+  activeTooltipId.value = null;
+};
+
+const onBubbleDoubleClick = (messageId: string) => {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
+  activeTooltipId.value = activeTooltipId.value === messageId ? null : messageId;
+};
 
 const scrollToBottom = async () => {
   await nextTick();
@@ -230,6 +279,10 @@ onMounted(() => {
   scrollToBottom();
 });
 
+onUnmounted(() => {
+  if (hoverTimer) clearTimeout(hoverTimer);
+});
+
 defineExpose({ scrollToBottom });
 </script>
 
@@ -250,5 +303,14 @@ defineExpose({ scrollToBottom });
 
 textarea::-webkit-scrollbar {
   display: none;
+}
+
+.tooltip-enter-active,
+.tooltip-leave-active {
+  transition: opacity 0.15s ease;
+}
+.tooltip-enter-from,
+.tooltip-leave-to {
+  opacity: 0;
 }
 </style>

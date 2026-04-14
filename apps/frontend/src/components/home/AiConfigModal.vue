@@ -168,6 +168,27 @@ const form = ref({
   maxTokens: undefined as number | undefined,
 });
 
+const resetForm = () => {
+  form.value = {
+    name: '',
+    apiUrl: '',
+    apiKey: '',
+    model: '',
+    temperature: 0.7,
+    maxTokens: undefined,
+  };
+  showApiKey.value = false;
+};
+
+const isValid = computed(() => {
+  return (
+    form.value.name.trim().length > 0 &&
+    form.value.apiUrl.trim().length > 0 &&
+    form.value.apiKey.trim().length > 0 &&
+    form.value.model.trim().length > 0
+  );
+});
+
 // 编辑模式时填充表单
 watch(
   () => props.editingConfig,
@@ -197,27 +218,6 @@ watch(
     }
   }
 );
-
-const isValid = computed(() => {
-  return (
-    form.value.name.trim().length > 0 &&
-    form.value.apiUrl.trim().length > 0 &&
-    form.value.apiKey.trim().length > 0 &&
-    form.value.model.trim().length > 0
-  );
-});
-
-const resetForm = () => {
-  form.value = {
-    name: '',
-    apiUrl: '',
-    apiKey: '',
-    model: '',
-    temperature: 0.7,
-    maxTokens: undefined,
-  };
-  showApiKey.value = false;
-};
 
 const handleSave = () => {
   if (!isValid.value) return;

@@ -42,75 +42,99 @@
         class="flex-1 bg-bg-quaternary border-b border-border-color min-h-0"
       >
         <div class="p-4 space-y-2">
-          <div
-            v-for="message in messages"
-            :key="message.id"
-            :class="[
-              'flex gap-2 max-w-[75%]',
-              { 'flex-row-reverse ml-auto': message.sender_id === currentUserId },
-            ]"
-          >
-            <div class="size-12 roundrect overflow-hidden flex-shrink-0">
-              <img
-                v-if="message.sender?.avatar_url"
-                :src="message.sender.avatar_url"
-                alt="avatar"
-                class="w-full h-full object-cover"
-              />
-              <div
-                v-else
-                class="w-full h-full flex items-center justify-center font-bold text-white text-2xl"
-                style="background: var(--theme-gradient)"
-              >
-                {{ message.sender?.username?.charAt(0) || '?' }}
-              </div>
+          <template v-for="(message, index) in messages" :key="message.id">
+            <!-- 时间分割线 -->
+            <div v-if="timeDividers.has(index)" class="flex items-center py-2">
+              <div class="flex-1 h-px" style="background: var(--border-color)"></div>
+              <span class="px-3 text-xs text-text-tertiary whitespace-nowrap">
+                {{ timeDividers.get(index) }}
+              </span>
+              <div class="flex-1 h-px" style="background: var(--border-color)"></div>
             </div>
-            <div class="gap-1">
-              <!-- 对方的消息显示昵称，自己的消息不显示昵称 -->
-              <div
-                v-if="message.sender_id !== currentUserId"
-                class="text-lg font-semibold text-text-tertiary"
-              >
-                {{ message.sender?.username }}
-              </div>
-              <div
-                :class="['px-4 py-2 relative rounded-2xl']"
-                :style="{
-                  background: 'var(--strong-background-color)',
-                  color: 'var(--text-color)',
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
-                  whiteSpace: 'pre-wrap',
-                }"
-              >
-                {{ message.content }}
-                <!-- 消息发送状态指示器（仅显示自己的消息） -->
-                <div
-                  v-if="message.sender_id === currentUserId && message.sendStatus"
-                  :class="[
-                    'absolute top-2 right-2 w-2 h-2 rounded-full',
-                    {
-                      'bg-yellow-500': message.sendStatus === 'sending',
-                      'bg-green-500': message.sendStatus === 'sent',
-                      'bg-red-500': message.sendStatus === 'failed',
-                    },
-                  ]"
-                  :title="
-                    {
-                      sending: '发送中',
-                      sent: '已发送',
-                      failed: '发送失败',
-                    }[message.sendStatus]
-                  "
+
+            <!-- 消息行 -->
+            <div
+              :class="['flex gap-3', { 'flex-row-reverse': message.sender_id === currentUserId }]"
+            >
+              <!-- 头像 -->
+              <div class="size-12 roundrect overflow-hidden flex-shrink-0">
+                <img
+                  v-if="message.sender?.avatar_url"
+                  :src="message.sender.avatar_url"
+                  alt="avatar"
+                  class="w-full h-full object-cover"
                 />
+                <div
+                  v-else
+                  class="w-full h-full flex items-center justify-center font-bold text-white text-2xl"
+                  style="background: var(--theme-gradient)"
+                >
+                  {{ message.sender?.username?.charAt(0) || '?' }}
+                </div>
               </div>
-              <div
-                class="text-base text-text-tertiary"
-                :title="formatTimeWithSeconds(message.created_at)"
-              >
-                {{ formatTime(message.created_at) }}
+
+              <!-- 消息内容 -->
+              <div class="w-fit max-w-[75%]">
+                <!-- 对方的消息显示昵称 -->
+                <div
+                  v-if="message.sender_id !== currentUserId"
+                  class="text-lg font-semibold text-text-tertiary mb-0.5"
+                >
+                  {{ message.sender?.username }}
+                </div>
+                <div
+                  class="relative px-4 py-2 rounded-2xl cursor-default"
+                  :style="{
+                    background: 'var(--strong-background-color)',
+                    color: 'var(--text-color)',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
+                    whiteSpace: 'pre-wrap',
+                  }"
+                  @mouseenter="onBubbleMouseEnter(message.id)"
+                  @mouseleave="onBubbleMouseLeave"
+                  @dblclick="onBubbleDoubleClick(message.id)"
+                >
+                  {{ message.content }}
+                  <!-- 消息发送状态指示器（仅显示自己的消息） -->
+                  <div
+                    v-if="message.sender_id === currentUserId && message.sendStatus"
+                    :class="[
+                      'absolute top-2 right-2 w-2 h-2 rounded-full',
+                      {
+                        'bg-yellow-500': message.sendStatus === 'sending',
+                        'bg-green-500': message.sendStatus === 'sent',
+                        'bg-red-500': message.sendStatus === 'failed',
+                      },
+                    ]"
+                    :title="
+                      {
+                        sending: '发送中',
+                        sent: '已发送',
+                        failed: '发送失败',
+                      }[message.sendStatus]
+                    "
+                  />
+                  <!-- 精确时间提示 -->
+                  <Transition name="tooltip">
+                    <div
+                      v-if="activeTooltipId === message.id"
+                      class="absolute -bottom-7 left-1/2 -translate-x-1/2 text-xs text-text-tertiary whitespace-nowrap px-2 py-0.5 rounded-md z-10 pointer-events-none"
+                      style="background: var(--surface-color); border: 1px solid var(--border-color)"
+                    >
+                      {{ formatTimeWithSeconds(message.created_at) }}
+                    </div>
+                  </Transition>
+                </div>
               </div>
             </div>
+          </template>
+
+          <!-- 空状态 -->
+          <div v-if="messages.length === 0" class="flex flex-col items-center justify-center text-text-tertiary">
+            <div class="text-6xl mb-4">💬</div>
+            <h3 class="text-2xl font-semibold mb-2 text-text-primary">欢迎来到 PurrChat</h3>
+            <p>选择一个会话开始聊天</p>
           </div>
         </div>
       </CustomScrollbar>
@@ -180,9 +204,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { getUserUsername, getOtherUser } from '../../utils/userHelpers';
-import { formatTime, formatTimeWithSeconds } from '../../utils/formatTime';
+import { formatTimeWithSeconds, computeTimeDividers } from '../../utils/formatTime';
 import { BsPaperclip, BsCamera, BsCameraVideo, BsInfoCircle } from 'vue-icons-plus/bs';
 import ResizableSplitter from '../common/Splitter.vue';
 import CustomScrollbar from '../common/CustomScrollbar.vue';
@@ -210,6 +234,35 @@ const newMessage = ref('');
 const inputAreaHeight = ref(300);
 const messagesContainer = ref<InstanceType<typeof CustomScrollbar> | null>(null);
 
+// ===== 时间分割线 =====
+const timeDividers = computed(() => computeTimeDividers(props.messages));
+
+// ===== 精确时间提示 =====
+const activeTooltipId = ref<string | null>(null);
+let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+
+const onBubbleMouseEnter = (messageId: string) => {
+  hoverTimer = setTimeout(() => {
+    activeTooltipId.value = messageId;
+  }, 2000);
+};
+
+const onBubbleMouseLeave = () => {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
+  activeTooltipId.value = null;
+};
+
+const onBubbleDoubleClick = (messageId: string) => {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
+  activeTooltipId.value = activeTooltipId.value === messageId ? null : messageId;
+};
+
 // 滚动到底部
 const scrollToBottom = async () => {
   await nextTick();
@@ -236,20 +289,15 @@ const handleSend = () => {
 
 const handleEmojiSelect = (emoji: string) => {
   console.log('[ChatWindow] Emoji selected:', emoji);
-  // Emoji 已经通过 v-model 自动添加到 newMessage
-  // 这里可以添加额外的逻辑，比如聚焦到输入框
 };
 
 const handleShowDetail = () => {
   if (!props.conversation) return;
-
-  // 总是触发 show-detail 事件，显示会话详情
   emit('show-detail');
 };
 
 const handleSplitterResize = async (height: number) => {
   inputAreaHeight.value = height;
-  // 等待 DOM 更新后更新滚动条
   await nextTick();
   if (messagesContainer.value) {
     messagesContainer.value.updateScrollbar();
@@ -266,7 +314,6 @@ watch(
 );
 
 onMounted(() => {
-  // 从localStorage恢复输入区高度
   const savedHeight = localStorage.getItem('chat-input-height');
   if (savedHeight) {
     const height = parseInt(savedHeight, 10);
@@ -274,8 +321,11 @@ onMounted(() => {
       inputAreaHeight.value = height;
     }
   }
-  // 组件挂载后滚动到底部
   scrollToBottom();
+});
+
+onUnmounted(() => {
+  if (hoverTimer) clearTimeout(hoverTimer);
 });
 
 // 暴露方法给父组件
@@ -287,5 +337,14 @@ defineExpose({
 <style scoped>
 textarea::-webkit-scrollbar {
   display: none;
+}
+
+.tooltip-enter-active,
+.tooltip-leave-active {
+  transition: opacity 0.15s ease;
+}
+.tooltip-enter-from,
+.tooltip-leave-to {
+  opacity: 0;
 }
 </style>
