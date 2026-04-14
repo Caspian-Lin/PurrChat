@@ -2,6 +2,8 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { User } from '../models/types';
 import { api } from '../models/api';
+import { messageCacheService } from '../services/messageCache';
+import { conversationStateCacheService } from '../services/conversationStateCache';
 
 // 错误信息映射：将后端返回的英文错误翻译成中文
 function getErrorMessage(backendError: string): string {
@@ -65,6 +67,15 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = authUser;
     localStorage.setItem('token', authToken);
     localStorage.setItem('user', JSON.stringify(authUser));
+    // 切换缓存服务到当前用户（不删除其他用户数据）
+    switchStorageUser(authUser.id);
+  }
+
+  // 切换缓存服务到指定用户
+  function switchStorageUser(userId: string) {
+    console.log('[auth store] Switching storage to user:', userId);
+    messageCacheService.init(userId);
+    conversationStateCacheService.init(userId);
   }
 
   // 清除认证信息

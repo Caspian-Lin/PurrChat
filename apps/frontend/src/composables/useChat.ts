@@ -52,6 +52,18 @@ export const useChat = () => {
       );
       const response = await api.getMessagesIncremental(conversationId, sinceTimestamp);
       if (response.success && response.data && response.data.length > 0) {
+        // 构建服务器消息 ID 集合，用于校准本地缓存
+        const serverMessageIds = new Set(response.data.map((msg) => msg.id));
+
+        // 校准本地缓存：移除服务器上不存在的消息（被撤回/删除的）
+        const removedCount = await messageCache.reconcileWithServer(conversationId, serverMessageIds);
+        if (removedCount > 0) {
+          console.log(`[useChat] Reconciled ${removedCount} removed messages for conversation ${conversationId}`);
+          // 同步从内存消息列表中移除
+          messages.value = messages.value.filter((m) => serverMessageIds.has(m.id));
+          messageStore.setMessages(conversationId, messages.value);
+        }
+
         // 增量消息是按created_at ASC排序的（从旧到新）
         // 直接添加到消息列表
         const newMessages: Message[] = [];

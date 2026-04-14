@@ -2,40 +2,45 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { messageCacheService, useMessageCache } from '../services/messageCache';
 import type { Message } from '../models/types';
 
-// Mock localStorage
+// Mock localStorage - store data as direct properties so Object.keys works
 const localStorageMock = (() => {
-  let store: Record<string, string> = {};
+  const store: Record<string, string> = {};
 
-  return {
-    getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => {
-      store[key] = value.toString();
+  const handler: ProxyHandler<typeof store> = {
+    get(target, prop, receiver) {
+      if (prop === 'getItem') return (key: string) => target[key] ?? null;
+      if (prop === 'setItem') return (key: string, value: string) => { target[key] = String(value); };
+      if (prop === 'removeItem') return (key: string) => { delete target[key]; };
+      if (prop === 'clear') return () => { for (const k of Object.keys(target)) delete target[k]; };
+      if (prop === 'length') return Object.keys(target).length;
+      if (prop === 'key') return (index: number) => Object.keys(target)[index] ?? null;
+      return Reflect.get(target, prop, receiver);
     },
-    removeItem: (key: string) => {
-      delete store[key];
+    ownKeys(target) {
+      return Reflect.ownKeys(target);
     },
-    clear: () => {
-      store = {};
+    has(target, prop) {
+      return Reflect.has(target, prop);
     },
-    get length() {
-      return Object.keys(store).length;
-    },
-    key: (index: number) => {
-      const keys = Object.keys(store);
-      return keys[index] || null;
+    getOwnPropertyDescriptor(target, prop) {
+      return Reflect.getOwnPropertyDescriptor(target, prop);
     },
   };
+
+  return new Proxy(store, handler);
 })();
 
 Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
 });
 
+const TEST_USER_ID = 'test-user-123';
+
 describe('MessageCache', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     // 清空缓存和localStorage
-    messageCacheService.clearAll();
     localStorageMock.clear();
+    await messageCacheService.init(TEST_USER_ID);
   });
 
   afterEach(() => {
@@ -190,7 +195,7 @@ describe('MessageCache', () => {
   });
 
   describe('缓存持久化', () => {
-    it('应该能够保存到localStorage', async () => {
+    it('应该能够保存到localStorage（带用户前缀）', async () => {
       const message: Message = {
         id: '1',
         conversation_id: 'conv1',
@@ -202,7 +207,7 @@ describe('MessageCache', () => {
 
       await messageCacheService.addMessage('conv1', message);
 
-      expect(localStorageMock.getItem('message_cache_conv1')).toBeTruthy();
+      expect(localStorageMock.getItem(`msg_${TEST_USER_ID}_conv1`)).toBeTruthy();
     });
 
     it('应该能够从localStorage加载', async () => {
@@ -217,12 +222,48 @@ describe('MessageCache', () => {
 
       await messageCacheService.addMessage('conv1', message);
 
-      // 创建新的缓存服务实例
-      const newCacheService = messageCacheService;
-      const cachedMessages = newCacheService.getMessages('conv1');
+      // 重新初始化，模拟页面刷新
+      await messageCacheService.init(TEST_USER_ID);
+      const cachedMessages = messageCacheService.getMessages('conv1');
 
       expect(cachedMessages).toHaveLength(1);
       expect(cachedMessages[0].content).toBe('Hello');
+    });
+  });
+
+  describe('用户隔离', () => {
+    it('不同用户的数据应该隔离', async () => {
+      const message: Message = {
+        id: '1',
+        conversation_id: 'conv1',
+        sender_id: 'user1',
+        content: 'Hello from user A',
+        msg_type: 'text',
+        created_at: new Date().toISOString(),
+      };
+
+      // 用户 A 添加消息
+      await messageCacheService.addMessage('conv1', message);
+
+      // 切换到用户 B
+      await messageCacheService.init('user-B');
+      expect(messageCacheService.getMessages('conv1')).toHaveLength(0);
+
+      // 用户 B 添加自己的消息
+      const messageB: Message = {
+        id: '2',
+        conversation_id: 'conv1',
+        sender_id: 'user2',
+        content: 'Hello from user B',
+        msg_type: 'text',
+        created_at: new Date().toISOString(),
+      };
+      await messageCacheService.addMessage('conv1', messageB);
+
+      // 切回用户 A，数据应保留
+      await messageCacheService.init(TEST_USER_ID);
+      expect(messageCacheService.getMessages('conv1')).toHaveLength(1);
+      expect(messageCacheService.getMessages('conv1')[0].content).toBe('Hello from user A');
     });
   });
 
@@ -346,27 +387,61 @@ describe('MessageCache', () => {
       expect(messageCacheService.hasCache('conv1')).toBe(true);
     });
   });
+
+  describe('服务器消息校准', () => {
+    it('应该移除本地存在但服务器不存在的消息', async () => {
+      const messages: Message[] = [
+        {
+          id: '1',
+          conversation_id: 'conv1',
+          sender_id: 'user1',
+          content: '保留',
+          msg_type: 'text',
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: '2',
+          conversation_id: 'conv1',
+          sender_id: 'user1',
+          content: '删除',
+          msg_type: 'text',
+          created_at: new Date().toISOString(),
+        },
+      ];
+
+      await messageCacheService.addMessages('conv1', messages);
+      expect(messageCacheService.getMessages('conv1')).toHaveLength(2);
+
+      // 服务器只返回消息 1
+      const serverIds = new Set(['1']);
+      const removed = await messageCacheService.reconcileWithServer('conv1', serverIds);
+
+      expect(removed).toBe(1);
+      expect(messageCacheService.getMessages('conv1')).toHaveLength(1);
+      expect(messageCacheService.getMessages('conv1')[0].id).toBe('1');
+    });
+  });
 });
 
 describe('useMessageCache Composable', () => {
-  beforeEach(() => {
-    // 清空缓存和localStorage
-    messageCacheService.clearAll();
+  beforeEach(async () => {
     localStorageMock.clear();
+    await messageCacheService.init(TEST_USER_ID);
   });
 
   afterEach(() => {
-    // 清理
     messageCacheService.clearAll();
     localStorageMock.clear();
   });
 
   it('应该能够使用composable', () => {
-    const { getMessages, addMessage, clearAll, stats } = useMessageCache();
+    const { getMessages, addMessage, clearAll, stats, init, isInitialized } = useMessageCache();
 
     expect(typeof getMessages).toBe('function');
     expect(typeof addMessage).toBe('function');
     expect(typeof clearAll).toBe('function');
+    expect(typeof init).toBe('function');
+    expect(typeof isInitialized).toBe('function');
     expect(stats.value).toBeDefined();
   });
 

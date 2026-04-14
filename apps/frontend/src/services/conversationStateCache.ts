@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { convStateKeyPrefix, clearUserData as clearUserDataByKey } from '../utils/storageNamespace';
 
 export interface ConversationState {
   conversationId: string;
@@ -9,19 +10,35 @@ export interface ConversationState {
 
 class ConversationStateCacheService {
   private cache = new Map<string, ConversationState>();
-  private storageKeyPrefix = 'conversation_state_';
+  private currentUserId: string | null = null;
 
   constructor() {
+    // 不再自动初始化，等待 init(userId) 调用
+  }
+
+  /**
+   * 初始化服务（首次或用户切换时调用）
+   * 只加载当前用户的数据，不影响其他用户
+   */
+  init(userId: string) {
+    console.log('[ConversationStateCache] init called for user:', userId);
+    this.currentUserId = userId;
+    this.cache.clear();
     this.loadCacheFromStorage();
   }
 
-  // 从localStorage加载缓存
+  private getStorageKeyPrefix(): string {
+    return this.currentUserId ? convStateKeyPrefix(this.currentUserId) : 'conversation_state_';
+  }
+
+  // 从localStorage加载当前用户的缓存
   private loadCacheFromStorage() {
     try {
+      const prefix = this.getStorageKeyPrefix();
       const keys = Object.keys(localStorage);
       for (const key of keys) {
-        if (key.startsWith(this.storageKeyPrefix)) {
-          const conversationId = key.replace(this.storageKeyPrefix, '');
+        if (key.startsWith(prefix)) {
+          const conversationId = key.slice(prefix.length);
           const data = localStorage.getItem(key);
           if (data) {
             try {
@@ -38,7 +55,7 @@ class ConversationStateCacheService {
           }
         }
       }
-      console.log(`[ConversationStateCache] Loaded state for ${this.cache.size} conversations`);
+      console.log(`[ConversationStateCache] Loaded state for ${this.cache.size} conversations (user: ${this.currentUserId})`);
     } catch (error) {
       console.error('[ConversationStateCache] Failed to load cache from storage:', error);
     }
@@ -47,13 +64,12 @@ class ConversationStateCacheService {
   // 保存缓存到localStorage
   private saveCacheToStorage(conversationId: string) {
     const state = this.cache.get(conversationId);
-    if (!state) {
-      return;
-    }
+    if (!state) return;
 
     try {
       const data = JSON.stringify(state);
-      localStorage.setItem(`${this.storageKeyPrefix}${conversationId}`, data);
+      const prefix = this.getStorageKeyPrefix();
+      localStorage.setItem(`${prefix}${conversationId}`, data);
     } catch (error) {
       console.error(
         '[ConversationStateCache] Failed to save state for conversation:',
@@ -90,7 +106,6 @@ class ConversationStateCacheService {
     }
     this.cache.set(conversationId, state);
     this.saveCacheToStorage(conversationId);
-    console.log(`[ConversationStateCache] Hidden conversation ${conversationId}`);
   }
 
   // 显示会话
@@ -109,7 +124,6 @@ class ConversationStateCacheService {
     }
     this.cache.set(conversationId, state);
     this.saveCacheToStorage(conversationId);
-    console.log(`[ConversationStateCache] Shown conversation ${conversationId}`);
   }
 
   // 获取未读消息数量
@@ -134,9 +148,6 @@ class ConversationStateCacheService {
     }
     this.cache.set(conversationId, state);
     this.saveCacheToStorage(conversationId);
-    console.log(
-      `[ConversationStateCache] Incremented unread count for conversation ${conversationId} to ${state.unreadCount}`
-    );
   }
 
   // 清除未读消息数量
@@ -155,26 +166,25 @@ class ConversationStateCacheService {
     }
     this.cache.set(conversationId, state);
     this.saveCacheToStorage(conversationId);
-    console.log(`[ConversationStateCache] Cleared unread count for conversation ${conversationId}`);
   }
 
   // 清除会话状态
   clearConversationState(conversationId: string) {
     this.cache.delete(conversationId);
-    localStorage.removeItem(`${this.storageKeyPrefix}${conversationId}`);
-    console.log(`[ConversationStateCache] Cleared state for conversation ${conversationId}`);
+    const prefix = this.getStorageKeyPrefix();
+    localStorage.removeItem(`${prefix}${conversationId}`);
   }
 
-  // 清除所有状态
+  // 清除当前用户的所有状态
   clearAll() {
     this.cache.clear();
+    const prefix = this.getStorageKeyPrefix();
     const keys = Object.keys(localStorage);
     keys.forEach((key) => {
-      if (key.startsWith(this.storageKeyPrefix)) {
+      if (key.startsWith(prefix)) {
         localStorage.removeItem(key);
       }
     });
-    console.log('[ConversationStateCache] Cleared all states');
   }
 
   // 获取所有未隐藏的会话ID
@@ -228,26 +238,15 @@ export function useConversationStateCache() {
   return {
     stats,
     refreshStats,
+    init: conversationStateCacheService.init.bind(conversationStateCacheService),
     getState: conversationStateCacheService.getState.bind(conversationStateCacheService),
     isHidden: conversationStateCacheService.isHidden.bind(conversationStateCacheService),
-    hideConversation: conversationStateCacheService.hideConversation.bind(
-      conversationStateCacheService
-    ),
-    showConversation: conversationStateCacheService.showConversation.bind(
-      conversationStateCacheService
-    ),
-    getUnreadCount: conversationStateCacheService.getUnreadCount.bind(
-      conversationStateCacheService
-    ),
-    incrementUnreadCount: conversationStateCacheService.incrementUnreadCount.bind(
-      conversationStateCacheService
-    ),
-    clearUnreadCount: conversationStateCacheService.clearUnreadCount.bind(
-      conversationStateCacheService
-    ),
-    clearConversationState: conversationStateCacheService.clearConversationState.bind(
-      conversationStateCacheService
-    ),
+    hideConversation: conversationStateCacheService.hideConversation.bind(conversationStateCacheService),
+    showConversation: conversationStateCacheService.showConversation.bind(conversationStateCacheService),
+    getUnreadCount: conversationStateCacheService.getUnreadCount.bind(conversationStateCacheService),
+    incrementUnreadCount: conversationStateCacheService.incrementUnreadCount.bind(conversationStateCacheService),
+    clearUnreadCount: conversationStateCacheService.clearUnreadCount.bind(conversationStateCacheService),
+    clearConversationState: conversationStateCacheService.clearConversationState.bind(conversationStateCacheService),
     clearAll: conversationStateCacheService.clearAll.bind(conversationStateCacheService),
     getVisibleConversationIds: conversationStateCacheService.getVisibleConversationIds.bind(
       conversationStateCacheService

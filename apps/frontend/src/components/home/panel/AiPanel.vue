@@ -107,6 +107,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useAiStore } from '../../../stores/ai';
 import { useAiChat } from '../../../composables/useAiChat';
+import { useAuthStore } from '../../../stores/auth';
 import AiConfigList from '../AiConfigList.vue';
 import AiChatWindow from '../AiChatWindow.vue';
 import AiConfigModal from '../AiConfigModal.vue';
@@ -115,6 +116,7 @@ import type { AiConfig } from '../../../models/types';
 import { BsPlusLg, BsGear, BsRobot, BsChatLeftText } from 'vue-icons-plus/bs';
 
 const aiStore = useAiStore();
+const authStore = useAuthStore();
 const { isStreaming, error, sendMessage, stopGeneration, clearError } = useAiChat();
 
 const chatWindowRef = ref<InstanceType<typeof AiChatWindow> | null>(null);
@@ -217,7 +219,7 @@ watch(error, () => {
 
 // 初始化
 onMounted(() => {
-  aiStore.initStore();
+  aiStore.initStore(authStore.currentUser?.id);
   // 首次使用且无配置时，自动弹出引导
   if (!aiStore.hasConfigs) {
     showConfigModal.value = true;

@@ -1,13 +1,37 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { AiConfig, AiConversation, AiMessage } from '../models/types';
-
-const AI_CONFIGS_STORAGE_KEY = 'purr-chat-ai-configs';
-const AI_CONVERSATIONS_STORAGE_KEY = 'purr-chat-ai-conversations';
-const AI_ACTIVE_CONFIG_KEY = 'purr-chat-ai-active-config';
-const AI_ACTIVE_CONVERSATION_KEY = 'purr-chat-ai-active-conversation';
+import {
+  aiConfigsKey,
+  aiConversationsKey,
+  aiActiveConfigKey,
+  aiActiveConversationKey,
+} from '../utils/storageNamespace';
 
 export const useAiStore = defineStore('ai', () => {
+  // 当前用户 ID，用于生成隔离的 storage key
+  const currentUserId = ref<string | null>(null);
+
+  // 动态生成 storage key
+  const getStorageKeys = () => {
+    const uid = currentUserId.value;
+    if (!uid) {
+      // 未初始化时回退到旧 key（避免破坏性变更）
+      return {
+        configs: 'purr-chat-ai-configs',
+        conversations: 'purr-chat-ai-conversations',
+        activeConfig: 'purr-chat-ai-active-config',
+        activeConversation: 'purr-chat-ai-active-conversation',
+      };
+    }
+    return {
+      configs: aiConfigsKey(uid),
+      conversations: aiConversationsKey(uid),
+      activeConfig: aiActiveConfigKey(uid),
+      activeConversation: aiActiveConversationKey(uid),
+    };
+  };
+
   // ===== 配置管理 =====
   const configs = ref<AiConfig[]>([]);
   const activeConfigId = ref<string | null>(null);
@@ -20,7 +44,8 @@ export const useAiStore = defineStore('ai', () => {
 
   const loadConfigs = () => {
     try {
-      const saved = localStorage.getItem(AI_CONFIGS_STORAGE_KEY);
+      const { configs: key } = getStorageKeys();
+      const saved = localStorage.getItem(key);
       if (saved) {
         configs.value = JSON.parse(saved) as AiConfig[];
       }
@@ -31,7 +56,8 @@ export const useAiStore = defineStore('ai', () => {
 
   const saveConfigs = () => {
     try {
-      localStorage.setItem(AI_CONFIGS_STORAGE_KEY, JSON.stringify(configs.value));
+      const { configs: key } = getStorageKeys();
+      localStorage.setItem(key, JSON.stringify(configs.value));
     } catch (error) {
       console.error('[AiStore] Failed to save configs:', error);
     }
@@ -65,10 +91,11 @@ export const useAiStore = defineStore('ai', () => {
     conversations.value = conversations.value.filter((c) => c.configId !== id);
     saveConfigs();
     saveConversations();
+    const { activeConfig: actCfgKey, activeConversation: actConvKey } = getStorageKeys();
     // 如果删除的是当前激活的配置
     if (activeConfigId.value === id) {
       activeConfigId.value = configs.value[0]?.id ?? null;
-      localStorage.setItem(AI_ACTIVE_CONFIG_KEY, activeConfigId.value || '');
+      localStorage.setItem(actCfgKey, activeConfigId.value || '');
     }
     // 如果当前会话属于被删除的配置
     if (
@@ -76,13 +103,14 @@ export const useAiStore = defineStore('ai', () => {
       !conversations.value.find((c) => c.id === activeConversationId.value)
     ) {
       activeConversationId.value = null;
-      localStorage.setItem(AI_ACTIVE_CONVERSATION_KEY, '');
+      localStorage.setItem(actConvKey, '');
     }
   };
 
   const setActiveConfig = (id: string) => {
     activeConfigId.value = id;
-    localStorage.setItem(AI_ACTIVE_CONFIG_KEY, id);
+    const { activeConfig: key } = getStorageKeys();
+    localStorage.setItem(key, id);
   };
 
   // ===== 会话管理 =====
@@ -103,7 +131,8 @@ export const useAiStore = defineStore('ai', () => {
 
   const loadConversations = () => {
     try {
-      const saved = localStorage.getItem(AI_CONVERSATIONS_STORAGE_KEY);
+      const { conversations: key } = getStorageKeys();
+      const saved = localStorage.getItem(key);
       if (saved) {
         conversations.value = JSON.parse(saved) as AiConversation[];
       }
@@ -114,7 +143,8 @@ export const useAiStore = defineStore('ai', () => {
 
   const saveConversations = () => {
     try {
-      localStorage.setItem(AI_CONVERSATIONS_STORAGE_KEY, JSON.stringify(conversations.value));
+      const { conversations: key } = getStorageKeys();
+      localStorage.setItem(key, JSON.stringify(conversations.value));
     } catch (error) {
       console.error('[AiStore] Failed to save conversations:', error);
     }
@@ -131,7 +161,8 @@ export const useAiStore = defineStore('ai', () => {
     };
     conversations.value.unshift(conv);
     activeConversationId.value = conv.id;
-    localStorage.setItem(AI_ACTIVE_CONVERSATION_KEY, conv.id);
+    const { activeConversation: key } = getStorageKeys();
+    localStorage.setItem(key, conv.id);
     saveConversations();
     return conv;
   };
@@ -174,35 +205,52 @@ export const useAiStore = defineStore('ai', () => {
 
   const setActiveConversation = (id: string | null) => {
     activeConversationId.value = id;
-    localStorage.setItem(AI_ACTIVE_CONVERSATION_KEY, id || '');
+    const { activeConversation: key } = getStorageKeys();
+    localStorage.setItem(key, id || '');
   };
 
   const deleteConversation = (id: string) => {
     conversations.value = conversations.value.filter((c) => c.id !== id);
     saveConversations();
+    const { activeConversation: key } = getStorageKeys();
     if (activeConversationId.value === id) {
       activeConversationId.value = conversations.value[0]?.id ?? null;
-      localStorage.setItem(AI_ACTIVE_CONVERSATION_KEY, activeConversationId.value || '');
+      localStorage.setItem(key, activeConversationId.value || '');
     }
   };
 
   // ===== 初始化 =====
-  const initStore = () => {
+  /**
+   * 初始化 store，加载指定用户的数据
+   * 不会删除其他用户的数据
+   */
+  const initStore = (userId?: string) => {
+    if (userId) {
+      currentUserId.value = userId;
+    } else {
+      currentUserId.value = null;
+    }
+
+    // 清空内存中的状态
+    configs.value = [];
+    conversations.value = [];
+    activeConfigId.value = null;
+    activeConversationId.value = null;
+
+    // 从 localStorage 加载当前用户的数据
     loadConfigs();
     loadConversations();
+    const { activeConfig: actCfgKey, activeConversation: actConvKey } = getStorageKeys();
     // 恢复上次激活的配置
-    const savedActiveConfig = localStorage.getItem(AI_ACTIVE_CONFIG_KEY);
+    const savedActiveConfig = localStorage.getItem(actCfgKey);
     if (savedActiveConfig && configs.value.some((c) => c.id === savedActiveConfig)) {
       activeConfigId.value = savedActiveConfig;
     } else if (configs.value.length > 0) {
       activeConfigId.value = configs.value[0]!.id;
     }
     // 恢复上次激活的会话
-    const savedActiveConv = localStorage.getItem(AI_ACTIVE_CONVERSATION_KEY);
-    if (
-      savedActiveConv &&
-      conversations.value.some((c) => c.id === savedActiveConv)
-    ) {
+    const savedActiveConv = localStorage.getItem(actConvKey);
+    if (savedActiveConv && conversations.value.some((c) => c.id === savedActiveConv)) {
       activeConversationId.value = savedActiveConv;
     }
   };

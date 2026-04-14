@@ -27,6 +27,8 @@ import { useWebSocketEventManager } from '../services/websocketEventManager';
 import { useConversations } from '../composables/useConversations';
 import { useFriends } from '../composables/useFriends';
 import { useNotification } from '../composables/useNotification';
+import { messageCacheService } from '../services/messageCache';
+import { conversationStateCacheService } from '../services/conversationStateCache';
 import SideNavbar from '../components/home/SideNavbar.vue';
 import UserProfileModal from '../components/home/UserProfileModal.vue';
 import type { Conversation, Friendship } from '../models/types';
@@ -121,7 +123,12 @@ const handleFriendRequestUpdate = async (friendship: Friendship) => {
 onMounted(async () => {
   await auth.checkAuth();
   if (auth.currentUser) {
-    console.log('[HomeView] currentUser 存在，连接 WebSocket');
+    console.log('[HomeView] currentUser 存在，初始化缓存服务');
+    // 页面刷新时，用当前用户 ID 初始化缓存服务
+    messageCacheService.init(auth.currentUser.id);
+    conversationStateCacheService.init(auth.currentUser.id);
+
+    console.log('[HomeView] 连接 WebSocket');
     // 连接WebSocket
     connect();
 
