@@ -67,7 +67,8 @@ type FriendRequestResponse struct {
 
 // UpdateProfileRequest 更新个人资料请求
 type UpdateProfileRequest struct {
-	Nickname string `json:"nickname,omitempty" binding:"omitempty,min=1,max=20"`
-	Email    string `json:"email,omitempty" binding:"omitempty,email"`
-	Phone    string `json:"phone,omitempty" binding:"omitempty,max=20"`
+	Nickname  string `json:"nickname,omitempty" binding:"omitempty,min=1,max=20"`
+	AvatarURL string `json:"avatar_url,omitempty" binding:"omitempty,url"`
+	Email     string `json:"email,omitempty" binding:"omitempty,email"`
+	Phone     string `json:"phone,omitempty" binding:"omitempty,max=20"`
 }

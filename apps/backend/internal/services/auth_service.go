@@ -191,6 +191,9 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *mod
 	}
 
 	// 更新字段
+	if req.AvatarURL != "" {
+		user.AvatarURL = req.AvatarURL
+	}
 	if req.Email != "" && req.Email != user.Email {
 		// 检查邮箱是否已被其他用户使用
 		existingUser, err := s.userRepo.FindByEmail(ctx, req.Email)

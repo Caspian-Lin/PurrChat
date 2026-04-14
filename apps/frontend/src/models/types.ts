@@ -137,6 +137,7 @@ export interface HandleFriendRequest {
 // 更新个人资料请求
 export interface UpdateProfileRequest {
   nickname?: string;
+  avatar_url?: string;
   email?: string;
   phone?: string;
 }
@@ -195,4 +196,37 @@ export interface AiConversation {
   messages: AiMessage[];
   createdAt: string;
   updatedAt: string;
+}
+
+// ===== 文件存储相关类型定义 =====
+
+// 文件上传申请请求
+export interface UploadRequest {
+  file_name: string;
+  file_size: number;
+  content_type: string;
+  category: string;
+  usage: string;
+}
+
+// 文件上传申请响应
+export interface UploadResponse {
+  upload_id: string;
+  object_key: string;
+  upload_url: string;
+  method: string;
+  expires_in: number;
+}
+
+// 文件上传确认请求
+export interface ConfirmUploadRequest {
+  upload_id: string;
+  object_key: string;
+}
+
+// 文件上传确认响应
+export interface ConfirmUploadResponse {
+  file_id: string;
+  object_key: string;
+  public_url: string;
 }

@@ -62,6 +62,15 @@ export const getApiBaseUrl = (): string => {
   return baseUrl;
 };
 
+// 获取存储服务 API 基础 URL
+// 生产环境通过 nginx 代理（/api/files/ → storage），与 API Base URL 相同
+// 开发环境需要单独配置（如 http://localhost:8081）
+export const getStorageApiBaseUrl = (): string => {
+  const storageUrl = getEnvVar('VITE_STORAGE_BASE_URL', '');
+  if (storageUrl) return storageUrl;
+  return getApiBaseUrl();
+};
+
 // 获取 WebSocket URL
 export const getWebSocketUrl = (token: string, userId: string): string => {
   const baseUrl = appConfig.apiBaseUrl;

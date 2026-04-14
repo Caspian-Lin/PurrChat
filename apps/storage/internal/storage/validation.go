@@ -7,7 +7,7 @@ import (
 
 // ValidateFileSize 校验文件大小是否符合类别限制
 const (
-	MaxAvatarSize      = 5 * 1024 * 1024  // 5MB
+	MaxAvatarSize      = 2 * 1024 * 1024  // 2MB
 	MaxBackgroundSize  = 10 * 1024 * 1024 // 10MB
 	MaxChatImageSize   = 20 * 1024 * 1024 // 20MB
 	MaxFileSize        = 100 * 1024 * 1024 // 100MB
@@ -18,7 +18,7 @@ func ValidateFileSize(category string, size int64) error {
 	switch category {
 	case "avatar":
 		if size > MaxAvatarSize {
-			return errors.New("avatar file size must not exceed 5MB")
+			return errors.New("avatar file size must not exceed 2MB")
 		}
 	case "background":
 		if size > MaxBackgroundSize {

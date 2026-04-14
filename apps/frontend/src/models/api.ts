@@ -18,8 +18,12 @@ import type {
   AddMemberRequest,
   RemoveMemberRequest,
   Enrollment,
+  UploadRequest,
+  UploadResponse,
+  ConfirmUploadRequest,
+  ConfirmUploadResponse,
 } from './types';
-import { getApiBaseUrl, logger } from '../config/app';
+import { getApiBaseUrl, getStorageApiBaseUrl, logger } from '../config/app';
 
 // 创建 axios 实例
 const apiClient: AxiosInstance = axios.create({
@@ -256,6 +260,45 @@ export const api = {
   // 健康检查
   health: (): Promise<{ status: string; message: string }> => {
     return apiClient.get('/health').then((res) => res.data);
+  },
+};
+
+// 存储服务 API 客户端
+const storageApiClient: AxiosInstance = axios.create({
+  baseURL: getStorageApiBaseUrl(),
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// 存储服务请求拦截器 - 添加 token
+storageApiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// 存储服务 API 方法
+export const storageApi = {
+  // 申请上传（获取预签名 URL）
+  requestUpload: (data: UploadRequest): Promise<ApiResponse<UploadResponse>> => {
+    return storageApiClient
+      .post('/api/files/upload/request', data)
+      .then((res) => res.data);
+  },
+
+  // 确认上传
+  confirmUpload: (data: ConfirmUploadRequest): Promise<ApiResponse<ConfirmUploadResponse>> => {
+    return storageApiClient
+      .post('/api/files/upload/confirm', data)
+      .then((res) => res.data);
   },
 };
 
