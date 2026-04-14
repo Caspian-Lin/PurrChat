@@ -78,7 +78,7 @@ export const useThemeStore = defineStore('theme', () => {
     // 设置主题色
     root.style.setProperty('--theme-primary', colorConfig.primary);
     root.style.setProperty('--theme-secondary', colorConfig.secondary);
-    root.style.setProperty('--theme-gradient', colorConfig.gradient);
+    root.style.setProperty('--theme-gradient', colorConfig.primary);
 
     // 设置主题变量
     root.style.setProperty('--background-color', theme.background);

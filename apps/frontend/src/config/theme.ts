@@ -10,42 +10,35 @@ export interface ThemeConfig {
 // 主题色配置
 export const themeColors: Record<
   ThemeColor,
-  { primary: string; secondary: string; gradient: string }
+  { primary: string; secondary: string }
 > = {
   purple: {
     primary: '#bf5eff',
     secondary: '#764ba2',
-    gradient: 'linear-gradient(135deg, #899cf0 0%, #764ba2 100%)',
   },
   blue: {
     primary: '#1d79cb',
     secondary: '#57a6eb',
-    gradient: 'linear-gradient(135deg, #1d79cb 0%, #57a6eb 100%)',
   },
   green: {
     primary: '#70e874',
     secondary: '#92de63',
-    gradient: 'linear-gradient(135deg, #70e874 0%, #92de63 100%)',
   },
   orange: {
     primary: '#fa709a',
     secondary: '#fee140',
-    gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
   },
   red: {
     primary: '#d43f3f',
     secondary: '#ee5a5a',
-    gradient: 'linear-gradient(135deg, #d43f3f 0%, #ee5a5a 100%)',
   },
   pink: {
     primary: '#f093fb',
     secondary: '#f5576c',
-    gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
   },
   cyan: {
     primary: '#4facfe',
     secondary: '#00f2fe',
-    gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
   },
 };
 

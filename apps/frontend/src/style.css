@@ -10,7 +10,7 @@
   /* 主题变量 */
   --theme-primary: #5171ff;
   --theme-secondary: #764ba2;
-  --theme-gradient: linear-gradient(135deg, #5171ff 0%, #764ba2 100%);
+  --theme-gradient: #5171ff;
 
   /* 浅色主题默认值 */
   --background-color: #f0f0f0;

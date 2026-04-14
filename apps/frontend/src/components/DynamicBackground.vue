@@ -246,12 +246,8 @@ const animate = () => {
 
   ctx.clearRect(0, 0, width, height);
 
-  // 绘制渐变背景
-  const gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, currentColors.value[0] + '20');
-  gradient.addColorStop(0.5, currentColors.value[1] + '15');
-  gradient.addColorStop(1, currentColors.value[2] + '20');
-  ctx.fillStyle = gradient;
+  // 绘制纯色背景
+  ctx.fillStyle = currentColors.value[0] + '15';
   ctx.fillRect(0, 0, width, height);
 
   // 更新和绘制形状
@@ -358,7 +354,7 @@ watch(
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.05) 100%);
+  background: rgba(0, 0, 0, 0.08);
   pointer-events: none;
 }
 </style>
