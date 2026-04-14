@@ -5,6 +5,7 @@
         v-if="show"
         class="fixed inset-0 z-50 flex items-center justify-center"
         style="background: var(--modal-overlay-color)"
+        @mousedown.self="handleOverlayMouseDown"
         @click.self="handleOverlayClick"
       >
         <Transition name="modal-content">
@@ -48,6 +49,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, watch, onBeforeUnmount } from 'vue';
 import { BsX } from 'vue-icons-plus/bs';
 interface Props {
   show: boolean;
@@ -67,16 +69,45 @@ const emit = defineEmits<{
   close: [];
 }>();
 
+// 记录 mousedown 是否发生在 overlay 上，确保完整的点击（按下+释放）都在 overlay 区域
+const mouseDownOnOverlay = ref(false);
+
 const handleClose = () => {
   emit('update:show', false);
   emit('close');
 };
 
+const handleOverlayMouseDown = () => {
+  mouseDownOnOverlay.value = true;
+};
+
+const handleDocumentMouseUp = () => {
+  mouseDownOnOverlay.value = false;
+};
+
 const handleOverlayClick = () => {
-  if (props.closeOnOverlayClick) {
+  if (props.closeOnOverlayClick && mouseDownOnOverlay.value) {
     handleClose();
   }
+  mouseDownOnOverlay.value = false;
 };
+
+// modal 显示时监听全局 mouseup，确保拖出 modal 后释放能正确重置状态
+watch(
+  () => props.show,
+  (show) => {
+    if (show) {
+      document.addEventListener('mouseup', handleDocumentMouseUp);
+    } else {
+      document.removeEventListener('mouseup', handleDocumentMouseUp);
+    }
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mouseup', handleDocumentMouseUp);
+});
 </script>
 
 <style scoped>
