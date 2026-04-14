@@ -159,3 +159,40 @@ export interface RemoveMemberRequest {
   conversation_id: string;
   user_id: string;
 }
+
+// ===== AI 对话相关类型定义 =====
+
+// AI 配置
+export interface AiConfig {
+  id: string;
+  name: string;
+  apiUrl: string;
+  apiKey: string;
+  model: string;
+  temperature: number;
+  maxTokens?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// AI 消息角色
+export type AiMessageRole = 'system' | 'user' | 'assistant';
+
+// AI 消息
+export interface AiMessage {
+  id: string;
+  role: AiMessageRole;
+  content: string;
+  createdAt: string;
+  isStreaming?: boolean;
+}
+
+// AI 会话
+export interface AiConversation {
+  id: string;
+  configId: string;
+  title: string;
+  messages: AiMessage[];
+  createdAt: string;
+  updatedAt: string;
+}

@@ -35,6 +35,20 @@
           :size="24"
         />
       </button>
+      <button
+        :class="[
+          'w-12 h-12 p-0 roundrect flex items-center justify-center transition-all',
+          activePanel === 'ai'
+            ? 'bg-[var(--theme-primary)]'
+            : 'bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary',
+        ]"
+        @click="handlePanelClick('ai')"
+      >
+        <BsRobot
+          :class="['', activePanel === 'ai' ? 'text-white' : 'text-text-tertiary']"
+          :size="24"
+        />
+      </button>
     </div>
 
     <!-- 底部区域 - 主题切换、个人资料 -->
@@ -86,7 +100,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { BsChatLeftDots, BsFillPersonLinesFill } from 'vue-icons-plus/bs';
+import { BsChatLeftDots, BsFillPersonLinesFill, BsRobot } from 'vue-icons-plus/bs';
 import ThemeSwitcher from '../ThemeSwitcher.vue';
 import { usePanelController } from '../../controllers/panelController';
 import { useRoute } from 'vue-router';
@@ -107,7 +121,8 @@ const connectionStore = useConnectionStore();
 const activePanel = computed(() => {
   if (route.path === '/chat') return 'chat';
   if (route.path === '/friends') return 'friends';
-  return 'chat'; // 默认
+  if (route.path === '/ai') return 'ai';
+  return 'chat';
 });
 
 // 连接状态
@@ -116,7 +131,7 @@ const isOffline = computed(() => connectionStore.isOffline);
 // const isConnecting = computed(() => connectionStore.isConnecting);
 const connectionStatusText = computed(() => connectionStore.getConnectionStatusText());
 
-const handlePanelClick = (panel: 'chat' | 'friends') => {
+const handlePanelClick = (panel: 'chat' | 'friends' | 'ai') => {
   navigateToPanel(panel);
 };
 

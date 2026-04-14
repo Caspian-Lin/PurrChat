@@ -22,6 +22,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../components/home/panel/FriendsPanel.vue'),
         meta: { requiresAuth: true },
       },
+      {
+        path: 'ai',
+        name: 'Ai',
+        component: () => import('../components/home/panel/AiPanel.vue'),
+        meta: { requiresAuth: true },
+      },
     ],
   },
   {
