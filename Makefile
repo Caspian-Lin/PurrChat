@@ -36,6 +36,11 @@ ifneq (,$(wildcard ./apps/backend/.env))
     include ./apps/backend/.env
     export
 endif
+
+ifneq (,$(wildcard ./apps/storage/.env))
+    include ./apps/storage/.env
+    export
+endif
 # 安装依赖
 install:
 	pnpm install

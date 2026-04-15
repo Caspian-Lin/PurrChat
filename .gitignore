@@ -66,3 +66,4 @@ Cargo.lock
 tmp/
 
 CLAUDE.md
+r2-cors.json
