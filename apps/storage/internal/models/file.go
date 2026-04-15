@@ -36,8 +36,8 @@ type FileMetadata struct {
 	Category    FileCategory `json:"category" db:"category"`
 	Usage       FileUsage    `json:"usage" db:"usage"`
 	UploaderID  uuid.UUID    `json:"uploader_id" db:"uploader_id"`
-	PublicURL   string       `json:"public_url" db:"public_url"`
-	ETag        string       `json:"etag" db:"etag"`
+	PublicURL   *string      `json:"public_url,omitempty" db:"public_url"`
+	ETag        *string      `json:"etag,omitempty" db:"etag"`
 	Confirmed   bool         `json:"confirmed" db:"confirmed"`
 	CreatedAt   time.Time    `json:"created_at" db:"created_at"`
 	ConfirmedAt *time.Time   `json:"confirmed_at,omitempty" db:"confirmed_at"`
