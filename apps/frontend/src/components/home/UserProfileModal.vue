@@ -184,6 +184,7 @@ import { BsCamera } from 'vue-icons-plus/bs';
 import BaseModal from '../common/BaseModal.vue';
 import type { User, Friendship } from '../../models/types';
 import { useAvatarUpload } from '../../composables/useAvatarUpload';
+import { useAuthStore } from '../../stores/auth';
 
 interface Props {
   show: boolean;
@@ -207,11 +208,12 @@ const emit = defineEmits<{
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const { uploading, error, previewUrl, uploadAvatar, clearError } = useAvatarUpload();
+const authStore = useAuthStore();
 
-// 显示的头像 URL：优先显示上传预览，否则显示用户的 avatar_url
+// 显示的头像 URL：优先显示上传预览，否则显示 authStore 中最新的 avatar_url
 const displayAvatarUrl = computed(() => {
   if (previewUrl.value) return previewUrl.value;
-  return props.user?.avatar_url || '';
+  return authStore.user?.avatar_url || props.user?.avatar_url || '';
 });
 
 // 弹窗关闭时清除状态
