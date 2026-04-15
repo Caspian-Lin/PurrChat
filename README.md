@@ -5,7 +5,6 @@
 **PurrChat - 现代化聊天应用**
 
 [![CI/CD](https://github.com/Caspian-Lin/PurrChat/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/Caspian-Lin/PurrChat/actions)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 一个基于 Turborepo 的全栈聊天应用，包含前端和后端服务。
 
@@ -15,30 +14,51 @@
 
 PurrChat 是一个现代化的聊天应用，采用前后端分离架构，使用 Turborepo 进行 monorepo 管理。
 
-- **前端**: Vue 3 + Vite + Naive UI + Tauri
+- **前端**: Vue 3 + Vite + Tauri
 - **后端**: Go + Gin + PostgreSQL
 - **容器化**: Docker + Docker Compose
 - **CI/CD**: GitHub Actions
 
 ## 已知问题和路线图
+
 ### 当前问题
-- ws全局事件 收到特定事件应该更新特定视图
-- alart和提示使用不统一 有些使用了浏览器的alart
-- 重复alart
-- 缺乏多用户测试 不知道ws能否成功
-- 重新梳理数据库迁移
-- 视图上端统一padding
-- conservationlist 长度不匹配
-- friendslist缺滚动条
-- 滚动条太丑了
-- 添加群聊按钮因为色彩显得比较大 需要添加补偿
+- alert 和提示使用不统一，有些使用了浏览器的 alert
+- 重复 alert
+- 缺乏多用户测试，不知道 ws 能否成功
+- friendslist 缺滚动条
+- 添加群聊按钮因为色彩显得比较大，需要添加补偿
 - 前端部分功能日志过多
+
 ### 预计实现功能
-- 上传头像 发送图片
-- 服务器端并发限制 分流 排队处理等
-- 聊天过程中分组显示时间
-- 桌面端 存储重构
-- 接入beh
+- 上传头像、发送图片
+- 服务器端并发限制、分流、排队处理等
+- 桌面端、存储重构
+- 接入 beh
+
+### 文件存储安全路线图
+
+当前文件存储基于 Cloudflare R2（S3 兼容），按资源类型采用不同访问策略：
+
+| 资源类型 | 当前方案 | 目标方案 |
+|---------|---------|---------|
+| 头像 | 公开 URL（R2.dev 子域名） | 同左 |
+| 聊天图片 | 预签名 URL | 短有效期（30s）预签名 URL |
+| 聊天文件 | 预签名 URL | 短有效期（30s）预签名 URL |
+
+#### 阶段一：公开资源（头像）— 当前阶段
+- R2 存储桶开启公开访问，头像通过公开 URL 直接访问
+- 优势：零后端负载、访问速度快、无需鉴权
+- 适用场景：所有用户可见的公开资源
+
+#### 阶段二：受保护资源（聊天文件）— 待实现
+- 使用短有效期预签名 URL（30-60 秒）
+- 每次前端请求文件时，后端验证用户身份和访问权限后生成签名 URL
+- 签名 URL 过期后自动失效，降低泄露风险
+
+#### 阶段三：细粒度权限控制（可选进阶）
+- 通过 Cloudflare Workers 在边缘节点执行鉴权逻辑
+- 实现聊天级别的访问控制（仅聊天双方可查看文件）
+- 后端零负载，鉴权在 CDN 边缘完成
 
 ## 项目结构
 
@@ -51,11 +71,18 @@ PurrChat/
 │   │   ├── src-tau/        # Tauri 源码
 │   │   ├── Dockerfile
 │   │   └── package.json
-│   └── backend/            # 后端应用 (Go)
+│   ├── backend/            # 后端应用 (Go)
+│   │   ├── cmd/
+│   │   ├── internal/
+│   │   ├── migrations/
+│   │   ├── tests/
+│   │   ├── Dockerfile
+│   │   ├── go.mod
+│   │   └── package.json
+│   └── storage/            # 存储服务 (Go)
 │       ├── cmd/
 │       ├── internal/
 │       ├── migrations/
-│       ├── tests/
 │       ├── Dockerfile
 │       ├── go.mod
 │       └── package.json
@@ -76,7 +103,7 @@ PurrChat/
 
 - Node.js >= 18
 - pnpm >= 9
-- Go >= 1.24
+- Go >= 1.25
 - Docker (可选，用于容器化部署)
 
 ### 安装依赖
