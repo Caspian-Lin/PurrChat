@@ -97,7 +97,7 @@ lint-backend:
 # 前端测试
 test-frontend:
 	@echo "运行前端测试..."
-	cd apps/frontend && pnpm test:coverage
+	cd apps/frontend && pnpm test:coverage --run
 
 # 后端测试
 test-backend:
