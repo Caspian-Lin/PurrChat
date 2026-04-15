@@ -9,6 +9,7 @@ import (
 	"purr-chat-storage/internal/models"
 	"purr-chat-storage/internal/repository"
 	"purr-chat-storage/internal/storage"
+	"purr-chat-storage/pkg/logger"
 
 	"github.com/google/uuid"
 )
@@ -137,9 +138,12 @@ func (s *FileService) ConfirmUpload(ctx context.Context, userID string, req *mod
 	publicURL := s.storage.GetPublicURL(meta.ObjectKey)
 
 	// 更新数据库
-	if err := s.fileRepo.ConfirmUpload(ctx, uploadID, info.ETag, publicURL); err != nil {
+	if err := s.fileRepo.ConfirmUpload(ctx, uploadID, &info.ETag, &publicURL); err != nil {
 		return nil, fmt.Errorf("failed to confirm upload: %w", err)
 	}
+
+	// 清理旧文件（头像、背景等每种分类只保留最新一个）
+	s.cleanupOldFile(ctx, meta.UploaderID, string(meta.Category), uploadID)
 
 	return &models.ConfirmUploadResponse{
 		FileID:    uploadID,
@@ -210,6 +214,36 @@ func (s *FileService) DeleteFile(ctx context.Context, userID string, fileID stri
 	}
 
 	return s.fileRepo.DeleteByID(ctx, id)
+}
+
+// cleanupOldFile 清理用户同分类下的旧文件（仅保留最新一个）
+// 适用于头像、背景等每种分类只应存在一份的场景
+func (s *FileService) cleanupOldFile(ctx context.Context, uploaderID uuid.UUID, category string, newFileID uuid.UUID) {
+	// 仅对头像和背景生效
+	if category != "avatar" && category != "background" {
+		return
+	}
+
+	old, err := s.fileRepo.GetConfirmedByUploaderAndCategory(ctx, uploaderID, category)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to query old file for cleanup: user=%s category=%s err=%v", uploaderID, category, err)
+		return
+	}
+	if old == nil || old.ID == newFileID {
+		return
+	}
+
+	// 从对象存储中删除
+	if s.storage != nil {
+		if err := s.storage.DeleteObject(ctx, old.ObjectKey); err != nil {
+			logger.ErrorfWithCaller("Failed to delete old file from storage: key=%s err=%v", old.ObjectKey, err)
+		}
+	}
+
+	// 从数据库中删除
+	if err := s.fileRepo.DeleteByID(ctx, old.ID); err != nil {
+		logger.ErrorfWithCaller("Failed to delete old file record: id=%s err=%v", old.ID, err)
+	}
 }
 
 // contentTypeToExt 根据 MIME 类型推断文件扩展名
