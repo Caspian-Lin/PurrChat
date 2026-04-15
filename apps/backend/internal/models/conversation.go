@@ -38,8 +38,8 @@ type ConversationListResponse struct {
 // SendMessageRequest 发送消息请求
 type SendMessageRequest struct {
 	ConversationID uuid.UUID `json:"conversation_id" binding:"required,uuid"`
-	Content        string    `json:"content" binding:"required,max=5000"`
-	MsgType        string    `json:"msg_type" binding:"required,oneof=text image"`
+	Content        string    `json:"content" binding:"required,max=10000"`
+	MsgType        string    `json:"msg_type" binding:"required,oneof=text image file"`
 }
 
 // MessageResponse 消息响应

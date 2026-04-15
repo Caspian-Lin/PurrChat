@@ -90,7 +90,7 @@ export interface Message {
   conversation_id: string;
   sender_id: string;
   content: string;
-  msg_type: 'text' | 'image';
+  msg_type: 'text' | 'image' | 'file';
   created_at: string;
   sender?: User;
   is_read?: boolean; // 消息是否已读
@@ -115,7 +115,7 @@ export interface SearchUsersRequest {
 export interface SendMessageRequest {
   conversation_id: string;
   content: string;
-  msg_type: 'text' | 'image';
+  msg_type: 'text' | 'image' | 'file';
 }
 
 // 创建会话请求
@@ -229,4 +229,15 @@ export interface ConfirmUploadResponse {
   file_id: string;
   object_key: string;
   public_url: string;
+}
+
+// 文件消息内容结构（存储在 Message.content 中的 JSON）
+export interface FileMessageContent {
+  file_id: string;
+  file_name: string;
+  file_size: number;
+  content_type: string;
+  thumbnail_url?: string;
+  public_url: string;
+  category: 'chat-image' | 'file';
 }

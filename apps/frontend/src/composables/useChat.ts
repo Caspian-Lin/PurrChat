@@ -3,7 +3,7 @@ import { api } from '../models/api';
 import { useMessage } from './useMessage';
 import { useMessageCache } from '../services/messageCache';
 import { useMessageStore } from '../stores/message';
-import type { Message, SendMessageRequest } from '../models/types';
+import type { Message, SendMessageRequest, FileMessageContent } from '../models/types';
 
 export const useChat = () => {
   const messages = ref<Message[]>([]);
@@ -256,6 +256,80 @@ export const useChat = () => {
   };
 
   /**
+   * 发送文件消息
+   * @param conversationId - 会话ID
+   * @param fileContent - 文件消息内容
+   * @returns 是否发送成功
+   */
+  const sendFileMessage = async (
+    conversationId: string,
+    fileContent: FileMessageContent
+  ): Promise<boolean> => {
+    const contentJson = JSON.stringify(fileContent);
+
+    try {
+      const tempId = `temp-file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      const tempMessage: Message = {
+        id: tempId,
+        conversation_id: conversationId,
+        sender_id: '',
+        content: contentJson,
+        msg_type: 'file',
+        created_at: new Date().toISOString(),
+        sendStatus: 'sending',
+      };
+
+      messages.value.push(tempMessage);
+      scrollToBottom();
+      messageStore.addMessage(conversationId, tempMessage);
+
+      const requestData: SendMessageRequest = {
+        conversation_id: conversationId,
+        content: contentJson,
+        msg_type: 'file',
+      };
+      const response = await api.sendMessage(requestData);
+
+      if (response.success && response.data) {
+        const tempMessageIndex = messages.value.findIndex((m) => m.id === tempId);
+        if (tempMessageIndex !== -1 && messages.value[tempMessageIndex]) {
+          messages.value[tempMessageIndex].sendStatus = 'sent';
+          messageStore.updateMessageStatus(conversationId, tempId, 'sent');
+        }
+
+        try {
+          await messageCache.addMessage(conversationId, response.data);
+        } catch (error) {
+          console.error('[useChat] Error caching file message:', error);
+        }
+        return true;
+      }
+
+      const tempMessageIndex = messages.value.findIndex((m) => m.id === tempId);
+      if (tempMessageIndex !== -1 && messages.value[tempMessageIndex]) {
+        messages.value[tempMessageIndex].sendStatus = 'failed';
+        messageStore.updateMessageStatus(conversationId, tempId, 'failed');
+      }
+      return false;
+    } catch (error) {
+      console.error('[useChat] Failed to send file message:', error);
+      const lastTempIndex = messages.value.findIndex(
+        (m) => m.id.startsWith('temp-file-') && m.sendStatus === 'sending'
+      );
+      if (lastTempIndex !== -1 && messages.value[lastTempIndex]) {
+        messages.value[lastTempIndex].sendStatus = 'failed';
+        messageStore.updateMessageStatus(
+          conversationId,
+          messages.value[lastTempIndex].id,
+          'failed'
+        );
+      }
+      return false;
+    }
+  };
+
+  /**
    * 滚动到底部
    */
   const scrollToBottom = async () => {
@@ -291,6 +365,7 @@ export const useChat = () => {
     loadMessagesIncremental,
     checkAndLoadIncremental,
     sendMessage,
+    sendFileMessage,
     exportMessages,
     addMessage,
     clearMessages,

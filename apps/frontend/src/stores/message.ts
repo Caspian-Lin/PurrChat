@@ -142,7 +142,7 @@ export const useMessageStore = defineStore('message', () => {
       // 类型转换：CachedMessage[] -> Message[]
       const messagesAsMessage: Message[] = cachedMessages.map((msg) => ({
         ...msg,
-        msg_type: msg.msg_type as 'text' | 'image',
+        msg_type: msg.msg_type as 'text' | 'image' | 'file',
         sender: msg.sender
           ? {
               id: msg.sender.id,

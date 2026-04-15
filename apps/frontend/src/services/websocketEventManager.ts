@@ -208,7 +208,7 @@ class WebSocketEventManager {
       conversation_id: data.conversation_id,
       sender_id: data.sender_id,
       content: data.content,
-      msg_type: data.msg_type as 'text' | 'image',
+      msg_type: data.msg_type as 'text' | 'image' | 'file',
       created_at: data.created_at,
       sender: data.sender
         ? {

@@ -79,7 +79,7 @@
 
         <div class="flex justify-between items-center">
           <div class="text-base truncate text-text-tertiary">
-            {{ conversation.last_message?.content || '暂无消息' }}
+            {{ formatLastMessageContent(conversation.last_message) }}
           </div>
           <div class="flex items-center gap-2">
             <!-- 未读消息提示气泡 -->
@@ -123,7 +123,7 @@ import {
 } from '../../utils/userHelpers';
 import { formatConversationTime } from '../../utils/formatTime';
 import { BsX } from 'vue-icons-plus/bs';
-import type { Conversation } from '../../models/types';
+import type { Conversation, Message } from '../../models/types';
 import CustomScrollbar from '../common/CustomScrollbar.vue';
 
 interface Props {
@@ -140,6 +140,20 @@ const getConversationName = (conversation: Conversation): string => {
     return conversation.name || '群聊';
   }
   return conversation.name || getUserUsername(getOtherUser(conversation, props.currentUserId));
+};
+
+// 格式化最后一条消息内容（文件消息显示文件名）
+const formatLastMessageContent = (message: Message | undefined): string => {
+  if (!message) return '暂无消息';
+  if (message.msg_type === 'file') {
+    try {
+      const fileContent = JSON.parse(message.content);
+      return `[文件] ${fileContent.file_name}`;
+    } catch {
+      return '[文件]';
+    }
+  }
+  return message.content || '暂无消息';
 };
 
 // 按最后消息时间排序所有会话

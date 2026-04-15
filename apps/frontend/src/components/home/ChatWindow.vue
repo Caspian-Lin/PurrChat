@@ -45,11 +45,9 @@
           <template v-for="(message, index) in messages" :key="message.id">
             <!-- 时间分割线 -->
             <div v-if="timeDividers.has(index)" class="flex justify-center py-2">
-              <!-- <div class="flex-1 h-px" style="background: var(--border-color)"></div> -->
               <span class="px-3 text-xs text-text-tertiary whitespace-nowrap">
                 {{ timeDividers.get(index) }}
               </span>
-              <!-- <div class="flex-1 h-px" style="background: var(--border-color)"></div> -->
             </div>
 
             <!-- 消息行 -->
@@ -95,7 +93,39 @@
                   @mouseleave="onBubbleMouseLeave"
                   @dblclick="onBubbleDoubleClick(message.id)"
                 >
-                  {{ message.content }}
+                  <!-- 文件消息：图片 -->
+                  <template v-if="isFileMessage(message) && getFileContent(message)?.thumbnail_url">
+                    <img
+                      :src="getFileContent(message)!.thumbnail_url"
+                      :alt="getFileContent(message)!.file_name"
+                      class="max-w-[300px] max-h-[300px] rounded-lg object-cover cursor-pointer"
+                      loading="lazy"
+                      @click="openImagePreview(message)"
+                    />
+                  </template>
+                  <!-- 文件消息：非图片文件 -->
+                  <template v-else-if="isFileMessage(message)">
+                    <div
+                      class="flex items-center gap-3 p-1 min-w-[200px] cursor-pointer"
+                      @click="handleFileDownload(message)"
+                    >
+                      <BsFileEarmark class="text-3xl text-text-tertiary flex-shrink-0" />
+                      <div class="flex flex-col gap-0.5 flex-1 min-w-0">
+                        <span class="text-sm font-medium truncate">{{
+                          getFileContent(message)?.file_name
+                        }}</span>
+                        <span class="text-xs text-text-tertiary">{{
+                          formatFileSize(getFileContent(message)?.file_size || 0)
+                        }}</span>
+                      </div>
+                      <BsDownload class="text-lg text-text-tertiary flex-shrink-0" />
+                    </div>
+                  </template>
+                  <!-- 文本/图片消息：原有逻辑 -->
+                  <template v-else>
+                    {{ message.content }}
+                  </template>
+
                   <!-- 消息发送状态指示器（仅显示自己的消息） -->
                   <div
                     v-if="message.sender_id === currentUserId && message.sendStatus"
@@ -158,14 +188,61 @@
       <!-- 消息输入区 -->
       <div
         class="flex flex-col bg-bg-primary border-t border-border-color flex-shrink-0"
+        :class="{ 'border-dashed border-2 border-[var(--theme-primary)]': isDragOver }"
         :style="{ height: `${inputAreaHeight}px` }"
+        @dragover.prevent="isDragOver = true"
+        @dragleave.prevent="isDragOver = false"
+        @drop.prevent="handleDrop"
       >
+        <!-- 文件预览卡片（上传完成后显示） -->
+        <div v-if="fileData || fileUploading" class="px-4 pt-2">
+          <div
+            class="flex items-center gap-3 p-2 rounded-lg"
+            style="background: var(--surface-color); border: 1px solid var(--border-color)"
+          >
+            <!-- 图片预览 -->
+            <div v-if="thumbnailDataUrl" class="w-12 h-12 rounded overflow-hidden flex-shrink-0">
+              <img :src="thumbnailDataUrl" alt="preview" class="w-full h-full object-cover" />
+            </div>
+            <!-- 文件图标 -->
+            <div
+              v-else
+              class="w-12 h-12 rounded flex items-center justify-center flex-shrink-0"
+              style="background: var(--bg-quaternary)"
+            >
+              <BsFileEarmark class="text-2xl text-text-tertiary" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium truncate">
+                {{ fileData?.file_name || '上传中...' }}
+              </div>
+              <div class="text-xs text-text-tertiary">
+                {{ fileData ? formatFileSize(fileData.file_size) : '正在上传...' }}
+              </div>
+            </div>
+            <!-- 上传进度条 -->
+            <div v-if="fileUploading" class="w-20">
+              <div class="h-1 rounded-full overflow-hidden" style="background: var(--border-color)">
+                <div
+                  class="h-1 rounded-full bg-[var(--theme-primary)] transition-all duration-300"
+                  :style="{ width: `${fileUploadProgress}%` }"
+                />
+              </div>
+            </div>
+            <!-- 移除按钮 -->
+            <button v-else class="p-1 hover:bg-hover-bg rounded" @click="removePendingFile">
+              <BsX class="text-lg text-text-tertiary" />
+            </button>
+          </div>
+        </div>
+
         <!-- 文本选项 -->
         <div class="flex items-center gap-3 px-4 py-3">
           <EmojiPicker v-model="newMessage" @select="handleEmojiSelect" />
           <button
             class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
             title="文件"
+            @click="handleFileSelect"
           >
             <BsPaperclip class="text-2xl" />
           </button>
@@ -182,6 +259,8 @@
           >
             <BsCameraVideo class="text-2xl" />
           </button>
+          <!-- 隐藏的文件输入 -->
+          <input ref="fileInputRef" type="file" class="hidden" @change="handleFileChange" />
         </div>
 
         <!-- 文本输入区 -->
@@ -197,8 +276,8 @@
         <!-- 发送按钮 -->
         <div class="flex justify-end pb-8 pr-8">
           <button
-            class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-xl"
-            :disabled="!newMessage.trim()"
+            class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="sendDisabled"
             @click="handleSend"
           >
             Send
@@ -206,6 +285,14 @@
         </div>
       </div>
     </div>
+
+    <!-- 图片预览器 -->
+    <ImagePreviewModal
+      v-model:show="showImagePreview"
+      :image-url="previewImageUrl"
+      :file-name="previewFileName"
+      @download="handlePreviewDownload"
+    />
   </div>
 </template>
 
@@ -213,11 +300,22 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { getUserUsername, getOtherUser } from '../../utils/userHelpers';
 import { formatTimeWithSeconds, computeTimeDividers } from '../../utils/formatTime';
-import { BsPaperclip, BsCamera, BsCameraVideo, BsInfoCircle } from 'vue-icons-plus/bs';
+import {
+  BsPaperclip,
+  BsCamera,
+  BsCameraVideo,
+  BsInfoCircle,
+  BsFileEarmark,
+  BsDownload,
+  BsX,
+} from 'vue-icons-plus/bs';
 import ResizableSplitter from '../common/Splitter.vue';
 import CustomScrollbar from '../common/CustomScrollbar.vue';
 import EmojiPicker from '../common/EmojiPicker.vue';
-import type { Conversation, Message } from '../../models/types';
+import ImagePreviewModal from '../common/ImagePreviewModal.vue';
+import { useFileUpload } from '../../composables/useFileUpload';
+import { useMessage } from '../../composables/useMessage';
+import type { Conversation, Message, FileMessageContent } from '../../models/types';
 
 interface Props {
   conversation: Conversation | null;
@@ -229,6 +327,7 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   'send-message': [content: string];
+  'send-file-message': [fileData: FileMessageContent];
   'export-messages': [];
   'show-user': [user: any];
   'update-conversation': [];
@@ -239,6 +338,23 @@ const emit = defineEmits<{
 const newMessage = ref('');
 const inputAreaHeight = ref(300);
 const messagesContainer = ref<InstanceType<typeof CustomScrollbar> | null>(null);
+const fileInputRef = ref<HTMLInputElement | null>(null);
+const isDragOver = ref(false);
+
+// 文件上传
+const {
+  uploading: fileUploading,
+  uploadProgress: fileUploadProgress,
+  fileData,
+  thumbnailDataUrl,
+  processAndUpload,
+  clearFile,
+} = useFileUpload();
+
+// 图片预览器状态
+const showImagePreview = ref(false);
+const previewImageUrl = ref('');
+const previewFileName = ref('');
 
 // ===== 时间分割线 =====
 const timeDividers = computed(() => computeTimeDividers(props.messages));
@@ -269,7 +385,115 @@ const onBubbleDoubleClick = (messageId: string) => {
   activeTooltipId.value = activeTooltipId.value === messageId ? null : messageId;
 };
 
-// 滚动到底部
+// ===== 发送按钮状态 =====
+const sendDisabled = computed(() => {
+  if (fileUploading.value) return true;
+  if (!fileData.value && !newMessage.value.trim()) return true;
+  return false;
+});
+
+// ===== 文件消息辅助函数 =====
+function isFileMessage(msg: Message): boolean {
+  return msg.msg_type === 'file';
+}
+
+function getFileContent(msg: Message): FileMessageContent | null {
+  try {
+    return JSON.parse(msg.content) as FileMessageContent;
+  } catch {
+    return null;
+  }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// ===== 文件选择和拖拽 =====
+function handleFileSelect() {
+  fileInputRef.value?.click();
+}
+
+async function handleFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  clearFile();
+  input.value = '';
+
+  if (file.size > 50 * 1024 * 1024) {
+    useMessage().error('文件大小不能超过 50MB');
+    return;
+  }
+
+  await processAndUpload(file);
+}
+
+function handleDrop(event: DragEvent) {
+  isDragOver.value = false;
+  const file = event.dataTransfer?.files[0];
+  if (!file) return;
+
+  clearFile();
+
+  if (file.size > 50 * 1024 * 1024) {
+    useMessage().error('文件大小不能超过 50MB');
+    return;
+  }
+
+  processAndUpload(file);
+}
+
+function removePendingFile() {
+  clearFile();
+}
+
+// ===== 图片预览 =====
+function openImagePreview(message: Message) {
+  const fileContent = getFileContent(message);
+  if (!fileContent) return;
+  previewImageUrl.value = fileContent.public_url;
+  previewFileName.value = fileContent.file_name;
+  showImagePreview.value = true;
+}
+
+async function handleFileDownload(message: Message) {
+  const fileContent = getFileContent(message);
+  if (!fileContent) return;
+
+  try {
+    const response = await fetch(fileContent.public_url);
+    if (!response.ok) throw new Error('下载失败');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileContent.file_name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('下载文件失败:', error);
+    useMessage().error('下载文件失败');
+  }
+}
+
+function handlePreviewDownload() {
+  if (!previewImageUrl.value) return;
+  const link = document.createElement('a');
+  link.href = previewImageUrl.value;
+  link.download = previewFileName.value;
+  link.target = '_blank';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// ===== 滚动到底部 =====
 const scrollToBottom = async () => {
   await nextTick();
   if (messagesContainer.value) {
@@ -277,20 +501,22 @@ const scrollToBottom = async () => {
   }
 };
 
+// ===== 发送消息 =====
 const handleSend = () => {
-  console.log(
-    '[ChatWindow] handleSend called, conversation:',
-    props.conversation?.id,
-    'newMessage:',
-    newMessage.value
-  );
-  if (!props.conversation?.id || !newMessage.value.trim()) {
-    console.log('[ChatWindow] handleSend returning early, no conversation or empty message');
-    return;
+  if (!props.conversation?.id) return;
+  if (sendDisabled.value) return;
+
+  // 发送文件消息
+  if (fileData.value) {
+    emit('send-file-message', fileData.value);
+    clearFile();
   }
-  console.log('[ChatWindow] Emitting send-message event with content:', newMessage.value);
-  emit('send-message', newMessage.value);
-  newMessage.value = '';
+
+  // 发送文字消息
+  if (newMessage.value.trim()) {
+    emit('send-message', newMessage.value);
+    newMessage.value = '';
+  }
 };
 
 const handleKeyDown = (event: KeyboardEvent) => {

@@ -289,16 +289,12 @@ storageApiClient.interceptors.request.use(
 export const storageApi = {
   // 申请上传（获取预签名 URL）
   requestUpload: (data: UploadRequest): Promise<ApiResponse<UploadResponse>> => {
-    return storageApiClient
-      .post('/api/files/upload/request', data)
-      .then((res) => res.data);
+    return storageApiClient.post('/api/files/upload/request', data).then((res) => res.data);
   },
 
   // 确认上传
   confirmUpload: (data: ConfirmUploadRequest): Promise<ApiResponse<ConfirmUploadResponse>> => {
-    return storageApiClient
-      .post('/api/files/upload/confirm', data)
-      .then((res) => res.data);
+    return storageApiClient.post('/api/files/upload/confirm', data).then((res) => res.data);
   },
 };
 

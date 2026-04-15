@@ -12,6 +12,7 @@ type MsgType string
 const (
 	MsgTypeText  MsgType = "text"
 	MsgTypeImage MsgType = "image"
+	MsgTypeFile  MsgType = "file"
 )
 
 // Message 消息模型

@@ -61,6 +61,7 @@
         :messages="messages"
         :current-user-id="auth.currentUser?.id"
         @send-message="handleSendMessage"
+        @send-file-message="handleSendFileMessage"
         @export-messages="handleExportMessages"
         @show-user="handleShowUserProfile"
         @update-conversation="handleUpdateConversation"
@@ -141,7 +142,13 @@ import CreateGroupModal from '../CreateGroupModal.vue';
 import ConversationDetailModal from '../ConversationDetailModal.vue';
 import NotificationList from '../../common/NotificationList.vue';
 import ResizableContainer from '../../common/ResizableContainer.vue';
-import type { User, Conversation, Message, Friendship } from '../../../models/types';
+import type {
+  User,
+  Conversation,
+  Message,
+  Friendship,
+  FileMessageContent,
+} from '../../../models/types';
 import { BsPlusLg, BsXCircle } from 'vue-icons-plus/bs';
 
 // Auth
@@ -153,8 +160,14 @@ const router = useRouter();
 const { conversations, loadConversations, createConversation } = useConversations();
 const { friends, loadFriends, sendFriendRequest, handleFriendRequest, loadPendingRequests } =
   useFriends();
-const { loadMessages, checkAndLoadIncremental, sendMessage, exportMessages, clearMessages } =
-  useChat();
+const {
+  loadMessages,
+  checkAndLoadIncremental,
+  sendMessage,
+  sendFileMessage,
+  exportMessages,
+  clearMessages,
+} = useChat();
 const { addMessage: cacheMessage } = useMessageCache();
 const { notifications, removeNotification } = useNotification();
 const messageStore = useMessageStore();
@@ -517,6 +530,41 @@ const handleSendMessage = async (content: string) => {
     }
   } catch (error) {
     console.error('[ChatPanel] Error in handleSendMessage:', error);
+  }
+};
+
+const handleSendFileMessage = async (fileData: FileMessageContent) => {
+  if (!selectedConversation.value?.id) return;
+
+  if (isHidden(selectedConversation.value.id)) {
+    showConversation(selectedConversation.value.id);
+    conversations.value = [...conversations.value];
+  }
+
+  try {
+    const success = await sendFileMessage(selectedConversation.value.id, fileData);
+    if (success) {
+      const conversationIndex = conversations.value.findIndex(
+        (c) => c.id === selectedConversation.value?.id
+      );
+      if (conversationIndex !== -1 && messages.value.length > 0) {
+        const lastMessage = messages.value[messages.value.length - 1];
+        if (lastMessage) {
+          const conversation = conversations.value[conversationIndex];
+          if (conversation) {
+            conversations.value[conversationIndex] = {
+              ...conversation,
+              last_message: lastMessage,
+              updated_at: new Date().toISOString(),
+            };
+            await cacheMessage(selectedConversation.value.id, lastMessage);
+            conversations.value = [...conversations.value];
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[ChatPanel] Error in handleSendFileMessage:', error);
   }
 };
 
