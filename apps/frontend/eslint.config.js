@@ -3,6 +3,7 @@ import pluginVue from 'eslint-plugin-vue';
 import * as parserVue from 'vue-eslint-parser';
 import configPrettier from 'eslint-config-prettier';
 import pluginPrettier from 'eslint-plugin-prettier';
+import tsPlugin from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 
 export default [
@@ -28,6 +29,7 @@ export default [
   {
     plugins: {
       prettier: pluginPrettier,
+      '@typescript-eslint': tsPlugin,
     },
     rules: {
       ...configPrettier.rules,

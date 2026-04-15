@@ -63,9 +63,7 @@ export const useAiStore = defineStore('ai', () => {
     }
   };
 
-  const addConfig = (
-    config: Omit<AiConfig, 'id' | 'createdAt' | 'updatedAt'>
-  ): AiConfig => {
+  const addConfig = (config: Omit<AiConfig, 'id' | 'createdAt' | 'updatedAt'>): AiConfig => {
     const newConfig: AiConfig = {
       ...config,
       id: crypto.randomUUID(),
@@ -124,7 +122,6 @@ export const useAiStore = defineStore('ai', () => {
   });
 
   const activeMessages = computed(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     streamingVersion.value;
     return activeConversation.value?.messages || [];
   });
