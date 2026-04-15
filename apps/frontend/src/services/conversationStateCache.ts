@@ -55,7 +55,9 @@ class ConversationStateCacheService {
           }
         }
       }
-      console.log(`[ConversationStateCache] Loaded state for ${this.cache.size} conversations (user: ${this.currentUserId})`);
+      console.log(
+        `[ConversationStateCache] Loaded state for ${this.cache.size} conversations (user: ${this.currentUserId})`
+      );
     } catch (error) {
       console.error('[ConversationStateCache] Failed to load cache from storage:', error);
     }
@@ -241,12 +243,24 @@ export function useConversationStateCache() {
     init: conversationStateCacheService.init.bind(conversationStateCacheService),
     getState: conversationStateCacheService.getState.bind(conversationStateCacheService),
     isHidden: conversationStateCacheService.isHidden.bind(conversationStateCacheService),
-    hideConversation: conversationStateCacheService.hideConversation.bind(conversationStateCacheService),
-    showConversation: conversationStateCacheService.showConversation.bind(conversationStateCacheService),
-    getUnreadCount: conversationStateCacheService.getUnreadCount.bind(conversationStateCacheService),
-    incrementUnreadCount: conversationStateCacheService.incrementUnreadCount.bind(conversationStateCacheService),
-    clearUnreadCount: conversationStateCacheService.clearUnreadCount.bind(conversationStateCacheService),
-    clearConversationState: conversationStateCacheService.clearConversationState.bind(conversationStateCacheService),
+    hideConversation: conversationStateCacheService.hideConversation.bind(
+      conversationStateCacheService
+    ),
+    showConversation: conversationStateCacheService.showConversation.bind(
+      conversationStateCacheService
+    ),
+    getUnreadCount: conversationStateCacheService.getUnreadCount.bind(
+      conversationStateCacheService
+    ),
+    incrementUnreadCount: conversationStateCacheService.incrementUnreadCount.bind(
+      conversationStateCacheService
+    ),
+    clearUnreadCount: conversationStateCacheService.clearUnreadCount.bind(
+      conversationStateCacheService
+    ),
+    clearConversationState: conversationStateCacheService.clearConversationState.bind(
+      conversationStateCacheService
+    ),
     clearAll: conversationStateCacheService.clearAll.bind(conversationStateCacheService),
     getVisibleConversationIds: conversationStateCacheService.getVisibleConversationIds.bind(
       conversationStateCacheService

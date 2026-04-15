@@ -23,7 +23,10 @@
     <!-- 可调整大小的容器 -->
     <div class="flex flex-col flex-1 overflow-hidden">
       <!-- 消息列表 -->
-      <CustomScrollbar ref="messagesContainer" class="flex-1 bg-bg-quaternary border-b border-border-color min-h-0">
+      <CustomScrollbar
+        ref="messagesContainer"
+        class="flex-1 bg-bg-quaternary border-b border-border-color min-h-0"
+      >
         <div class="p-4 space-y-2">
           <template v-for="(message, index) in messages" :key="message.id">
             <!-- 时间分割线 -->
@@ -36,9 +39,7 @@
             </div>
 
             <!-- 消息行 -->
-            <div
-              :class="['flex gap-3', { 'flex-row-reverse': message.role === 'user' }]"
-            >
+            <div :class="['flex gap-3', { 'flex-row-reverse': message.role === 'user' }]">
               <!-- 头像 -->
               <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
                 <div
@@ -62,7 +63,10 @@
                 <div
                   class="relative px-4 py-2.5 rounded-2xl cursor-default"
                   :style="{
-                    background: message.role === 'user' ? 'var(--theme-primary)' : 'var(--strong-background-color)',
+                    background:
+                      message.role === 'user'
+                        ? 'var(--theme-primary)'
+                        : 'var(--strong-background-color)',
                     color: message.role === 'user' ? '#ffffff' : 'var(--text-color)',
                     wordBreak: 'break-word',
                     overflowWrap: 'break-word',
@@ -83,7 +87,10 @@
                     <div
                       v-if="activeTooltipId === message.id"
                       class="absolute -bottom-7 left-1/2 -translate-x-1/2 text-xs text-text-tertiary whitespace-nowrap px-2 py-0.5 rounded-md z-10 pointer-events-none"
-                      style="background: var(--surface-color); border: 1px solid var(--border-color)"
+                      style="
+                        background: var(--surface-color);
+                        border: 1px solid var(--border-color);
+                      "
                     >
                       {{ formatTimeWithSeconds(message.createdAt) }}
                     </div>
@@ -94,7 +101,10 @@
           </template>
 
           <!-- 空状态 -->
-          <div v-if="messages.length === 0" class="flex flex-col items-center justify-center py-16 text-text-tertiary">
+          <div
+            v-if="messages.length === 0"
+            class="flex flex-col items-center justify-center py-16 text-text-tertiary"
+          >
             <BsRobot :size="48" class="mb-4 opacity-30" />
             <p>开始和 AI 对话吧</p>
           </div>

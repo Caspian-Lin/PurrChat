@@ -230,13 +230,19 @@ class MessageCacheService {
               const cache: ConversationCache = JSON.parse(decryptedData);
               this.cache.set(conversationId, cache);
             } catch (error) {
-              console.error('[MessageCache] Failed to load cache for conversation:', conversationId, error);
+              console.error(
+                '[MessageCache] Failed to load cache for conversation:',
+                conversationId,
+                error
+              );
               localStorage.removeItem(key);
             }
           }
         }
       }
-      console.log(`[MessageCache] Loaded message cache for ${this.cache.size} conversations (user: ${this.currentUserId})`);
+      console.log(
+        `[MessageCache] Loaded message cache for ${this.cache.size} conversations (user: ${this.currentUserId})`
+      );
     } catch (error) {
       console.error('[MessageCache] Failed to load cache from storage:', error);
     }
@@ -327,7 +333,10 @@ class MessageCacheService {
    * @param serverMessageIds 服务器返回的消息 ID 集合
    * @returns 被移除的消息数量
    */
-  async reconcileWithServer(conversationId: string, serverMessageIds: Set<string>): Promise<number> {
+  async reconcileWithServer(
+    conversationId: string,
+    serverMessageIds: Set<string>
+  ): Promise<number> {
     const cache = this.cache.get(conversationId);
     if (!cache) return 0;
 
@@ -338,7 +347,9 @@ class MessageCacheService {
     if (removed > 0) {
       cache.lastUpdated = Date.now();
       await this.saveCacheToStorage(conversationId);
-      console.log(`[MessageCache] Reconciled ${removed} messages for conversation ${conversationId}`);
+      console.log(
+        `[MessageCache] Reconciled ${removed} messages for conversation ${conversationId}`
+      );
     }
     return removed;
   }

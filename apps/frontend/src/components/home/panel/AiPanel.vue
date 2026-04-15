@@ -78,10 +78,7 @@
       </div>
 
       <!-- 未创建对话的空状态 -->
-      <div
-        v-else
-        class="flex-1 flex flex-col items-center justify-center text-text-tertiary gap-4"
-      >
+      <div v-else class="flex-1 flex flex-col items-center justify-center text-text-tertiary gap-4">
         <BsChatLeftText :size="64" class="opacity-30" />
         <h3 class="text-2xl font-semibold text-text-primary">AI 对话</h3>
         <p>选择一个配置并创建新对话</p>

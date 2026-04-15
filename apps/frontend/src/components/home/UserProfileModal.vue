@@ -7,11 +7,7 @@
   >
     <div class="flex flex-col items-center gap-6">
       <!-- 头像区域 -->
-      <div
-        v-if="isCurrentUser"
-        class="relative group cursor-pointer"
-        @click="handleAvatarClick"
-      >
+      <div v-if="isCurrentUser" class="relative group cursor-pointer" @click="handleAvatarClick">
         <div class="w-28 h-28 roundrect overflow-hidden">
           <img
             v-if="displayAvatarUrl"
@@ -41,7 +37,10 @@
           v-else
           class="absolute inset-0 roundrect bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center"
         >
-          <BsCamera class="text-white opacity-0 group-hover:opacity-100 transition-opacity" :size="24" />
+          <BsCamera
+            class="text-white opacity-0 group-hover:opacity-100 transition-opacity"
+            :size="24"
+          />
         </div>
         <input
           ref="fileInputRef"

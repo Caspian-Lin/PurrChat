@@ -8,10 +8,7 @@ export interface ThemeConfig {
 }
 
 // 主题色配置
-export const themeColors: Record<
-  ThemeColor,
-  { primary: string; secondary: string }
-> = {
+export const themeColors: Record<ThemeColor, { primary: string; secondary: string }> = {
   purple: {
     primary: '#bf5eff',
     secondary: '#764ba2',

@@ -16,7 +16,11 @@
           type="text"
           placeholder="如: GPT-4、Claude、DeepSeek"
           class="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2"
-          style="background: var(--surface-color); border-color: var(--border-color); color: var(--text-color)"
+          style="
+            background: var(--surface-color);
+            border-color: var(--border-color);
+            color: var(--text-color);
+          "
         />
       </div>
 
@@ -30,7 +34,11 @@
           type="text"
           placeholder="https://api.openai.com/v1"
           class="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2"
-          style="background: var(--surface-color); border-color: var(--border-color); color: var(--text-color)"
+          style="
+            background: var(--surface-color);
+            border-color: var(--border-color);
+            color: var(--text-color);
+          "
         />
         <p class="text-xs mt-1" style="color: var(--text-tertiary-color)">
           兼容 OpenAI API 格式，如 OpenAI、DeepSeek、Ollama 等
@@ -48,7 +56,11 @@
             :type="showApiKey ? 'text' : 'password'"
             placeholder="sk-..."
             class="w-full px-4 py-2 pr-10 rounded-lg border focus:outline-none focus:ring-2"
-            style="background: var(--surface-color); border-color: var(--border-color); color: var(--text-color)"
+            style="
+              background: var(--surface-color);
+              border-color: var(--border-color);
+              color: var(--text-color);
+            "
           />
           <button
             class="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary transition-colors"
@@ -73,7 +85,11 @@
           type="text"
           placeholder="如: gpt-4o、claude-3-opus、deepseek-chat"
           class="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2"
-          style="background: var(--surface-color); border-color: var(--border-color); color: var(--text-color)"
+          style="
+            background: var(--surface-color);
+            border-color: var(--border-color);
+            color: var(--text-color);
+          "
         />
       </div>
 
@@ -93,7 +109,11 @@
           />
           <span
             class="w-12 text-center px-2 py-1 rounded-md text-sm font-mono"
-            style="background: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-color)"
+            style="
+              background: var(--surface-color);
+              border: 1px solid var(--border-color);
+              color: var(--text-color);
+            "
           >
             {{ form.temperature.toFixed(1) }}
           </span>
@@ -115,7 +135,11 @@
           min="1"
           max="128000"
           class="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2"
-          style="background: var(--surface-color); border-color: var(--border-color); color: var(--text-color)"
+          style="
+            background: var(--surface-color);
+            border-color: var(--border-color);
+            color: var(--text-color);
+          "
         />
       </div>
 
@@ -154,7 +178,16 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   'update:show': [value: boolean];
-  'config-saved': [data: { name: string; apiUrl: string; apiKey: string; model: string; temperature: number; maxTokens?: number }];
+  'config-saved': [
+    data: {
+      name: string;
+      apiUrl: string;
+      apiKey: string;
+      model: string;
+      temperature: number;
+      maxTokens?: number;
+    },
+  ];
 }>();
 
 const showApiKey = ref(false);

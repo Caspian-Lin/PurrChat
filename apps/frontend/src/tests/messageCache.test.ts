@@ -9,9 +9,18 @@ const localStorageMock = (() => {
   const handler: ProxyHandler<typeof store> = {
     get(target, prop, receiver) {
       if (prop === 'getItem') return (key: string) => target[key] ?? null;
-      if (prop === 'setItem') return (key: string, value: string) => { target[key] = String(value); };
-      if (prop === 'removeItem') return (key: string) => { delete target[key]; };
-      if (prop === 'clear') return () => { for (const k of Object.keys(target)) delete target[k]; };
+      if (prop === 'setItem')
+        return (key: string, value: string) => {
+          target[key] = String(value);
+        };
+      if (prop === 'removeItem')
+        return (key: string) => {
+          delete target[key];
+        };
+      if (prop === 'clear')
+        return () => {
+          for (const k of Object.keys(target)) delete target[k];
+        };
       if (prop === 'length') return Object.keys(target).length;
       if (prop === 'key') return (index: number) => Object.keys(target)[index] ?? null;
       return Reflect.get(target, prop, receiver);

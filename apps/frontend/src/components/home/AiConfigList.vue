@@ -17,7 +17,12 @@
         >
           <div
             class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-            :style="{ background: activeConfigId === config.id ? 'var(--theme-primary)' : 'var(--surface-secondary-color)' }"
+            :style="{
+              background:
+                activeConfigId === config.id
+                  ? 'var(--theme-primary)'
+                  : 'var(--surface-secondary-color)',
+            }"
           >
             <BsRobot
               :size="16"
@@ -46,10 +51,7 @@
             </button>
           </div>
         </div>
-        <div
-          v-if="configs.length === 0"
-          class="px-4 py-6 text-center text-text-tertiary text-sm"
-        >
+        <div v-if="configs.length === 0" class="px-4 py-6 text-center text-text-tertiary text-sm">
           暂无配置，请先添加
         </div>
       </CustomScrollbar>
@@ -57,7 +59,9 @@
 
     <!-- 会话列表区域 -->
     <div class="flex-1 min-h-0">
-      <div class="px-4 py-2 text-xs font-medium uppercase tracking-wider text-text-tertiary border-b border-border-color flex items-center justify-between">
+      <div
+        class="px-4 py-2 text-xs font-medium uppercase tracking-wider text-text-tertiary border-b border-border-color flex items-center justify-between"
+      >
         <span>对话历史</span>
       </div>
       <CustomScrollbar class="h-[calc(100%-28px)]">
