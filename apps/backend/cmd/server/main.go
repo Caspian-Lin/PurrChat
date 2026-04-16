@@ -22,6 +22,7 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"golang.org/x/time/rate"
 )
 
 // registerUUIDValidator 注册 UUID 验证器
@@ -195,6 +196,13 @@ func main() {
 	// 配置日志中间件（记录所有API活动）
 	r.Use(handlers.LoggingMiddleware())
 
+	// 全局 per-IP 速率限制 — 防止 DDoS 和 API 滥用
+	r.Use(handlers.IPRateLimitMiddleware(
+		rate.Limit(cfg.RateLimit.GlobalRatePerSec),
+		cfg.RateLimit.GlobalBurst,
+		10*time.Minute, // visitor 条目过期时间
+	))
+
 	// 配置 CORS 中间件
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
@@ -226,7 +234,28 @@ func main() {
 	websocket.InitHubWithConfig(cfg.WebSocket.MaxConnections, cfg.WebSocket.MaxUserConnections)
 	websocket.InitJWTSecret(cfg.JWT.Secret)
 
-	// 健康检查
+	// 认证端点 per-IP 速率限制 — 防止暴力破解和批量注册
+	authRateLimit := handlers.IPRateLimitMiddleware(
+		rate.Limit(cfg.RateLimit.AuthRatePerSec),
+		cfg.RateLimit.AuthBurst,
+		10*time.Minute,
+	)
+
+	// 已认证用户速率限制 — 防止已登录用户滥用 API
+	userRateLimit := handlers.UserRateLimitMiddleware(
+		rate.Limit(cfg.RateLimit.UserRatePerSec),
+		cfg.RateLimit.UserBurst,
+		10*time.Minute,
+	)
+
+	// 敏感操作速率限制 — 防止好友请求洪水和消息轰炸
+	sensitiveRateLimit := handlers.UserRateLimitMiddleware(
+		rate.Limit(cfg.RateLimit.SensitiveRatePerSec),
+		cfg.RateLimit.SensitiveBurst,
+		10*time.Minute,
+	)
+
+	// 健康检查（不受速率限制）
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status":  "ok",
@@ -240,51 +269,59 @@ func main() {
 		})
 	})
 
-	// 认证路由
+	// 认证路由（严格 per-IP 限流）
 	auth := r.Group("/api")
 	{
-		auth.POST("/register", authHandler.Register)
-		auth.POST("/login", authHandler.Login)
-		auth.GET("/me", handlers.AuthMiddleware(cfg.JWT.Secret), authHandler.Me)
-		auth.PUT("/profile", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.UpdateProfile)
+		auth.POST("/register", authRateLimit, authHandler.Register)
+		auth.POST("/login", authRateLimit, authHandler.Login)
+		auth.GET("/me", handlers.AuthMiddleware(cfg.JWT.Secret), userRateLimit, authHandler.Me)
+		auth.PUT("/profile", handlers.AuthMiddleware(cfg.JWT.Secret), userRateLimit, chatHandler.UpdateProfile)
 	}
 
-	// 用户路由
+	// 用户路由（per-User 限流）
 	users := r.Group("/api/users")
+	users.Use(handlers.AuthMiddleware(cfg.JWT.Secret))
+	users.Use(userRateLimit)
 	{
-		users.GET("/search", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SearchUsers)
-		users.GET("/:id", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetUserByID)
-		users.GET("/uid/:uid", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetUserByUID)
+		users.GET("/search", chatHandler.SearchUsers)
+		users.GET("/:id", chatHandler.GetUserByID)
+		users.GET("/uid/:uid", chatHandler.GetUserByUID)
 	}
 
-	// 会话路由
+	// 会话路由（per-User 限流）
 	conversations := r.Group("/api/conversations")
+	conversations.Use(handlers.AuthMiddleware(cfg.JWT.Secret))
+	conversations.Use(userRateLimit)
 	{
-		conversations.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetConversations)
-		conversations.POST("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.CreateConversation)
-		conversations.POST("/group", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.CreateGroupConversation)
-		conversations.GET("/members", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetConversationMembers)
-		conversations.POST("/members", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.AddMemberToConversation)
-		conversations.DELETE("/members", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.RemoveMemberFromConversation)
+		conversations.GET("", chatHandler.GetConversations)
+		conversations.POST("", chatHandler.CreateConversation)
+		conversations.POST("/group", chatHandler.CreateGroupConversation)
+		conversations.GET("/members", chatHandler.GetConversationMembers)
+		conversations.POST("/members", chatHandler.AddMemberToConversation)
+		conversations.DELETE("/members", chatHandler.RemoveMemberFromConversation)
 	}
 
-	// 消息路由
+	// 消息路由（发送消息使用严格限流）
 	messages := r.Group("/api/messages")
+	messages.Use(handlers.AuthMiddleware(cfg.JWT.Secret))
+	messages.Use(userRateLimit)
 	{
-		messages.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetMessages)
-		messages.GET("/export", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.ExportMessages)
-		messages.GET("/incremental", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetMessagesIncremental)
-		messages.POST("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SendMessage)
+		messages.GET("", chatHandler.GetMessages)
+		messages.GET("/export", chatHandler.ExportMessages)
+		messages.GET("/incremental", chatHandler.GetMessagesIncremental)
+		messages.POST("", sensitiveRateLimit, chatHandler.SendMessage) // 发送消息使用更严格的限流
 	}
 
-	// 好友路由
+	// 好友路由（敏感操作使用严格限流）
 	friends := r.Group("/api/friends")
+	friends.Use(handlers.AuthMiddleware(cfg.JWT.Secret))
+	friends.Use(userRateLimit)
 	{
-		friends.GET("", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetFriends)
-		friends.GET("/pending", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetPendingFriendRequests)
-		friends.GET("/requests", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.GetAllFriendRequests)
-		friends.POST("/request", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.SendFriendRequest)
-		friends.POST("/handle", handlers.AuthMiddleware(cfg.JWT.Secret), chatHandler.HandleFriendRequest)
+		friends.GET("", chatHandler.GetFriends)
+		friends.GET("/pending", chatHandler.GetPendingFriendRequests)
+		friends.GET("/requests", chatHandler.GetAllFriendRequests)
+		friends.POST("/request", sensitiveRateLimit, chatHandler.SendFriendRequest)    // 发送好友请求严格限流
+		friends.POST("/handle", sensitiveRateLimit, chatHandler.HandleFriendRequest)   // 处理好友请求严格限流
 	}
 
 	// WebSocket路由（不使用AuthMiddleware，因为WebSocket通过查询参数传递token）
