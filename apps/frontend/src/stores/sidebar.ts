@@ -1,13 +1,14 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
-export type PanelId = 'chat' | 'friends' | 'ai';
+export type PanelId = 'chat' | 'friends' | 'ai' | 'settings';
 
 export const useSidebarStore = defineStore('sidebar', () => {
   const collapsed = ref<Record<PanelId, boolean>>({
     chat: false,
     friends: false,
     ai: false,
+    settings: false,
   });
 
   function toggleSidebar(panelId: PanelId) {

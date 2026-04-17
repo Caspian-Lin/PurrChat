@@ -5,14 +5,14 @@ export function usePanelController() {
   const router = useRouter();
 
   // 导航到指定的panel
-  const navigateToPanel = (panel: 'chat' | 'friends' | 'ai') => {
-    if (panel === 'chat') {
-      router.push('/chat');
-    } else if (panel === 'friends') {
-      router.push('/friends');
-    } else if (panel === 'ai') {
-      router.push('/ai');
-    }
+  const navigateToPanel = (panel: 'chat' | 'friends' | 'ai' | 'settings') => {
+    const routes: Record<string, string> = {
+      chat: '/chat',
+      friends: '/friends',
+      ai: '/ai',
+      settings: '/settings',
+    };
+    router.push(routes[panel]);
   };
 
   return {

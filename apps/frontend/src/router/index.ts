@@ -28,6 +28,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../components/home/panel/AiPanel.vue'),
         meta: { requiresAuth: true },
       },
+      {
+        path: 'settings',
+        name: 'Settings',
+        component: () => import('../components/home/panel/SettingsPanel.vue'),
+        meta: { requiresAuth: true },
+      },
     ],
   },
   {

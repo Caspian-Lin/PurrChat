@@ -243,3 +243,43 @@ export interface FileMessageContent {
   public_url: string;
   category: 'chat-image' | 'file';
 }
+
+// ===== 用户设置相关类型定义 =====
+
+// 设置分类 ID
+export type SettingsCategoryId = 'account' | 'panels' | 'notifications' | 'general' | 'about';
+
+// 面板可见性设置
+export interface PanelVisibilitySettings {
+  visiblePanels: ('chat' | 'friends' | 'ai')[];
+}
+
+// 通知设置
+export interface NotificationSettings {
+  messageNotification: boolean;
+  friendRequestNotification: boolean;
+  groupInviteNotification: boolean;
+  systemNotification: boolean;
+  soundEnabled: boolean;
+  desktopNotificationEnabled: boolean;
+}
+
+// 通用设置
+export interface GeneralSettings {
+  themeMode: 'light' | 'dark';
+  themeColor: 'sage' | 'iris' | 'ocean' | 'ember' | 'rose' | 'slate' | 'clay' | 'honey';
+  language: string;
+  fontSize: 'small' | 'medium' | 'large';
+}
+
+// 用户设置（完整）
+export interface UserSettings {
+  panels: PanelVisibilitySettings;
+  notifications: NotificationSettings;
+  general: GeneralSettings;
+}
+
+// 设置更新请求
+export interface UpdateSettingsRequest {
+  settings: Partial<UserSettings>;
+}

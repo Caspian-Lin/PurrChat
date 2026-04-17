@@ -22,6 +22,8 @@ import type {
   UploadResponse,
   ConfirmUploadRequest,
   ConfirmUploadResponse,
+  UserSettings,
+  UpdateSettingsRequest,
 } from './types';
 import { getApiBaseUrl, getStorageApiBaseUrl, logger } from '../config/app';
 
@@ -260,6 +262,16 @@ export const api = {
   // 健康检查
   health: (): Promise<{ status: string; message: string }> => {
     return apiClient.get('/health').then((res) => res.data);
+  },
+
+  // 获取用户设置
+  getSettings: (): Promise<ApiResponse<UserSettings>> => {
+    return apiClient.get('/api/settings').then((res) => res.data);
+  },
+
+  // 更新用户设置
+  updateSettings: (data: UpdateSettingsRequest): Promise<ApiResponse<UserSettings>> => {
+    return apiClient.put('/api/settings', data).then((res) => res.data);
   },
 };
 
