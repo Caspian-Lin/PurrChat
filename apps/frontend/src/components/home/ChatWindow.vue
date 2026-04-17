@@ -205,120 +205,115 @@
         storage-key="chat-input-height"
         @resize="handleSplitterResize"
       />
-      <div class="pb-3 px-2">
-        <!-- 消息输入区 -->
-        <div
-          class="flex flex-col bg-bg-primary border-t border-border-subtle rounded-[var(--radius-md)] flex-shrink-0"
-          :class="{ 'border-dashed border-2 border-[var(--theme-primary)]': isDragOver }"
-          :style="{ height: `${inputAreaHeight}px` }"
-          @dragover.prevent="isDragOver = true"
-          @dragleave.prevent="isDragOver = false"
-          @drop.prevent="handleDrop"
-        >
-          <!-- 文件预览卡片（上传完成后显示） -->
-          <div v-if="fileData || fileUploading" class="px-4 pt-2">
-            <div
-              class="flex items-center gap-3 p-2 rounded-lg"
-              style="background: var(--surface-color); border: 1px solid var(--border-color)"
-            >
-              <!-- 图片预览 -->
-              <div v-if="thumbnailDataUrl" class="w-12 h-12 rounded overflow-hidden flex-shrink-0">
-                <img :src="thumbnailDataUrl" alt="preview" class="w-full h-full object-cover" />
-              </div>
-              <!-- 文件图标 -->
-              <div
-                v-else
-                class="w-12 h-12 rounded flex items-center justify-center flex-shrink-0"
-                style="background: var(--bg-quaternary)"
-              >
-                <BsFileEarmark class="text-2xl text-text-tertiary" />
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium truncate">
-                  {{ fileData?.file_name || '上传中...' }}
-                </div>
-                <div class="text-xs text-text-tertiary">
-                  {{ fileData ? formatFileSize(fileData.file_size) : '正在上传...' }}
-                </div>
-              </div>
-              <!-- 上传进度条 -->
-              <div v-if="fileUploading" class="w-20">
-                <div
-                  class="h-1 rounded-full overflow-hidden"
-                  style="background: var(--border-color)"
-                >
-                  <div
-                    class="h-1 rounded-full bg-[var(--theme-primary)] transition-all duration-300"
-                    :style="{ width: `${fileUploadProgress}%` }"
-                  />
-                </div>
-              </div>
-              <!-- 移除按钮 -->
-              <button v-else class="p-1 hover:bg-hover-bg rounded" @click="removePendingFile">
-                <BsX class="text-lg text-text-tertiary" />
-              </button>
+      <!-- 消息输入区 -->
+      <div
+        class="flex flex-col bg-bg-primary border-t border-border-subtle flex-shrink-0"
+        :class="{ 'border-dashed border-2 border-[var(--theme-primary)]': isDragOver }"
+        :style="{ height: `${inputAreaHeight}px` }"
+        @dragover.prevent="isDragOver = true"
+        @dragleave.prevent="isDragOver = false"
+        @drop.prevent="handleDrop"
+      >
+        <!-- 文件预览卡片（上传完成后显示） -->
+        <div v-if="fileData || fileUploading" class="px-4 pt-2">
+          <div
+            class="flex items-center gap-3 p-2 rounded-lg"
+            style="background: var(--surface-color); border: 1px solid var(--border-color)"
+          >
+            <!-- 图片预览 -->
+            <div v-if="thumbnailDataUrl" class="w-12 h-12 rounded overflow-hidden flex-shrink-0">
+              <img :src="thumbnailDataUrl" alt="preview" class="w-full h-full object-cover" />
             </div>
-          </div>
-
-          <!-- 文本选项 -->
-          <div class="flex items-center gap-3 px-4 py-3">
-            <EmojiPicker v-model="newMessage" @select="handleEmojiSelect" />
-            <button
-              class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-              title="文件"
-              @click="handleFileSelect"
+            <!-- 文件图标 -->
+            <div
+              v-else
+              class="w-12 h-12 rounded flex items-center justify-center flex-shrink-0"
+              style="background: var(--bg-quaternary)"
             >
-              <BsPaperclip class="text-2xl" />
-            </button>
-            <button
-              class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-              title="截图"
-            >
-              <BsCamera class="text-2xl" />
-            </button>
-            <div class="h-[18px] w-px bg-border-color" />
-            <button
-              class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-              title="视频通话"
-            >
-              <BsCameraVideo class="text-2xl" />
-            </button>
-            <!-- 隐藏的文件输入 -->
-            <input ref="fileInputRef" type="file" class="hidden" @change="handleFileChange" />
-          </div>
-
-          <!-- 文本输入区 -->
-          <div class="flex-1 px-4 min-h-0">
-            <textarea
-              v-model="newMessage"
-              placeholder="输入消息... (Enter 发送)"
-              class="w-full h-full bg-transparent text-base text-text-primary resize-none outline-none placeholder:text-text-tertiary"
-              @keydown="handleKeyDown"
-            />
-          </div>
-
-          <!-- 发送按钮 -->
-          <div class="flex justify-end pb-4 pr-4">
-            <button
-              class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-base disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="sendDisabled"
-              @click="handleSend"
-            >
-              Send
+              <BsFileEarmark class="text-2xl text-text-tertiary" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium truncate">
+                {{ fileData?.file_name || '上传中...' }}
+              </div>
+              <div class="text-xs text-text-tertiary">
+                {{ fileData ? formatFileSize(fileData.file_size) : '正在上传...' }}
+              </div>
+            </div>
+            <!-- 上传进度条 -->
+            <div v-if="fileUploading" class="w-20">
+              <div class="h-1 rounded-full overflow-hidden" style="background: var(--border-color)">
+                <div
+                  class="h-1 rounded-full bg-[var(--theme-primary)] transition-all duration-300"
+                  :style="{ width: `${fileUploadProgress}%` }"
+                />
+              </div>
+            </div>
+            <!-- 移除按钮 -->
+            <button v-else class="p-1 hover:bg-hover-bg rounded" @click="removePendingFile">
+              <BsX class="text-lg text-text-tertiary" />
             </button>
           </div>
         </div>
+
+        <!-- 文本选项 -->
+        <div class="flex items-center gap-3 px-4 py-3">
+          <EmojiPicker v-model="newMessage" @select="handleEmojiSelect" />
+          <button
+            class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+            title="文件"
+            @click="handleFileSelect"
+          >
+            <BsPaperclip class="text-2xl" />
+          </button>
+          <button
+            class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+            title="截图"
+          >
+            <BsCamera class="text-2xl" />
+          </button>
+          <div class="h-[18px] w-px bg-border-color" />
+          <button
+            class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+            title="视频通话"
+          >
+            <BsCameraVideo class="text-2xl" />
+          </button>
+          <!-- 隐藏的文件输入 -->
+          <input ref="fileInputRef" type="file" class="hidden" @change="handleFileChange" />
+        </div>
+
+        <!-- 文本输入区 -->
+        <div class="flex-1 px-4 min-h-0">
+          <textarea
+            v-model="newMessage"
+            placeholder="输入消息... (Enter 发送)"
+            class="w-full h-full bg-transparent text-base text-text-primary resize-none outline-none placeholder:text-text-tertiary"
+            @keydown="handleKeyDown"
+          />
+        </div>
+
+        <!-- 发送按钮 -->
+        <div class="flex justify-end pb-4 pr-4">
+          <button
+            class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-base disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="sendDisabled"
+            @click="handleSend"
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
-
-    <!-- 图片预览器 -->
-    <ImagePreviewModal
-      v-model:show="showImagePreview"
-      :image-url="previewImageUrl"
-      :file-name="previewFileName"
-      @download="handlePreviewDownload"
-    />
   </div>
+
+  <!-- 图片预览器 -->
+  <ImagePreviewModal
+    v-model:show="showImagePreview"
+    :image-url="previewImageUrl"
+    :file-name="previewFileName"
+    @download="handlePreviewDownload"
+  />
 </template>
 
 <script setup lang="ts">

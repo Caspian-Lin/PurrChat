@@ -64,15 +64,13 @@
             showSearchResults &&
             (filteredFriends.length > 0 || searchedUsers.length > 0 || filteredGroups.length > 0)
           "
-          class="absolute top-[80px] left-0 right-0 bg-bg-primary border border-border-subtle rounded-[var(--radius-lg)] shadow-lg z-50 max-h-[400px] overflow-y-auto scrollable"
+          class="absolute top-16 p-2 left-0 right-0 bg-bg-primary border border-border-subtle rounded-[var(--radius-lg)] shadow-lg z-50 max-h-[400px] overflow-y-auto scrollable"
           style="width: 300px"
         >
           <!-- 好友列表 -->
           <div v-if="filteredFriends.length > 0" class="border-b border-border-subtle">
-            <div class="px-3 py-2 text-sm font-semibold text-text-secondary bg-bg-secondary">
-              好友
-            </div>
-            <div class="px-1">
+            <div class="px-3 py-1 text-sm font-semibold text-text-secondary">好友</div>
+            <div>
               <BaseListItem
                 v-for="friendship in filteredFriends"
                 :key="'friend-' + friendship.id"
@@ -106,10 +104,8 @@
 
           <!-- 群聊列表 -->
           <div v-if="filteredGroups.length > 0" class="border-b border-border-subtle">
-            <div class="px-3 py-2 text-sm font-semibold text-text-secondary bg-bg-secondary">
-              群聊
-            </div>
-            <div class="px-1">
+            <div class="px-3 py-1 text-sm font-semibold text-text-secondary">群聊</div>
+            <div>
               <BaseListItem
                 v-for="conversation in filteredGroups"
                 :key="'group-' + conversation.id"
@@ -138,10 +134,8 @@
 
           <!-- 搜索到的用户列表 -->
           <div v-if="searchedUsers.length > 0">
-            <div class="px-3 py-2 text-sm font-semibold text-text-secondary bg-bg-secondary">
-              用户
-            </div>
-            <div class="px-1">
+            <div class="px-3 py-1 text-sm font-semibold text-text-secondary">用户</div>
+            <div>
               <BaseListItem
                 v-for="user in searchedUsers"
                 :key="'user-' + user.id"

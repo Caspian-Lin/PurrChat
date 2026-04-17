@@ -4,7 +4,7 @@
     <div
       class="flex items-center justify-between px-4 py-3 gap-2 bg-bg-secondary border-b border-border-color flex-shrink-0"
     >
-      <div class="flex items-center gap-2">
+      <div class="flex items-top gap-2 pt-2">
         <div
           class="w-8 h-8 rounded-lg flex items-center justify-center"
           style="background: var(--theme-primary)"
@@ -241,10 +241,10 @@
 
       <!-- 消息输入区 -->
       <div
-        class="flex flex-col bg-bg-primary border-t border-border-subtle flex-shrink-0"
+        class="flex flex-col px-4 pt-2 bg-bg-primary border-t border-border-subtle flex-shrink-0"
         :style="{ height: `${inputAreaHeight}px` }"
       >
-        <div class="flex-1 px-4 min-h-0">
+        <div class="flex-1 min-h-0">
           <textarea
             ref="textareaRef"
             v-model="newMessage"
