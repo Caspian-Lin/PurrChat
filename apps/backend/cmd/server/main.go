@@ -229,6 +229,9 @@ func main() {
 	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret)
 	chatHandler := handlers.NewChatHandler(authService, chatService)
+	settingsRepo := repository.NewSettingsRepository()
+	settingsService := services.NewSettingsService(settingsRepo)
+	settingsHandler := handlers.NewSettingsHandler(settingsService)
 
 	// 初始化WebSocket hub
 	websocket.InitHubWithConfig(cfg.WebSocket.MaxConnections, cfg.WebSocket.MaxUserConnections)
@@ -326,6 +329,15 @@ func main() {
 
 	// WebSocket路由（不使用AuthMiddleware，因为WebSocket通过查询参数传递token）
 	r.GET("/api/ws", websocket.HandleWebSocket)
+
+	// 设置路由（per-User 限流）
+	settingsGroup := r.Group("/api/settings")
+	settingsGroup.Use(handlers.AuthMiddleware(cfg.JWT.Secret))
+	settingsGroup.Use(userRateLimit)
+	{
+		settingsGroup.GET("", settingsHandler.GetSettings)
+		settingsGroup.PUT("", settingsHandler.UpdateSettings)
+	}
 
 	// 启动服务器
 	go func() {
