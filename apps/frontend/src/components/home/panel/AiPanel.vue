@@ -1,5 +1,10 @@
 <template>
-  <BasePanel panel-id="ai" :initial-sidebar-width="280" :min-sidebar-width="220" :max-sidebar-width="400">
+  <BasePanel
+    panel-id="ai"
+    :initial-sidebar-width="280"
+    :min-sidebar-width="220"
+    :max-sidebar-width="400"
+  >
     <template #sidebar>
       <div class="flex flex-col h-full">
         <!-- 顶部操作栏 -->
@@ -7,7 +12,7 @@
           class="flex items-center gap-2 px-3 pt-5 pb-3 bg-bg-secondary border-b border-border-subtle flex-shrink-0"
         >
           <button
-            class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-primary hover:text-text-primary"
+            class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
             title="新建对话"
             @click="handleNewConversation"
           >

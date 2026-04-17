@@ -1,5 +1,10 @@
 <template>
-  <BasePanel panel-id="chat" :initial-sidebar-width="320" :min-sidebar-width="250" :max-sidebar-width="500">
+  <BasePanel
+    panel-id="chat"
+    :initial-sidebar-width="320"
+    :min-sidebar-width="250"
+    :max-sidebar-width="500"
+  >
     <template #sidebar>
       <div class="flex flex-col h-full">
         <!-- 搜索用户 -->
@@ -90,46 +95,46 @@
   </BasePanel>
 
   <!-- 个人资料弹窗 -->
-    <UserProfileModal
-      v-model:show="showProfileModal"
-      :user="displayUser"
-      :is-current-user="!selectedUser || selectedUser.id === auth.currentUser?.id"
-      :friendship="getUserFriendship"
-      :loading="isSendingRequest"
-      :current-user-id="auth.currentUser?.id"
-      @send-friend-request="handleSendFriendRequestFromModal"
-      @accept-request="handleAcceptRequestFromModal"
-      @reject-request="handleRejectRequestFromModal"
-      @start-chat="handleStartChatFromModal"
-    />
+  <UserProfileModal
+    v-model:show="showProfileModal"
+    :user="displayUser"
+    :is-current-user="!selectedUser || selectedUser.id === auth.currentUser?.id"
+    :friendship="getUserFriendship"
+    :loading="isSendingRequest"
+    :current-user-id="auth.currentUser?.id"
+    @send-friend-request="handleSendFriendRequestFromModal"
+    @accept-request="handleAcceptRequestFromModal"
+    @reject-request="handleRejectRequestFromModal"
+    @start-chat="handleStartChatFromModal"
+  />
 
-    <!-- 搜索用户操作弹窗 -->
-    <UserActionsModal
-      v-model:show="showSearchModal"
-      :user="selectedSearchUser"
-      @send-friend-request="handleSendFriendRequest"
-      @start-chat="handleStartChatWithSearchUser"
-    />
+  <!-- 搜索用户操作弹窗 -->
+  <UserActionsModal
+    v-model:show="showSearchModal"
+    :user="selectedSearchUser"
+    @send-friend-request="handleSendFriendRequest"
+    @start-chat="handleStartChatWithSearchUser"
+  />
 
-    <!-- 创建群聊弹窗 -->
-    <CreateGroupModal
-      v-model:show="showCreateGroupModal"
-      :friends="friends"
-      @group-created="handleGroupCreated"
-    />
+  <!-- 创建群聊弹窗 -->
+  <CreateGroupModal
+    v-model:show="showCreateGroupModal"
+    :friends="friends"
+    @group-created="handleGroupCreated"
+  />
 
-    <!-- 会话详情弹窗 -->
-    <ConversationDetailModal
-      v-model:show="showConversationDetailModal"
-      :conversation="selectedConversation"
-      :current-user-id="auth.currentUser?.id"
-      @show-user-profile="handleShowUserProfile"
-      @members-changed="handleGroupUpdated"
-      @start-chat="handleStartChatFromDetail"
-    />
+  <!-- 会话详情弹窗 -->
+  <ConversationDetailModal
+    v-model:show="showConversationDetailModal"
+    :conversation="selectedConversation"
+    :current-user-id="auth.currentUser?.id"
+    @show-user-profile="handleShowUserProfile"
+    @members-changed="handleGroupUpdated"
+    @start-chat="handleStartChatFromDetail"
+  />
 
-    <!-- 通知列表 -->
-    <NotificationList :notifications="notifications" @remove-notification="removeNotification" />
+  <!-- 通知列表 -->
+  <NotificationList :notifications="notifications" @remove-notification="removeNotification" />
 </template>
 
 <script setup lang="ts">

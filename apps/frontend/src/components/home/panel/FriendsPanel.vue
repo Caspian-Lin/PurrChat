@@ -1,5 +1,10 @@
 <template>
-  <BasePanel panel-id="friends" :initial-sidebar-width="320" :min-sidebar-width="250" :max-sidebar-width="500">
+  <BasePanel
+    panel-id="friends"
+    :initial-sidebar-width="320"
+    :min-sidebar-width="250"
+    :max-sidebar-width="500"
+  >
     <template #sidebar>
       <div class="flex flex-col h-full relative">
         <!-- 搜索好友 -->
@@ -380,18 +385,18 @@
   </BasePanel>
 
   <!-- 个人资料弹窗 -->
-    <UserProfileModal
-      v-model:show="showProfileModal"
-      :user="displayUser"
-      :is-current-user="!selectedUser || selectedUser.id === auth.currentUser?.id"
-      :friendship="getUserFriendship"
-      :loading="isSendingRequest"
-      :current-user-id="auth.currentUser?.id"
-      @send-friend-request="handleSendFriendRequest"
-      @accept-request="handleAcceptRequestFromModal"
-      @reject-request="handleRejectRequestFromModal"
-      @start-chat="handleStartChatFromModal"
-    />
+  <UserProfileModal
+    v-model:show="showProfileModal"
+    :user="displayUser"
+    :is-current-user="!selectedUser || selectedUser.id === auth.currentUser?.id"
+    :friendship="getUserFriendship"
+    :loading="isSendingRequest"
+    :current-user-id="auth.currentUser?.id"
+    @send-friend-request="handleSendFriendRequest"
+    @accept-request="handleAcceptRequestFromModal"
+    @reject-request="handleRejectRequestFromModal"
+    @start-chat="handleStartChatFromModal"
+  />
 </template>
 
 <script setup lang="ts">

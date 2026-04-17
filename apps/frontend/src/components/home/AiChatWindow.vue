@@ -4,7 +4,7 @@
     <div
       class="flex items-center justify-between px-4 py-3 gap-2 bg-bg-secondary border-b border-border-color flex-shrink-0"
     >
-      <div class="flex items-top gap-2 pt-2">
+      <div class="flex items-top gap-3 pt-2">
         <div
           class="w-8 h-8 rounded-lg flex items-center justify-center"
           style="background: var(--theme-primary)"
