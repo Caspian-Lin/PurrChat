@@ -6,14 +6,14 @@
       :initial-size="320"
       :min-size="250"
       :max-size="500"
-      class="bg-bg-primary border-r border-border-color"
+      class="bg-bg-primary border-r border-border-subtle"
     >
       <div class="flex flex-col h-full relative">
         <!-- 搜索好友 -->
         <div
-          class="flex items-center gap-2 px-4 py-3 bg-bg-secondary border-b border-border-color flex-shrink-0 relative"
+          class="flex items-center gap-2 px-4 py-3 bg-bg-secondary border-b border-border-subtle flex-shrink-0 relative"
         >
-          <div class="flex-1 flex items-center bg-bg-quaternary rounded-lg h-10 px-3">
+          <div class="flex-1 flex items-center bg-bg-quaternary rounded-[var(--radius-sm)] h-10 px-3">
             <input
               v-model="searchQuery"
               type="text"
@@ -33,12 +33,12 @@
         </div>
         <!-- 好友消息条目（待处理好友申请） -->
         <div
-          class="flex items-center gap-4 p-4 bg-bg-secondary border-b border-border-color cursor-pointer hover:bg-hover-bg transition-colors flex-shrink-0"
+          class="flex items-center gap-4 px-4 py-3 bg-bg-secondary border-b border-border-subtle cursor-pointer hover:bg-hover-bg transition-colors flex-shrink-0"
           @click="showFriendRequestHistory = true"
         >
           <div class="relative">
             <div
-              class="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold"
+              class="w-11 h-11 rounded-[var(--radius-md)] flex items-center justify-center text-white font-bold"
               style="background: var(--theme-secondary)"
             >
               🔔
@@ -62,69 +62,73 @@
             showSearchResults &&
             (filteredFriends.length > 0 || searchedUsers.length > 0 || filteredGroups.length > 0)
           "
-          class="absolute top-[80px] left-0 right-0 bg-bg-primary border border-border-color rounded-lg shadow-lg z-50 max-h-[400px] overflow-y-auto scrollable"
+          class="absolute top-[80px] left-0 right-0 bg-bg-primary border border-border-subtle rounded-[var(--radius-lg)] shadow-lg z-50 max-h-[400px] overflow-y-auto scrollable"
           style="width: 300px"
         >
           <!-- 好友列表 -->
-          <div v-if="filteredFriends.length > 0" class="border-b border-border-color">
+          <div v-if="filteredFriends.length > 0" class="border-b border-border-subtle">
             <div class="px-3 py-2 text-sm font-semibold text-text-secondary bg-bg-secondary">
               好友
             </div>
-            <div
-              v-for="friendship in filteredFriends"
-              :key="'friend-' + friendship.id"
-              class="flex items-center gap-3 p-3 hover:bg-hover-bg cursor-pointer transition-colors"
-              @click="handleSelectFriend(friendship)"
-            >
-              <div class="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
-                <img
-                  v-if="friendship.friend?.avatar_url"
-                  :src="friendship.friend.avatar_url"
-                  alt="avatar"
-                  class="w-full h-full object-cover"
-                />
-                <div
-                  v-else
-                  class="w-full h-full flex items-center justify-center font-bold text-white"
-                  style="background: var(--theme-gradient)"
-                >
-                  {{ friendship.friend?.username?.charAt(0) || '?' }}
-                </div>
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-semibold truncate text-text-primary">
+            <div class="px-1">
+              <BaseListItem
+                v-for="friendship in filteredFriends"
+                :key="'friend-' + friendship.id"
+                @click="handleSelectFriend(friendship)"
+              >
+                <template #avatar>
+                  <div class="w-9 h-9 rounded-[var(--radius-md)] overflow-hidden flex-shrink-0">
+                    <img
+                      v-if="friendship.friend?.avatar_url"
+                      :src="friendship.friend.avatar_url"
+                      alt="avatar"
+                      class="w-full h-full object-cover"
+                    />
+                    <div
+                      v-else
+                      class="w-full h-full flex items-center justify-center font-bold text-white text-sm"
+                      style="background: var(--theme-gradient)"
+                    >
+                      {{ friendship.friend?.username?.charAt(0) || '?' }}
+                    </div>
+                  </div>
+                </template>
+
+                <div class="font-semibold truncate text-text-primary text-sm">
                   {{ friendship.friend?.username }}
                 </div>
-                <div class="text-sm text-text-secondary">UID: {{ friendship.friend?.uid }}</div>
-              </div>
+                <div class="text-xs text-text-secondary">UID: {{ friendship.friend?.uid }}</div>
+              </BaseListItem>
             </div>
           </div>
 
           <!-- 群聊列表 -->
-          <div v-if="filteredGroups.length > 0" class="border-b border-border-color">
+          <div v-if="filteredGroups.length > 0" class="border-b border-border-subtle">
             <div class="px-3 py-2 text-sm font-semibold text-text-secondary bg-bg-secondary">
               群聊
             </div>
-            <div
-              v-for="conversation in filteredGroups"
-              :key="'group-' + conversation.id"
-              class="flex items-center gap-3 p-3 hover:bg-hover-bg cursor-pointer transition-colors"
-              @click="handleSelectGroup(conversation)"
-            >
-              <div
-                class="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0"
-                style="background: var(--theme-gradient)"
+            <div class="px-1">
+              <BaseListItem
+                v-for="conversation in filteredGroups"
+                :key="'group-' + conversation.id"
+                @click="handleSelectGroup(conversation)"
               >
-                <div class="w-full h-full flex items-center justify-center font-bold text-white">
-                  {{ conversation.name?.charAt(0) || 'G' }}
-                </div>
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-semibold truncate text-text-primary">
+                <template #avatar>
+                  <div
+                    class="w-9 h-9 rounded-[var(--radius-md)] overflow-hidden flex-shrink-0"
+                    style="background: var(--theme-gradient)"
+                  >
+                    <div class="w-full h-full flex items-center justify-center font-bold text-white text-sm">
+                      {{ conversation.name?.charAt(0) || 'G' }}
+                    </div>
+                  </div>
+                </template>
+
+                <div class="font-semibold truncate text-text-primary text-sm">
                   {{ conversation.name }}
                 </div>
-                <div class="text-sm text-text-secondary">群聊</div>
-              </div>
+                <div class="text-xs text-text-secondary">群聊</div>
+              </BaseListItem>
             </div>
           </div>
 
@@ -133,34 +137,36 @@
             <div class="px-3 py-2 text-sm font-semibold text-text-secondary bg-bg-secondary">
               用户
             </div>
-            <div
-              v-for="user in searchedUsers"
-              :key="'user-' + user.id"
-              class="flex items-center gap-3 p-3 hover:bg-hover-bg cursor-pointer transition-colors"
-              @click="handleSelectUser(user)"
-            >
-              <div class="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
-                <img
-                  v-if="user.avatar_url"
-                  :src="user.avatar_url"
-                  alt="avatar"
-                  class="w-full h-full object-cover"
-                />
-                <div
-                  v-else
-                  class="w-full h-full flex items-center justify-center font-bold text-white"
-                  style="background: var(--theme-gradient)"
-                >
-                  {{ user.username?.charAt(0) || '?' }}
-                </div>
-              </div>
-              <div class="flex-1 min-w-0">
+            <div class="px-1">
+              <BaseListItem
+                v-for="user in searchedUsers"
+                :key="'user-' + user.id"
+                @click="handleSelectUser(user)"
+              >
+                <template #avatar>
+                  <div class="w-9 h-9 rounded-[var(--radius-md)] overflow-hidden flex-shrink-0">
+                    <img
+                      v-if="user.avatar_url"
+                      :src="user.avatar_url"
+                      alt="avatar"
+                      class="w-full h-full object-cover"
+                    />
+                    <div
+                      v-else
+                      class="w-full h-full flex items-center justify-center font-bold text-white text-sm"
+                      style="background: var(--theme-gradient)"
+                    >
+                      {{ user.username?.charAt(0) || '?' }}
+                    </div>
+                  </div>
+                </template>
+
                 <div class="flex items-center gap-2">
-                  <span class="font-semibold truncate text-text-primary">{{ user.username }}</span>
-                  <span class="text-xs px-2 py-0.5 bg-orange-500 text-white rounded">陌生人</span>
+                  <span class="font-semibold truncate text-text-primary text-sm">{{ user.username }}</span>
+                  <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded-[var(--radius-xs)]">陌生人</span>
                 </div>
-                <div class="text-sm text-text-secondary">UID: {{ user.uid }}</div>
-              </div>
+                <div class="text-xs text-text-secondary">UID: {{ user.uid }}</div>
+              </BaseListItem>
             </div>
           </div>
 
@@ -180,10 +186,10 @@
         <!-- 好友列表 -->
         <div class="flex-1 min-h-0">
           <!-- 标签切换 -->
-          <div class="flex gap-2 p-3 bg-bg-secondary border-b border-border-color">
+          <div class="flex gap-2 p-3 bg-bg-secondary border-b border-border-subtle">
             <button
               :class="[
-                'flex-1 py-2 px-4 rounded-md font-medium transition-colors',
+                'flex-1 py-2 px-4 rounded-[var(--radius-sm)] font-medium transition-colors',
                 activeTab === 'friends'
                   ? 'bg-accent-color text-white'
                   : 'bg-bg-quaternary text-text-secondary hover:text-text-primary',
@@ -194,7 +200,7 @@
             </button>
             <button
               :class="[
-                'flex-1 py-2 px-4 rounded-md font-medium transition-colors',
+                'flex-1 py-2 px-4 rounded-[var(--radius-sm)] font-medium transition-colors',
                 activeTab === 'groups'
                   ? 'bg-accent-color text-white'
                   : 'bg-bg-quaternary text-text-secondary hover:text-text-primary',
@@ -215,33 +221,35 @@
 
           <!-- 群聊列表 -->
           <CustomScrollbar v-else class="flex-1 min-h-0">
-            <div
-              v-for="conversation in filteredGroups"
-              :key="conversation.id"
-              class="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b hover:bg-hover-bg"
-              @click="handleSelectGroup(conversation)"
-            >
-              <div
-                class="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0"
-                style="background: var(--theme-gradient)"
+            <div class="px-2 pt-1 pb-0.5">
+              <BaseListItem
+                v-for="conversation in filteredGroups"
+                :key="conversation.id"
+                @click="handleSelectGroup(conversation)"
               >
-                <div
-                  class="w-full h-full flex items-center justify-center font-bold text-white text-2xl"
-                >
-                  {{ conversation.name?.charAt(0) || 'G' }}
-                </div>
-              </div>
-              <div class="flex-1 min-w-0">
+                <template #avatar>
+                  <div
+                    class="w-11 h-11 rounded-[var(--radius-md)] overflow-hidden"
+                    style="background: var(--theme-gradient)"
+                  >
+                    <div
+                      class="w-full h-full flex items-center justify-center font-bold text-white text-lg"
+                    >
+                      {{ conversation.name?.charAt(0) || 'G' }}
+                    </div>
+                  </div>
+                </template>
+
                 <div class="flex items-center gap-2">
-                  <span class="font-semibold truncate text-text-primary">
+                  <span class="font-semibold text-[15px] truncate text-text-primary">
                     {{ conversation.name }}
                   </span>
-                  <span class="text-xs px-1 rounded bg-bg-secondary">群聊</span>
+                  <span class="text-xs px-1 rounded-[var(--radius-xs)] bg-bg-secondary">群聊</span>
                 </div>
-                <div class="text-sm text-text-secondary">
+                <div class="text-sm text-text-secondary truncate">
                   {{ conversation.last_message?.content || '暂无消息' }}
                 </div>
-              </div>
+              </BaseListItem>
             </div>
             <div
               v-if="filteredGroups.length === 0"
@@ -276,66 +284,70 @@
             <p>暂无好友申请记录</p>
           </div>
 
-          <div v-else class="space-y-3">
-            <div
+          <div v-else class="space-y-1">
+            <BaseListItem
               v-for="request in allFriendRequests"
               :key="request.id"
-              class="flex items-center gap-4 px-4 py-2 bg-bg-secondary rounded-lg"
             >
-              <div
-                class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer"
-                @click="handleShowUserProfile(request.user!)"
-              >
-                <img
-                  v-if="request.user?.avatar_url"
-                  :src="request.user.avatar_url"
-                  alt="avatar"
-                  class="w-full h-full object-cover"
-                />
+              <template #avatar>
+                <div
+                  class="w-11 h-11 rounded-[var(--radius-md)] overflow-hidden cursor-pointer"
+                  @click="handleShowUserProfile(request.user!)"
+                >
+                  <img
+                    v-if="request.user?.avatar_url"
+                    :src="request.user.avatar_url"
+                    alt="avatar"
+                    class="w-full h-full object-cover"
+                  />
+                  <div
+                    v-else
+                    class="w-full h-full flex items-center justify-center font-bold text-white"
+                    style="background: var(--theme-gradient)"
+                  >
+                    {{ request.user?.username?.charAt(0) || '?' }}
+                  </div>
+                </div>
+              </template>
+
+              <div class="flex items-center justify-between">
+                <div class="min-w-0 flex-1">
+                  <div class="font-semibold text-text-primary text-sm">{{ request.user?.username }}</div>
+                  <div class="text-xs text-text-secondary">
+                    {{ getFriendRequestText(request) }}
+                  </div>
+                  <div class="text-xs text-text-tertiary">
+                    {{ formatTime(request.created_at) }}
+                  </div>
+                </div>
+                <div
+                  v-if="request.status === 'pending' && isRequestRecipient(request)"
+                  class="flex gap-1.5 ml-2"
+                >
+                  <button
+                    class="px-3 py-1 bg-green-500 text-white rounded-[var(--radius-sm)] text-xs font-medium hover:bg-green-600 transition-colors"
+                    @click="handleAcceptRequest(request)"
+                  >
+                    接受
+                  </button>
+                  <button
+                    class="px-3 py-1 bg-red-500 text-white rounded-[var(--radius-sm)] text-xs font-medium hover:bg-red-600 transition-colors"
+                    @click="handleRejectRequest(request)"
+                  >
+                    忽略
+                  </button>
+                </div>
                 <div
                   v-else
-                  class="w-full h-full flex items-center justify-center font-bold text-white"
-                  style="background: var(--theme-gradient)"
+                  :class="[
+                    'px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-medium',
+                    getFriendRequestStatusClass(request.status),
+                  ]"
                 >
-                  {{ request.user?.username?.charAt(0) || '?' }}
+                  {{ getFriendRequestStatusText(request.status) }}
                 </div>
               </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-semibold text-text-primary">{{ request.user?.username }}</div>
-                <div class="text-sm text-text-secondary">
-                  {{ getFriendRequestText(request) }}
-                </div>
-                <div class="text-xs text-text-tertiary">
-                  {{ formatTime(request.created_at) }}
-                </div>
-              </div>
-              <div
-                v-if="request.status === 'pending' && isRequestRecipient(request)"
-                class="flex gap-2"
-              >
-                <button
-                  class="px-3 py-1 bg-green-500 text-white rounded-md text-sm font-medium hover:bg-green-600 transition-colors"
-                  @click="handleAcceptRequest(request)"
-                >
-                  接受
-                </button>
-                <button
-                  class="px-3 py-1 bg-red-500 text-white rounded-md text-sm font-medium hover:bg-red-600 transition-colors"
-                  @click="handleRejectRequest(request)"
-                >
-                  忽略
-                </button>
-              </div>
-              <div
-                v-else
-                :class="[
-                  'px-3 py-1 rounded-md text-sm font-medium',
-                  getFriendRequestStatusClass(request.status),
-                ]"
-              >
-                {{ getFriendRequestStatusText(request.status) }}
-              </div>
-            </div>
+            </BaseListItem>
           </div>
         </div>
       </CustomScrollbar>
@@ -389,6 +401,7 @@ import FriendInfoModal from '../FriendInfoModal.vue';
 import UserProfileModal from '../UserProfileModal.vue';
 import ResizableContainer from '../../common/ResizableContainer.vue';
 import CustomScrollbar from '../../common/CustomScrollbar.vue';
+import BaseListItem from '../../common/BaseListItem.vue';
 import type { User, Friendship, Conversation } from '../../../models/types';
 import { BsX } from 'vue-icons-plus/bs';
 

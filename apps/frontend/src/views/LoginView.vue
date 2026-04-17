@@ -4,17 +4,12 @@
       <ThemeSwitcher />
     </div>
     <div
-      class="p-8 rounded-xl w-full max-w-md relative z-10 elevated-lg"
+      class="p-8 rounded-[var(--radius-xl)] w-full max-w-md relative z-10 elevated-lg"
       style="background: var(--background-color)"
     >
       <h1
-        class="text-3xl font-bold text-center mb-2"
-        style="
-          background: var(--theme-gradient);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        "
+        class="text-3xl font-bold font-display text-center mb-2"
+        style="color: var(--theme-primary)"
       >
         PurrChat
       </h1>

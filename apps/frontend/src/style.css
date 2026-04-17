@@ -2,97 +2,130 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ========================================
+   PurrChat Design System — Soft Architecture
+   Brand: Intimate · Refined · Alive
+   ======================================== */
+
 :root {
-  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  /* ── 品牌色 ── */
+  --theme-primary: #5A8F4E;
+  --theme-secondary: #E8F0E5;
+  --theme-gradient: #5A8F4E;
 
-  /* 主题变量（默认匹配 purple 主题） */
-  --theme-primary: #bf5eff;
-  --theme-secondary: #764ba2;
-  --theme-gradient: #bf5eff;
+  /* ── 表面色（温暖亚麻调） ── */
+  --background-color: #F7F5F2;
+  --surface-color: #EEEAE5;
+  --strong-background-color: #FFFFFF;
+  --surface-hover-color: #E2DDD7;
+  --surface-secondary-color: #F4F1EC;
+  --surface-tertiary-color: #E8E4DE;
+  --input-background: #FFFFFF;
+  --input-border: #D6D3CE;
+  --message-received-background: #FFFFFF;
+  --message-sent-background: #F0EDE8;
+  --card-background: #FFFFFF;
+  --hover-background: #E2DDD7;
+  --selected-background: #E2EDE0;
 
-  /* 浅色主题默认值（暖灰色系） */
-  --background-color: #faf9f7;
-  --surface-color: #f0efec;
-  --strong-background-color: #ffffff;
-  --surface-hover-color: #e8e6e3;
-  --surface-secondary-color: #f5f4f1;
-  --surface-tertiary-color: #eae8e5;
-  --text-color: #1a1a1e;
-  --text-secondary-color: #4a4a52;
-  --text-tertiary-color: #8a8a94;
-  --border-color: #e0ddd8;
-  --shadow-color: rgba(0, 0, 0, 0.08);
+  /* ── 文本色 ── */
+  --text-color: #1C1917;
+  --text-secondary-color: #57534E;
+  --text-tertiary-color: #A8A29E;
+
+  /* ── 边框色 ── */
+  --border-color: #D6D3CE;
+  --border-subtle-color: #E7E5E0;
+
+  /* ── 语义色 ── */
+  --color-success: #16A34A;
+  --color-success-bg: #E8F5E9;
+  --color-warning: #D97706;
+  --color-warning-bg: #FFF8E1;
+  --color-error: #DC2626;
+  --color-error-bg: #FEE2E2;
+  --color-info: #2563EB;
+  --color-info-bg: #E3F2FD;
+
+  /* ── 遮罩 ── */
   --modal-overlay-color: rgba(0, 0, 0, 0.4);
-  --input-background: #f0efec;
-  --input-border: #ddd9d3;
-  --message-received-background: #ffffff;
-  --message-sent-background: #f0efec;
-  --card-background: #ffffff;
-  --hover-background: #e8e6e3;
-  --selected-background: #eae8e5;
+  --shadow-color: rgba(28, 25, 23, 0.04);
 
-  /* 语义色 */
-  --color-success: #22c55e;
-  --color-success-bg: #dcfce7;
-  --color-warning: #f59e0b;
-  --color-warning-bg: #fef3c7;
-  --color-error: #ef4444;
-  --color-error-bg: #fef2f2;
-  --color-info: #3b82f6;
-  --color-info-bg: #eff6ff;
+  /* ── 阴影系统（单层、褐调、大面积扩散） ── */
+  --shadow-xs: 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-sm: 0 2px 8px rgba(28, 25, 23, 0.06);
+  --shadow-md: 0 4px 16px rgba(28, 25, 23, 0.08);
+  --shadow-lg: 0 8px 32px rgba(28, 25, 23, 0.10);
+  --shadow-xl: 0 16px 48px rgba(28, 25, 23, 0.12);
 
-  /* 阴影系统 */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+  /* ── 圆角系统 ── */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
 
+  /* ── 动效 ── */
+  --duration-instant: 100ms;
+  --duration-fast: 200ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ── 排版 ── */
+  font-family: 'Onest', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.55;
+  font-weight: 400;
   color-scheme: light dark;
   color: var(--text-color);
   background-color: var(--background-color);
-
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 深色主题 */
+/* ── 深色主题（蓝调暮色灰） ── */
 [data-theme='dark'] {
-  --background-color: #121212;
-  --strong-background-color: #1e1e1e;
-  --surface-color: #1e1e1e;
-  --surface-hover-color: #2a2a2a;
-  --surface-secondary-color: #181818;
-  --surface-tertiary-color: #252525;
-  --text-color: #e8e6e3;
-  --text-secondary-color: #a8a6a3;
-  --text-tertiary-color: #6e6c69;
-  --border-color: #333333;
-  --shadow-color: rgba(0, 0, 0, 0.4);
-  --modal-overlay-color: rgba(0, 0, 0, 0.75);
-  --input-background: #1a1a1a;
-  --input-border: #383838;
-  --message-received-background: #2d2d2d;
-  --message-sent-background: #252525;
-  --card-background: #1e1e1e;
-  --hover-background: #2a2a2a;
-  --selected-background: #252525;
+  --background-color: #111116;
+  --strong-background-color: #22222C;
+  --surface-color: #1A1A22;
+  --surface-hover-color: #282838;
+  --surface-secondary-color: #161620;
+  --surface-tertiary-color: #222230;
+  --input-background: #1E1E28;
+  --input-border: #2A2A36;
+  --message-received-background: #2C2C3A;
+  --message-sent-background: #1A1A22;
+  --card-background: #1E1E28;
+  --hover-background: #282838;
+  --selected-background: #1A2418;
 
-  /* 深色语义色背景 */
-  --color-success-bg: #1a2e1a;
-  --color-warning-bg: #2e2510;
-  --color-error-bg: #2e1a1a;
-  --color-info-bg: #1a2530;
+  --text-color: #ECEBE8;
+  --text-secondary-color: #A1A0A8;
+  --text-tertiary-color: #65656E;
 
-  /* 深色阴影系统 */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --border-color: #2A2A36;
+  --border-subtle-color: #1F1F2A;
+
+  --color-success-bg: #1A2E1A;
+  --color-warning-bg: #2E2510;
+  --color-error-bg: #2E1A1A;
+  --color-info-bg: #1A2530;
+
+  --modal-overlay-color: rgba(0, 0, 0, 0.6);
+  --shadow-color: rgba(0, 0, 0, 0.15);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.15);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.20);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.30);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.35);
 }
+
+/* ── 全局 reset ── */
 
 a {
   font-weight: 500;
@@ -116,7 +149,7 @@ body {
 }
 
 body {
-  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Onest', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   min-width: 320px;
   min-height: 100vh;
 }
@@ -127,143 +160,54 @@ body {
 }
 
 h1 {
+  font-family: 'Bricolage Grotesque', 'Onest', sans-serif;
   font-size: 3.2em;
-  line-height: 1.1;
+  line-height: 1.2;
 }
 
+h2 {
+  font-family: 'Bricolage Grotesque', 'Onest', sans-serif;
+}
+
+/* ── 按钮全局 reset ── */
 button {
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: none;
   font-size: 1em;
   font-weight: 500;
-  font-family: inherit;
+  font-family: 'Onest', 'Noto Sans SC', sans-serif;
   background-color: transparent;
   color: var(--text-color);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color var(--duration-fast) var(--ease-out-quart),
+              box-shadow var(--duration-fast) var(--ease-out-quart),
+              opacity var(--duration-fast) var(--ease-out-quart);
 }
 button:hover {
-  opacity: 0.9;
+  opacity: 1;
 }
-
+button:active {
+  transform: scale(0.98);
+}
 button:focus,
 button:focus-visible {
-  outline: 2px solid var(--theme-primary);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background-color), 0 0 0 4px var(--theme-primary);
+  border-radius: var(--radius-sm);
 }
+
+/* ── 工具类 ── */
 
 .card {
   padding: 2em;
 }
 
-/* 圆角矩形样式：统一为 12px 圆角 */
 .roundrect {
-  border-radius: 12px;
-}
-
-/* 半透明滚动条样式 */
-/* Webkit 浏览器滚动条样式 */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-/* 滚动条轨道 - 半透明背景 */
-::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 4px;
-}
-
-/* 滚动条滑块 - 半透明主题色 */
-::-webkit-scrollbar-thumb {
-  background: rgba(226, 226, 226, 0.4);
-  border-radius: 4px;
-  transition:
-    background 0.2s ease,
-    opacity 0.2s ease;
-}
-
-/* 滚动条滑块悬停效果 */
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(177, 177, 177, 0.418);
-}
-
-/* 滚动条滑块激活效果 */
-::-webkit-scrollbar-thumb:active {
-  background: rgba(193, 193, 193, 0.9);
-}
-
-/* 滚动条角落 */
-::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
-/* Firefox 滚动条样式 */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(145, 145, 145, 0.286) transparent;
-}
-
-/* 深色主题下的滚动条样式 */
-[data-theme='dark']::-webkit-scrollbar-thumb {
-  background: rgba(115, 115, 115, 0.5);
-}
-
-[data-theme='dark']::-webkit-scrollbar-thumb:hover {
-  background: rgba(202, 202, 202, 0.8);
-}
-
-[data-theme='dark']::-webkit-scrollbar-thumb:active {
-  background: rgb(211, 211, 211);
-}
-
-[data-theme='dark'] * {
-  scrollbar-color: rgba(214, 214, 214, 0.5) transparent;
-}
-
-/* 可滚动区域的通用样式 */
-.scrollable {
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-}
-
-.scrollable-x {
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-}
-
-.scrollable-both {
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* 隐藏滚动条但保留滚动功能 */
-.no-scrollbar::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* 隐藏原生滚动条（用于自定义滚动条组件） */
-.hide-scrollbar::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
-}
-
-.hide-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-  overflow: auto;
+  border-radius: var(--radius-md);
 }
 
 /* 阴影系统 */
+.elevated-xs { box-shadow: var(--shadow-xs); }
 .elevated-sm { box-shadow: var(--shadow-sm); }
 .elevated-md { box-shadow: var(--shadow-md); }
 .elevated-lg { box-shadow: var(--shadow-lg); }
@@ -276,5 +220,100 @@ button:focus-visible {
   -webkit-backdrop-filter: blur(12px);
 }
 [data-theme='dark'] .glass {
-  background: rgba(30, 30, 30, 0.7);
+  background: rgba(26, 26, 34, 0.7);
+}
+
+/* ── 滚动条样式（6px，药丸形） ── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle-color);
+  border-radius: var(--radius-full);
+  transition: background var(--duration-fast) var(--ease-out-quart);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-color);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--text-tertiary-color);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-subtle-color) transparent;
+}
+
+[data-theme='dark']::-webkit-scrollbar-thumb {
+  background: rgba(100, 100, 120, 0.4);
+}
+[data-theme='dark']::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 140, 160, 0.5);
+}
+[data-theme='dark']::-webkit-scrollbar-thumb:active {
+  background: rgba(180, 180, 200, 0.6);
+}
+[data-theme='dark'] * {
+  scrollbar-color: rgba(100, 100, 120, 0.4) transparent;
+}
+
+/* ── 可滚动区域 ── */
+.scrollable {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+.scrollable-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+.scrollable-both {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── 隐藏滚动条 ── */
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  overflow: auto;
+}
+
+/* ── 减少动画偏好 ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

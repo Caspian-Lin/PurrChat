@@ -1,52 +1,50 @@
 <template>
   <CustomScrollbar class="flex-1 min-h-0">
     <!-- 统一的会话列表（按时间排序） -->
-    <div
-      v-for="conversation in sortedConversations"
-      :key="conversation.id"
-      :class="[
-        'flex items-center gap-3 px-4 py-3 cursor-pointer transition-all duration-150',
-        selectedId === conversation.id ? 'bg-selected-bg' : 'hover:bg-hover-bg',
-      ]"
-      @click="$emit('select', conversation)"
-    >
-      <!-- 头像 -->
-      <div
-        v-if="conversation.conversation_type === 'group'"
-        class="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0"
+    <div class="px-2 pt-2 pb-0.5">
+      <BaseListItem
+        v-for="conversation in sortedConversations"
+        :key="conversation.id"
+        :selected="selectedId === conversation.id"
+        @click="$emit('select', conversation)"
       >
-        <div
-          class="w-full h-full flex items-center justify-center font-bold text-white text-lg"
-          style="background: var(--theme-gradient)"
-        >
-          {{ conversation.name?.charAt(0) || 'G' }}
-        </div>
-      </div>
-      <div
-        v-else
-        class="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 cursor-pointer"
-        @click.stop="$emit('show-user', getOtherUser(conversation, currentUserId)!)"
-      >
-        <img
-          v-if="getUserAvatar(getOtherUser(conversation, currentUserId))"
-          :src="getUserAvatar(getOtherUser(conversation, currentUserId))"
-          alt="avatar"
-          class="w-full h-full object-cover"
-        />
-        <div
-          v-else
-          class="w-full h-full flex items-center justify-center font-bold text-white text-lg"
-          style="background: var(--theme-gradient)"
-        >
-          {{ getUserUsername(getOtherUser(conversation, currentUserId)).charAt(0) }}
-        </div>
-      </div>
+        <template #avatar>
+          <div
+            v-if="conversation.conversation_type === 'group'"
+            class="w-11 h-11 rounded-[var(--radius-md)] overflow-hidden"
+          >
+            <div
+              class="w-full h-full flex items-center justify-center font-bold text-white text-lg"
+              style="background: var(--theme-gradient)"
+            >
+              {{ conversation.name?.charAt(0) || 'G' }}
+            </div>
+          </div>
+          <div
+            v-else
+            class="w-11 h-11 rounded-[var(--radius-md)] overflow-hidden cursor-pointer"
+            @click.stop="$emit('show-user', getOtherUser(conversation, currentUserId)!)"
+          >
+            <img
+              v-if="getUserAvatar(getOtherUser(conversation, currentUserId))"
+              :src="getUserAvatar(getOtherUser(conversation, currentUserId))"
+              alt="avatar"
+              class="w-full h-full object-cover"
+            />
+            <div
+              v-else
+              class="w-full h-full flex items-center justify-center font-bold text-white text-lg"
+              style="background: var(--theme-gradient)"
+            >
+              {{ getUserUsername(getOtherUser(conversation, currentUserId)).charAt(0) }}
+            </div>
+          </div>
+        </template>
 
-      <!-- 内容区域 -->
-      <div class="flex-1 min-w-0">
+        <!-- 内容 -->
         <div class="flex justify-between items-center">
           <div class="flex items-center gap-2">
-            <span class="font-semibold text-lg truncate text-text-primary">
+            <span class="font-semibold text-[15px] truncate text-text-primary">
               {{ getConversationName(conversation) }}
             </span>
             <!-- 群聊标签 -->
@@ -76,7 +74,6 @@
             {{ formatConversationTime(conversation.last_message.created_at) }}
           </div>
         </div>
-
         <div class="flex justify-between items-center">
           <div class="text-base truncate text-text-tertiary">
             {{ formatLastMessageContent(conversation.last_message) }}
@@ -90,7 +87,7 @@
             >
               {{ conversation.unread_count > 99 ? '99+' : conversation.unread_count }}
             </div>
-            <!-- 删除按钮 -->
+            <!-- 删除按钮（始终可见，因为未读徽标也需要可见性） -->
             <button
               class="size-5 aspect-1 rounded-full flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary flex-shrink-0"
               @click.stop="$emit('delete-conversation', conversation.id)"
@@ -100,7 +97,7 @@
             </button>
           </div>
         </div>
-      </div>
+      </BaseListItem>
     </div>
 
     <div
@@ -125,6 +122,7 @@ import { formatConversationTime } from '../../utils/formatTime';
 import { BsX } from 'vue-icons-plus/bs';
 import type { Conversation, Message } from '../../models/types';
 import CustomScrollbar from '../common/CustomScrollbar.vue';
+import BaseListItem from '../common/BaseListItem.vue';
 
 interface Props {
   conversations: Conversation[];
@@ -191,5 +189,3 @@ defineEmits<{
   'show-group-detail': [conversation: Conversation];
 }>();
 </script>
-
-<style scoped></style>

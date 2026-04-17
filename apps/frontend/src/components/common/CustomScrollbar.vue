@@ -48,8 +48,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  thumbWidth: 8,
-  thumbMinHeight: 40,
+  thumbWidth: 6,
+  thumbMinHeight: 36,
 });
 
 const wrapperRef = ref<HTMLElement | null>(null);
@@ -281,7 +281,7 @@ defineExpose({
   position: absolute;
   top: 0;
   right: 0;
-  width: 8px;
+  width: 6px;
   height: 100%;
   z-index: 9999;
   pointer-events: none; /* 让鼠标事件穿透到下面的轨道和滑块 */
@@ -303,55 +303,54 @@ defineExpose({
 /* 轨道hover效果 */
 .custom-scrollbar-track:hover,
 .custom-scrollbar-track-hover {
-  background: rgba(145, 145, 145, 0.4);
-  width: 10px;
+  background: var(--border-subtle-color);
 }
 
 /* 自定义滚动条滑块 */
 .custom-scrollbar-thumb {
   position: absolute;
-  right: 1px;
-  width: 6px; /* 默认细滚动条 */
-  background: rgba(106, 106, 106, 0.4);
-  border-radius: 4px;
+  right: 0px;
+  width: 4px; /* 默认细滚动条 */
+  background: var(--border-color);
+  border-radius: var(--radius-full);
   cursor: pointer;
   z-index: 10000;
-  opacity: 1; /* 一直可见 */
+  opacity: 1;
   transition:
-    width 0.2s ease,
-    background 0.2s ease;
-  pointer-events: auto; /* 滑块接收鼠标事件 */
+    width 0.2s cubic-bezier(0.25, 1, 0.5, 1),
+    background 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  pointer-events: auto;
 }
 
 .custom-scrollbar-thumb-hover {
-  width: 8px; /* hover时变粗 */
-  right: 1px;
+  width: 6px; /* hover时变粗 */
+  right: 0px;
 }
 
 .custom-scrollbar-thumb:hover {
-  background: rgba(64, 64, 64, 0.6);
+  background: var(--text-tertiary-color);
 }
 
 .custom-scrollbar-thumb:active {
-  background: rgba(64, 64, 64, 0.6);
+  background: var(--text-secondary-color);
 }
 
 /* 深色主题 */
 [data-theme='dark'] .custom-scrollbar-thumb {
-  background: rgba(115, 115, 115, 0.5);
+  background: rgba(100, 100, 120, 0.4);
 }
 
 [data-theme='dark'] .custom-scrollbar-thumb:hover {
-  background: rgba(202, 202, 202, 0.8);
+  background: rgba(140, 140, 160, 0.6);
 }
 
 [data-theme='dark'] .custom-scrollbar-thumb:active {
-  background: rgb(211, 211, 211);
+  background: rgba(180, 180, 200, 0.7);
 }
 
 /* 深色主题轨道hover效果 */
 [data-theme='dark'] .custom-scrollbar-track:hover,
 [data-theme='dark'] .custom-scrollbar-track-hover {
-  background: rgba(115, 115, 115, 0.2);
+  background: rgba(100, 100, 120, 0.15);
 }
 </style>

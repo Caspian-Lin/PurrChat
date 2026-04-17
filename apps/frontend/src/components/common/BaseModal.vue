@@ -11,15 +11,15 @@
         <Transition name="modal-content">
           <div
             v-if="show"
-            :class="['rounded-lg elevated-xl max-w-md w-full mx-4', props.class]"
-            style="background: var(--background-color)"
+            :class="['rounded-[var(--radius-lg)] elevated-lg max-w-md w-full mx-4', props.class]"
+            style="background: var(--strong-background-color)"
           >
             <div
               v-if="$slots.header || title"
-              class="flex items-center justify-between p-4 border-b"
+              class="flex items-center justify-between px-6 py-4 border-b"
               style="border-color: var(--border-color)"
             >
-              <h2 v-if="title" class="text-xl font-bold" style="color: var(--text-color)">
+              <h2 v-if="title" class="text-xl font-bold font-display" style="color: var(--text-color)">
                 {{ title }}
               </h2>
               <slot name="header"></slot>
@@ -31,12 +31,12 @@
                 <BsX class="text-2xl" />
               </button>
             </div>
-            <div class="p-4">
+            <div class="px-6 py-5">
               <slot></slot>
             </div>
             <div
               v-if="$slots.footer"
-              class="flex items-center justify-end gap-2 p-4 border-t"
+              class="flex items-center justify-end gap-2 px-6 py-4 border-t"
               style="border-color: var(--border-color)"
             >
               <slot name="footer"></slot>
@@ -113,7 +113,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .modal-enter-active,
 .modal-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .modal-enter-from,
@@ -123,12 +123,12 @@ onBeforeUnmount(() => {
 
 .modal-content-enter-active,
 .modal-content-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .modal-content-enter-from,
 .modal-content-leave-to {
   opacity: 0;
-  transform: scale(0.95);
+  transform: scale(0.97);
 }
 </style>

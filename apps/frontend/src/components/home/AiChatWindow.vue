@@ -66,10 +66,7 @@
                 @dblclick="onBubbleDoubleClick(message.id)"
               >
                 <!-- 思维链区域（仅 AI 消息，有 thinking 内容时显示） -->
-                <div
-                  v-if="message.role === 'assistant' && message.thinking"
-                  class="mb-1"
-                >
+                <div v-if="message.role === 'assistant' && message.thinking" class="mb-1">
                   <button
                     class="flex items-center gap-1.5 text-xs text-text-quaternary hover:text-text-secondary transition-colors cursor-pointer select-none"
                     @click.stop="toggleThinkingExpand(message.id)"
@@ -88,9 +85,14 @@
                   <Transition name="thinking-expand">
                     <div
                       v-show="message.isThinking || expandedThinking.has(message.id)"
-                      class="mt-1 px-3 py-2 rounded-xl text-sm text-text-quaternary overflow-hidden"
+                      class="mt-1 px-3 py-2 rounded-[var(--radius-md)] text-sm text-text-quaternary overflow-hidden"
                       :class="message.isThinking ? 'thinking-active' : ''"
-                      style="background: var(--strong-background-color); border: 1px solid var(--border-color); max-height: 300px; overflow-y: auto;"
+                      style="
+                        background: var(--strong-background-color);
+                        border: 1px solid var(--border-color);
+                        max-height: 300px;
+                        overflow-y: auto;
+                      "
                     >
                       <div style="white-space: pre-wrap; opacity: 0.7">{{ message.thinking }}</div>
                       <span
@@ -109,12 +111,14 @@
                 >
                   <BsLightbulb :size="14" />
                   <span>正在整理回复...</span>
-                  <span class="inline-block w-1.5 h-4 ml-0.5 align-middle bg-current opacity-50 streaming-cursor"></span>
+                  <span
+                    class="inline-block w-1.5 h-4 ml-0.5 align-middle bg-current opacity-50 streaming-cursor"
+                  ></span>
                 </div>
 
                 <div
                   v-if="message.role === 'user' || message.content"
-                  class="relative px-4 py-2.5 rounded-2xl cursor-default"
+                  class="relative px-3.5 py-2.5 rounded-2xl cursor-default"
                   :style="{
                     background:
                       message.role === 'user'
@@ -149,7 +153,7 @@
                   <Transition name="tooltip">
                     <div
                       v-if="activeTooltipId === message.id"
-                      class="absolute -bottom-7 left-1/2 -translate-x-1/2 text-xs text-text-tertiary whitespace-nowrap px-2 py-0.5 rounded-md z-10 pointer-events-none"
+                      class="absolute -bottom-7 left-1/2 -translate-x-1/2 text-xs text-text-tertiary whitespace-nowrap px-2 py-0.5 rounded-[var(--radius-xs)] z-10 pointer-events-none"
                       style="
                         background: var(--surface-color);
                         border: 1px solid var(--border-color);
@@ -204,7 +208,10 @@
             v-if="messages.length === 0"
             class="flex flex-col items-center justify-center py-20 text-text-tertiary"
           >
-            <div class="w-20 h-20 rounded-full flex items-center justify-center mb-6" style="background: var(--message-sent-background)">
+            <div
+              class="w-20 h-20 rounded-full flex items-center justify-center mb-6"
+              style="background: var(--message-sent-background)"
+            >
               <BsRobot :size="36" style="color: var(--theme-primary)" />
             </div>
             <p class="text-sm">开始和 AI 对话吧</p>
@@ -234,7 +241,7 @@
 
       <!-- 消息输入区 -->
       <div
-        class="flex flex-col bg-bg-primary border-t border-border-color flex-shrink-0"
+        class="flex flex-col bg-bg-primary border-t border-border-subtle flex-shrink-0"
         :style="{ height: `${inputAreaHeight}px` }"
       >
         <div class="flex-1 px-4 min-h-0">
@@ -242,7 +249,7 @@
             ref="textareaRef"
             v-model="newMessage"
             placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
-            class="w-full h-full bg-transparent text-base text-text-tertiary resize-none outline-none"
+            class="w-full h-full bg-transparent text-base text-text-primary resize-none outline-none placeholder:text-text-tertiary"
             @keydown="handleKeyDown"
           />
         </div>

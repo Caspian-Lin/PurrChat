@@ -267,27 +267,25 @@ onUnmounted(() => {
   width: 1px;
   height: 100%;
   cursor: col-resize;
-  border-left: 1px solid var(--border-color, #e5e7eb);
-  border-right: 1px solid var(--border-color, #e5e7eb);
+  background-color: var(--border-subtle-color, #e5e7eb);
 }
 
 .resizer--vertical {
   width: 100%;
   height: 1px;
   cursor: row-resize;
-  border-top: 1px solid var(--border-color, #e5e7eb);
-  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  background-color: var(--border-subtle-color, #e5e7eb);
 }
 
 .resizer:hover,
 .resizer--active {
-  background-color: var(--primary-color, #3b82f6);
+  background-color: var(--theme-primary, #5A8F4E);
 }
 
 .resizer-handle {
   position: absolute;
-  background-color: var(--text-tertiary, #9ca3af);
-  transition: background-color 0.2s ease;
+  background-color: var(--border-color, #e5e7eb);
+  transition: background-color 0.2s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .resizer--horizontal .resizer-handle {

@@ -6,12 +6,12 @@
       :initial-size="280"
       :min-size="220"
       :max-size="400"
-      class="bg-bg-primary border-r border-border-color"
+      class="bg-bg-primary border-r border-border-subtle"
     >
       <div class="flex flex-col h-full">
         <!-- 顶部操作栏 -->
         <div
-          class="flex items-center gap-2 px-3 pt-5 pb-3 bg-bg-secondary border-b border-border-color flex-shrink-0"
+          class="flex items-center gap-2 px-3 pt-5 pb-3 bg-bg-secondary border-b border-border-subtle flex-shrink-0"
         >
           <button
             class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-primary hover:text-text-primary"

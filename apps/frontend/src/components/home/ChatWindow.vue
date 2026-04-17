@@ -81,7 +81,7 @@
                   {{ message.sender?.username }}
                 </div>
                 <div
-                  class="relative px-4 py-2.5 rounded-2xl cursor-default"
+                  class="relative px-3.5 py-2.5 rounded-2xl cursor-default"
                   :style="{
                     background: message.sender_id === currentUserId
                       ? 'var(--message-sent-background)'
@@ -90,7 +90,6 @@
                     wordBreak: 'break-word',
                     overflowWrap: 'break-word',
                     whiteSpace: 'pre-wrap',
-                    boxShadow: 'var(--shadow-sm)',
                   }"
                   @mouseenter="onBubbleMouseEnter(message.id)"
                   @mouseleave="onBubbleMouseLeave"
@@ -101,7 +100,7 @@
                     <img
                       :src="getFileContent(message)!.thumbnail_url"
                       :alt="getFileContent(message)!.file_name"
-                      class="max-w-[300px] max-h-[300px] rounded-lg object-cover cursor-pointer"
+                      class="max-w-[300px] max-h-[300px] rounded-[var(--radius-md)] object-cover cursor-pointer"
                       loading="lazy"
                       @click="openImagePreview(message)"
                     />
@@ -152,7 +151,7 @@
                   <Transition name="tooltip">
                     <div
                       v-if="activeTooltipId === message.id"
-                      class="absolute -bottom-7 left-1/2 -translate-x-1/2 text-xs text-text-tertiary whitespace-nowrap px-2 py-0.5 rounded-md z-10 pointer-events-none"
+                      class="absolute -bottom-7 left-1/2 -translate-x-1/2 text-xs text-text-tertiary whitespace-nowrap px-2 py-0.5 rounded-[var(--radius-xs)] z-10 pointer-events-none"
                       style="
                         background: var(--surface-color);
                         border: 1px solid var(--border-color);
@@ -194,7 +193,7 @@
 
       <!-- 消息输入区 -->
       <div
-        class="flex flex-col bg-bg-primary border-t border-border-color flex-shrink-0"
+        class="flex flex-col bg-bg-primary border-t border-border-subtle flex-shrink-0"
         :class="{ 'border-dashed border-2 border-[var(--theme-primary)]': isDragOver }"
         :style="{ height: `${inputAreaHeight}px` }"
         @dragover.prevent="isDragOver = true"
@@ -275,7 +274,7 @@
           <textarea
             v-model="newMessage"
             placeholder="输入消息... (Enter 发送)"
-            class="w-full h-full bg-transparent text-base text-text-tertiary resize-none outline-none"
+            class="w-full h-full bg-transparent text-base text-text-primary resize-none outline-none placeholder:text-text-tertiary"
             @keydown="handleKeyDown"
           />
         </div>

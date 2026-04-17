@@ -194,7 +194,7 @@ onUnmounted(() => {
 .splitter {
   position: relative;
   background-color: transparent;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s cubic-bezier(0.25, 1, 0.5, 1);
   cursor: pointer;
   z-index: 10;
   display: flex;
@@ -206,16 +206,14 @@ onUnmounted(() => {
   width: 1px;
   height: 100%;
   cursor: col-resize;
-  border-left: 1px solid var(--border-color, #e5e7eb);
-  border-right: 1px solid var(--border-color, #e5e7eb);
+  background-color: var(--border-subtle-color, #e5e7eb);
 }
 
 .splitter--vertical {
   width: 100%;
   height: 1px;
   cursor: row-resize;
-  border-top: 1px solid var(--border-color, #e5e7eb);
-  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  background-color: var(--border-subtle-color, #e5e7eb);
 }
 
 .splitter:hover,
@@ -225,8 +223,8 @@ onUnmounted(() => {
 
 .splitter-handle {
   position: absolute;
-  background-color: var(--text-tertiary, #9ca3af);
-  transition: background-color 0.2s ease;
+  background-color: var(--border-color, #e5e7eb);
+  transition: background-color 0.2s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .splitter--horizontal .splitter-handle {

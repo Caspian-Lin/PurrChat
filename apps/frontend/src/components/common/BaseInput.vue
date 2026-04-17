@@ -5,10 +5,10 @@
     :placeholder="placeholder"
     :disabled="disabled"
     :class="[
-      'w-full px-3 py-2 rounded-md outline-none transition-colors',
-      'bg-bg-secondary border border-border-color',
+      'w-full px-3.5 py-2.5 rounded-[var(--radius-sm)] outline-none transition-all duration-[var(--duration-fast)]',
+      'bg-[var(--strong-background-color)] border border-[var(--border-color)]',
       'text-text-primary placeholder-text-tertiary',
-      'focus:border-[var(--theme-primary)]',
+      'focus:border-[var(--theme-primary)] focus:shadow-[var(--shadow-xs)]',
       disabled ? 'opacity-50 cursor-not-allowed' : '',
     ]"
     @input="handleInput"

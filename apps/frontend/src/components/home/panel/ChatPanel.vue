@@ -6,19 +6,19 @@
       :initial-size="320"
       :min-size="250"
       :max-size="500"
-      class="bg-bg-primary border-r border-border-color"
+      class="bg-bg-primary border-r border-border-subtle"
     >
       <div class="flex flex-col h-full">
         <!-- 搜索用户 -->
         <div
-          class="flex items-center gap-2 px-4 py-3 bg-bg-secondary border-b border-border-color flex-shrink-0"
+          class="flex items-center gap-2 px-4 py-3 bg-bg-secondary border-b border-border-subtle flex-shrink-0"
         >
-          <div class="flex-1 flex items-center bg-bg-quaternary rounded-md h-[40px] px-3">
+          <div class="flex-1 flex items-center bg-bg-quaternary rounded-[var(--radius-sm)] h-10 px-3">
             <input
               v-model="searchQuery"
               type="text"
               placeholder="搜索会话、消息内容、好友名..."
-              class="w-full bg-transparent text-text-tertiary text-base font-normal outline-none"
+              class="w-full bg-transparent text-text-primary text-base font-normal outline-none placeholder:text-text-tertiary"
               @input="handleSearch"
             />
           </div>
