@@ -1,6 +1,22 @@
 # PurrChat 开发路线图
 
-> 最后更新: 2026-04-15
+> 最后更新: 2026-04-17
+
+---
+
+## 已知问题
+
+### ISSUE-001: R2 r2.dev 域名在中国大陆无法访问
+
+- **影响**: 头像、文件等通过 R2 公开 URL 加载的资源对国内用户不可用
+- **现象**: 浏览器报 `ERR_CONNECTION_CLOSED`，需 VPN 才能正常加载
+- **根因**: Cloudflare R2 的 `pub-xxx.r2.dev` 子域名被 GFW 阻断，属于网络层面阻断而非配置问题
+- **已尝试**: `referrerpolicy="no-referrer"` 无效，确认非防盗链问题
+- **待实施方案**:
+  - 存储服务代理模式（后端从 R2 拉取再返回前端，服务端不受 GFW 影响，头像文件小开销可控）
+  - R2 自定义域名（走 Cloudflare CDN 常规路径，可能改善但不保证）
+  - 切换到国内对象存储（阿里云 OSS / 腾讯 COS 等）
+- **诊断日志**: 已在 `r2_provider.go`、`file_service.go`、`useAvatarUpload.ts` 中添加 URL 生成日志；前端头像 `<img>` 已添加 `@error` 事件监听
 
 ---
 
@@ -185,3 +201,4 @@
 - [x] 增量消息加载
 - [x] 多客户端支持 (Web/Tauri)
 - [x] 时区统一 (UTC 存储)
+- [x] 头像/背景旧文件自动清理 (cleanupOldFile bug 修复: 查询排除新文件 ID)
