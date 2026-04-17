@@ -14,6 +14,8 @@
             :src="displayAvatarUrl"
             alt="avatar"
             class="w-full h-full object-cover"
+            referrerpolicy="no-referrer"
+            @error="(e) => console.error('[avatar] 头像加载失败:', displayAvatarUrl, e)"
           />
           <div
             v-else

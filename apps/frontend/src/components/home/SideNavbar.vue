@@ -85,6 +85,8 @@
           :src="currentUser.avatar_url"
           alt="avatar"
           class="w-10 h-10 roundrect object-cover"
+          referrerpolicy="no-referrer"
+          @error="(e) => console.error('[avatar] 侧边栏头像加载失败:', currentUser?.avatar_url, e)"
         />
         <div
           v-else

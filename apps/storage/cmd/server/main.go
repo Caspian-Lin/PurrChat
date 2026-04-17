@@ -74,6 +74,11 @@ func main() {
 
 	if storageProvider != nil {
 		logger.Infof("Storage provider initialized: %s, bucket: %s", cfg.Storage.Provider, cfg.Storage.Bucket)
+		if cfg.Storage.PublicURL != "" {
+			logger.Infof("Storage public URL: %s", cfg.Storage.PublicURL)
+		} else {
+			logger.Info("WARNING: Storage public URL is NOT configured — generated file URLs may be empty")
+		}
 	} else {
 		logger.Info("WARNING: Storage provider NOT initialized — file upload/download will return errors")
 	}

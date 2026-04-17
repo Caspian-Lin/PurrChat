@@ -77,6 +77,7 @@ export function useAvatarUpload() {
       }
 
       const publicUrl = confirmResp.data.public_url;
+      console.log('[avatar-upload] 存储服务返回 public_url:', publicUrl);
 
       // 第四步：更新用户资料中的头像 URL
       const profileResp = await api.updateProfile({ avatar_url: publicUrl });
@@ -88,6 +89,7 @@ export function useAvatarUpload() {
       // 更新 auth store 中的用户数据
       authStore.user = profileResp.data;
       localStorage.setItem('user', JSON.stringify(profileResp.data));
+      console.log('[avatar-upload] 头像更新成功，avatar_url:', profileResp.data.avatar_url);
 
       // 释放本地预览 URL
       if (previewUrl.value) {

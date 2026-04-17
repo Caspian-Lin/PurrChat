@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"purr-chat-storage/pkg/config"
@@ -127,5 +128,9 @@ func (p *R2Provider) GetPublicURL(objectKey string) string {
 		logger.Error("R2 public URL is not configured, returning empty string")
 		return ""
 	}
-	return fmt.Sprintf("%s/%s", p.publicURL.String(), objectKey)
+	// 清理末尾斜杠，防止生成双斜杠 URL（如 https://pub-xxx.r2.dev//avatar/...）
+	base := strings.TrimRight(p.publicURL.String(), "/")
+	url := fmt.Sprintf("%s/%s", base, objectKey)
+	logger.InfofWithCaller("R2 GetPublicURL: base=%s objectKey=%s result=%s", base, objectKey, url)
+	return url
 }
