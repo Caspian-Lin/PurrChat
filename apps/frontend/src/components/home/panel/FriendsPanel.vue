@@ -1,13 +1,6 @@
 <template>
-  <div class="flex h-full">
-    <!-- 好友列表 -->
-    <ResizableContainer
-      direction="horizontal"
-      :initial-size="320"
-      :min-size="250"
-      :max-size="500"
-      class="bg-bg-primary border-r border-border-subtle"
-    >
+  <BasePanel panel-id="friends" :initial-sidebar-width="320" :min-sidebar-width="250" :max-sidebar-width="500">
+    <template #sidebar>
       <div class="flex flex-col h-full relative">
         <!-- 搜索好友 -->
         <div
@@ -263,131 +256,130 @@
           </CustomScrollbar>
         </div>
       </div>
-    </ResizableContainer>
+    </template>
 
     <!-- 好友信息窗口 -->
-    <div class="flex-1 flex flex-col bg-bg-tertiary">
-      <!-- 好友申请历史 -->
-      <CustomScrollbar v-if="showFriendRequestHistory" class="flex-1">
-        <div class="flex flex-col p-6 h-full">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-2xl font-bold text-text-primary">好友申请记录</h2>
-            <button
-              class="bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-              @click="showFriendRequestHistory = false"
-            >
-              <BsX class="text-2xl" />
-            </button>
-          </div>
-
-          <div
-            v-if="allFriendRequests.length === 0"
-            class="flex-1 flex items-center justify-center text-text-tertiary"
+    <!-- 好友申请历史 -->
+    <CustomScrollbar v-if="showFriendRequestHistory" class="flex-1">
+      <div class="flex flex-col p-6 h-full">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-bold text-text-primary">好友申请记录</h2>
+          <button
+            class="bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+            @click="showFriendRequestHistory = false"
           >
-            <p>暂无好友申请记录</p>
-          </div>
+            <BsX class="text-2xl" />
+          </button>
+        </div>
 
-          <div v-else class="space-y-1">
-            <BaseListItem v-for="request in allFriendRequests" :key="request.id">
-              <template #avatar>
-                <div
-                  class="w-11 h-11 rounded-[var(--radius-md)] overflow-hidden cursor-pointer"
-                  @click="handleShowUserProfile(request.user!)"
-                >
-                  <img
-                    v-if="request.user?.avatar_url"
-                    :src="request.user.avatar_url"
-                    alt="avatar"
-                    class="w-full h-full object-cover"
-                  />
-                  <div
-                    v-else
-                    class="w-full h-full flex items-center justify-center font-bold text-white"
-                    style="background: var(--theme-gradient)"
-                  >
-                    {{ request.user?.username?.charAt(0) || '?' }}
-                  </div>
-                </div>
-              </template>
+        <div
+          v-if="allFriendRequests.length === 0"
+          class="flex-1 flex items-center justify-center text-text-tertiary"
+        >
+          <p>暂无好友申请记录</p>
+        </div>
 
-              <div class="flex items-center justify-between">
-                <div class="min-w-0 flex-1">
-                  <div class="font-semibold text-text-primary text-sm">
-                    {{ request.user?.username }}
-                  </div>
-                  <div class="text-xs text-text-secondary">
-                    {{ getFriendRequestText(request) }}
-                  </div>
-                  <div class="text-xs text-text-tertiary">
-                    {{ formatTime(request.created_at) }}
-                  </div>
-                </div>
-                <div
-                  v-if="request.status === 'pending' && isRequestRecipient(request)"
-                  class="flex gap-1.5 ml-2"
-                >
-                  <button
-                    class="px-3 py-1 bg-green-500 text-white rounded-[var(--radius-sm)] text-xs font-medium hover:bg-green-600 transition-colors"
-                    @click="handleAcceptRequest(request)"
-                  >
-                    接受
-                  </button>
-                  <button
-                    class="px-3 py-1 bg-red-500 text-white rounded-[var(--radius-sm)] text-xs font-medium hover:bg-red-600 transition-colors"
-                    @click="handleRejectRequest(request)"
-                  >
-                    忽略
-                  </button>
-                </div>
+        <div v-else class="space-y-1">
+          <BaseListItem v-for="request in allFriendRequests" :key="request.id">
+            <template #avatar>
+              <div
+                class="w-11 h-11 rounded-[var(--radius-md)] overflow-hidden cursor-pointer"
+                @click="handleShowUserProfile(request.user!)"
+              >
+                <img
+                  v-if="request.user?.avatar_url"
+                  :src="request.user.avatar_url"
+                  alt="avatar"
+                  class="w-full h-full object-cover"
+                />
                 <div
                   v-else
-                  :class="[
-                    'px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-medium',
-                    getFriendRequestStatusClass(request.status),
-                  ]"
+                  class="w-full h-full flex items-center justify-center font-bold text-white"
+                  style="background: var(--theme-gradient)"
                 >
-                  {{ getFriendRequestStatusText(request.status) }}
+                  {{ request.user?.username?.charAt(0) || '?' }}
                 </div>
               </div>
-            </BaseListItem>
-          </div>
-        </div>
-      </CustomScrollbar>
+            </template>
 
-      <FriendInfoModal
-        v-else-if="selectedFriend"
-        :friendship="selectedFriend"
-        @close="selectedFriend = null"
-        @start-chat="handleStartChatWithFriend"
-      />
-
-      <!-- 空状态 -->
-      <div v-else class="flex-1 flex flex-col items-center justify-center text-text-tertiary">
-        <div
-          class="w-20 h-20 rounded-full flex items-center justify-center mb-6"
-          style="background: var(--surface-color)"
-        >
-          <svg
-            class="w-10 h-10"
-            style="color: var(--text-tertiary-color)"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.5"
-              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-          </svg>
+            <div class="flex items-center justify-between">
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-text-primary text-sm">
+                  {{ request.user?.username }}
+                </div>
+                <div class="text-xs text-text-secondary">
+                  {{ getFriendRequestText(request) }}
+                </div>
+                <div class="text-xs text-text-tertiary">
+                  {{ formatTime(request.created_at) }}
+                </div>
+              </div>
+              <div
+                v-if="request.status === 'pending' && isRequestRecipient(request)"
+                class="flex gap-1.5 ml-2"
+              >
+                <button
+                  class="px-3 py-1 bg-green-500 text-white rounded-[var(--radius-sm)] text-xs font-medium hover:bg-green-600 transition-colors"
+                  @click="handleAcceptRequest(request)"
+                >
+                  接受
+                </button>
+                <button
+                  class="px-3 py-1 bg-red-500 text-white rounded-[var(--radius-sm)] text-xs font-medium hover:bg-red-600 transition-colors"
+                  @click="handleRejectRequest(request)"
+                >
+                  忽略
+                </button>
+              </div>
+              <div
+                v-else
+                :class="[
+                  'px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-medium',
+                  getFriendRequestStatusClass(request.status),
+                ]"
+              >
+                {{ getFriendRequestStatusText(request.status) }}
+              </div>
+            </div>
+          </BaseListItem>
         </div>
-        <h3 class="text-lg font-semibold mb-1 text-text-primary">好友列表</h3>
-        <p class="text-sm">选择一个好友查看详情或开始聊天</p>
       </div>
-    </div>
+    </CustomScrollbar>
 
-    <!-- 个人资料弹窗 -->
+    <FriendInfoModal
+      v-else-if="selectedFriend"
+      :friendship="selectedFriend"
+      @close="selectedFriend = null"
+      @start-chat="handleStartChatWithFriend"
+    />
+
+    <!-- 空状态 -->
+    <div v-else class="flex-1 flex flex-col items-center justify-center text-text-tertiary">
+      <div
+        class="w-20 h-20 rounded-full flex items-center justify-center mb-6"
+        style="background: var(--surface-color)"
+      >
+        <svg
+          class="w-10 h-10"
+          style="color: var(--text-tertiary-color)"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+          />
+        </svg>
+      </div>
+      <h3 class="text-lg font-semibold mb-1 text-text-primary">好友列表</h3>
+      <p class="text-sm">选择一个好友查看详情或开始聊天</p>
+    </div>
+  </BasePanel>
+
+  <!-- 个人资料弹窗 -->
     <UserProfileModal
       v-model:show="showProfileModal"
       :user="displayUser"
@@ -400,7 +392,6 @@
       @reject-request="handleRejectRequestFromModal"
       @start-chat="handleStartChatFromModal"
     />
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -415,7 +406,7 @@ import { useRouter } from 'vue-router';
 import FriendList from '../FriendList.vue';
 import FriendInfoModal from '../FriendInfoModal.vue';
 import UserProfileModal from '../UserProfileModal.vue';
-import ResizableContainer from '../../common/ResizableContainer.vue';
+import BasePanel from './BasePanel.vue';
 import CustomScrollbar from '../../common/CustomScrollbar.vue';
 import BaseListItem from '../../common/BaseListItem.vue';
 import type { User, Friendship, Conversation } from '../../../models/types';

@@ -1,13 +1,6 @@
 <template>
-  <div class="flex h-full">
-    <!-- 会话列表 -->
-    <ResizableContainer
-      direction="horizontal"
-      :initial-size="320"
-      :min-size="250"
-      :max-size="500"
-      class="bg-bg-primary border-r border-border-subtle"
-    >
+  <BasePanel panel-id="chat" :initial-sidebar-width="320" :min-sidebar-width="250" :max-sidebar-width="500">
+    <template #sidebar>
       <div class="flex flex-col h-full">
         <!-- 搜索用户 -->
         <div
@@ -52,52 +45,51 @@
           />
         </div>
       </div>
-    </ResizableContainer>
+    </template>
 
     <!-- 聊天窗口 -->
-    <div class="flex-1 flex flex-col bg-bg-tertiary">
-      <ChatWindow
-        ref="chatWindowRef"
-        v-if="selectedConversation"
-        :conversation="selectedConversation"
-        :messages="messages"
-        :current-user-id="auth.currentUser?.id"
-        @send-message="handleSendMessage"
-        @send-file-message="handleSendFileMessage"
-        @export-messages="handleExportMessages"
-        @show-user="handleShowUserProfile"
-        @update-conversation="handleUpdateConversation"
-        @create-group="handleCreateGroup"
-        @show-detail="handleShowDetail"
-      />
+    <ChatWindow
+      ref="chatWindowRef"
+      v-if="selectedConversation"
+      :conversation="selectedConversation"
+      :messages="messages"
+      :current-user-id="auth.currentUser?.id"
+      @send-message="handleSendMessage"
+      @send-file-message="handleSendFileMessage"
+      @export-messages="handleExportMessages"
+      @show-user="handleShowUserProfile"
+      @update-conversation="handleUpdateConversation"
+      @create-group="handleCreateGroup"
+      @show-detail="handleShowDetail"
+    />
 
-      <!-- 空状态 -->
-      <div v-else class="flex-1 flex flex-col items-center justify-center text-text-tertiary">
-        <div
-          class="w-20 h-20 rounded-full flex items-center justify-center mb-6"
-          style="background: var(--message-sent-background)"
+    <!-- 空状态 -->
+    <div v-else class="flex-1 flex flex-col items-center justify-center text-text-tertiary">
+      <div
+        class="w-20 h-20 rounded-full flex items-center justify-center mb-6"
+        style="background: var(--message-sent-background)"
+      >
+        <svg
+          class="w-10 h-10"
+          style="color: var(--theme-primary)"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
         >
-          <svg
-            class="w-10 h-10"
-            style="color: var(--theme-primary)"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.5"
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
-        </div>
-        <h3 class="text-lg font-semibold mb-1 text-text-primary">欢迎来到 PurrChat</h3>
-        <p class="text-sm">选择一个会话开始聊天</p>
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+          />
+        </svg>
       </div>
+      <h3 class="text-lg font-semibold mb-1 text-text-primary">欢迎来到 PurrChat</h3>
+      <p class="text-sm">选择一个会话开始聊天</p>
     </div>
+  </BasePanel>
 
-    <!-- 个人资料弹窗 -->
+  <!-- 个人资料弹窗 -->
     <UserProfileModal
       v-model:show="showProfileModal"
       :user="displayUser"
@@ -138,7 +130,6 @@
 
     <!-- 通知列表 -->
     <NotificationList :notifications="notifications" @remove-notification="removeNotification" />
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -161,7 +152,7 @@ import UserActionsModal from '../UserActionsModal.vue';
 import CreateGroupModal from '../CreateGroupModal.vue';
 import ConversationDetailModal from '../ConversationDetailModal.vue';
 import NotificationList from '../../common/NotificationList.vue';
-import ResizableContainer from '../../common/ResizableContainer.vue';
+import BasePanel from './BasePanel.vue';
 import type {
   User,
   Conversation,

@@ -1,13 +1,6 @@
 <template>
-  <div class="flex h-full">
-    <!-- 左侧：配置 + 会话列表 -->
-    <ResizableContainer
-      direction="horizontal"
-      :initial-size="280"
-      :min-size="220"
-      :max-size="400"
-      class="bg-bg-primary border-r border-border-subtle"
-    >
+  <BasePanel panel-id="ai" :initial-sidebar-width="280" :min-sidebar-width="220" :max-sidebar-width="400">
+    <template #sidebar>
       <div class="flex flex-col h-full">
         <!-- 顶部操作栏 -->
         <div
@@ -44,60 +37,58 @@
           />
         </div>
       </div>
-    </ResizableContainer>
+    </template>
 
-    <!-- 右侧：对话窗口 -->
-    <div class="flex-1 flex flex-col bg-bg-tertiary">
-      <AiChatWindow
-        v-if="aiStore.activeConversation && aiStore.activeConfig"
-        ref="chatWindowRef"
-        :config="aiStore.activeConfig"
-        :conversation="aiStore.activeConversation"
-        :messages="aiStore.activeMessages"
-        :is-streaming="isStreaming"
-        :error="error"
-        @send-message="handleSendMessage"
-        @stop-generation="stopGeneration"
-        @clear-error="clearError"
-      />
+    <!-- 对话窗口 -->
+    <AiChatWindow
+      v-if="aiStore.activeConversation && aiStore.activeConfig"
+      ref="chatWindowRef"
+      :config="aiStore.activeConfig"
+      :conversation="aiStore.activeConversation"
+      :messages="aiStore.activeMessages"
+      :is-streaming="isStreaming"
+      :error="error"
+      @send-message="handleSendMessage"
+      @stop-generation="stopGeneration"
+      @clear-error="clearError"
+    />
 
-      <!-- 未选择配置的空状态 -->
-      <div
-        v-else-if="!aiStore.hasConfigs"
-        class="flex-1 flex flex-col items-center justify-center text-text-tertiary gap-4"
+    <!-- 未选择配置的空状态 -->
+    <div
+      v-else-if="!aiStore.hasConfigs"
+      class="flex-1 flex flex-col items-center justify-center text-text-tertiary gap-4"
+    >
+      <BsRobot :size="64" class="opacity-30" />
+      <h3 class="text-2xl font-semibold text-text-primary">开始使用 AI 对话</h3>
+      <p>请先添加一个 AI 模型配置</p>
+      <button
+        class="px-6 py-2 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity text-white font-semibold rounded-md"
+        @click="handleAddConfig"
       >
-        <BsRobot :size="64" class="opacity-30" />
-        <h3 class="text-2xl font-semibold text-text-primary">开始使用 AI 对话</h3>
-        <p>请先添加一个 AI 模型配置</p>
-        <button
-          class="px-6 py-2 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity text-white font-semibold rounded-md"
-          @click="handleAddConfig"
-        >
-          添加配置
-        </button>
-      </div>
-
-      <!-- 未创建对话的空状态 -->
-      <div v-else class="flex-1 flex flex-col items-center justify-center text-text-tertiary gap-4">
-        <BsChatLeftText :size="64" class="opacity-30" />
-        <h3 class="text-2xl font-semibold text-text-primary">AI 对话</h3>
-        <p>选择一个配置并创建新对话</p>
-        <button
-          class="px-6 py-2 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity text-white font-semibold rounded-md"
-          @click="handleNewConversation"
-        >
-          新建对话
-        </button>
-      </div>
+        添加配置
+      </button>
     </div>
 
-    <!-- 配置弹窗 -->
-    <AiConfigModal
-      v-model:show="showConfigModal"
-      :editing-config="editingConfig"
-      @config-saved="handleConfigSaved"
-    />
-  </div>
+    <!-- 未创建对话的空状态 -->
+    <div v-else class="flex-1 flex flex-col items-center justify-center text-text-tertiary gap-4">
+      <BsChatLeftText :size="64" class="opacity-30" />
+      <h3 class="text-2xl font-semibold text-text-primary">AI 对话</h3>
+      <p>选择一个配置并创建新对话</p>
+      <button
+        class="px-6 py-2 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity text-white font-semibold rounded-md"
+        @click="handleNewConversation"
+      >
+        新建对话
+      </button>
+    </div>
+  </BasePanel>
+
+  <!-- 配置弹窗 -->
+  <AiConfigModal
+    v-model:show="showConfigModal"
+    :editing-config="editingConfig"
+    @config-saved="handleConfigSaved"
+  />
 </template>
 
 <script setup lang="ts">
@@ -108,7 +99,7 @@ import { useAuthStore } from '../../../stores/auth';
 import AiConfigList from '../AiConfigList.vue';
 import AiChatWindow from '../AiChatWindow.vue';
 import AiConfigModal from '../AiConfigModal.vue';
-import ResizableContainer from '../../common/ResizableContainer.vue';
+import BasePanel from './BasePanel.vue';
 import type { AiConfig } from '../../../models/types';
 import { BsPlusLg, BsGear, BsRobot, BsChatLeftText } from 'vue-icons-plus/bs';
 
