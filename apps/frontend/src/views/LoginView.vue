@@ -4,7 +4,7 @@
       <ThemeSwitcher />
     </div>
     <div
-      class="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg w-full max-w-md relative z-10"
+      class="p-8 rounded-xl w-full max-w-md relative z-10 elevated-lg"
       style="background: var(--background-color)"
     >
       <h1
@@ -19,7 +19,7 @@
         PurrChat
       </h1>
       <p
-        class="text-center text-gray-600 dark:text-gray-400 mb-8"
+        class="text-center mb-8"
         style="color: var(--text-secondary-color)"
       >
         欢迎回来
@@ -40,8 +40,8 @@
 
         <button
           type="submit"
-          class="w-full !h-12 !font-medium"
-          block
+          class="w-full h-12 font-medium"
+          style="background: var(--theme-primary); color: #fff;"
           :disabled="auth.loading.value"
         >
           {{ auth.loading.value ? '登录中...' : '登录' }}

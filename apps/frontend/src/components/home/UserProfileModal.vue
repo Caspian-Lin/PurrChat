@@ -115,7 +115,7 @@
         <!-- 陌生人：显示添加好友按钮 -->
         <button
           v-if="friendshipStatus === 'stranger'"
-          class="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors font-semibold"
+          class="w-full py-3 bg-accent-color text-white rounded-lg hover:opacity-80 transition-colors font-semibold"
           :disabled="loading"
           @click="handleSendFriendRequest"
         >
@@ -151,7 +151,7 @@
         <!-- 已是好友：显示开始聊天按钮 -->
         <button
           v-else-if="friendshipStatus === 'accepted'"
-          class="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors font-semibold"
+          class="w-full py-3 bg-accent-color text-white rounded-lg hover:opacity-80 transition-colors font-semibold"
           @click="emit('start-chat')"
         >
           开始聊天
@@ -160,7 +160,7 @@
         <!-- 已拒绝：显示重新添加好友按钮 -->
         <button
           v-else-if="friendshipStatus === 'rejected'"
-          class="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors font-semibold"
+          class="w-full py-3 bg-accent-color text-white rounded-lg hover:opacity-80 transition-colors font-semibold"
           :disabled="loading"
           @click="handleSendFriendRequest"
         >

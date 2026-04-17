@@ -5,7 +5,7 @@
       <ThemeSwitcher />
     </div>
     <div
-      class="relative z-10 bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg w-full max-w-md"
+      class="relative z-10 p-8 rounded-xl w-full max-w-md elevated-lg"
       style="background: var(--background-color)"
     >
       <h1
@@ -20,7 +20,7 @@
         PurrChat
       </h1>
       <p
-        class="text-center text-gray-600 dark:text-gray-400 mb-8"
+        class="text-center mb-8"
         style="color: var(--text-secondary-color)"
       >
         创建新账号
@@ -63,9 +63,9 @@
 
         <button
           type="submit"
-          block
+          class="w-full h-12 font-medium"
+          style="background: var(--theme-primary); color: #fff;"
           :disabled="auth.loading.value"
-          class="!h-12 w-full !font-medium"
         >
           {{ auth.loading.value ? '注册中...' : '注册' }}
         </button>

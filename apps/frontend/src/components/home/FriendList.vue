@@ -3,12 +3,12 @@
     <div
       v-for="friendship in friends"
       :key="friendship.id"
-      class="flex items-center gap-4 p-4 cursor-pointer transition-colors border-b hover:bg-hover-bg"
+      class="flex items-center gap-4 p-4 cursor-pointer transition-all duration-150 border-b hover:bg-hover-bg"
       style="border-color: var(--border-color)"
       @click="$emit('select', friendship)"
     >
       <div
-        class="w-12 h-12 roundrect overflow-hidden flex-shrink-0 cursor-pointer"
+        class="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 cursor-pointer"
         @click.stop="$emit('show-user', friendship.friend!)"
       >
         <img

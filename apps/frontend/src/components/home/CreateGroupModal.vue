@@ -106,7 +106,7 @@
           取消
         </button>
         <button
-          class="flex-1 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          class="flex-1 px-4 py-2 bg-accent-color text-white rounded-md hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="!isValid"
           @click="handleCreateGroup"
         >
@@ -188,8 +188,4 @@ const handleCreateGroup = async () => {
 };
 </script>
 
-<style scoped>
-.roundrect {
-  border-radius: 8px;
-}
-</style>
+<style scoped></style>

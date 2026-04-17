@@ -79,7 +79,7 @@
           <label class="text-sm font-medium" style="color: var(--text-color)"> 成员列表 </label>
           <button
             v-if="canManageMembers"
-            class="px-3 py-1.5 text-sm bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+            class="px-3 py-1.5 text-sm bg-accent-color text-white rounded-md hover:opacity-80 transition-colors"
             @click="showAddMemberModal = true"
           >
             添加成员
@@ -134,7 +134,7 @@
       <!-- 发送消息按钮 -->
       <div>
         <button
-          class="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+          class="w-full px-4 py-2 bg-accent-color text-white rounded-md hover:opacity-80 transition-colors"
           @click="handleSendMessage"
         >
           发送消息
@@ -369,8 +369,4 @@ watch(
 );
 </script>
 
-<style scoped>
-.roundrect {
-  border-radius: 8px;
-}
-</style>
+<style scoped></style>

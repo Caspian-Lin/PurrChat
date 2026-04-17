@@ -220,7 +220,7 @@ onUnmounted(() => {
 
 .splitter:hover,
 .splitter--active {
-  background-color: var(--primary-color, #3b82f6);
+  background-color: var(--theme-primary);
 }
 
 .splitter-handle {

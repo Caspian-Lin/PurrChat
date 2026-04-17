@@ -2,14 +2,20 @@
   <div
     class="flex flex-col items-center justify-between px-4 py-5 gap-4 bg-bg-primary border-r border-border-color relative overflow-hidden"
   >
-    <!-- 标题 -->
-    <div class="flex-0 text-xl font-bold text-text-primary">Purr <br />Chat</div>
+    <!-- Logo -->
+    <div class="flex-0 flex flex-col items-center">
+      <div class="text-xl font-bold tracking-tight leading-tight text-center">
+        <span style="color: var(--theme-primary)">Purr</span>
+        <br />
+        <span class="text-text-tertiary">Chat</span>
+      </div>
+    </div>
 
     <!-- 会话和好友按钮 -->
     <div class="flex flex-col items-center gap-2">
       <button
         :class="[
-          'w-12 h-12 p-0 roundrect flex items-center justify-center transition-all',
+          'w-12 h-12 p-0 rounded-xl flex items-center justify-center transition-all',
           activePanel === 'chat'
             ? 'bg-[var(--theme-primary)]'
             : 'bg-bg-quaternary hover:bg-hover-bg',
@@ -23,7 +29,7 @@
       </button>
       <button
         :class="[
-          'w-12 h-12 p-0 roundrect flex items-center justify-center transition-all',
+          'w-12 h-12 p-0 rounded-xl flex items-center justify-center transition-all',
           activePanel === 'friends'
             ? 'bg-[var(--theme-primary)]'
             : 'bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary',
@@ -37,7 +43,7 @@
       </button>
       <button
         :class="[
-          'w-12 h-12 p-0 roundrect flex items-center justify-center transition-all',
+          'w-12 h-12 p-0 rounded-xl flex items-center justify-center transition-all',
           activePanel === 'ai'
             ? 'bg-[var(--theme-primary)]'
             : 'bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary',
@@ -56,19 +62,18 @@
       <!-- 在线状态指示器（只在离线或连接中时显示） -->
       <div
         v-if="!isOnline"
-        :class="[
-          'flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all',
-          isOffline
-            ? 'bg-red-500/20 border border-red-500/50'
-            : 'bg-yellow-500/20 border border-yellow-500/50',
-        ]"
+        class="flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all"
+        :style="{
+          background: isOffline ? 'var(--color-error-bg)' : 'var(--color-warning-bg)',
+          borderColor: isOffline ? 'var(--color-error)' : 'var(--color-warning)',
+        }"
         :title="connectionStatusText"
       >
         <div
-          :class="[
-            'w-2 h-2 rounded-full animate-pulse',
-            isOffline ? 'bg-red-500' : 'bg-yellow-500',
-          ]"
+          class="w-2 h-2 rounded-full animate-pulse"
+          :style="{
+            background: isOffline ? 'var(--color-error)' : 'var(--color-warning)',
+          }"
         ></div>
         <!-- <span :class="['text-xs font-medium', isOffline ? 'text-red-400' : 'text-yellow-400']">
           {{ connectionStatusText }}
@@ -84,13 +89,13 @@
           v-if="currentUser?.avatar_url"
           :src="currentUser.avatar_url"
           alt="avatar"
-          class="w-10 h-10 roundrect object-cover"
+          class="w-10 h-10 rounded-xl object-cover"
           referrerpolicy="no-referrer"
           @error="(e) => console.error('[avatar] 侧边栏头像加载失败:', currentUser?.avatar_url, e)"
         />
         <div
           v-else
-          class="w-10 h-10 roundrect flex items-center justify-center font-bold text-white"
+          class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white"
           style="background: var(--theme-gradient)"
         >
           {{ currentUser?.username?.charAt(0) || 'U' }}

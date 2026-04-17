@@ -5,7 +5,7 @@
       v-for="conversation in sortedConversations"
       :key="conversation.id"
       :class="[
-        'flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors',
+        'flex items-center gap-3 px-4 py-3 cursor-pointer transition-all duration-150',
         selectedId === conversation.id ? 'bg-selected-bg' : 'hover:bg-hover-bg',
       ]"
       @click="$emit('select', conversation)"
@@ -13,10 +13,10 @@
       <!-- 头像 -->
       <div
         v-if="conversation.conversation_type === 'group'"
-        class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0"
+        class="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0"
       >
         <div
-          class="w-full h-full flex items-center justify-center font-bold text-white text-2xl"
+          class="w-full h-full flex items-center justify-center font-bold text-white text-lg"
           style="background: var(--theme-gradient)"
         >
           {{ conversation.name?.charAt(0) || 'G' }}
@@ -24,7 +24,7 @@
       </div>
       <div
         v-else
-        class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer"
+        class="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 cursor-pointer"
         @click.stop="$emit('show-user', getOtherUser(conversation, currentUserId)!)"
       >
         <img
@@ -35,7 +35,7 @@
         />
         <div
           v-else
-          class="w-full h-full flex items-center justify-center font-bold text-white text-2xl"
+          class="w-full h-full flex items-center justify-center font-bold text-white text-lg"
           style="background: var(--theme-gradient)"
         >
           {{ getUserUsername(getOtherUser(conversation, currentUserId)).charAt(0) }}
@@ -192,8 +192,4 @@ defineEmits<{
 }>();
 </script>
 
-<style scoped>
-.roundrect {
-  border-radius: 8px;
-}
-</style>
+<style scoped></style>

@@ -1,31 +1,40 @@
 <template>
   <div
-    :class="[
-      'p-4 rounded-md border',
-      type === 'error'
-        ? 'bg-red-50 dark:bg-red-900/30 text-red-900 dark:text-red-200 border-red-200 dark:border-red-800'
-        : '',
-      type === 'warning'
-        ? 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-200 border-yellow-200 dark:border-yellow-800'
-        : '',
-      type === 'info'
-        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800'
-        : '',
-      type === 'success'
-        ? 'bg-green-50 dark:bg-green-900/30 text-green-900 dark:text-green-200 border-green-200 dark:border-green-800'
-        : '',
-    ]"
+    class="p-4 rounded-md border"
+    :style="{
+      background: alertBgColor,
+      color: alertTextColor,
+      borderColor: alertBorderColor,
+    }"
   >
     <slot></slot>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
+
+type AlertType = 'error' | 'warning' | 'info' | 'success';
+
 interface Props {
-  type?: 'error' | 'warning' | 'info' | 'success';
+  type?: AlertType;
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   type: 'info',
 });
+
+const getColor = (type: AlertType) => {
+  const map: Record<AlertType, { bg: string; text: string; border: string }> = {
+    error: { bg: 'var(--color-error-bg)', text: 'var(--color-error)', border: 'var(--color-error)' },
+    warning: { bg: 'var(--color-warning-bg)', text: 'var(--color-warning)', border: 'var(--color-warning)' },
+    info: { bg: 'var(--color-info-bg)', text: 'var(--color-info)', border: 'var(--color-info)' },
+    success: { bg: 'var(--color-success-bg)', text: 'var(--color-success)', border: 'var(--color-success)' },
+  };
+  return map[type];
+};
+
+const alertBgColor = computed(() => getColor(props.type).bg);
+const alertTextColor = computed(() => getColor(props.type).text);
+const alertBorderColor = computed(() => getColor(props.type).border);
 </script>

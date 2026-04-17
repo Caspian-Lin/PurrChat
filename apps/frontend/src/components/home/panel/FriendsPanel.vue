@@ -11,16 +11,18 @@
       <div class="flex flex-col h-full relative">
         <!-- 搜索好友 -->
         <div
-          class="flex items-center gap-2 p-3 pt-5 bg-bg-secondary border-b border-border-color flex-shrink-0 relative"
+          class="flex items-center gap-2 px-4 py-3 bg-bg-secondary border-b border-border-color flex-shrink-0 relative"
         >
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="搜索好友或用户..."
-            class="flex-1 bg-bg-quaternary rounded-md h-[40px] px-3 text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary"
-            @input="handleSearch"
-            @focus="showSearchResults = true"
-          />
+          <div class="flex-1 flex items-center bg-bg-quaternary rounded-lg h-10 px-3">
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="搜索好友或用户..."
+              class="w-full bg-transparent text-text-primary placeholder-text-tertiary text-sm outline-none"
+              @input="handleSearch"
+              @focus="showSearchResults = true"
+            />
+          </div>
           <button
             v-if="searchQuery"
             class="p-2 text-text-tertiary hover:text-text-primary transition-colors"
@@ -74,7 +76,7 @@
               class="flex items-center gap-3 p-3 hover:bg-hover-bg cursor-pointer transition-colors"
               @click="handleSelectFriend(friendship)"
             >
-              <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
+              <div class="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
                 <img
                   v-if="friendship.friend?.avatar_url"
                   :src="friendship.friend.avatar_url"
@@ -110,7 +112,7 @@
               @click="handleSelectGroup(conversation)"
             >
               <div
-                class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0"
+                class="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0"
                 style="background: var(--theme-gradient)"
               >
                 <div class="w-full h-full flex items-center justify-center font-bold text-white">
@@ -137,7 +139,7 @@
               class="flex items-center gap-3 p-3 hover:bg-hover-bg cursor-pointer transition-colors"
               @click="handleSelectUser(user)"
             >
-              <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
+              <div class="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
                 <img
                   v-if="user.avatar_url"
                   :src="user.avatar_url"
@@ -183,7 +185,7 @@
               :class="[
                 'flex-1 py-2 px-4 rounded-md font-medium transition-colors',
                 activeTab === 'friends'
-                  ? 'bg-primary text-white'
+                  ? 'bg-accent-color text-white'
                   : 'bg-bg-quaternary text-text-secondary hover:text-text-primary',
               ]"
               @click="activeTab = 'friends'"
@@ -194,7 +196,7 @@
               :class="[
                 'flex-1 py-2 px-4 rounded-md font-medium transition-colors',
                 activeTab === 'groups'
-                  ? 'bg-primary text-white'
+                  ? 'bg-accent-color text-white'
                   : 'bg-bg-quaternary text-text-secondary hover:text-text-primary',
               ]"
               @click="activeTab = 'groups'"
@@ -220,7 +222,7 @@
               @click="handleSelectGroup(conversation)"
             >
               <div
-                class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0"
+                class="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0"
                 style="background: var(--theme-gradient)"
               >
                 <div
@@ -347,9 +349,13 @@
 
       <!-- 空状态 -->
       <div v-else class="flex-1 flex flex-col items-center justify-center text-text-tertiary">
-        <div class="text-6xl mb-4">👥</div>
-        <h3 class="text-2xl font-semibold mb-2 text-text-primary">好友列表</h3>
-        <p>选择一个好友查看详情或开始聊天</p>
+        <div class="w-20 h-20 rounded-full flex items-center justify-center mb-6" style="background: var(--surface-color)">
+          <svg class="w-10 h-10" style="color: var(--text-tertiary-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+        <h3 class="text-lg font-semibold mb-1 text-text-primary">好友列表</h3>
+        <p class="text-sm">选择一个好友查看详情或开始聊天</p>
       </div>
     </div>
 

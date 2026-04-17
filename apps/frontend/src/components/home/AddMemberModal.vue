@@ -73,7 +73,7 @@
             </div>
           </div>
           <button
-            class="px-3 py-1.5 text-sm bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+            class="px-3 py-1.5 text-sm bg-accent-color text-white rounded-md hover:opacity-80 transition-colors"
             @click="handleAddMember(user)"
           >
             添加
@@ -117,7 +117,7 @@
               </div>
             </div>
             <button
-              class="px-3 py-1.5 text-sm bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+              class="px-3 py-1.5 text-sm bg-accent-color text-white rounded-md hover:opacity-80 transition-colors"
               @click="handleAddMember(friend.friend!)"
             >
               添加
@@ -231,8 +231,4 @@ watch(searchQuery, () => {
 });
 </script>
 
-<style scoped>
-.roundrect {
-  border-radius: 8px;
-}
-</style>
+<style scoped></style>

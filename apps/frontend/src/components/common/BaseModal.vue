@@ -11,7 +11,7 @@
         <Transition name="modal-content">
           <div
             v-if="show"
-            :class="['rounded-lg shadow-xl max-w-md w-full mx-4', props.class]"
+            :class="['rounded-lg elevated-xl max-w-md w-full mx-4', props.class]"
             style="background: var(--background-color)"
           >
             <div
