@@ -136,6 +136,7 @@ func (s *FileService) ConfirmUpload(ctx context.Context, userID string, req *mod
 
 	// 生成公开 URL
 	publicURL := s.storage.GetPublicURL(meta.ObjectKey)
+	logger.InfofWithCaller("Generated public URL for file: objectKey=%s publicURL=%s", meta.ObjectKey, publicURL)
 
 	// 更新数据库
 	if err := s.fileRepo.ConfirmUpload(ctx, uploadID, &info.ETag, &publicURL); err != nil {
@@ -224,12 +225,12 @@ func (s *FileService) cleanupOldFile(ctx context.Context, uploaderID uuid.UUID, 
 		return
 	}
 
-	old, err := s.fileRepo.GetConfirmedByUploaderAndCategory(ctx, uploaderID, category)
+	old, err := s.fileRepo.GetConfirmedByUploaderAndCategoryExclude(ctx, uploaderID, category, newFileID)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to query old file for cleanup: user=%s category=%s err=%v", uploaderID, category, err)
 		return
 	}
-	if old == nil || old.ID == newFileID {
+	if old == nil {
 		return
 	}
 

@@ -18,6 +18,7 @@ type FileRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.FileMetadata, error)
 	GetByObjectKey(ctx context.Context, objectKey string) (*models.FileMetadata, error)
 	GetConfirmedByUploaderAndCategory(ctx context.Context, uploaderID uuid.UUID, category string) (*models.FileMetadata, error)
+	GetConfirmedByUploaderAndCategoryExclude(ctx context.Context, uploaderID uuid.UUID, category string, excludeID uuid.UUID) (*models.FileMetadata, error)
 	ConfirmUpload(ctx context.Context, id uuid.UUID, etag *string, publicURL *string) error
 	DeleteByID(ctx context.Context, id uuid.UUID) error
 	DeleteUnconfirmedBefore(ctx context.Context, before time.Time) (int64, error)
@@ -84,6 +85,27 @@ func (r *fileRepository) GetConfirmedByUploaderAndCategory(ctx context.Context, 
 				        public_url, etag, confirmed, created_at, confirmed_at
 				 FROM file_metadata WHERE uploader_id = $1 AND category = $2 AND confirmed = true
 				 ORDER BY confirmed_at DESC LIMIT 1`, uploaderID, category).Scan(
+		&meta.ID, &meta.ObjectKey, &meta.FileName, &meta.FileSize, &meta.ContentType,
+		&meta.Category, &meta.Usage, &meta.UploaderID, &meta.PublicURL, &meta.ETag,
+		&meta.Confirmed, &meta.CreatedAt, &meta.ConfirmedAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &meta, nil
+}
+
+// GetConfirmedByUploaderAndCategoryExclude 查询用户指定分类下最新的已确认文件（排除指定 ID）
+// 用于清理旧文件时排除刚上传的新文件，避免查询总是返回新文件本身
+func (r *fileRepository) GetConfirmedByUploaderAndCategoryExclude(ctx context.Context, uploaderID uuid.UUID, category string, excludeID uuid.UUID) (*models.FileMetadata, error) {
+	var meta models.FileMetadata
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, object_key, file_name, file_size, content_type, category, usage, uploader_id,
+					        public_url, etag, confirmed, created_at, confirmed_at
+					 FROM file_metadata WHERE uploader_id = $1 AND category = $2 AND confirmed = true AND id != $3
+					 ORDER BY confirmed_at DESC LIMIT 1`, uploaderID, category, excludeID).Scan(
 		&meta.ID, &meta.ObjectKey, &meta.FileName, &meta.FileSize, &meta.ContentType,
 		&meta.Category, &meta.Usage, &meta.UploaderID, &meta.PublicURL, &meta.ETag,
 		&meta.Confirmed, &meta.CreatedAt, &meta.ConfirmedAt)
