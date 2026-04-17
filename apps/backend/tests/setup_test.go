@@ -76,6 +76,7 @@ func SetupTestDB(t *testing.T) {
 func CreateTestTables(t *testing.T, ctx context.Context) {
 	// 先删除现有的表（注意顺序：先删除有外键约束的表）
 	tables := []string{
+		"user_settings",
 		"enrollments",
 		"friendships",
 		"conversations",
@@ -179,6 +180,18 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create enrollments table: %v", err)
+	}
+
+	// 创建user_settings表（用户设置）
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE user_settings (
+			user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			settings JSONB DEFAULT '{}'::jsonb,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create user_settings table: %v", err)
 	}
 
 	// 创建更新时间触发器函数
@@ -448,6 +461,14 @@ func SetupTestRouter() {
 	testRouter.GET("/api/friends", handlers.AuthMiddleware(jwtSecret), chatHandler.GetFriends)
 	testRouter.POST("/api/friends/request", handlers.AuthMiddleware(jwtSecret), chatHandler.SendFriendRequest)
 	testRouter.POST("/api/friends/handle", handlers.AuthMiddleware(jwtSecret), chatHandler.HandleFriendRequest)
+
+	// 设置服务
+	settingsRepo := repository.NewSettingsRepository()
+	settingsService := services.NewSettingsService(settingsRepo)
+	settingsHandler := handlers.NewSettingsHandler(settingsService)
+
+	testRouter.GET("/api/settings", handlers.AuthMiddleware(jwtSecret), settingsHandler.GetSettings)
+	testRouter.PUT("/api/settings", handlers.AuthMiddleware(jwtSecret), settingsHandler.UpdateSettings)
 }
 
 // CleanupTestDB 清理测试数据库
@@ -474,6 +495,7 @@ func CleanupTestTables(t *testing.T) {
 
 	// 清理表数据（注意顺序：先清理有外键约束的表）
 	tables := []string{
+		"user_settings",
 		"enrollments",
 		"friendships",
 		"conversations",
@@ -500,8 +522,8 @@ func CreateTestUser(t *testing.T, username, email, password string) *models.User
 
 	userRepo := repository.NewUserRepository()
 
-	// 生成唯一的 phone 值（基于 username）
-	phone := "test_" + username + "_phone"
+	// 生成唯一的 phone 值（基于 username，保持 VARCHAR(20) 以内）
+	phone := "1" + username
 
 	user := &models.User{
 		Username:      username,
