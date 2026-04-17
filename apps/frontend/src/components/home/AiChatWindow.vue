@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full bg-bg-tertiary">
     <!-- 聊天头部 -->
     <div
-      class="flex items-center justify-between p-3 pt-5 gap-2 bg-bg-secondary border-b border-border-color flex-shrink-0"
+      class="flex items-center justify-between px-4 py-3 gap-2 bg-bg-secondary border-b border-border-color flex-shrink-0"
     >
       <div class="flex items-center gap-2">
         <div
@@ -41,7 +41,7 @@
             <!-- 消息行 -->
             <div :class="['flex gap-3', { 'flex-row-reverse': message.role === 'user' }]">
               <!-- 头像 -->
-              <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
+              <div class="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
                 <div
                   v-if="message.role === 'assistant'"
                   class="w-full h-full flex items-center justify-center"
@@ -82,7 +82,7 @@
                     <span>{{ message.isThinking ? '正在思考...' : '思维链' }}</span>
                     <span
                       v-if="message.isThinking"
-                      class="inline-block w-1.5 h-1.5 rounded-full bg-primary thinking-dot"
+                      class="inline-block w-1.5 h-1.5 rounded-full bg-accent-color thinking-dot"
                     ></span>
                   </button>
                   <Transition name="thinking-expand">
@@ -202,10 +202,12 @@
           <!-- 空状态 -->
           <div
             v-if="messages.length === 0"
-            class="flex flex-col items-center justify-center py-16 text-text-tertiary"
+            class="flex flex-col items-center justify-center py-20 text-text-tertiary"
           >
-            <BsRobot :size="48" class="mb-4 opacity-30" />
-            <p>开始和 AI 对话吧</p>
+            <div class="w-20 h-20 rounded-full flex items-center justify-center mb-6" style="background: var(--message-sent-background)">
+              <BsRobot :size="36" style="color: var(--theme-primary)" />
+            </div>
+            <p class="text-sm">开始和 AI 对话吧</p>
           </div>
         </div>
       </CustomScrollbar>
@@ -240,15 +242,15 @@
             ref="textareaRef"
             v-model="newMessage"
             placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
-            class="w-full h-full bg-transparent text-lg text-text-tertiary resize-none outline-none"
+            class="w-full h-full bg-transparent text-base text-text-tertiary resize-none outline-none"
             @keydown="handleKeyDown"
           />
         </div>
 
-        <div class="flex justify-end pb-8 pr-8">
+        <div class="flex justify-end pb-4 pr-4">
           <button
             v-if="isStreaming"
-            class="px-4 py-1.5 bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center text-white font-semibold text-xl gap-2"
+            class="px-4 py-1.5 bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center text-white font-semibold text-base gap-2"
             @click="$emit('stop-generation')"
           >
             <BsStopFill :size="16" />
@@ -256,7 +258,7 @@
           </button>
           <button
             v-else
-            class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-xl"
+            class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-base"
             :disabled="!newMessage.trim()"
             @click="handleSend"
           >

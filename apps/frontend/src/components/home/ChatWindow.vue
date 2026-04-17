@@ -2,10 +2,10 @@
   <div v-if="conversation" class="flex flex-col h-full bg-bg-tertiary">
     <!-- 聊天头部 -->
     <div
-      class="flex items-center justify-between p-3 pt-5 gap-2 bg-bg-secondary border-b border-border-color flex-shrink-0"
+      class="flex items-center justify-between px-4 py-3 gap-2 bg-bg-secondary border-b border-border-color flex-shrink-0"
     >
       <div class="flex items-center gap-2">
-        <div class="font-semibold text-2xl text-text-secondary leading-none">
+        <div class="font-semibold text-lg text-text-secondary leading-none">
           {{
             conversation.conversation_type === 'group'
               ? conversation.name
@@ -55,7 +55,7 @@
               :class="['flex gap-3', { 'flex-row-reverse': message.sender_id === currentUserId }]"
             >
               <!-- 头像 -->
-              <div class="size-10 roundrect overflow-hidden flex-shrink-0">
+              <div class="size-10 rounded-xl overflow-hidden flex-shrink-0">
                 <img
                   v-if="message.sender?.avatar_url"
                   :src="message.sender.avatar_url"
@@ -64,7 +64,7 @@
                 />
                 <div
                   v-else
-                  class="w-full h-full flex items-center justify-center font-bold text-white text-2xl"
+                  class="w-full h-full flex items-center justify-center font-bold text-white text-lg"
                   style="background: var(--theme-gradient)"
                 >
                   {{ message.sender?.username?.charAt(0) || '?' }}
@@ -81,13 +81,16 @@
                   {{ message.sender?.username }}
                 </div>
                 <div
-                  class="relative px-4 py-2 rounded-2xl cursor-default"
+                  class="relative px-4 py-2.5 rounded-2xl cursor-default"
                   :style="{
-                    background: 'var(--strong-background-color)',
+                    background: message.sender_id === currentUserId
+                      ? 'var(--message-sent-background)'
+                      : 'var(--message-received-background)',
                     color: 'var(--text-color)',
                     wordBreak: 'break-word',
                     overflowWrap: 'break-word',
                     whiteSpace: 'pre-wrap',
+                    boxShadow: 'var(--shadow-sm)',
                   }"
                   @mouseenter="onBubbleMouseEnter(message.id)"
                   @mouseleave="onBubbleMouseLeave"
@@ -166,11 +169,15 @@
           <!-- 空状态 -->
           <div
             v-if="messages.length === 0"
-            class="flex flex-col items-center justify-center text-text-tertiary"
+            class="flex flex-col items-center justify-center py-20 text-text-tertiary"
           >
-            <div class="text-6xl mb-4">💬</div>
-            <h3 class="text-2xl font-semibold mb-2 text-text-primary">欢迎来到 PurrChat</h3>
-            <p>选择一个会话开始聊天</p>
+            <div class="w-20 h-20 rounded-full flex items-center justify-center mb-6" style="background: var(--message-sent-background)">
+              <svg class="w-10 h-10" style="color: var(--theme-primary)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold mb-1 text-text-primary">开始聊天吧</h3>
+            <p class="text-sm">选择一个会话开始聊天</p>
           </div>
         </div>
       </CustomScrollbar>
@@ -267,16 +274,16 @@
         <div class="flex-1 px-4 min-h-0">
           <textarea
             v-model="newMessage"
-            placeholder="text here..."
-            class="w-full h-full bg-transparent text-xl text-text-tertiary resize-none outline-none"
+            placeholder="输入消息... (Enter 发送)"
+            class="w-full h-full bg-transparent text-base text-text-tertiary resize-none outline-none"
             @keydown="handleKeyDown"
           />
         </div>
 
         <!-- 发送按钮 -->
-        <div class="flex justify-end pb-8 pr-8">
+        <div class="flex justify-end pb-4 pr-4">
           <button
-            class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-base disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="sendDisabled"
             @click="handleSend"
           >
