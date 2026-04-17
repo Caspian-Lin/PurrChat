@@ -57,33 +57,6 @@
       </button>
     </div>
 
-    <!-- 侧栏折叠按钮 -->
-    <button
-      :class="[
-        'w-12 h-12 p-0 rounded-xl flex items-center justify-center transition-all',
-        sidebarStore.isCollapsed(activePanel)
-          ? 'bg-bg-quaternary hover:bg-hover-bg text-text-tertiary hover:text-text-primary'
-          : 'bg-bg-quaternary hover:bg-hover-bg text-text-tertiary hover:text-text-primary',
-      ]"
-      :title="sidebarStore.isCollapsed(activePanel) ? '展开侧栏' : '收起侧栏'"
-      @click="sidebarStore.toggleSidebar(activePanel)"
-    >
-      <svg
-        class="w-5 h-5 transition-transform duration-200"
-        :class="{ 'rotate-180': sidebarStore.isCollapsed(activePanel) }"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="1.5"
-          d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-        />
-      </svg>
-    </button>
-
     <!-- 底部区域 - 主题切换、个人资料 -->
     <div class="w-12 flex flex-col items-center gap-4 mt-auto">
       <!-- 在线状态指示器（只在离线或连接中时显示） -->
@@ -106,7 +79,32 @@
           {{ connectionStatusText }}
         </span> -->
       </div>
-
+      <!-- 侧栏折叠按钮 -->
+      <button
+        :class="[
+          'w-10 h-10  p-0 rounded-lg flex items-center justify-center transition-all',
+          sidebarStore.isCollapsed(activePanel)
+            ? 'bg-bg-quaternary hover:bg-hover-bg text-text-tertiary hover:text-text-primary'
+            : 'bg-bg-quaternary hover:bg-hover-bg text-text-tertiary hover:text-text-primary',
+        ]"
+        :title="sidebarStore.isCollapsed(activePanel) ? '展开侧栏' : '收起侧栏'"
+        @click="sidebarStore.toggleSidebar(activePanel)"
+      >
+        <svg
+          class="w-5 h-5 transition-transform duration-200"
+          :class="{ 'rotate-180': sidebarStore.isCollapsed(activePanel) }"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+          />
+        </svg>
+      </button>
       <ThemeSwitcher />
       <div
         class="flex items-center gap-2 cursor-pointer rounded-lg hover:bg-hover-bg transition-colors"
