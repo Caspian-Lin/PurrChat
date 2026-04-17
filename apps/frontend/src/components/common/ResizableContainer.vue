@@ -279,7 +279,7 @@ onUnmounted(() => {
 
 .resizer:hover,
 .resizer--active {
-  background-color: var(--theme-primary, #5A8F4E);
+  background-color: var(--theme-primary, #5a8f4e);
 }
 
 .resizer-handle {

@@ -17,7 +17,14 @@ import MessageContainer from './components/common/MessageContainer.vue';
 }
 
 body {
-  font-family: 'Onest', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    'Onest',
+    'Noto Sans SC',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   background: var(--background-color);
   color: var(--text-color);
 }

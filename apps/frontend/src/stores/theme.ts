@@ -1,7 +1,13 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
 import type { ThemeConfig, ThemeMode, ThemeColor } from '../config/theme';
-import { defaultThemeConfig, themeColors, lightTheme, darkTheme, legacyColorMap } from '../config/theme';
+import {
+  defaultThemeConfig,
+  themeColors,
+  lightTheme,
+  darkTheme,
+  legacyColorMap,
+} from '../config/theme';
 
 const THEME_STORAGE_KEY = 'purr-chat-theme';
 
@@ -99,7 +105,8 @@ export const useThemeStore = defineStore('theme', () => {
     root.style.setProperty('--surface-hover-color', theme.surfaceHover);
     root.style.setProperty('--surface-secondary-color', theme.surfaceSecondary);
     root.style.setProperty('--surface-tertiary-color', theme.surfaceTertiary);
-    root.style.setProperty('--strong-background-color',
+    root.style.setProperty(
+      '--strong-background-color',
       mode.value === 'light' ? '#FFFFFF' : '#22222C'
     );
 
@@ -110,9 +117,7 @@ export const useThemeStore = defineStore('theme', () => {
 
     // 设置边框色
     root.style.setProperty('--border-color', theme.border);
-    root.style.setProperty('--border-subtle-color',
-      mode.value === 'light' ? '#E7E5E0' : '#1F1F2A'
-    );
+    root.style.setProperty('--border-subtle-color', mode.value === 'light' ? '#E7E5E0' : '#1F1F2A');
 
     // 设置其他变量
     root.style.setProperty('--shadow-color', theme.shadow);

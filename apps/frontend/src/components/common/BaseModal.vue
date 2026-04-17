@@ -19,7 +19,11 @@
               class="flex items-center justify-between px-6 py-4 border-b"
               style="border-color: var(--border-color)"
             >
-              <h2 v-if="title" class="text-xl font-bold font-display" style="color: var(--text-color)">
+              <h2
+                v-if="title"
+                class="text-xl font-bold font-display"
+                style="color: var(--text-color)"
+              >
                 {{ title }}
               </h2>
               <slot name="header"></slot>

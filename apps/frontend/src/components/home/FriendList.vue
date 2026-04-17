@@ -34,15 +34,16 @@
           </span>
           <span
             v-if="friendship.status !== 'accepted'"
-            :class="['text-xs px-1.5 py-0.5 rounded-[var(--radius-xs)]', getFriendshipStatusColor(friendship.status)]"
+            :class="[
+              'text-xs px-1.5 py-0.5 rounded-[var(--radius-xs)]',
+              getFriendshipStatusColor(friendship.status),
+            ]"
             class="bg-bg-secondary"
           >
             {{ formatFriendshipStatus(friendship.status) }}
           </span>
         </div>
-        <div class="text-sm text-text-secondary truncate">
-          UID: {{ friendship.friend?.uid }}
-        </div>
+        <div class="text-sm text-text-secondary truncate">UID: {{ friendship.friend?.uid }}</div>
       </BaseListItem>
     </div>
 

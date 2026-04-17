@@ -51,7 +51,10 @@
             class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-hover-bg transition-colors rounded-lg"
             @click="handleSelect(`color-${key}`)"
           >
-            <div class="w-5 h-5 rounded-[var(--radius-xs)]" :style="{ background: color.primary }" />
+            <div
+              class="w-5 h-5 rounded-[var(--radius-xs)]"
+              :style="{ background: color.primary }"
+            />
             <span class="flex-1">{{ colorNames[key as ThemeColor] || key }}</span>
             <div
               v-if="themeStore.color === key"

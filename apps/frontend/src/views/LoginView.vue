@@ -13,12 +13,7 @@
       >
         PurrChat
       </h1>
-      <p
-        class="text-center mb-8"
-        style="color: var(--text-secondary-color)"
-      >
-        欢迎回来
-      </p>
+      <p class="text-center mb-8" style="color: var(--text-secondary-color)">欢迎回来</p>
 
       <form @submit.prevent="handleSubmit" class="space-y-6">
         <BaseFormItem label="邮箱">
@@ -36,7 +31,7 @@
         <button
           type="submit"
           class="w-full h-12 font-medium"
-          style="background: var(--theme-primary); color: #fff;"
+          style="background: var(--theme-primary); color: #fff"
           :disabled="auth.loading.value"
         >
           {{ auth.loading.value ? '登录中...' : '登录' }}

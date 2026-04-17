@@ -13,7 +13,9 @@
         <div
           class="flex items-center gap-2 px-4 py-3 bg-bg-secondary border-b border-border-subtle flex-shrink-0 relative"
         >
-          <div class="flex-1 flex items-center bg-bg-quaternary rounded-[var(--radius-sm)] h-10 px-3">
+          <div
+            class="flex-1 flex items-center bg-bg-quaternary rounded-[var(--radius-sm)] h-10 px-3"
+          >
             <input
               v-model="searchQuery"
               type="text"
@@ -118,7 +120,9 @@
                     class="w-9 h-9 rounded-[var(--radius-md)] overflow-hidden flex-shrink-0"
                     style="background: var(--theme-gradient)"
                   >
-                    <div class="w-full h-full flex items-center justify-center font-bold text-white text-sm">
+                    <div
+                      class="w-full h-full flex items-center justify-center font-bold text-white text-sm"
+                    >
                       {{ conversation.name?.charAt(0) || 'G' }}
                     </div>
                   </div>
@@ -162,8 +166,13 @@
                 </template>
 
                 <div class="flex items-center gap-2">
-                  <span class="font-semibold truncate text-text-primary text-sm">{{ user.username }}</span>
-                  <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded-[var(--radius-xs)]">陌生人</span>
+                  <span class="font-semibold truncate text-text-primary text-sm">{{
+                    user.username
+                  }}</span>
+                  <span
+                    class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded-[var(--radius-xs)]"
+                    >陌生人</span
+                  >
                 </div>
                 <div class="text-xs text-text-secondary">UID: {{ user.uid }}</div>
               </BaseListItem>
@@ -285,10 +294,7 @@
           </div>
 
           <div v-else class="space-y-1">
-            <BaseListItem
-              v-for="request in allFriendRequests"
-              :key="request.id"
-            >
+            <BaseListItem v-for="request in allFriendRequests" :key="request.id">
               <template #avatar>
                 <div
                   class="w-11 h-11 rounded-[var(--radius-md)] overflow-hidden cursor-pointer"
@@ -312,7 +318,9 @@
 
               <div class="flex items-center justify-between">
                 <div class="min-w-0 flex-1">
-                  <div class="font-semibold text-text-primary text-sm">{{ request.user?.username }}</div>
+                  <div class="font-semibold text-text-primary text-sm">
+                    {{ request.user?.username }}
+                  </div>
                   <div class="text-xs text-text-secondary">
                     {{ getFriendRequestText(request) }}
                   </div>
@@ -361,9 +369,23 @@
 
       <!-- 空状态 -->
       <div v-else class="flex-1 flex flex-col items-center justify-center text-text-tertiary">
-        <div class="w-20 h-20 rounded-full flex items-center justify-center mb-6" style="background: var(--surface-color)">
-          <svg class="w-10 h-10" style="color: var(--text-tertiary-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+        <div
+          class="w-20 h-20 rounded-full flex items-center justify-center mb-6"
+          style="background: var(--surface-color)"
+        >
+          <svg
+            class="w-10 h-10"
+            style="color: var(--text-tertiary-color)"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+            />
           </svg>
         </div>
         <h3 class="text-lg font-semibold mb-1 text-text-primary">好友列表</h3>

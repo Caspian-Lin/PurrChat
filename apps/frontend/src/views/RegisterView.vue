@@ -14,12 +14,7 @@
       >
         PurrChat
       </h1>
-      <p
-        class="text-center mb-8"
-        style="color: var(--text-secondary-color)"
-      >
-        创建新账号
-      </p>
+      <p class="text-center mb-8" style="color: var(--text-secondary-color)">创建新账号</p>
 
       <form @submit.prevent="handleSubmit" class="space-y-5">
         <BaseFormItem label="用户名">
@@ -59,7 +54,7 @@
         <button
           type="submit"
           class="w-full h-12 font-medium"
-          style="background: var(--theme-primary); color: #fff;"
+          style="background: var(--theme-primary); color: #fff"
           :disabled="auth.loading.value"
         >
           {{ auth.loading.value ? '注册中...' : '注册' }}
