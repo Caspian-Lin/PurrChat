@@ -3,34 +3,51 @@
 @tailwind utilities;
 
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  /* 主题变量 */
-  --theme-primary: #5171ff;
+  /* 主题变量（默认匹配 purple 主题） */
+  --theme-primary: #bf5eff;
   --theme-secondary: #764ba2;
-  --theme-gradient: #5171ff;
+  --theme-gradient: #bf5eff;
 
-  /* 浅色主题默认值 */
-  --background-color: #f0f0f0;
-  --surface-color: #ececec;
-  --strong-background-color: rgb(255, 255, 255);
-  --surface-hover-color: #e8e8e8;
-  --surface-secondary-color: #f4f4f4;
-  --surface-tertiary-color: #f2f2f2;
-  --text-color: #000000;
-  --text-secondary-color: #000000cc;
-  --text-tertiary-color: #00000099;
-  --border-color: #d9d9d9;
-  --shadow-color: rgba(0, 0, 0, 0.1);
-  --modal-overlay-color: rgba(0, 0, 0, 0.5);
-  --input-background: #f2f2f2;
-  --input-border: #d9d9d9;
-  --message-received-background: #fffffffa;
-  --card-background: #f9f9f9;
-  --hover-background: #f2f2f2;
-  --selected-background: #e8f4fd;
+  /* 浅色主题默认值（暖灰色系） */
+  --background-color: #faf9f7;
+  --surface-color: #f0efec;
+  --strong-background-color: #ffffff;
+  --surface-hover-color: #e8e6e3;
+  --surface-secondary-color: #f5f4f1;
+  --surface-tertiary-color: #eae8e5;
+  --text-color: #1a1a1e;
+  --text-secondary-color: #4a4a52;
+  --text-tertiary-color: #8a8a94;
+  --border-color: #e0ddd8;
+  --shadow-color: rgba(0, 0, 0, 0.08);
+  --modal-overlay-color: rgba(0, 0, 0, 0.4);
+  --input-background: #f0efec;
+  --input-border: #ddd9d3;
+  --message-received-background: #ffffff;
+  --message-sent-background: #f0efec;
+  --card-background: #ffffff;
+  --hover-background: #e8e6e3;
+  --selected-background: #eae8e5;
+
+  /* 语义色 */
+  --color-success: #22c55e;
+  --color-success-bg: #dcfce7;
+  --color-warning: #f59e0b;
+  --color-warning-bg: #fef3c7;
+  --color-error: #ef4444;
+  --color-error-bg: #fef2f2;
+  --color-info: #3b82f6;
+  --color-info-bg: #eff6ff;
+
+  /* 阴影系统 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
 
   color-scheme: light dark;
   color: var(--text-color);
@@ -44,24 +61,37 @@
 
 /* 深色主题 */
 [data-theme='dark'] {
-  --background-color: #1a1a1a;
-  --strong-background-color: rgba(0, 0, 0, 0.503);
-  --surface-color: #2d2d2d;
-  --surface-hover-color: #3d3d3d;
-  --surface-secondary-color: #252525;
-  --surface-tertiary-color: #1f1f1f;
-  --text-color: #f0efef;
-  --text-secondary-color: #e0e0e0;
-  --text-tertiary-color: #b0b0b0;
-  --border-color: #404040;
-  --shadow-color: rgba(0, 0, 0, 0.3);
-  --modal-overlay-color: rgba(0, 0, 0, 0.7);
-  --input-background: #1f1f1f;
-  --input-border: #404040;
-  --message-received-background: #3d3d3d;
-  --card-background: #2d2d2d;
-  --hover-background: #3d3d3d;
-  --selected-background: #1e3a5f;
+  --background-color: #121212;
+  --strong-background-color: #1e1e1e;
+  --surface-color: #1e1e1e;
+  --surface-hover-color: #2a2a2a;
+  --surface-secondary-color: #181818;
+  --surface-tertiary-color: #252525;
+  --text-color: #e8e6e3;
+  --text-secondary-color: #a8a6a3;
+  --text-tertiary-color: #6e6c69;
+  --border-color: #333333;
+  --shadow-color: rgba(0, 0, 0, 0.4);
+  --modal-overlay-color: rgba(0, 0, 0, 0.75);
+  --input-background: #1a1a1a;
+  --input-border: #383838;
+  --message-received-background: #2d2d2d;
+  --message-sent-background: #252525;
+  --card-background: #1e1e1e;
+  --hover-background: #2a2a2a;
+  --selected-background: #252525;
+
+  /* 深色语义色背景 */
+  --color-success-bg: #1a2e1a;
+  --color-warning-bg: #2e2510;
+  --color-error-bg: #2e1a1a;
+  --color-info-bg: #1a2530;
+
+  /* 深色阴影系统 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
 }
 
 a {
@@ -86,7 +116,7 @@ body {
 }
 
 body {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   min-width: 320px;
   min-height: 100vh;
 }
@@ -103,31 +133,32 @@ h1 {
 
 button {
   border-radius: 8px;
-  /* border: 1px solid transparent; */
+  border: none;
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: var(--theme-primary);
+  background-color: transparent;
   color: var(--text-color);
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: all 0.2s ease;
 }
 button:hover {
-  /* border-color: var(--theme-primary); */
+  opacity: 0.9;
 }
 
 button:focus,
 button:focus-visible {
-  /* outline: 4px auto -webkit-focus-ring-color; */
+  outline: 2px solid var(--theme-primary);
+  outline-offset: 2px;
 }
 
 .card {
   padding: 2em;
 }
 
-/* 圆角矩形样式：圆角大小为长宽中较小值的四分之一 */
+/* 圆角矩形样式：统一为 12px 圆角 */
 .roundrect {
-  border-radius: 25%;
+  border-radius: 12px;
 }
 
 /* 半透明滚动条样式 */
@@ -230,4 +261,20 @@ button:focus-visible {
   -ms-overflow-style: none;
   scrollbar-width: none;
   overflow: auto;
+}
+
+/* 阴影系统 */
+.elevated-sm { box-shadow: var(--shadow-sm); }
+.elevated-md { box-shadow: var(--shadow-md); }
+.elevated-lg { box-shadow: var(--shadow-lg); }
+.elevated-xl { box-shadow: var(--shadow-xl); }
+
+/* 毛玻璃效果 */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+[data-theme='dark'] .glass {
+  background: rgba(30, 30, 30, 0.7);
 }

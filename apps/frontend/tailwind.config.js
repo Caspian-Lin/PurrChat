@@ -16,6 +16,16 @@ export default {
         'accent-color': 'var(--theme-primary)',
         'hover-bg': 'var(--hover-background)',
         'selected-bg': 'var(--selected-background)',
+        'msg-sent': 'var(--message-sent-background)',
+        'msg-received': 'var(--message-received-background)',
+        'success': 'var(--color-success)',
+        'success-bg': 'var(--color-success-bg)',
+        'warning-color': 'var(--color-warning)',
+        'warning-bg': 'var(--color-warning-bg)',
+        'error-color': 'var(--color-error)',
+        'error-bg': 'var(--color-error-bg)',
+        'info-color': 'var(--color-info)',
+        'info-bg': 'var(--color-info-bg)',
       },
       dark: {
         colors: {

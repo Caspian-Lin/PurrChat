@@ -5,6 +5,14 @@ import { defaultThemeConfig, themeColors, lightTheme, darkTheme } from '../confi
 
 const THEME_STORAGE_KEY = 'purr-chat-theme';
 
+// 将 hex 颜色转为 rgba 字符串
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export const useThemeStore = defineStore('theme', () => {
   // 状态
   const mode = ref<ThemeMode>(defaultThemeConfig.mode);
@@ -99,6 +107,33 @@ export const useThemeStore = defineStore('theme', () => {
     root.style.setProperty('--card-background', theme.cardBackground);
     root.style.setProperty('--hover-background', theme.hoverBackground);
     root.style.setProperty('--selected-background', theme.selectedBackground);
+
+    // 动态混入主题色到 sent 气泡和选中态（让它们跟随主题色变化）
+    const tintColor = colorConfig.primary;
+    root.style.setProperty(
+      '--message-sent-background',
+      hexToRgba(tintColor, mode.value === 'light' ? 0.08 : 0.15)
+    );
+    root.style.setProperty(
+      '--selected-background',
+      hexToRgba(tintColor, mode.value === 'light' ? 0.1 : 0.15)
+    );
+
+    // 设置语义色变量
+    root.style.setProperty('--color-success', theme.success);
+    root.style.setProperty('--color-success-bg', theme.successBackground);
+    root.style.setProperty('--color-warning', theme.warning);
+    root.style.setProperty('--color-warning-bg', theme.warningBackground);
+    root.style.setProperty('--color-error', theme.error);
+    root.style.setProperty('--color-error-bg', theme.errorBackground);
+    root.style.setProperty('--color-info', theme.info);
+    root.style.setProperty('--color-info-bg', theme.infoBackground);
+
+    // 设置强背景色（浅色为白色，深色与 surface 一致）
+    root.style.setProperty(
+      '--strong-background-color',
+      mode.value === 'light' ? '#ffffff' : theme.surface
+    );
 
     // 保存到 localStorage
     saveTheme();
