@@ -2,6 +2,24 @@ import { ref } from 'vue';
 import { useAiStore } from '../stores/ai';
 import type { AiMessage, AiMessageRole } from '../models/types';
 
+/**
+ * SSE 流式 delta 的结构
+ * 兼容不同 API 提供商的思维链字段
+ */
+interface StreamDelta {
+  role?: string;
+  content?: string | null;
+  reasoning_content?: string | null; // DeepSeek / QwQ / vLLM
+  reasoning?: string | null; // OpenAI 旧版 o-series
+}
+
+/**
+ * 从 delta 中统一获取思维链文本
+ */
+function getThinkingText(delta: StreamDelta): string | null {
+  return delta.reasoning_content ?? delta.reasoning ?? null;
+}
+
 export const useAiChat = () => {
   const isStreaming = ref(false);
   const error = ref<string | null>(null);
@@ -32,12 +50,15 @@ export const useAiChat = () => {
     store.addMessage(conversation.id, userMessage);
 
     // 2. 创建 AI 回复占位消息
+    const assistantId = crypto.randomUUID();
     const assistantMessage: AiMessage = {
-      id: crypto.randomUUID(),
+      id: assistantId,
       role: 'assistant',
       content: '',
+      thinking: '',
       createdAt: new Date().toISOString(),
       isStreaming: true,
+      isThinking: true,
     };
     store.addMessage(conversation.id, assistantMessage);
 
@@ -50,12 +71,16 @@ export const useAiChat = () => {
     }
     apiMessages.push({ role: 'user', content });
 
-    // 4. 发起 SSE 流式请求
+    // 4. 发起请求
     isStreaming.value = true;
     error.value = null;
     abortController.value = new AbortController();
 
     let fullContent = '';
+    let fullThinking = '';
+    let hasSSEData = false;
+    let inThinkingPhase = true;
+    let hasContentDelta = false;
 
     try {
       const url = config.apiUrl.replace(/\/+$/, '') + '/chat/completions';
@@ -107,38 +132,79 @@ export const useAiChat = () => {
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed || trimmed === 'data: [DONE]') continue;
-          if (!trimmed.startsWith('data: ')) continue;
 
-          try {
-            const json = JSON.parse(trimmed.slice(6));
-            const delta = json.choices?.[0]?.delta?.content;
-            if (delta) {
-              fullContent += delta;
-              store.updateStreamingMessage(conversation.id, assistantMessage.id, fullContent);
+          if (trimmed.startsWith('data: ')) {
+            hasSSEData = true;
+            try {
+              const json = JSON.parse(trimmed.slice(6));
+              const delta: StreamDelta = json.choices?.[0]?.delta;
+              if (!delta) continue;
+
+              if ('content' in delta) {
+                hasContentDelta = true;
+              }
+
+              // 提取思维链内容
+              const thinkingDelta = getThinkingText(delta);
+              if (thinkingDelta) {
+                fullThinking += thinkingDelta;
+                store.updateStreamingThinking(conversation.id, assistantId, fullThinking);
+              }
+
+              // 提取正式回复内容
+              if (delta.content) {
+                if (inThinkingPhase) {
+                  inThinkingPhase = false;
+                  store.setThinkingState(conversation.id, assistantId, false);
+                }
+                fullContent += delta.content;
+                store.updateStreamingMessage(conversation.id, assistantId, fullContent);
+              }
+            } catch {
+              // 忽略 JSON 解析错误
             }
-          } catch {
-            // 忽略解析错误（可能是不完整的 JSON）
           }
         }
       }
 
-      store.finalizeStreamingMessage(conversation.id, assistantMessage.id);
+      // 非流式 fallback：API 可能忽略 stream: true 返回普通 JSON
+      if (!hasSSEData && !fullContent) {
+        try {
+          const json = JSON.parse(buffer.trim());
+          const messageContent = json.choices?.[0]?.message?.content;
+          if (messageContent) {
+            fullContent = messageContent;
+            store.updateStreamingMessage(conversation.id, assistantId, fullContent);
+          }
+        } catch {
+          // JSON 解析失败，保持空内容
+        }
+      }
+
+      // 模型只有思维链无独立 content 阶段
+      if (!fullContent && fullThinking && !hasContentDelta) {
+        store.setThinkingState(conversation.id, assistantId, false);
+        fullContent = fullThinking;
+        store.updateStreamingMessage(conversation.id, assistantId, fullContent);
+      }
+
+      store.finalizeStreamingMessage(conversation.id, assistantId);
       store.saveConversations();
     } catch (err: unknown) {
       const e = err as Error;
       if (e.name === 'AbortError') {
-        store.finalizeStreamingMessage(conversation.id, assistantMessage.id);
+        store.finalizeStreamingMessage(conversation.id, assistantId);
         store.saveConversations();
       } else {
         error.value = e.message || '发送消息失败';
-        if (!fullContent) {
+        if (!fullContent && !fullThinking) {
           store.updateStreamingMessage(
             conversation.id,
-            assistantMessage.id,
+            assistantId,
             `[错误] ${e.message || '未知错误'}`
           );
         }
-        store.finalizeStreamingMessage(conversation.id, assistantMessage.id);
+        store.finalizeStreamingMessage(conversation.id, assistantId);
         store.saveConversations();
       }
     } finally {

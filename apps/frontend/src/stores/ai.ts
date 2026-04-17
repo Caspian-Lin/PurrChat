@@ -123,7 +123,9 @@ export const useAiStore = defineStore('ai', () => {
 
   const activeMessages = computed(() => {
     streamingVersion.value;
-    return activeConversation.value?.messages || [];
+    const conv = activeConversation.value;
+    // 返回数组浅拷贝，确保每次 streamingVersion 变化时子组件收到新的引用
+    return conv ? conv.messages.slice() : [];
   });
 
   const loadConversations = () => {
@@ -188,12 +190,35 @@ export const useAiStore = defineStore('ai', () => {
     }
   };
 
+  const updateStreamingThinking = (conversationId: string, messageId: string, thinking: string) => {
+    const conv = conversations.value.find((c) => c.id === conversationId);
+    if (conv) {
+      const msg = conv.messages.find((m) => m.id === messageId);
+      if (msg) {
+        msg.thinking = thinking;
+        streamingVersion.value++;
+      }
+    }
+  };
+
+  const setThinkingState = (conversationId: string, messageId: string, isThinking: boolean) => {
+    const conv = conversations.value.find((c) => c.id === conversationId);
+    if (conv) {
+      const msg = conv.messages.find((m) => m.id === messageId);
+      if (msg) {
+        msg.isThinking = isThinking;
+        streamingVersion.value++;
+      }
+    }
+  };
+
   const finalizeStreamingMessage = (conversationId: string, messageId: string) => {
     const conv = conversations.value.find((c) => c.id === conversationId);
     if (conv) {
       const msg = conv.messages.find((m) => m.id === messageId);
       if (msg) {
         msg.isStreaming = false;
+        msg.isThinking = false;
         conv.updatedAt = new Date().toISOString();
         saveConversations();
       }
@@ -272,6 +297,8 @@ export const useAiStore = defineStore('ai', () => {
     createConversation,
     addMessage,
     updateStreamingMessage,
+    updateStreamingThinking,
+    setThinkingState,
     finalizeStreamingMessage,
     setActiveConversation,
     deleteConversation,

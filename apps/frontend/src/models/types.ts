@@ -184,8 +184,10 @@ export interface AiMessage {
   id: string;
   role: AiMessageRole;
   content: string;
+  thinking?: string; // 思维链内容（reasoning models）
   createdAt: string;
   isStreaming?: boolean;
+  isThinking?: boolean; // 是否正在思考（流式思维链阶段）
 }
 
 // AI 会话
