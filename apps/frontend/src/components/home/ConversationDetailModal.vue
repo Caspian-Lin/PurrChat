@@ -86,47 +86,42 @@
           </button>
         </div>
         <CustomScrollbar class="max-h-64 rounded-lg" style="background: var(--surface-color)">
-          <div class="h-full">
-            <div
+          <div class="px-2 pt-2 pb-0.5">
+            <BaseListItem
               v-for="member in members"
               :key="member.id"
-              class="flex items-center gap-3 p-3 border-b"
-              style="border-color: var(--border-color)"
+              @click="handleShowUserProfile(member.user)"
             >
-              <div
-                class="w-10 h-10 roundrect overflow-hidden flex-shrink-0 cursor-pointer"
-                @click="handleShowUserProfile(member.user)"
-              >
-                <img
-                  v-if="member.user?.avatar_url"
-                  :src="member.user.avatar_url"
-                  alt="avatar"
-                  class="w-full h-full object-cover"
-                />
-                <div
-                  v-else
-                  class="w-full h-full flex items-center justify-center font-bold text-white"
-                  style="background: var(--theme-gradient)"
+              <template #avatar>
+                <div class="w-10 h-10 rounded-[var(--radius-md)] overflow-hidden">
+                  <img
+                    v-if="member.user?.avatar_url"
+                    :src="member.user.avatar_url"
+                    alt="avatar"
+                    class="w-full h-full object-cover"
+                  />
+                  <div
+                    v-else
+                    class="w-full h-full flex items-center justify-center font-bold text-white"
+                    style="background: var(--theme-gradient)"
+                  >
+                    {{ member.user?.username?.charAt(0) || 'U' }}
+                  </div>
+                </div>
+              </template>
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-text-primary">{{ member.user?.username }}</span>
+                <span class="text-xs text-text-secondary">{{ getRoleLabel(member.role) }}</span>
+              </div>
+              <template v-if="canRemoveMember(member)" #actions>
+                <button
+                  class="px-2.5 py-1 text-xs bg-red-500 text-white rounded-[var(--radius-sm)] hover:bg-red-600 transition-colors"
+                  @click.stop="handleRemoveMember(member)"
                 >
-                  {{ member.user?.username?.charAt(0) || 'U' }}
-                </div>
-              </div>
-              <div class="flex-1">
-                <div class="font-medium" style="color: var(--text-color)">
-                  {{ member.user?.username }}
-                </div>
-                <div class="text-xs" style="color: var(--text-secondary-color)">
-                  {{ getRoleLabel(member.role) }}
-                </div>
-              </div>
-              <button
-                v-if="canRemoveMember(member)"
-                class="px-3 py-1.5 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-                @click="handleRemoveMember(member)"
-              >
-                移除
-              </button>
-            </div>
+                  移除
+                </button>
+              </template>
+            </BaseListItem>
           </div>
         </CustomScrollbar>
       </div>
@@ -177,6 +172,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import BaseModal from '../common/BaseModal.vue';
+import BaseListItem from '../common/BaseListItem.vue';
 import AddMemberModal from './AddMemberModal.vue';
 import CustomScrollbar from '../common/CustomScrollbar.vue';
 import { api } from '../../models/api';
