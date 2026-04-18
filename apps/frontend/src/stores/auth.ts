@@ -9,7 +9,7 @@ import { conversationStateCacheService } from '../services/conversationStateCach
 function getErrorMessage(backendError: string): string {
   const errorMap: Record<string, string> = {
     // 注册相关错误
-    'username already exists': '用户名已存在，请使用其他用户名',
+    'username already exists': '该用户名已被占用，请使用其他用户名',
     'email already exists': '该邮箱已被注册，请使用其他邮箱或直接登录',
     'phone already exists': '该手机号已被注册，请使用其他手机号或直接登录',
     'Invalid request': '请求格式错误，请检查输入信息',
@@ -25,7 +25,6 @@ function getErrorMessage(backendError: string): string {
     'User not found': '用户不存在',
     'invalid current password': '当前密码不正确',
     'new password must be different from current password': '新密码不能与当前密码相同',
-    'username already exists': '该用户名已被占用，请使用其他用户名',
   };
 
   // 优先进行精确匹配

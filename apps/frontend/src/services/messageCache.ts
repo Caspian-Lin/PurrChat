@@ -1,11 +1,6 @@
 import { ref } from 'vue';
 import type { Message } from '../models/types';
-import {
-  messageKeyPrefix,
-  messageKey,
-  messageEncryptionKey,
-  clearUserData as clearUserDataByKey,
-} from '../utils/storageNamespace';
+import { messageKeyPrefix, messageEncryptionKey } from '../utils/storageNamespace';
 
 export interface CachedMessage {
   id: string;

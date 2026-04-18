@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import { convStateKeyPrefix, clearUserData as clearUserDataByKey } from '../utils/storageNamespace';
+import { convStateKeyPrefix } from '../utils/storageNamespace';
 
 export interface ConversationState {
   conversationId: string;

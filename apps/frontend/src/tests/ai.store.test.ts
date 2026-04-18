@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useAiStore } from '../stores/ai';
-import type { AiConfig, AiMessage } from '../models/types';
+import type { AiMessage } from '../models/types';
 
 // Mock crypto.randomUUID
 let uuidCounter = 0;
@@ -436,7 +436,7 @@ describe('AI Store', () => {
         temperature: 0.5,
       });
       store.createConversation(config.id);
-      const conv2 = store.createConversation(config.id);
+      store.createConversation(config.id);
 
       // Make conv1 active (conversations[0] is conv1 because unshift)
       store.setActiveConversation(store.conversations[0].id);

@@ -60,6 +60,12 @@ export default [
     },
   },
   {
+    files: ['**/*.d.ts'],
+    rules: {
+      'no-unused-vars': 'off',
+    },
+  },
+  {
     files: ['**/*.{ts,mts,tsx}'],
     languageOptions: {
       parser: tsParser,
