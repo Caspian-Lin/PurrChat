@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { conversationStateCacheService, useConversationStateCache } from '../services/conversationStateCache';
+import {
+  conversationStateCacheService,
+  useConversationStateCache,
+} from '../services/conversationStateCache';
 
 // Mock localStorage with Proxy (same pattern as messageCache.test.ts)
 const localStorageMock = (() => {
@@ -53,8 +56,18 @@ describe('ConversationStateCacheService', () => {
     it('should load cached states from localStorage for user', () => {
       // Pre-populate localStorage
       const prefix = 'conv_state_test-user-1_';
-      const state1 = { conversationId: 'conv-1', isHidden: false, unreadCount: 3, lastUpdated: Date.now() };
-      const state2 = { conversationId: 'conv-2', isHidden: true, unreadCount: 0, lastUpdated: Date.now() };
+      const state1 = {
+        conversationId: 'conv-1',
+        isHidden: false,
+        unreadCount: 3,
+        lastUpdated: Date.now(),
+      };
+      const state2 = {
+        conversationId: 'conv-2',
+        isHidden: true,
+        unreadCount: 0,
+        lastUpdated: Date.now(),
+      };
       localStorage.setItem(`${prefix}conv-1`, JSON.stringify(state1));
       localStorage.setItem(`${prefix}conv-2`, JSON.stringify(state2));
 
@@ -77,8 +90,24 @@ describe('ConversationStateCacheService', () => {
     it('should only load entries with user-specific prefix', () => {
       const prefix1 = 'conv_state_test-user-1_';
       const prefix2 = 'conv_state_test-user-2_';
-      localStorage.setItem(`${prefix1}conv-a`, JSON.stringify({ conversationId: 'conv-a', isHidden: false, unreadCount: 1, lastUpdated: Date.now() }));
-      localStorage.setItem(`${prefix2}conv-b`, JSON.stringify({ conversationId: 'conv-b', isHidden: false, unreadCount: 2, lastUpdated: Date.now() }));
+      localStorage.setItem(
+        `${prefix1}conv-a`,
+        JSON.stringify({
+          conversationId: 'conv-a',
+          isHidden: false,
+          unreadCount: 1,
+          lastUpdated: Date.now(),
+        })
+      );
+      localStorage.setItem(
+        `${prefix2}conv-b`,
+        JSON.stringify({
+          conversationId: 'conv-b',
+          isHidden: false,
+          unreadCount: 2,
+          lastUpdated: Date.now(),
+        })
+      );
 
       conversationStateCacheService.init('test-user-1');
 
@@ -194,12 +223,15 @@ describe('ConversationStateCacheService', () => {
       conversationStateCacheService.incrementUnreadCount('conv-1', 1);
 
       // Add data for another user directly
-      localStorage.setItem('conv_state_other-user_conv-a', JSON.stringify({
-        conversationId: 'conv-a',
-        isHidden: false,
-        unreadCount: 5,
-        lastUpdated: Date.now(),
-      }));
+      localStorage.setItem(
+        'conv_state_other-user_conv-a',
+        JSON.stringify({
+          conversationId: 'conv-a',
+          isHidden: false,
+          unreadCount: 5,
+          lastUpdated: Date.now(),
+        })
+      );
 
       conversationStateCacheService.clearAll();
 

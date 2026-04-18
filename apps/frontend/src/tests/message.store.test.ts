@@ -212,10 +212,7 @@ describe('Message Store', () => {
 
   describe('loadFromCache', () => {
     it('should load from cache and set messages', async () => {
-      mockGetMessages.mockReturnValueOnce([
-        createMessage('m1'),
-        createMessage('m2'),
-      ]);
+      mockGetMessages.mockReturnValueOnce([createMessage('m1'), createMessage('m2')]);
 
       const store = useMessageStore();
       const loaded = await store.loadFromCache('conv-1');

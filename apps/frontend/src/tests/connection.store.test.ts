@@ -61,9 +61,7 @@ describe('Connection Store', () => {
 
     it('should update lastConnectedTime on each successful connection', () => {
       const store = useConnectionStore();
-      vi.spyOn(Date, 'now')
-        .mockReturnValueOnce(1000)
-        .mockReturnValueOnce(2000);
+      vi.spyOn(Date, 'now').mockReturnValueOnce(1000).mockReturnValueOnce(2000);
 
       store.setConnected(true);
       expect(store.lastConnectedTime).toBe(1000);

@@ -87,7 +87,9 @@ describe('Settings Store', () => {
       const { api } = await import('../models/api');
       vi.mocked(api.getSettings).mockResolvedValueOnce({
         success: true,
-        data: { general: { themeMode: 'dark', themeColor: 'sage', language: 'zh-CN', fontSize: 'medium' } },
+        data: {
+          general: { themeMode: 'dark', themeColor: 'sage', language: 'zh-CN', fontSize: 'medium' },
+        },
       });
 
       const store = useSettingsStore();
@@ -141,14 +143,30 @@ describe('Settings Store', () => {
       const { api } = await import('../models/api');
       // Set cache
       const cached: Partial<UserSettings> = {
-        notifications: { messageNotification: false, friendRequestNotification: true, groupInviteNotification: true, systemNotification: true, soundEnabled: true, desktopNotificationEnabled: false },
+        notifications: {
+          messageNotification: false,
+          friendRequestNotification: true,
+          groupInviteNotification: true,
+          systemNotification: true,
+          soundEnabled: true,
+          desktopNotificationEnabled: false,
+        },
       };
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(cached));
 
       // Server returns different value
       vi.mocked(api.getSettings).mockResolvedValueOnce({
         success: true,
-        data: { notifications: { messageNotification: true, friendRequestNotification: false, groupInviteNotification: true, systemNotification: true, soundEnabled: false, desktopNotificationEnabled: true } },
+        data: {
+          notifications: {
+            messageNotification: true,
+            friendRequestNotification: false,
+            groupInviteNotification: true,
+            systemNotification: true,
+            soundEnabled: false,
+            desktopNotificationEnabled: true,
+          },
+        },
       });
 
       const store = useSettingsStore();

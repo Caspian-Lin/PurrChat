@@ -74,7 +74,10 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.onConversationUpdate(cb);
 
       triggerEvent('new_group_conversation', {
-        conversation_id: 'conv-1', name: 'Test', created_by: 'user-1', member_count: 2,
+        conversation_id: 'conv-1',
+        name: 'Test',
+        created_by: 'user-1',
+        member_count: 2,
       });
       expect(cb).toHaveBeenCalled();
 
@@ -82,7 +85,10 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.offConversationUpdate(cb);
 
       triggerEvent('new_group_conversation', {
-        conversation_id: 'conv-1', name: 'Test', created_by: 'user-1', member_count: 2,
+        conversation_id: 'conv-1',
+        name: 'Test',
+        created_by: 'user-1',
+        member_count: 2,
       });
       expect(cb).not.toHaveBeenCalled();
     });
@@ -93,8 +99,12 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.setCurrentConversation('conv-1');
 
       triggerEvent('new_message', {
-        id: 'msg-1', conversation_id: 'conv-1', sender_id: 'user-2',
-        content: 'Hi', msg_type: 'text', created_at: new Date().toISOString(),
+        id: 'msg-1',
+        conversation_id: 'conv-1',
+        sender_id: 'user-2',
+        content: 'Hi',
+        msg_type: 'text',
+        created_at: new Date().toISOString(),
       });
       expect(cb).toHaveBeenCalled();
 
@@ -102,8 +112,12 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.offMessageUpdate(cb);
 
       triggerEvent('new_message', {
-        id: 'msg-2', conversation_id: 'conv-1', sender_id: 'user-2',
-        content: 'Hi again', msg_type: 'text', created_at: new Date().toISOString(),
+        id: 'msg-2',
+        conversation_id: 'conv-1',
+        sender_id: 'user-2',
+        content: 'Hi again',
+        msg_type: 'text',
+        created_at: new Date().toISOString(),
       });
       expect(cb).not.toHaveBeenCalled();
     });
@@ -113,7 +127,9 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.onFriendRequest(cb);
 
       triggerEvent('new_friend_request', {
-        conversation_id: 'conv-1', sender_id: 'user-2', status: 'pending',
+        conversation_id: 'conv-1',
+        sender_id: 'user-2',
+        status: 'pending',
         sender: { id: 'user-2', username: 'sender', avatar_url: '' },
       });
       expect(cb).toHaveBeenCalled();
@@ -122,7 +138,9 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.offFriendRequest(cb);
 
       triggerEvent('new_friend_request', {
-        conversation_id: 'conv-1', sender_id: 'user-2', status: 'pending',
+        conversation_id: 'conv-1',
+        sender_id: 'user-2',
+        status: 'pending',
         sender: { id: 'user-2', username: 'sender', avatar_url: '' },
       });
       expect(cb).not.toHaveBeenCalled();
@@ -160,13 +178,15 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.onConversationUpdate(convCb);
 
       triggerEvent('new_message', {
-        id: 'msg-1', conversation_id: 'conv-1', sender_id: 'user-2',
-        content: 'Hi', msg_type: 'text', created_at: new Date().toISOString(),
+        id: 'msg-1',
+        conversation_id: 'conv-1',
+        sender_id: 'user-2',
+        content: 'Hi',
+        msg_type: 'text',
+        created_at: new Date().toISOString(),
       });
 
-      expect(convCb).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'conv-1' })
-      );
+      expect(convCb).toHaveBeenCalledWith(expect.objectContaining({ id: 'conv-1' }));
     });
 
     it('should not trigger messageUpdateCallbacks for non-current conversation', () => {
@@ -175,8 +195,12 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.setCurrentConversation('conv-other');
 
       triggerEvent('new_message', {
-        id: 'msg-1', conversation_id: 'conv-1', sender_id: 'user-2',
-        content: 'Hi', msg_type: 'text', created_at: new Date().toISOString(),
+        id: 'msg-1',
+        conversation_id: 'conv-1',
+        sender_id: 'user-2',
+        content: 'Hi',
+        msg_type: 'text',
+        created_at: new Date().toISOString(),
       });
 
       expect(msgCb).not.toHaveBeenCalled();
@@ -188,8 +212,12 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.setCurrentConversation('conv-1');
 
       triggerEvent('new_message', {
-        id: 'msg-1', conversation_id: 'conv-1', sender_id: 'user-2',
-        content: 'Hi', msg_type: 'text', created_at: new Date().toISOString(),
+        id: 'msg-1',
+        conversation_id: 'conv-1',
+        sender_id: 'user-2',
+        content: 'Hi',
+        msg_type: 'text',
+        created_at: new Date().toISOString(),
       });
 
       expect(msgCb).toHaveBeenCalledWith('conv-1', expect.objectContaining({ id: 'msg-1' }));
@@ -202,13 +230,13 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.onFriendRequest(friendCb);
 
       triggerEvent('new_friend_request', {
-        conversation_id: 'conv-1', sender_id: 'user-2', status: 'pending',
+        conversation_id: 'conv-1',
+        sender_id: 'user-2',
+        status: 'pending',
         sender: { id: 'user-2', username: 'sender', avatar_url: '' },
       });
 
-      expect(friendCb).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'pending' })
-      );
+      expect(friendCb).toHaveBeenCalledWith(expect.objectContaining({ status: 'pending' }));
     });
 
     it('should trigger conversationUpdateCallbacks', () => {
@@ -216,7 +244,9 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.onConversationUpdate(convCb);
 
       triggerEvent('new_friend_request', {
-        conversation_id: 'conv-1', sender_id: 'user-2', status: 'pending',
+        conversation_id: 'conv-1',
+        sender_id: 'user-2',
+        status: 'pending',
         sender: { id: 'user-2', username: 'sender', avatar_url: '' },
       });
 
@@ -228,7 +258,9 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.onFriendRequest(friendCb);
 
       triggerEvent('new_friend_request', {
-        conversation_id: 'conv-1', sender_id: 'user-2', status: 'pending',
+        conversation_id: 'conv-1',
+        sender_id: 'user-2',
+        status: 'pending',
       });
 
       expect(friendCb).not.toHaveBeenCalled();
@@ -241,12 +273,13 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.onFriendRequest(friendCb);
 
       triggerEvent('friend_request_update', {
-        conversation_id: 'conv-1', status: 'accepted', action: 'accept', user_id: 'user-2',
+        conversation_id: 'conv-1',
+        status: 'accepted',
+        action: 'accept',
+        user_id: 'user-2',
       });
 
-      expect(friendCb).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'accepted' })
-      );
+      expect(friendCb).toHaveBeenCalledWith(expect.objectContaining({ status: 'accepted' }));
     });
 
     it('should trigger conversationUpdateCallbacks', () => {
@@ -254,7 +287,10 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.onConversationUpdate(convCb);
 
       triggerEvent('friend_request_update', {
-        conversation_id: 'conv-1', status: 'accepted', action: 'accept', user_id: 'user-2',
+        conversation_id: 'conv-1',
+        status: 'accepted',
+        action: 'accept',
+        user_id: 'user-2',
       });
 
       expect(convCb).toHaveBeenCalled();
@@ -267,7 +303,9 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.onConversationUpdate(convCb);
 
       triggerEvent('conversation_member_removed', {
-        conversation_id: 'conv-1', user_id: 'user-other', removed_by: 'user-owner',
+        conversation_id: 'conv-1',
+        user_id: 'user-other',
+        removed_by: 'user-owner',
       });
 
       expect(convCb).toHaveBeenCalled();
@@ -294,14 +332,20 @@ describe('WebSocketEventManager', () => {
       websocketEventManager.onConversationUpdate(cb);
 
       triggerEvent('new_group_conversation', {
-        conversation_id: 'conv-1', name: 'Test', created_by: 'user-1', member_count: 2,
+        conversation_id: 'conv-1',
+        name: 'Test',
+        created_by: 'user-1',
+        member_count: 2,
       });
       expect(cb).toHaveBeenCalledTimes(1);
 
       websocketEventManager.destroy();
 
       triggerEvent('new_group_conversation', {
-        conversation_id: 'conv-1', name: 'Test', created_by: 'user-1', member_count: 2,
+        conversation_id: 'conv-1',
+        name: 'Test',
+        created_by: 'user-1',
+        member_count: 2,
       });
       expect(cb).toHaveBeenCalledTimes(1); // Still 1, not called again
     });

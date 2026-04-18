@@ -30,11 +30,7 @@
                 {{ title }}
               </h2>
               <slot name="header"></slot>
-              <button
-                v-if="closable"
-                class="modal-close-btn"
-                @click="handleClose"
-              >
+              <button v-if="closable" class="modal-close-btn" @click="handleClose">
                 <BsX class="text-2xl" />
               </button>
             </div>

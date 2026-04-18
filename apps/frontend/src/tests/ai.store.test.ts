@@ -198,8 +198,20 @@ describe('AI Store', () => {
 
     it('deleteConfig should reset activeConfigId if deleted config was active', () => {
       const store = useAiStore();
-      const config1 = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
-      const config2 = store.addConfig({ name: 'C2', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config1 = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
+      const config2 = store.addConfig({
+        name: 'C2',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       store.setActiveConfig(config1.id);
 
       store.deleteConfig(config1.id);
@@ -209,7 +221,13 @@ describe('AI Store', () => {
 
     it('deleteConfig should fall back to null if no configs remain', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       store.setActiveConfig(config.id);
 
       store.deleteConfig(config.id);
@@ -219,7 +237,13 @@ describe('AI Store', () => {
 
     it('deleteConfig should clear activeConversationId if its conversation was deleted', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       const conv = store.createConversation(config.id);
       expect(store.activeConversationId).toBe(conv.id);
 
@@ -230,7 +254,13 @@ describe('AI Store', () => {
 
     it('setActiveConfig should update activeConfigId and persist', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
 
       store.setActiveConfig(config.id);
 
@@ -243,7 +273,13 @@ describe('AI Store', () => {
   describe('Computed properties', () => {
     it('activeConfig should return matching config or null', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
 
       expect(store.activeConfig).toBeNull();
       store.setActiveConfig(config.id);
@@ -262,7 +298,13 @@ describe('AI Store', () => {
   describe('Conversation management', () => {
     it('createConversation should create conversation with correct configId', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
 
       const conv = store.createConversation(config.id);
 
@@ -274,7 +316,13 @@ describe('AI Store', () => {
 
     it('createConversation should set as activeConversation', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
 
       const conv = store.createConversation(config.id);
 
@@ -284,7 +332,13 @@ describe('AI Store', () => {
 
     it('addMessage should add message to correct conversation', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       const conv = store.createConversation(config.id);
 
       const msg: AiMessage = {
@@ -301,7 +355,13 @@ describe('AI Store', () => {
 
     it('addMessage should auto-generate title from first user message', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       const conv = store.createConversation(config.id);
 
       store.addMessage(conv.id, {
@@ -316,7 +376,13 @@ describe('AI Store', () => {
 
     it('addMessage should truncate long titles to 30 chars', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       const conv = store.createConversation(config.id);
 
       store.addMessage(conv.id, {
@@ -331,7 +397,13 @@ describe('AI Store', () => {
 
     it('deleteConversation should remove conversation', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       store.createConversation(config.id);
       store.createConversation(config.id);
 
@@ -341,7 +413,13 @@ describe('AI Store', () => {
 
     it('deleteConversation should reset activeConversationId if needed', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       const conv = store.createConversation(config.id);
 
       store.deleteConversation(conv.id);
@@ -350,7 +428,13 @@ describe('AI Store', () => {
 
     it('deleteConversation should fall back to first remaining', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       store.createConversation(config.id);
       const conv2 = store.createConversation(config.id);
 
@@ -363,7 +447,13 @@ describe('AI Store', () => {
 
     it('setActiveConversation should update activeConversationId', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       const conv = store.createConversation(config.id);
 
       store.setActiveConversation(null);
@@ -377,7 +467,13 @@ describe('AI Store', () => {
   describe('Streaming', () => {
     it('updateStreamingMessage should update content and increment streamingVersion', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       const conv = store.createConversation(config.id);
       const msg: AiMessage = {
         id: 'msg-1',
@@ -400,7 +496,13 @@ describe('AI Store', () => {
 
     it('updateStreamingThinking should update thinking and increment version', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       const conv = store.createConversation(config.id);
       const msg: AiMessage = {
         id: 'msg-1',
@@ -418,7 +520,13 @@ describe('AI Store', () => {
 
     it('setThinkingState should toggle isThinking', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       const conv = store.createConversation(config.id);
       const msg: AiMessage = {
         id: 'msg-1',
@@ -438,7 +546,13 @@ describe('AI Store', () => {
 
     it('finalizeStreamingMessage should set isStreaming=false and isThinking=false', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       const conv = store.createConversation(config.id);
       const msg: AiMessage = {
         id: 'msg-1',
@@ -458,7 +572,13 @@ describe('AI Store', () => {
 
     it('activeMessages should return shallow copy of active conversation messages', () => {
       const store = useAiStore();
-      const config = store.addConfig({ name: 'C1', apiUrl: 'a', apiKey: 'k', model: 'm', temperature: 0.5 });
+      const config = store.addConfig({
+        name: 'C1',
+        apiUrl: 'a',
+        apiKey: 'k',
+        model: 'm',
+        temperature: 0.5,
+      });
       const conv = store.createConversation(config.id);
       const msg: AiMessage = {
         id: 'msg-1',
