@@ -4,13 +4,19 @@
 
     <!-- 品牌标识 -->
     <div class="text-center py-8">
-      <p class="text-3xl font-bold" style="color: var(--theme-primary)">PurrChat</p>
+      <div class="text-3xl font-bold tracking-tight leading-tight text-center">
+        <span class="font-display" style="color: var(--theme-primary)">Purr</span>
+        <span class="text-text-tertiary font-body">Chat</span>
+      </div>
       <p class="text-text-tertiary text-sm mt-2">Intimate · Refined · Alive</p>
       <p class="text-text-tertiary text-xs mt-1">探索人与 AI 的情感连接和灵感边界</p>
     </div>
 
     <!-- 版本信息 -->
-    <div class="space-y-3 p-4 rounded-[var(--radius-sm,8px)]" style="background: var(--surface-secondary-color)">
+    <div
+      class="space-y-3 p-4 rounded-[var(--radius-sm,8px)]"
+      style="background: var(--surface-secondary-color)"
+    >
       <div class="flex justify-between">
         <span class="text-sm text-text-secondary">版本</span>
         <span class="text-sm text-text-primary">{{ version }}</span>

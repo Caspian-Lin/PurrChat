@@ -9,9 +9,9 @@
         :key="panel.id"
         class="flex items-center justify-between p-3 rounded-[var(--radius-sm,8px)] cursor-pointer transition-colors duration-200"
         :class="panelSettings.visiblePanels.includes(panel.id) ? '' : 'opacity-50'"
-        style="background: transparent;"
-        onmouseenter="this.style.background='var(--hover-background)'"
-        onmouseleave="this.style.background='transparent'"
+        style="background: transparent"
+        onmouseenter="this.style.background = 'var(--hover-background)'"
+        onmouseleave="this.style.background = 'transparent'"
       >
         <div class="flex items-center gap-3">
           <component :is="panel.icon" :size="18" class="text-text-secondary" />

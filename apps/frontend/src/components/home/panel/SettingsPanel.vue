@@ -6,15 +6,12 @@
     :max-sidebar-width="360"
   >
     <template #sidebar>
-      <SettingsSidebar
-        :active-category="activeCategory"
-        @select="scrollToSection"
-      />
+      <SettingsSidebar :active-category="activeCategory" @select="scrollToSection" />
     </template>
 
     <!-- 右侧设置内容 — 连续滚动长栏 -->
     <div ref="scrollContent" class="flex-1 overflow-y-auto">
-      <div class="max-w-2xl mx-auto px-8 py-6 space-y-10">
+      <div class="max-w-3xl mx-auto px-12 py-6 space-y-10">
         <!-- 账号设置 -->
         <SettingsAccount :user="authStore.currentUser" />
 
@@ -85,7 +82,13 @@ let pendingNavigation: ((val?: boolean) => void) | null = null;
 let observer: IntersectionObserver | null = null;
 
 // 所有分类 ID 顺序
-const categoryIds: SettingsCategoryId[] = ['account', 'panels', 'notifications', 'general', 'about'];
+const categoryIds: SettingsCategoryId[] = [
+  'account',
+  'panels',
+  'notifications',
+  'general',
+  'about',
+];
 
 // 点击左侧导航 → 平滑滚动到对应小节
 function scrollToSection(id: SettingsCategoryId) {
@@ -186,7 +189,7 @@ onUnmounted(() => {
 }
 
 :deep(.settings-section__title) {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 600;
   color: var(--text-color);
   margin-bottom: 4px;
@@ -199,7 +202,7 @@ onUnmounted(() => {
 }
 
 :deep(.settings-section__subtitle) {
-  font-size: 0.9375rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: var(--text-color);
   margin-bottom: 8px;
@@ -213,7 +216,7 @@ onUnmounted(() => {
 
 :deep(.settings-field__label) {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--text-tertiary-color);
   margin-bottom: 4px;
   text-transform: uppercase;

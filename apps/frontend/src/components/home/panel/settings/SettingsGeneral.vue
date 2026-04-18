@@ -1,5 +1,5 @@
 <template>
-  <section id="settings-general" class="settings-section">
+  <section id="settings-general" class="settings-section space-y-5">
     <h2 class="settings-section__title">通用</h2>
 
     <!-- 主题模式 -->
@@ -10,15 +10,16 @@
           v-for="mode in themeModes"
           :key="mode.value"
           :class="[
-            'px-4 py-2.5 rounded-[var(--radius-sm,8px)] text-sm font-medium transition-all duration-200',
+            'px-4 py-2.5 rounded-[var(--radius-sm)] text-sm font-medium transition-all duration-200',
             generalSettings.themeMode === mode.value
               ? 'text-white'
               : 'text-text-secondary hover:text-text-primary',
           ]"
           :style="{
-            backgroundColor: generalSettings.themeMode === mode.value
-              ? 'var(--theme-primary)'
-              : 'var(--surface-tertiary-color)',
+            backgroundColor:
+              generalSettings.themeMode === mode.value
+                ? 'var(--theme-primary)'
+                : 'var(--surface-tertiary-color)',
           }"
           @click="updateSetting('themeMode', mode.value)"
         >
@@ -32,14 +33,13 @@
       <h3 class="settings-section__subtitle">主题色</h3>
       <div class="flex gap-3 flex-wrap">
         <button
-          v-for="color in themeColors"
+          v-for="color in themeColorsList"
           :key="color.name"
-          class="w-10 h-10 rounded-full transition-all duration-200 border-2"
+          class="w-5 h-5 rounded-md transition-all duration-200 border-2"
           :style="{
             backgroundColor: color.value,
-            borderColor: generalSettings.themeColor === color.name
-              ? 'var(--text-primary)'
-              : 'transparent',
+            borderColor:
+              generalSettings.themeColor === color.name ? 'var(--text-primary)' : 'transparent',
             transform: generalSettings.themeColor === color.name ? 'scale(1.15)' : 'scale(1)',
           }"
           :title="color.label"
@@ -56,15 +56,16 @@
           v-for="size in fontSizes"
           :key="size.value"
           :class="[
-            'px-4 py-2.5 rounded-[var(--radius-sm,8px)] text-sm font-medium transition-all duration-200',
+            'px-4 py-2.5 rounded-[var(--radius-sm)] text-sm font-medium transition-all duration-200',
             generalSettings.fontSize === size.value
               ? 'text-white'
               : 'text-text-secondary hover:text-text-primary',
           ]"
           :style="{
-            backgroundColor: generalSettings.fontSize === size.value
-              ? 'var(--theme-primary)'
-              : 'var(--surface-tertiary-color)',
+            backgroundColor:
+              generalSettings.fontSize === size.value
+                ? 'var(--theme-primary)'
+                : 'var(--surface-tertiary-color)',
           }"
           @click="updateSetting('fontSize', size.value)"
         >
@@ -76,11 +77,37 @@
     <!-- 本地存储 -->
     <div class="space-y-3">
       <h3 class="settings-section__subtitle">存储</h3>
-      <div class="p-4 rounded-[var(--radius-sm,8px)]" style="background: var(--surface-secondary-color)">
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-text-secondary">本地存储占用</span>
-          <span class="text-sm text-text-primary">{{ storageText }}</span>
+      <div
+        class="p-4 rounded-[var(--radius-sm)] space-y-3"
+        style="background: var(--surface-secondary-color)"
+      >
+        <div class="space-y-2">
+          <div
+            v-for="item in storageBreakdown"
+            :key="item.label"
+            class="flex items-center justify-between text-sm"
+          >
+            <span style="color: var(--text-secondary-color)">{{ item.label }}</span>
+            <span style="color: var(--text-primary-color)">{{ item.size }}</span>
+          </div>
+          <div class="border-t" style="border-color: var(--border-color)" />
+          <div class="flex items-center justify-between text-sm font-medium">
+            <span style="color: var(--text-primary-color)">总计</span>
+            <span style="color: var(--text-primary-color)">{{ storageText }}</span>
+          </div>
         </div>
+
+        <button
+          :disabled="clearingCache"
+          class="w-full mt-2 px-4 py-2 text-sm rounded-[var(--radius-sm)] transition-all duration-200 disabled:opacity-50"
+          style="color: var(--text-secondary-color); background: var(--surface-tertiary-color)"
+          @click="handleClearCache"
+        >
+          {{ clearingCache ? '清除中...' : '清除缓存数据' }}
+        </button>
+        <p class="text-xs" style="color: var(--text-tertiary-color)">
+          清除聊天记录缓存和会话状态缓存，不影响个人设置和账号数据
+        </p>
       </div>
     </div>
   </section>
@@ -90,6 +117,10 @@
 import { ref, onMounted, computed } from 'vue';
 import { useThemeStore } from '../../../../stores/theme';
 import { themeColors } from '../../../../config/theme';
+import { getCurrentUserId, clearUserData } from '../../../../utils/storageNamespace';
+import { messageCacheService } from '../../../../services/messageCache';
+import { conversationStateCacheService } from '../../../../services/conversationStateCache';
+import { useMessage } from '../../../../composables/useMessage';
 import type { GeneralSettings, ThemeColor } from '../../../../models/types';
 
 interface Props {
@@ -103,6 +134,7 @@ const emit = defineEmits<{
 }>();
 
 const themeStore = useThemeStore();
+const { success, error: showError } = useMessage();
 
 const themeModes = [
   { value: 'light' as const, label: '浅色' },
@@ -126,28 +158,102 @@ const fontSizes = [
   { value: 'large' as const, label: '大' },
 ];
 
-// 本地存储估算
+// ===== 本地存储统计 =====
 const storageUsage = ref<number>(0);
-const storageQuota = ref<number>(0);
+const clearingCache = ref(false);
 
-onMounted(async () => {
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+const storageBreakdown = computed(() => {
+  const breakdown: { label: string; size: string }[] = [];
+  const userId = getCurrentUserId();
+
+  if (userId) {
+    const keys = Object.keys(localStorage);
+    const calcSize = (prefix: string | string[]): number => {
+      const prefixes = Array.isArray(prefix) ? prefix : [prefix];
+      let bytes = 0;
+      for (const key of keys) {
+        if (prefixes.some((p) => key.startsWith(p) || key === p)) {
+          const val = localStorage.getItem(key);
+          if (val) bytes += (key.length + val.length) * 2; // UTF-16
+        }
+      }
+      return bytes;
+    };
+
+    const msgSize = calcSize([`msg_${userId}_`, `msg_key_${userId}`]);
+    const convSize = calcSize(`conv_state_${userId}_`);
+    const aiSize = calcSize([
+      `ai_cfg_${userId}`,
+      `ai_conv_${userId}`,
+      `ai_act_cfg_${userId}`,
+      `ai_act_conv_${userId}`,
+    ]);
+
+    if (msgSize > 0) breakdown.push({ label: '聊天记录缓存', size: formatBytes(msgSize) });
+    if (convSize > 0) breakdown.push({ label: '会话状态', size: formatBytes(convSize) });
+    if (aiSize > 0) breakdown.push({ label: 'AI 对话数据', size: formatBytes(aiSize) });
+  }
+
+  // 设置数据
+  const settingsData = localStorage.getItem('purr-chat-settings');
+  const settingsSize = settingsData ? settingsData.length * 2 : 0;
+  if (settingsSize > 0) breakdown.push({ label: '应用设置', size: formatBytes(settingsSize) });
+
+  // 账号信息
+  const tokenData = localStorage.getItem('token');
+  const userData = localStorage.getItem('user');
+  const authSize = (tokenData ? tokenData.length * 2 : 0) + (userData ? userData.length * 2 : 0);
+  if (authSize > 0) breakdown.push({ label: '账号信息', size: formatBytes(authSize) });
+
+  return breakdown;
+});
+
+const storageText = computed(() => formatBytes(storageUsage.value));
+
+async function refreshStorageEstimate() {
   if ('storage' in navigator && 'estimate' in navigator.storage) {
     try {
       const estimate = await navigator.storage.estimate();
       storageUsage.value = estimate.usage || 0;
-      storageQuota.value = estimate.quota || 0;
     } catch {
       // 不支持，忽略
     }
   }
-});
+}
 
-const storageText = computed(() => {
-  if (storageUsage.value === 0) return '计算中...';
-  const mb = (storageUsage.value / (1024 * 1024)).toFixed(2);
-  return `${mb} MB`;
-});
+onMounted(refreshStorageEstimate);
 
+async function handleClearCache() {
+  const userId = getCurrentUserId();
+  if (!userId) {
+    showError('未找到用户信息');
+    return;
+  }
+
+  clearingCache.value = true;
+  try {
+    clearUserData(userId);
+    // 重新初始化缓存服务
+    messageCacheService.init(userId);
+    conversationStateCacheService.init(userId);
+    // 刷新存储统计
+    await refreshStorageEstimate();
+    success('缓存已清除');
+  } catch {
+    showError('清除缓存失败');
+  } finally {
+    clearingCache.value = false;
+  }
+}
+
+// ===== 设置更新 =====
 function updateSetting<K extends keyof GeneralSettings>(key: K, value: GeneralSettings[K]) {
   emit('update', { [key]: value });
 

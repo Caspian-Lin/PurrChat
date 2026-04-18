@@ -16,9 +16,7 @@
         >
           <div class="px-6 py-5">
             <h2 class="text-lg font-semibold text-text-primary mb-2">未保存的更改</h2>
-            <p class="text-sm text-text-secondary">
-              你有未保存的设置更改。离开后更改将丢失。
-            </p>
+            <p class="text-sm text-text-secondary">你有未保存的设置更改。离开后更改将丢失。</p>
           </div>
           <div
             class="flex justify-end gap-2 px-6 py-4"
@@ -26,18 +24,18 @@
           >
             <button
               class="px-4 py-2 text-sm text-text-secondary rounded-[var(--radius-sm,8px)] transition-colors duration-200"
-              style="background: transparent;"
-              onmouseenter="this.style.background='var(--hover-background)'"
-              onmouseleave="this.style.background='transparent'"
+              style="background: transparent"
+              onmouseenter="this.style.background = 'var(--hover-background)'"
+              onmouseleave="this.style.background = 'transparent'"
               @click="$emit('cancel')"
             >
               取消
             </button>
             <button
               class="px-4 py-2 text-sm text-text-primary rounded-[var(--radius-sm,8px)] transition-colors duration-200"
-              style="background: var(--surface-tertiary-color);"
-              onmouseenter="this.style.background='var(--hover-background)'"
-              onmouseleave="this.style.background='var(--surface-tertiary-color)'"
+              style="background: var(--surface-tertiary-color)"
+              onmouseenter="this.style.background = 'var(--hover-background)'"
+              onmouseleave="this.style.background = 'var(--surface-tertiary-color)'"
               @click="$emit('discard')"
             >
               不保存

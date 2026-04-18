@@ -24,7 +24,13 @@
 </template>
 
 <script setup lang="ts">
-import { BsPersonCircle, BsLayoutSidebar, BsBell, BsPalette, BsInfoCircle } from 'vue-icons-plus/bs';
+import {
+  BsPersonCircle,
+  BsLayoutSidebar,
+  BsBell,
+  BsPalette,
+  BsInfoCircle,
+} from 'vue-icons-plus/bs';
 import type { SettingsCategoryId } from '../../../../models/types';
 
 interface Props {

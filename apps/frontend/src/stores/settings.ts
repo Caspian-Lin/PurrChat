@@ -13,9 +13,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // ===== 状态 =====
 
   // 当前（可能含未保存修改的）设置
-  const settings = ref<UserSettings>(structuredClone(DEFAULT_SETTINGS));
+  const settings = ref<UserSettings>(deepClone(DEFAULT_SETTINGS));
   // 上次保存的设置快照（dirty 检测基准）
-  const savedSettings = ref<UserSettings>(structuredClone(DEFAULT_SETTINGS));
+  const savedSettings = ref<UserSettings>(deepClone(DEFAULT_SETTINGS));
   // 加载状态
   const isLoading = ref(false);
   // 保存状态
@@ -30,6 +30,11 @@ export const useSettingsStore = defineStore('settings', () => {
   });
 
   // ===== 工具函数 =====
+
+  // 安全深拷贝：JSON 序列化可自动脱去 Vue reactive Proxy
+  function deepClone<T>(obj: T): T {
+    return JSON.parse(JSON.stringify(obj));
+  }
 
   function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
     const result = { ...target };
@@ -60,8 +65,8 @@ export const useSettingsStore = defineStore('settings', () => {
       const cached = localStorage.getItem(SETTINGS_STORAGE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached) as Partial<UserSettings>;
-        settings.value = deepMerge(structuredClone(DEFAULT_SETTINGS), parsed);
-        savedSettings.value = structuredClone(settings.value);
+        settings.value = deepMerge(deepClone(DEFAULT_SETTINGS), parsed);
+        savedSettings.value = deepClone(settings.value);
         return true;
       }
     } catch (e) {
@@ -87,9 +92,9 @@ export const useSettingsStore = defineStore('settings', () => {
       const response = await api.getSettings();
       if (response.success && response.data) {
         const serverSettings = response.data as Partial<UserSettings>;
-        const merged = deepMerge(structuredClone(DEFAULT_SETTINGS), serverSettings);
+        const merged = deepMerge(deepClone(DEFAULT_SETTINGS), serverSettings);
         settings.value = merged;
-        savedSettings.value = structuredClone(merged);
+        savedSettings.value = deepClone(merged);
         saveToCache();
       }
     } catch (e: any) {
@@ -130,7 +135,7 @@ export const useSettingsStore = defineStore('settings', () => {
     try {
       const response = await api.updateSettings({ settings: settings.value });
       if (response.success) {
-        savedSettings.value = structuredClone(settings.value);
+        savedSettings.value = deepClone(settings.value);
         saveToCache();
       } else {
         error.value = response.message || '保存设置失败';
@@ -146,7 +151,7 @@ export const useSettingsStore = defineStore('settings', () => {
   // ===== 丢弃修改 =====
 
   const discard = () => {
-    settings.value = structuredClone(savedSettings.value);
+    settings.value = deepClone(savedSettings.value);
   };
 
   return {

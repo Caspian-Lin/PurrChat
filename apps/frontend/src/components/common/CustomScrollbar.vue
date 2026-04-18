@@ -261,6 +261,7 @@ defineExpose({
   overflow: hidden; /* 隐藏原生滚动条 */
   width: 100%;
   height: 100%;
+  max-height: inherit; /* 从 wrapper 继承 max-height 约束 */
   display: flex;
   flex-direction: column;
 }

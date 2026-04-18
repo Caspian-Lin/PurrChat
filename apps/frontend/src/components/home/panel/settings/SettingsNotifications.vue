@@ -8,9 +8,9 @@
         v-for="item in notificationItems"
         :key="item.key"
         class="flex items-center justify-between p-3 rounded-[var(--radius-sm,8px)] cursor-pointer transition-colors duration-200"
-        style="background: transparent;"
-        onmouseenter="this.style.background='var(--hover-background)'"
-        onmouseleave="this.style.background='transparent'"
+        style="background: transparent"
+        onmouseenter="this.style.background = 'var(--hover-background)'"
+        onmouseleave="this.style.background = 'transparent'"
         @click="toggleNotification(item.key)"
       >
         <div>
