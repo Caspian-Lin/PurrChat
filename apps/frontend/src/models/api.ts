@@ -24,6 +24,7 @@ import type {
   ConfirmUploadResponse,
   UserSettings,
   UpdateSettingsRequest,
+  ChangePasswordRequest,
 } from './types';
 import { getApiBaseUrl, getStorageApiBaseUrl, logger } from '../config/app';
 
@@ -144,6 +145,11 @@ export const api = {
   // 更新个人资料
   updateProfile: (data: UpdateProfileRequest): Promise<ApiResponse<User>> => {
     return apiClient.put('/api/profile', data).then((res) => res.data);
+  },
+
+  // 修改密码
+  changePassword: (data: ChangePasswordRequest): Promise<ApiResponse<void>> => {
+    return apiClient.put('/api/password', data).then((res) => res.data);
   },
 
   // 搜索用户

@@ -23,6 +23,9 @@ function getErrorMessage(backendError: string): string {
     'Login successful': '登录成功',
     Unauthorized: '未授权，请重新登录',
     'User not found': '用户不存在',
+    'invalid current password': '当前密码不正确',
+    'new password must be different from current password': '新密码不能与当前密码相同',
+    'username already exists': '该用户名已被占用，请使用其他用户名',
   };
 
   // 优先进行精确匹配

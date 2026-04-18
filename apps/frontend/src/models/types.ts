@@ -136,10 +136,16 @@ export interface HandleFriendRequest {
 
 // 更新个人资料请求
 export interface UpdateProfileRequest {
-  nickname?: string;
+  username?: string;
   avatar_url?: string;
   email?: string;
   phone?: string;
+}
+
+// 修改密码请求
+export interface ChangePasswordRequest {
+  old_password: string;
+  new_password: string;
 }
 
 // 创建群聊请求
