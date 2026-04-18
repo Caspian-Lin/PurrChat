@@ -190,6 +190,16 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *mod
 		return nil, err
 	}
 
+	// 更新用户名
+	if req.Username != "" && req.Username != user.Username {
+		existingUser, err := s.userRepo.FindByUsername(ctx, req.Username)
+		if err == nil && existingUser.ID != id {
+			logger.ErrorfWithCaller("Username already exists: %s", req.Username)
+			return nil, errors.New("username already exists")
+		}
+		user.Username = req.Username
+	}
+
 	// 更新字段
 	if req.AvatarURL != "" {
 		user.AvatarURL = req.AvatarURL
@@ -229,4 +239,48 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *mod
 	user.Salt = ""
 
 	return user, nil
+}
+
+// ChangePassword 修改用户密码
+func (s *AuthService) ChangePassword(ctx context.Context, userID string, req *models.ChangePasswordRequest) error {
+	logger.InfofWithCaller("Changing password for user: %s", userID)
+
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return err
+	}
+
+	// 获取用户（含密码哈希）
+	user, err := s.userRepo.FindByID(ctx, id)
+	if err != nil {
+		return errors.New("user not found")
+	}
+
+	// 验证旧密码
+	valid, err := hash.VerifyPassword(req.OldPassword, user.PasswordHash, user.Salt)
+	if err != nil || !valid {
+		return errors.New("invalid current password")
+	}
+
+	// 检查新旧密码不能相同
+	same, _ := hash.VerifyPassword(req.NewPassword, user.PasswordHash, user.Salt)
+	if same {
+		return errors.New("new password must be different from current password")
+	}
+
+	// 哈希新密码
+	newSalt, newHash, err := hash.HashPasswordWithSalt(req.NewPassword)
+	if err != nil {
+		return err
+	}
+
+	// 更新密码
+	err = s.userRepo.UpdatePassword(ctx, id, newHash, newSalt)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to update password for user %s: %v", userID, err)
+		return err
+	}
+
+	logger.InfofWithCaller("Password changed successfully for user: %s", userID)
+	return nil
 }

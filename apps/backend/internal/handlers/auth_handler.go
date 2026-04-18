@@ -138,6 +138,52 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	})
 }
 
+// ChangePassword 修改密码
+// @Summary 修改密码
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body models.ChangePasswordRequest true "修改密码信息"
+// @Success 200 {object} models.AuthResponse
+// @Router /api/password [put]
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var req models.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.ErrorfWithCaller("Invalid change password request: %v", err)
+		c.JSON(http.StatusBadRequest, models.AuthResponse{
+			Success: false,
+			Message: "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.AuthResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	err := h.authService.ChangePassword(c.Request.Context(), userID.(string), &req)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to change password: %v", err)
+		c.JSON(http.StatusBadRequest, models.AuthResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	logger.InfofWithCaller("Password changed successfully for user: %s", userID)
+	c.JSON(http.StatusOK, models.AuthResponse{
+		Success: true,
+		Message: "Password changed successfully",
+	})
+}
+
 // AuthMiddleware JWT认证中间件
 func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {

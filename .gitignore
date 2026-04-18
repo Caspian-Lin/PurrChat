@@ -55,6 +55,7 @@ local-ci-*.log
 *.prof
 vendor/
 go.work
+apps/backend/server
 
 # Rust/Cargo (Tauri)
 **/target/

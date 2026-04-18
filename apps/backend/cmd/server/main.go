@@ -279,6 +279,7 @@ func main() {
 		auth.POST("/login", authRateLimit, authHandler.Login)
 		auth.GET("/me", handlers.AuthMiddleware(cfg.JWT.Secret), userRateLimit, authHandler.Me)
 		auth.PUT("/profile", handlers.AuthMiddleware(cfg.JWT.Secret), userRateLimit, chatHandler.UpdateProfile)
+		auth.PUT("/password", handlers.AuthMiddleware(cfg.JWT.Secret), userRateLimit, authHandler.ChangePassword)
 	}
 
 	// 用户路由（per-User 限流）

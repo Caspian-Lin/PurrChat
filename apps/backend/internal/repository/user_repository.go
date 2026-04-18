@@ -22,6 +22,7 @@ type UserRepository interface {
 	FindByPhone(ctx context.Context, phone string) (*models.User, error)
 	Search(ctx context.Context, query string) ([]*models.User, error)
 	Update(ctx context.Context, user *models.User) error
+	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string, salt string) error
 }
 
 type userRepository struct {
@@ -281,11 +282,12 @@ func (r *userRepository) Update(ctx context.Context, user *models.User) error {
 
 	query := `
 		UPDATE users
-		SET  avatar_url = $1, email = $2, email_verified = $3, phone = $4, phone_verified = $5
-		WHERE id = $6
+		SET username = $1, avatar_url = $2, email = $3, email_verified = $4, phone = $5, phone_verified = $6
+		WHERE id = $7
 	`
 
 	_, err := database.GetPool().Exec(ctx, query,
+		user.Username,
 		user.AvatarURL,
 		user.Email,
 		user.EmailVerified,
@@ -298,6 +300,23 @@ func (r *userRepository) Update(ctx context.Context, user *models.User) error {
 		logger.ErrorfWithCaller("Failed to update user %s: %v", user.ID, err)
 	} else {
 		logger.InfofWithCaller("User updated successfully: %s (ID: %s)", user.Username, user.ID)
+	}
+
+	return err
+}
+
+// UpdatePassword 更新用户密码
+func (r *userRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string, salt string) error {
+	logger.InfofWithCaller("Updating password for user ID: %s", userID)
+
+	query := `UPDATE users SET password_hash = $1, salt = $2 WHERE id = $3`
+
+	_, err := database.GetPool().Exec(ctx, query, passwordHash, salt, userID)
+
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to update password for user %s: %v", userID, err)
+	} else {
+		logger.InfofWithCaller("Password updated successfully for user ID: %s", userID)
 	}
 
 	return err

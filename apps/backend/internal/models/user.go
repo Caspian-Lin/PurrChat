@@ -67,8 +67,14 @@ type FriendRequestResponse struct {
 
 // UpdateProfileRequest 更新个人资料请求
 type UpdateProfileRequest struct {
-	Nickname  string `json:"nickname,omitempty" binding:"omitempty,min=1,max=20"`
+	Username  string `json:"username,omitempty" binding:"omitempty,min=3,max=20"`
 	AvatarURL string `json:"avatar_url,omitempty" binding:"omitempty,url"`
 	Email     string `json:"email,omitempty" binding:"omitempty,email"`
 	Phone     string `json:"phone,omitempty" binding:"omitempty,max=20"`
+}
+
+// ChangePasswordRequest 修改密码请求
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password" binding:"required,min=6"`
+	NewPassword string `json:"new_password" binding:"required,min=6,max=128"`
 }
