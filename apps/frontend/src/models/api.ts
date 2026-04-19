@@ -17,6 +17,8 @@ import type {
   CreateGroupRequest,
   AddMemberRequest,
   RemoveMemberRequest,
+  UpdateConversationRequest,
+  UpdateMemberRoleRequest,
   Enrollment,
   UploadRequest,
   UploadResponse,
@@ -25,6 +27,18 @@ import type {
   UserSettings,
   UpdateSettingsRequest,
   ChangePasswordRequest,
+  Bot,
+  CreateBotRequest,
+  UpdateBotRequest,
+  DeployBotRequest,
+  UpdateDeploymentStatusRequest,
+  BotDeployment,
+  PaginatedSearchResult,
+  DeployableConversation,
+  DebugBotRequest,
+  DebugStepRequest,
+  DebugResetRequest,
+  DebugTraceResult,
 } from './types';
 import { getApiBaseUrl, getStorageApiBaseUrl, logger } from '../config/app';
 
@@ -177,6 +191,21 @@ export const api = {
     return apiClient.delete(`/api/conversations/${conversationId}`).then((res) => res.data);
   },
 
+  // 更新群聊信息（名称、头像）
+  updateConversation: (
+    conversationId: string,
+    data: UpdateConversationRequest
+  ): Promise<ApiResponse<void>> => {
+    return apiClient
+      .put('/api/conversations', data, { params: { conversation_id: conversationId } })
+      .then((res) => res.data);
+  },
+
+  // 更新成员角色（转让群主、设置管理员）
+  updateMemberRole: (data: UpdateMemberRoleRequest): Promise<ApiResponse<void>> => {
+    return apiClient.put('/api/conversations/members/role', data).then((res) => res.data);
+  },
+
   // 获取消息列表
   getMessages: (
     conversationId: string,
@@ -278,6 +307,114 @@ export const api = {
   // 更新用户设置
   updateSettings: (data: UpdateSettingsRequest): Promise<ApiResponse<UserSettings>> => {
     return apiClient.put('/api/settings', data).then((res) => res.data);
+  },
+
+  // ===== Bot API =====
+
+  // 获取用户创建的 Bot 列表
+  getBots: (): Promise<ApiResponse<Bot[]>> => {
+    return apiClient.get('/api/bots').then((res) => res.data);
+  },
+
+  // 搜索公开 Bot（分页）
+  searchBots: (
+    query: string,
+    limit = 20,
+    offset = 0
+  ): Promise<ApiResponse<PaginatedSearchResult>> => {
+    return apiClient
+      .get('/api/bots/search', { params: { query, limit, offset } })
+      .then((res) => res.data);
+  },
+
+  // 获取可部署 Bot 的群聊列表
+  getDeployableConversations: (botId: string): Promise<ApiResponse<DeployableConversation[]>> => {
+    return apiClient.get(`/api/bots/${botId}/deployable-conversations`).then((res) => res.data);
+  },
+
+  // 获取 Bot 部署列表
+  getBotDeployments: (): Promise<ApiResponse<BotDeployment[]>> => {
+    return apiClient.get('/api/bots/deployments').then((res) => res.data);
+  },
+
+  // 获取会话中的活跃 Bot 列表
+  getConversationBots: (conversationId: string): Promise<ApiResponse<BotDeployment[]>> => {
+    return apiClient.get(`/api/conversations/${conversationId}/bots`).then((res) => res.data);
+  },
+
+  // 获取 Bot 详情
+  getBot: (botId: string): Promise<ApiResponse<Bot>> => {
+    return apiClient.get(`/api/bots/${botId}`).then((res) => res.data);
+  },
+
+  // 创建 Bot
+  createBot: (data: CreateBotRequest): Promise<ApiResponse<Bot>> => {
+    return apiClient.post('/api/bots', data).then((res) => res.data);
+  },
+
+  // 更新 Bot
+  updateBot: (botId: string, data: UpdateBotRequest): Promise<ApiResponse<Bot>> => {
+    return apiClient.put(`/api/bots/${botId}`, data).then((res) => res.data);
+  },
+
+  // 删除 Bot
+  deleteBot: (botId: string): Promise<ApiResponse<void>> => {
+    return apiClient.delete(`/api/bots/${botId}`).then((res) => res.data);
+  },
+
+  // 部署 Bot 到会话
+  deployBot: (botId: string, data: DeployBotRequest): Promise<ApiResponse<BotDeployment>> => {
+    return apiClient.post(`/api/bots/${botId}/deploy`, data).then((res) => res.data);
+  },
+
+  // 从会话移除 Bot
+  undeployBot: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
+    return apiClient
+      .delete(`/api/bots/${botId}/deploy`, {
+        params: { conversation_id: conversationId },
+      })
+      .then((res) => res.data);
+  },
+
+  // 更新部署状态（暂停/恢复）
+  updateDeploymentStatus: (
+    botId: string,
+    data: UpdateDeploymentStatusRequest
+  ): Promise<ApiResponse<void>> => {
+    return apiClient.put(`/api/bots/${botId}/deploy/status`, data).then((res) => res.data);
+  },
+
+  // 创建与 Bot 的私聊会话
+  createBotConversation: (botId: string): Promise<ApiResponse<Conversation>> => {
+    return apiClient.post(`/api/bots/${botId}/conversation`).then((res) => res.data);
+  },
+
+  // 激活 Bot 特殊模式
+  activateSpecialMode: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
+    return apiClient
+      .post(`/api/bots/${botId}/special-mode/activate`, { conversation_id: conversationId })
+      .then((res) => res.data);
+  },
+
+  // 停用 Bot 特殊模式
+  deactivateSpecialMode: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
+    return apiClient
+      .post(`/api/bots/${botId}/special-mode/deactivate`, { conversation_id: conversationId })
+      .then((res) => res.data);
+  },
+
+  // ─── 调试 API ───
+
+  debugBot: (botId: string, data: DebugBotRequest): Promise<ApiResponse<DebugTraceResult>> => {
+    return apiClient.post(`/api/bots/${botId}/debug`, data).then((res) => res.data);
+  },
+
+  debugStep: (botId: string, data: DebugStepRequest): Promise<ApiResponse<DebugTraceResult>> => {
+    return apiClient.post(`/api/bots/${botId}/debug/step`, data).then((res) => res.data);
+  },
+
+  debugReset: (botId: string, data: DebugResetRequest): Promise<ApiResponse<void>> => {
+    return apiClient.post(`/api/bots/${botId}/debug/reset`, data).then((res) => res.data);
   },
 };
 

@@ -11,10 +11,13 @@ export interface NewMessageEventData {
   content: string;
   msg_type: string;
   created_at: string;
+  bot_id?: string;
+  bot_name?: string;
   sender?: {
     id: string;
     username: string;
     avatar_url?: string;
+    is_bot?: boolean;
   };
 }
 
@@ -67,6 +70,10 @@ export type ConversationUpdateCallback = (_conversation: Conversation) => void;
 export type MessageUpdateCallback = (_conversationId: string, _message: Message) => void;
 export type FriendRequestCallback = (_request: Friendship) => void;
 export type OnlineStatusCallback = (_userId: string, _online: boolean) => void;
+export type SpecialModeChangeCallback = (
+  event: 'started' | 'ended',
+  data: { bot_id: string; bot_name: string; conversation_id: string }
+) => void;
 
 /**
  * WebSocket事件管理器
@@ -78,6 +85,7 @@ class WebSocketEventManager {
   private messageUpdateCallbacks: Set<MessageUpdateCallback> = new Set();
   private friendRequestCallbacks: Set<FriendRequestCallback> = new Set();
   private onlineStatusCallbacks: Set<OnlineStatusCallback> = new Set();
+  private specialModeCallbacks: Set<SpecialModeChangeCallback> = new Set();
 
   // 当前选中的会话ID
   private currentConversationId: string | null = null;
@@ -116,6 +124,10 @@ class WebSocketEventManager {
 
     // 用户在线状态事件
     websocketService.on('user_online_status', this.handleUserOnlineStatus.bind(this));
+
+    // Bot 特殊模式事件
+    websocketService.on('bot_special_mode_started', this.handleSpecialModeStarted.bind(this));
+    websocketService.on('bot_special_mode_ended', this.handleSpecialModeEnded.bind(this));
   }
 
   /**
@@ -208,7 +220,7 @@ class WebSocketEventManager {
       conversation_id: data.conversation_id,
       sender_id: data.sender_id,
       content: data.content,
-      msg_type: data.msg_type as 'text' | 'image' | 'file',
+      msg_type: data.msg_type as 'text' | 'image' | 'file' | 'system',
       created_at: data.created_at,
       sender: data.sender
         ? {
@@ -221,6 +233,8 @@ class WebSocketEventManager {
             created_at: '',
           }
         : undefined,
+      bot_id: data.bot_id,
+      bot_name: data.bot_name,
       sendStatus: 'sent', // WebSocket收到的消息都是已发送状态
     };
 
@@ -454,6 +468,31 @@ class WebSocketEventManager {
     this.onlineStatusCallbacks.forEach((callback) => {
       callback(data.user_id, data.online);
     });
+  }
+
+  private handleSpecialModeStarted(data: {
+    bot_id: string;
+    bot_name: string;
+    conversation_id: string;
+  }) {
+    console.log('[WebSocketEventManager] Bot 特殊模式启动:', data);
+    this.specialModeCallbacks.forEach((callback) => callback('started', data));
+  }
+
+  private handleSpecialModeEnded(data: {
+    bot_id: string;
+    bot_name: string;
+    conversation_id: string;
+  }) {
+    console.log('[WebSocketEventManager] Bot 特殊模式结束:', data);
+    this.specialModeCallbacks.forEach((callback) => callback('ended', data));
+  }
+
+  /**
+   * 注册特殊模式变更回调
+   */
+  onSpecialModeChange(callback: SpecialModeChangeCallback) {
+    this.specialModeCallbacks.add(callback);
   }
 
   /**

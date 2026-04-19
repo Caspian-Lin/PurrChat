@@ -29,6 +29,12 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true },
       },
       {
+        path: 'bots',
+        name: 'Bots',
+        component: () => import('../components/home/panel/BotStudioPanel.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('../components/home/panel/SettingsPanel.vue'),
@@ -52,6 +58,12 @@ const routes: RouteRecordRaw[] = [
     path: '/ws-debug',
     name: 'WebSocketDebug',
     component: () => import('../views/WebSocketDebugView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/bots/:botId/mechanisms/:mechanismId/special-mode',
+    name: 'SpecialModeEditor',
+    component: () => import('../views/SpecialModeEditorView.vue'),
     meta: { requiresAuth: true },
   },
   {

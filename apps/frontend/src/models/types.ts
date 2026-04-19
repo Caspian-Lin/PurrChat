@@ -9,6 +9,7 @@ export interface User {
   phone?: string;
   phone_verified: boolean;
   created_at: string;
+  is_bot?: boolean;
 }
 
 // 注册请求
@@ -90,11 +91,22 @@ export interface Message {
   conversation_id: string;
   sender_id: string;
   content: string;
-  msg_type: 'text' | 'image' | 'file';
+  msg_type: 'text' | 'image' | 'file' | 'system';
   created_at: string;
   sender?: User;
   is_read?: boolean; // 消息是否已读
   sendStatus?: 'sending' | 'sent' | 'failed'; // 消息发送状态：发送中、已发送、发送失败
+  bot_id?: string; // Bot 消息标识
+  bot_name?: string; // Bot 名称
+}
+
+// 系统消息内容（JSON 格式存储在 Message.content 中）
+export interface SystemMessageContent {
+  type: 'special_mode_start' | 'special_mode_end' | 'bot_deployed' | 'bot_undeployed';
+  bot_id?: string;
+  bot_name?: string;
+  user_id?: string;
+  user_name?: string;
 }
 
 // 群组类型
@@ -115,7 +127,7 @@ export interface SearchUsersRequest {
 export interface SendMessageRequest {
   conversation_id: string;
   content: string;
-  msg_type: 'text' | 'image' | 'file';
+  msg_type: 'text' | 'image' | 'file' | 'system';
 }
 
 // 创建会话请求
@@ -165,6 +177,19 @@ export interface AddMemberRequest {
 export interface RemoveMemberRequest {
   conversation_id: string;
   user_id: string;
+}
+
+// 更新群聊信息请求
+export interface UpdateConversationRequest {
+  name?: string;
+  avatar_url?: string;
+}
+
+// 更新成员角色请求
+export interface UpdateMemberRoleRequest {
+  conversation_id: string;
+  user_id: string;
+  role: EnrollmentRole;
 }
 
 // ===== AI 对话相关类型定义 =====
@@ -257,7 +282,7 @@ export type SettingsCategoryId = 'account' | 'panels' | 'notifications' | 'gener
 
 // 面板可见性设置
 export interface PanelVisibilitySettings {
-  visiblePanels: ('chat' | 'friends' | 'ai')[];
+  visiblePanels: ('chat' | 'friends' | 'ai' | 'bots')[];
 }
 
 // 通知设置
@@ -288,4 +313,305 @@ export interface UserSettings {
 // 设置更新请求
 export interface UpdateSettingsRequest {
   settings: Partial<UserSettings>;
+}
+
+// ===== Bot 相关类型定义 =====
+
+// Bot 状态
+export type BotStatus = 'active' | 'disabled';
+
+// Bot 可见性
+export type BotVisibility = 'private' | 'public' | 'global';
+
+// Bot 模型
+export interface Bot {
+  id: string;
+  owner_id: string;
+  name: string;
+  avatar_url: string;
+  description: string;
+  status: BotStatus;
+  visibility: BotVisibility;
+  mechanism_config?: MechanismConfig;
+  /** @deprecated 使用 mechanism_config */
+  trigger_config?: TriggerConfig;
+  /** @deprecated 使用 mechanism_config */
+  reply_config?: ReplyConfig;
+  /** @deprecated 使用 mechanism_config */
+  special_mode_config?: SpecialModeConfig;
+  created_at: string;
+  updated_at: string;
+}
+
+// Bot 部署
+export interface BotDeployment {
+  id: string;
+  bot_id: string;
+  conversation_id: string;
+  deployed_by: string;
+  status: 'active' | 'paused';
+  special_mode_active: boolean;
+  special_mode_started_at?: string;
+  deployed_at: string;
+  bot?: Bot;
+  conversation?: Conversation;
+}
+
+// 公开 Bot 详情（含统计信息）
+export interface PublicBotDetail extends Bot {
+  deployment_count: number;
+  owner_name: string;
+  trigger_summary: string;
+  reply_type: string;
+}
+
+// 分页搜索结果
+export interface PaginatedSearchResult {
+  bots: PublicBotDetail[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+// 可部署的会话
+export interface DeployableConversation {
+  id: string;
+  name: string;
+  member_count: number;
+}
+
+// 创建 Bot 请求
+export interface CreateBotRequest {
+  name: string;
+  avatar_url?: string;
+  description?: string;
+  visibility?: BotVisibility;
+}
+
+// 更新 Bot 请求
+export interface UpdateBotRequest {
+  name?: string;
+  avatar_url?: string;
+  description?: string;
+  status?: BotStatus;
+  visibility?: BotVisibility;
+  mechanism_config?: MechanismConfig;
+  /** @deprecated 使用 mechanism_config */
+  trigger_config?: TriggerConfig;
+  /** @deprecated 使用 mechanism_config */
+  reply_config?: ReplyConfig;
+  /** @deprecated 使用 mechanism_config */
+  special_mode_config?: SpecialModeConfig;
+}
+
+// 部署 Bot 请求
+export interface DeployBotRequest {
+  conversation_id: string;
+}
+
+// 更新部署状态请求
+export interface UpdateDeploymentStatusRequest {
+  conversation_id: string;
+  status: 'active' | 'paused';
+}
+
+// 触发配置
+/** @deprecated 使用 TriggerSpec（在 MechanismConfig 中） */
+export interface TriggerConfig {
+  mode: 'rule' | 'probability' | 'conditional';
+  rules?: TriggerRule[];
+  probability?: number;
+  condition?: ConditionConfig;
+}
+
+// 触发规则
+export interface TriggerRule {
+  type: 'keyword' | 'regex' | 'command' | 'equals';
+  pattern: string;
+  case_sensitive?: boolean;
+}
+
+/** @deprecated 使用 TriggerSpec（在 MechanismConfig 中） */
+export interface ConditionConfig {
+  start_expression: string;
+  end_expression: string;
+}
+
+// 回复配置
+/** @deprecated 使用 ReplySpec（在 MechanismConfig 中） */
+export interface ReplyConfig {
+  type: 'predefined' | 'llm';
+  predefined?: PredefinedConfig;
+  llm?: LLMConfig;
+}
+
+// 预定义回复配置
+export interface PredefinedConfig {
+  mode: 'fixed' | 'random' | 'template';
+  replies?: string[];
+  template?: string;
+}
+
+// LLM 回复配置
+export interface LLMConfig {
+  api_url: string;
+  api_key: string;
+  model: string;
+  system_prompt: string;
+  temperature?: number;
+  max_tokens?: number;
+  context_window?: number;
+}
+
+// 特殊模式配置（事件链）
+/** @deprecated 使用 SpecialModeSpec（在 MechanismConfig 中） */
+export interface SpecialModeConfig {
+  events?: SpecialModeEvent[];
+  end_conditions?: SpecialModeEndCondition[];
+}
+
+// ===== 机制列表类型定义 =====
+
+// 机制配置（Bot 的新统一配置格式）
+export interface MechanismConfig {
+  mechanisms: Mechanism[];
+}
+
+// 单个机制 = 触发规则 + 回复设置
+export interface Mechanism {
+  id: string;
+  name: string;
+  enabled: boolean;
+  trigger: TriggerSpec;
+  reply: ReplySpec;
+}
+
+// 触发规格
+export interface TriggerSpec {
+  type: 'rule' | 'probability';
+  rules?: TriggerRule[];
+  probability?: number;
+}
+
+// 回复规格
+export interface ReplySpec {
+  type: 'predefined' | 'llm' | 'special_mode';
+  predefined?: PredefinedConfig;
+  llm?: LLMConfig;
+  special_mode?: SpecialModeSpec;
+}
+
+// 特殊模式规格（嵌套在机制中）
+export interface SpecialModeSpec {
+  events: SpecialModeEvent[];
+  end_conditions: SpecialModeEndCondition[];
+}
+
+// 特殊模式事件
+export interface SpecialModeEvent {
+  id: string;
+  type: 'llm' | 'builtin' | 'python' | 'reply';
+  name: string;
+  config: Record<string, any>;
+  next?: string[];
+}
+
+// LLM 事件配置
+export interface LLMEventConfig {
+  api_url: string;
+  api_key: string;
+  model: string;
+  system_prompt: string;
+  temperature?: number;
+  max_tokens?: number;
+  context_window?: number;
+  context_scope?: 'session' | string;
+}
+
+// 内置事件配置
+export interface BuiltinEventConfig {
+  builtin_type: 'random_number' | 'haiku' | 'echo' | 'count' | 'template';
+  min?: number;
+  max?: number;
+  integer?: boolean;
+  topic?: string;
+  prefix?: string;
+  suffix?: string;
+  counter_key?: string;
+  template?: string;
+}
+
+// Python 事件配置
+export interface PythonEventConfig {
+  code: string;
+  timeout_ms?: number;
+  input_schema?: Record<string, string>;
+  output_schema?: Record<string, string>;
+}
+
+// 回复事件配置
+export interface ReplyEventConfig {
+  template: string;
+}
+
+// 特殊模式结束条件
+export interface SpecialModeEndCondition {
+  type: 'message_match' | 'max_rounds' | 'timeout';
+  pattern?: string;
+  value?: number;
+}
+
+// 特殊模式运行时会话（调试用）
+export interface SpecialModeSession {
+  conversation_id: string;
+  bot_id: string;
+  bot_name: string;
+  round: number;
+  started_at: string;
+  event_outputs: Record<string, string>;
+}
+
+// ─── 调试相关类型 ───
+
+export interface EventTrace {
+  event_id: string;
+  event_type: 'llm' | 'builtin' | 'python' | 'reply';
+  event_name: string;
+  status: 'pending' | 'running' | 'success' | 'error';
+  input: string;
+  output: string;
+  error?: string;
+  duration_ms: number;
+  context_messages?: DebugContextMessage[];
+}
+
+export interface DebugContextMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+export interface DebugTraceResult {
+  session_id: string;
+  reply: string;
+  context_messages: DebugContextMessage[];
+  event_traces: EventTrace[];
+  waiting_for_step: boolean;
+  next_event_id?: string;
+  round: number;
+}
+
+export interface DebugBotRequest {
+  message: string;
+  step_mode?: boolean;
+  session_id?: string;
+  sender_name?: string;
+  special_mode_config?: SpecialModeConfig;
+}
+
+export interface DebugStepRequest {
+  session_id: string;
+}
+
+export interface DebugResetRequest {
+  session_id: string;
 }

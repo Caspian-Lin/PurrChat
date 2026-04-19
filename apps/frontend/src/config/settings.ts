@@ -5,7 +5,7 @@ export const APP_VERSION = pkg.version;
 
 export const DEFAULT_SETTINGS: UserSettings = {
   panels: {
-    visiblePanels: ['chat', 'friends', 'ai'],
+    visiblePanels: ['chat', 'friends', 'ai', 'bots'],
   },
   notifications: {
     messageNotification: true,

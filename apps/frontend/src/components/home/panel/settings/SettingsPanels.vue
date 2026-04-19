@@ -39,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { BsChatLeftDots, BsFillPersonLinesFill, BsRobot } from 'vue-icons-plus/bs';
+import { BsChatLeftDots, BsFillPersonLinesFill, BsRobot, BsCpu } from 'vue-icons-plus/bs';
 import type { PanelVisibilitySettings } from '../../../../models/types';
 
 interface Props {
@@ -56,9 +56,10 @@ const allPanels = [
   { id: 'chat' as const, label: '聊天', icon: BsChatLeftDots },
   { id: 'friends' as const, label: '好友', icon: BsFillPersonLinesFill },
   { id: 'ai' as const, label: 'AI', icon: BsRobot },
+  { id: 'bots' as const, label: 'Bot Studio', icon: BsCpu },
 ];
 
-function togglePanel(panelId: 'chat' | 'friends' | 'ai') {
+function togglePanel(panelId: 'chat' | 'friends' | 'ai' | 'bots') {
   const current = [...props.panelSettings.visiblePanels];
   const index = current.indexOf(panelId);
   if (index >= 0) {

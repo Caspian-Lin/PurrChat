@@ -34,6 +34,16 @@
       </div>
     </div>
 
+    <!-- 特殊模式状态条 -->
+    <div v-if="activeSpecialMode" class="special-mode-banner">
+      <BsCpu :size="14" class="special-mode-banner__icon" />
+      <span class="special-mode-banner__text">
+        {{ activeSpecialMode.bot_name }} · Agent 模式运行中
+      </span>
+      <span class="special-mode-banner__dot" />
+      <button class="special-mode-banner__stop" @click="handleDeactivateSpecialMode">结束</button>
+    </div>
+
     <!-- 可调整大小的容器：包含消息列表和输入区 -->
     <div class="flex flex-col flex-1 overflow-hidden">
       <!-- 消息列表 -->
@@ -50,25 +60,53 @@
               </span>
             </div>
 
+            <!-- 系统消息（居中，无头像） -->
+            <div v-else-if="message.msg_type === 'system'" class="flex justify-center py-1.5">
+              <span
+                class="px-3 py-1 text-xs text-text-tertiary rounded-full bg-bg-quaternary whitespace-nowrap"
+              >
+                {{ getSystemMessageText(message) }}
+              </span>
+            </div>
+
             <!-- 消息行 -->
             <div
               :class="['flex gap-3', { 'flex-row-reverse': message.sender_id === currentUserId }]"
             >
               <!-- 头像 -->
               <div class="size-10 rounded-xl overflow-hidden flex-shrink-0">
-                <img
-                  v-if="message.sender?.avatar_url"
-                  :src="message.sender.avatar_url"
-                  alt="avatar"
-                  class="w-full h-full object-cover"
-                />
-                <div
-                  v-else
-                  class="w-full h-full flex items-center justify-center font-bold text-white text-lg"
-                  style="background: var(--theme-gradient)"
-                >
-                  {{ message.sender?.username?.charAt(0) || '?' }}
-                </div>
+                <!-- Bot 消息头像 -->
+                <template v-if="message.bot_id">
+                  <img
+                    v-if="message.sender?.avatar_url"
+                    :src="message.sender.avatar_url"
+                    alt="bot avatar"
+                    class="w-full h-full object-cover"
+                  />
+                  <div
+                    v-else
+                    class="w-full h-full flex items-center justify-center text-white"
+                    style="background: var(--theme-primary)"
+                  >
+                    <BsCpu :size="20" />
+                  </div>
+                </template>
+                <!-- 普通消息头像 -->
+                <template v-else>
+                  <img
+                    v-if="message.sender?.avatar_url"
+                    :src="message.sender.avatar_url"
+                    alt="avatar"
+                    class="w-full h-full object-cover"
+                  />
+                  <div
+                    v-else
+                    class="w-full h-full flex items-center justify-center font-bold text-white text-lg"
+                    style="background: var(--theme-gradient)"
+                  >
+                    {{ message.sender?.username?.charAt(0) || '?' }}
+                  </div>
+                </template>
               </div>
 
               <!-- 消息内容 -->
@@ -78,13 +116,22 @@
                   v-if="message.sender_id !== currentUserId"
                   class="text-md font-semibold text-text-tertiary mb-0.5"
                 >
-                  {{ message.sender?.username }}
+                  {{ message.bot_name || message.sender?.username }}
+                  <span
+                    v-if="message.bot_id"
+                    class="inline-flex items-center gap-0.5 ml-1.5 text-[10px] font-normal px-1.5 py-0.5 rounded-full"
+                    style="background: var(--theme-primary); color: white"
+                  >
+                    <BsCpu :size="10" />
+                    Bot
+                  </span>
                 </div>
                 <div
                   class="relative px-3.5 py-2.5 rounded-2xl cursor-default"
                   :style="{
-                    background:
-                      message.sender_id === currentUserId
+                    background: message.bot_id
+                      ? 'var(--message-bot-background, rgba(90, 143, 78, 0.08))'
+                      : message.sender_id === currentUserId
                         ? 'var(--message-sent-background)'
                         : 'var(--message-received-background)',
                     color: 'var(--text-color)',
@@ -328,6 +375,7 @@ import {
   BsFileEarmark,
   BsDownload,
   BsX,
+  BsCpu,
 } from 'vue-icons-plus/bs';
 import ResizableSplitter from '../common/Splitter.vue';
 import CustomScrollbar from '../common/CustomScrollbar.vue';
@@ -335,7 +383,14 @@ import EmojiPicker from '../common/EmojiPicker.vue';
 import ImagePreviewModal from '../common/ImagePreviewModal.vue';
 import { useFileUpload } from '../../composables/useFileUpload';
 import { useMessage } from '../../composables/useMessage';
-import type { Conversation, Message, FileMessageContent } from '../../models/types';
+import { api } from '../../models/api';
+import { websocketEventManager } from '../../services/websocketEventManager';
+import type {
+  Conversation,
+  Message,
+  FileMessageContent,
+  SystemMessageContent,
+} from '../../models/types';
 
 interface Props {
   conversation: Conversation | null;
@@ -360,6 +415,34 @@ const inputAreaHeight = ref(300);
 const messagesContainer = ref<InstanceType<typeof CustomScrollbar> | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const isDragOver = ref(false);
+
+// 特殊模式状态
+const activeSpecialMode = ref<{ bot_id: string; bot_name: string; conversation_id: string } | null>(
+  null
+);
+
+websocketEventManager.onSpecialModeChange((event, data) => {
+  if (event === 'started') {
+    activeSpecialMode.value = data;
+  } else {
+    if (activeSpecialMode.value?.bot_id === data?.bot_id) {
+      activeSpecialMode.value = null;
+    }
+  }
+});
+
+async function handleDeactivateSpecialMode() {
+  if (!activeSpecialMode.value) return;
+  try {
+    await api.deactivateSpecialMode(
+      activeSpecialMode.value.bot_id,
+      activeSpecialMode.value.conversation_id
+    );
+    activeSpecialMode.value = null;
+  } catch {
+    // 静默处理
+  }
+}
 
 // 文件上传
 const {
@@ -411,6 +494,27 @@ const sendDisabled = computed(() => {
   if (!fileData.value && !newMessage.value.trim()) return true;
   return false;
 });
+
+// ===== 系统消息辅助函数 =====
+function getSystemMessageText(message: Message): string {
+  try {
+    const sys = JSON.parse(message.content) as SystemMessageContent;
+    switch (sys.type) {
+      case 'special_mode_start':
+        return `${sys.bot_name || 'Bot'} 进入了 Agent 模式`;
+      case 'special_mode_end':
+        return `${sys.bot_name || 'Bot'} 退出了 Agent 模式`;
+      case 'bot_deployed':
+        return `${sys.bot_name || 'Bot'} 已加入对话`;
+      case 'bot_undeployed':
+        return `${sys.bot_name || 'Bot'} 已离开对话`;
+      default:
+        return message.content;
+    }
+  } catch {
+    return message.content;
+  }
+}
 
 // ===== 文件消息辅助函数 =====
 function isFileMessage(msg: Message): boolean {
@@ -594,6 +698,58 @@ defineExpose({
 </script>
 
 <style scoped>
+.special-mode-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 8%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-primary, #5a8f4e) 15%, transparent);
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.special-mode-banner__icon {
+  color: var(--theme-primary, #5a8f4e);
+}
+
+.special-mode-banner__text {
+  color: var(--text-secondary, #666);
+  flex: 1;
+}
+
+.special-mode-banner__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--theme-primary, #5a8f4e);
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.special-mode-banner__stop {
+  padding: 2px 10px;
+  font-size: 11px;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px solid color-mix(in srgb, var(--theme-primary, #5a8f4e) 30%, transparent);
+  background: none;
+  color: var(--theme-primary, #5a8f4e);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.special-mode-banner__stop:hover {
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 10%, transparent);
+}
+
 textarea::-webkit-scrollbar {
   display: none;
 }

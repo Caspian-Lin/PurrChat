@@ -1,0 +1,353 @@
+<template>
+  <div class="space-y-4">
+    <!-- 类型选择 -->
+    <div class="flex gap-2">
+      <button
+        v-for="type in types"
+        :key="type.value"
+        class="px-3 py-1.5 text-xs rounded-[var(--radius-sm,8px)] transition-colors"
+        :class="
+          localConfig.type === type.value
+            ? 'text-white'
+            : 'bg-bg-quaternary text-text-secondary hover:bg-hover-bg'
+        "
+        :style="localConfig.type === type.value ? { background: 'var(--theme-primary)' } : {}"
+        @click="
+          localConfig.type = type.value;
+          emitUpdate();
+        "
+      >
+        {{ type.label }}
+      </button>
+    </div>
+
+    <!-- 预定义回复 -->
+    <div v-if="localConfig.type === 'predefined'" class="space-y-4">
+      <!-- 子模式选择 -->
+      <div class="flex gap-2">
+        <button
+          v-for="mode in predefinedModes"
+          :key="mode.value"
+          class="px-3 py-1.5 text-xs rounded-[var(--radius-sm,8px)] transition-colors"
+          :class="
+            localConfig.predefined?.mode === mode.value
+              ? 'text-white'
+              : 'bg-bg-quaternary text-text-secondary hover:bg-hover-bg'
+          "
+          :style="
+            localConfig.predefined?.mode === mode.value
+              ? { background: 'var(--theme-primary)' }
+              : {}
+          "
+          @click="setPredefinedMode(mode.value)"
+        >
+          {{ mode.label }}
+        </button>
+      </div>
+
+      <!-- 模板模式 -->
+      <div v-if="localConfig.predefined?.mode === 'template'" class="space-y-3">
+        <div>
+          <label class="block text-xs text-text-secondary mb-1.5">回复模板</label>
+          <textarea
+            v-model="localConfig.predefined.template"
+            rows="3"
+            placeholder="你好，{username}！现在是{time}"
+            class="w-full px-3 py-2 text-xs font-mono rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary placeholder:text-text-quaternary outline-none focus:ring-1 focus:ring-[var(--theme-primary)] resize-none"
+            @input="emitUpdate()"
+          />
+          <p class="text-xs text-text-quaternary mt-1">
+            可用变量: {'{input}'}, {'{username}'}, {'{time}'}
+          </p>
+        </div>
+      </div>
+
+      <!-- 回复列表（固定/随机模式） -->
+      <div v-else class="space-y-2">
+        <div
+          v-for="(reply, index) in localConfig.predefined?.replies"
+          :key="index"
+          class="flex items-center gap-2"
+        >
+          <input
+            v-model="localConfig.predefined!.replies![index]"
+            type="text"
+            placeholder="回复内容"
+            class="flex-1 px-3 py-2 text-xs rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary placeholder:text-text-quaternary outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+            @input="emitUpdate()"
+          />
+          <button
+            class="p-1.5 rounded-lg hover:bg-red-500/10 text-text-tertiary hover:text-red-500 transition-colors"
+            @click="removeReply(index)"
+          >
+            <BsX :size="14" />
+          </button>
+        </div>
+        <button
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs text-text-tertiary hover:text-text-primary rounded-[var(--radius-sm,8px)] hover:bg-hover-bg transition-colors"
+          @click="addReply"
+        >
+          <BsPlus :size="12" />
+          添加回复
+        </button>
+      </div>
+    </div>
+
+    <!-- LLM 回复 -->
+    <div v-if="localConfig.type === 'llm'" class="space-y-3">
+      <div>
+        <label class="block text-xs text-text-secondary mb-1.5">API URL</label>
+        <input
+          v-model="localConfig.llm!.api_url"
+          type="text"
+          placeholder="https://api.openai.com/v1/chat/completions"
+          class="w-full px-3 py-2 text-xs rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary placeholder:text-text-quaternary outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+          @input="emitUpdate()"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-text-secondary mb-1.5">API Key</label>
+        <input
+          v-model="localConfig.llm!.api_key"
+          type="password"
+          placeholder="sk-xxx"
+          class="w-full px-3 py-2 text-xs rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary placeholder:text-text-quaternary outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+          @input="emitUpdate()"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-text-secondary mb-1.5">模型</label>
+        <input
+          v-model="localConfig.llm!.model"
+          type="text"
+          placeholder="gpt-4o"
+          class="w-full px-3 py-2 text-xs rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary placeholder:text-text-quaternary outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+          @input="emitUpdate()"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-text-secondary mb-1.5">System Prompt</label>
+        <textarea
+          v-model="localConfig.llm!.system_prompt"
+          rows="4"
+          placeholder="你是一个友好的助手..."
+          class="w-full px-3 py-2 text-xs rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary placeholder:text-text-quaternary outline-none focus:ring-1 focus:ring-[var(--theme-primary)] resize-none"
+          @input="emitUpdate()"
+        />
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs text-text-secondary mb-1.5">Temperature</label>
+          <input
+            v-model.number="localConfig.llm!.temperature"
+            type="number"
+            min="0"
+            max="2"
+            step="0.1"
+            class="w-full px-3 py-2 text-xs rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+            @input="emitUpdate()"
+          />
+        </div>
+        <div>
+          <label class="block text-xs text-text-secondary mb-1.5">Max Tokens</label>
+          <input
+            v-model.number="localConfig.llm!.max_tokens"
+            type="number"
+            min="1"
+            max="4096"
+            step="1"
+            class="w-full px-3 py-2 text-xs rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+            @input="emitUpdate()"
+          />
+        </div>
+        <div>
+          <label class="block text-xs text-text-secondary mb-1.5">上下文窗口</label>
+          <input
+            v-model.number="localConfig.llm!.context_window"
+            type="number"
+            min="0"
+            max="200"
+            step="1"
+            class="w-full px-3 py-2 text-xs rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+            @input="emitUpdate()"
+          />
+        </div>
+      </div>
+      <p class="text-xs text-text-quaternary">
+        兼容 OpenAI API 格式的服务均可使用。上下文窗口 0 表示不限制。
+      </p>
+    </div>
+
+    <!-- 特殊模式（Agent）回复 -->
+    <div v-if="localConfig.type === 'special_mode'" class="space-y-3">
+      <!-- 事件链预览 -->
+      <div
+        v-if="localConfig.special_mode?.events?.length"
+        class="rounded-[var(--radius-sm,8px)] border border-border-subtle bg-bg-quaternary p-3"
+      >
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-text-secondary font-medium">
+            事件链（{{ localConfig.special_mode.events.length }} 个事件）
+          </span>
+          <span class="text-xs text-text-quaternary">
+            {{ localConfig.special_mode.end_conditions?.length || 0 }} 个结束条件
+          </span>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <span
+            v-for="event in localConfig.special_mode.events"
+            :key="event.id"
+            class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-[var(--radius-xs,4px)] bg-bg-tertiary text-text-secondary"
+          >
+            <span class="w-1.5 h-1.5 rounded-full" :class="getEventColor(event.type)" />
+            {{ event.name || event.id }}
+          </span>
+        </div>
+      </div>
+
+      <!-- 空状态 -->
+      <div
+        v-else
+        class="rounded-[var(--radius-sm,8px)] border border-dashed border-border-subtle bg-bg-quaternary p-4 text-center"
+      >
+        <p class="text-xs text-text-quaternary">尚未配置事件链</p>
+      </div>
+
+      <!-- 打开全页面编辑按钮 -->
+      <button
+        class="flex items-center gap-2 w-full justify-center px-3 py-2.5 text-xs text-text-secondary rounded-[var(--radius-sm,8px)] border border-border-subtle bg-bg-quaternary hover:border-[var(--theme-primary)] hover:text-[var(--theme-primary)] transition-colors"
+        @click="emit('openSpecialModeEditor')"
+      >
+        <BsBoxArrowUpRight :size="14" />
+        在新标签页中编辑事件链
+      </button>
+
+      <p class="text-xs text-text-quaternary">
+        特殊模式（Agent）允许你构建多步骤事件链，适合 RPG、对话式任务等场景。
+      </p>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { reactive, watch } from 'vue';
+import { BsPlus, BsX, BsBoxArrowUpRight } from 'vue-icons-plus/bs';
+import type { ReplySpec, SpecialModeSpec } from '../../../../models/types';
+
+interface Props {
+  config: ReplySpec;
+}
+
+const props = defineProps<Props>();
+
+const emit = defineEmits<{
+  update: [config: ReplySpec];
+  openSpecialModeEditor: [];
+}>();
+
+const types = [
+  { value: 'predefined' as const, label: '预定义' },
+  { value: 'llm' as const, label: 'LLM' },
+  { value: 'special_mode' as const, label: '特殊模式' },
+];
+
+const predefinedModes = [
+  { value: 'fixed' as const, label: '固定' },
+  { value: 'random' as const, label: '随机' },
+  { value: 'template' as const, label: '模板' },
+];
+
+const defaultPredefined = {
+  mode: 'random' as const,
+  replies: ['...'],
+  template: '',
+};
+
+const defaultLLM = {
+  api_url: '',
+  api_key: '',
+  model: '',
+  system_prompt: '',
+  temperature: 0.7,
+  max_tokens: 1000,
+  context_window: 20,
+};
+
+const defaultSpecialMode: SpecialModeSpec = {
+  events: [],
+  end_conditions: [],
+};
+
+function buildLocalConfig(config: ReplySpec): ReplySpec {
+  return {
+    type: config?.type || 'predefined',
+    predefined: config?.predefined
+      ? { ...config.predefined, replies: [...(config.predefined.replies || [])] }
+      : { ...defaultPredefined },
+    llm: config?.llm ? { ...config.llm } : { ...defaultLLM },
+    special_mode: config?.special_mode
+      ? deepCloneSpecialMode(config.special_mode)
+      : { ...defaultSpecialMode },
+  };
+}
+
+const localConfig = reactive<ReplySpec>(buildLocalConfig(props.config));
+
+watch(
+  () => props.config,
+  (newConfig) => {
+    if (!newConfig) return;
+    const rebuilt = buildLocalConfig(newConfig);
+    localConfig.type = rebuilt.type;
+    localConfig.predefined = rebuilt.predefined;
+    localConfig.llm = rebuilt.llm;
+    localConfig.special_mode = rebuilt.special_mode;
+  },
+  { deep: true }
+);
+
+function emitUpdate() {
+  emit('update', { ...localConfig, special_mode: deepCloneSpecialMode(localConfig.special_mode) });
+}
+
+function deepCloneSpecialMode(spec?: SpecialModeSpec): SpecialModeSpec | undefined {
+  if (!spec) return undefined;
+  return {
+    events: spec.events.map((e) => ({ ...e, config: { ...e.config } })),
+    end_conditions: spec.end_conditions.map((c) => ({ ...c })),
+  };
+}
+
+function getEventColor(type: string): string {
+  const colors: Record<string, string> = {
+    llm: 'bg-blue-400',
+    builtin: 'bg-amber-400',
+    python: 'bg-purple-400',
+    reply: 'bg-green-400',
+  };
+  return colors[type] || 'bg-gray-400';
+}
+
+function setPredefinedMode(mode: 'fixed' | 'random' | 'template') {
+  if (!localConfig.predefined) return;
+  localConfig.predefined.mode = mode;
+  if (mode === 'template') {
+    localConfig.predefined.template = localConfig.predefined.template || '{input}';
+  }
+  if (!localConfig.predefined.replies?.length) {
+    localConfig.predefined.replies = ['...'];
+  }
+  emitUpdate();
+}
+
+function addReply() {
+  if (!localConfig.predefined) return;
+  localConfig.predefined.replies!.push('');
+  emitUpdate();
+}
+
+function removeReply(index: number) {
+  localConfig.predefined!.replies!.splice(index, 1);
+  emitUpdate();
+}
+</script>

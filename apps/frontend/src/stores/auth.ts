@@ -4,6 +4,7 @@ import type { User } from '../models/types';
 import { api } from '../models/api';
 import { messageCacheService } from '../services/messageCache';
 import { conversationStateCacheService } from '../services/conversationStateCache';
+import { useBotStore } from './bot';
 
 // 错误信息映射：将后端返回的英文错误翻译成中文
 function getErrorMessage(backendError: string): string {
@@ -78,6 +79,8 @@ export const useAuthStore = defineStore('auth', () => {
     console.log('[auth store] Switching storage to user:', userId);
     messageCacheService.init(userId);
     conversationStateCacheService.init(userId);
+    const botStore = useBotStore();
+    botStore.reset();
   }
 
   // 清除认证信息
