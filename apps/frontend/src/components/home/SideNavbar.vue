@@ -58,6 +58,20 @@
       <button
         :class="[
           'w-12 h-12 p-0 rounded-xl flex items-center justify-center transition-all',
+          activePanel === 'bots'
+            ? 'bg-[var(--theme-primary)]'
+            : 'bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary',
+        ]"
+        @click="handlePanelClick('bots')"
+      >
+        <BsCpu
+          :class="['', activePanel === 'bots' ? 'text-white' : 'text-text-tertiary']"
+          :size="24"
+        />
+      </button>
+      <button
+        :class="[
+          'w-12 h-12 p-0 rounded-xl flex items-center justify-center transition-all',
           activePanel === 'settings'
             ? 'bg-[var(--theme-primary)]'
             : 'bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary',
@@ -93,32 +107,6 @@
           {{ connectionStatusText }}
         </span> -->
       </div>
-      <!-- 侧栏折叠按钮 -->
-      <button
-        :class="[
-          'w-10 h-10  p-0 rounded-lg flex items-center justify-center transition-all',
-          sidebarStore.isCollapsed(activePanel)
-            ? 'bg-bg-quaternary hover:bg-hover-bg text-text-tertiary hover:text-text-primary'
-            : 'bg-bg-quaternary hover:bg-hover-bg text-text-tertiary hover:text-text-primary',
-        ]"
-        :title="sidebarStore.isCollapsed(activePanel) ? '展开侧栏' : '收起侧栏'"
-        @click="sidebarStore.toggleSidebar(activePanel)"
-      >
-        <svg
-          class="w-5 h-5 transition-transform duration-200"
-          :class="{ 'rotate-180': sidebarStore.isCollapsed(activePanel) }"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.5"
-            d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-          />
-        </svg>
-      </button>
       <ThemeSwitcher />
       <div
         class="flex items-center gap-2 cursor-pointer rounded-lg hover:bg-hover-bg transition-colors"
@@ -146,7 +134,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { BsChatLeftDots, BsFillPersonLinesFill, BsRobot, BsGear } from 'vue-icons-plus/bs';
+import { BsChatLeftDots, BsFillPersonLinesFill, BsRobot, BsCpu, BsGear } from 'vue-icons-plus/bs';
 import ThemeSwitcher from '../ThemeSwitcher.vue';
 import { usePanelController } from '../../controllers/panelController';
 import { useRoute } from 'vue-router';
@@ -170,6 +158,7 @@ const activePanel = computed(() => {
   if (route.path === '/chat') return 'chat';
   if (route.path === '/friends') return 'friends';
   if (route.path === '/ai') return 'ai';
+  if (route.path === '/bots') return 'bots';
   if (route.path === '/settings') return 'settings';
   return 'chat';
 });
@@ -180,8 +169,14 @@ const isOffline = computed(() => connectionStore.isOffline);
 // const isConnecting = computed(() => connectionStore.isConnecting);
 const connectionStatusText = computed(() => connectionStore.getConnectionStatusText());
 
-const handlePanelClick = (panel: 'chat' | 'friends' | 'ai' | 'settings') => {
-  navigateToPanel(panel);
+const handlePanelClick = (panel: 'chat' | 'friends' | 'ai' | 'bots' | 'settings') => {
+  if (panel === activePanel.value) {
+    // 点击当前 panel → 切换折叠/展开
+    sidebarStore.toggleSidebar(panel);
+  } else {
+    // 切换到其他 panel
+    navigateToPanel(panel);
+  }
 };
 
 defineEmits<{

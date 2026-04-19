@@ -72,6 +72,7 @@
 import { ref, computed } from 'vue';
 import { BsSun, BsMoon } from 'vue-icons-plus/bs';
 import { useThemeStore } from '../stores/theme';
+import { useSettingsStore } from '../stores/settings';
 import { themeColors } from '../config/theme';
 import type { ThemeColor } from '../config/theme';
 
@@ -88,6 +89,7 @@ const colorNames: Record<ThemeColor, string> = {
 import BaseModal from './common/BaseModal.vue';
 
 const themeStore = useThemeStore();
+const settingsStore = useSettingsStore();
 const showModal = ref(false);
 
 const themeIcon = computed(() => {
@@ -97,9 +99,11 @@ const themeIcon = computed(() => {
 const handleSelect = (key: string) => {
   if (key === 'light' || key === 'dark') {
     themeStore.setMode(key);
+    settingsStore.updateGeneralSettings({ themeMode: key });
   } else if (key.startsWith('color-')) {
     const colorKey = key.replace('color-', '') as keyof typeof themeColors;
     themeStore.setColor(colorKey);
+    settingsStore.updateGeneralSettings({ themeColor: colorKey });
   }
   showModal.value = false;
 };
