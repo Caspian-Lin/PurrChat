@@ -1,6 +1,6 @@
 # PurrChat 开发路线图
 
-> 最后更新: 2026-04-17
+> 最后更新: 2026-04-20
 
 ---
 
@@ -77,6 +77,7 @@
   - 转让群主
   - 成员列表查看
   - 已有基础: `POST /api/conversations/group` 已实现基本群聊创建
+- **状态**: 已实现群名称编辑、群头像上传、成员角色管理、解散群聊等
 
 #### FEAT-006: 文件消息完整支持
 
@@ -122,6 +123,84 @@
 
 ### 低优先级 (Long-term)
 
+#### FEAT-017: 外部 Bot 接入
+
+- **来源**: Bot Studio 计划 Phase 5
+- **描述**: 参考 OneBot API 11 协议，允许外部程序通过 WebSocket 接入 PurrChat 作为 Bot 运行，支持反向 WebSocket 连接
+- **核心架构**:
+  - Bot 类型新增 `external`（与现有 `active`/`disabled` 状态区分）
+  - 外部 Bot 配置包含：WebSocket 端点 URL + 鉴权 Token + 可选的 IP 白名单
+  - 后端将群聊消息转发到已连接的外部 Bot 端点
+  - 外部 Bot 处理后通过 API 回调发送消息到会话
+- **连接模式**:
+  - **反向 WebSocket（推荐）**: 外部服务器主动连接到 PurrChat，保持长连接
+    - PurrChat 新增 `/api/external-bot/ws` WebSocket 端点
+    - 外部 Bot 通过 `Authorization: Bearer <token>` 鉴权
+    - 连接建立后，PurrChat 推送会话消息，外部 Bot 回复
+  - **HTTP 回调（备选）**: PurrChat 通过 POST 请求推送消息到外部 Bot 的 HTTP 端点
+    - 适用于无法维持长连接的场景
+    - 外部 Bot 收到请求后通过 API 回复
+- **OneBot API 11 兼容性**:
+  - 消息格式兼容 CQ 码 / OneBot 消息段格式
+  - 支持的动作（Action）:
+    - `send_message` — 发送消息到指定会话
+    - `send_private_msg` — 发送私聊消息
+    - `send_group_msg` — 发送群聊消息
+    - `get_group_msg_history` — 获取群聊历史消息
+    - `get_group_info` — 获取群聊信息
+    - `get_group_member_list` — 获取群成员列表
+    - `get_login_info` — 获取 Bot 登录信息
+  - 事件推送（Event）:
+    - `message` — 新消息事件（包含群聊/私聊消息）
+    - `notice` — 通知事件（成员加入/退出等）
+- **数据库变更**:
+  - `bots` 表新增字段:
+    - `bot_type VARCHAR(20) DEFAULT 'builtin'` — 区分内置 Bot (`builtin`) 和外部 Bot (`external`)
+    - `ws_endpoint TEXT` — 反向 WebSocket 连接的回调地址（HTTP 模式使用）
+    - `ws_token TEXT` — 鉴权 Token（加密存储）
+    - `ip_whitelist TEXT[]` — IP 白名单（PostgreSQL 数组类型）
+  - 新增 `external_bot_connections` 表 — 记录活跃的外部 Bot 连接:
+    ```sql
+    CREATE TABLE external_bot_connections (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+        connected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_heartbeat TIMESTAMP,
+        remote_addr TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'connected'  -- connected / disconnected
+    );
+    ```
+- **后端模块**:
+  - `apps/backend/internal/externalbot/`
+    - `manager.go` — 外部 Bot 连接管理器（连接生命周期、心跳检测、重连策略）
+    - `protocol.go` — OneBot 11 协议编解码（消息段解析、Action 路由、Event 构建）
+    - `handler.go` — WebSocket 连接处理器（鉴权、消息收发、错误处理）
+    - `rate_limiter.go` — 消息速率限制器（每 Bot 独立令牌桶）
+  - 修改 `apps/backend/internal/botengine/engine.go`:
+    - `processMessage` 中检测外部 Bot 部署，通过 `manager.ForwardMessage` 转发
+  - 新增路由:
+    - `GET /api/external-bot/ws?token=<token>` — 反向 WebSocket 连接端点
+    - `POST /api/external-bot/callback` — HTTP 回调端点
+- **安全设计**:
+  - 每个外部 Bot 独立鉴权 Token，Token 加密存储在数据库
+  - 消息转发速率限制（默认 20 条/分钟，可配置）
+  - IP 白名单支持（可选，为空时不限制）
+  - 连接心跳检测（30 秒间隔，超时 90 秒自动断开）
+  - 消息大小限制（单条消息最大 10KB）
+  - 连接数限制（单个外部 Bot 最多 3 个并发连接）
+- **前端变更**:
+  - `BotEditor.vue` — 创建/编辑 Bot 时可选类型（内置 / 外部）
+  - 外部 Bot 配置表单: WebSocket 端点 URL、Token、IP 白名单
+  - BotStudioPanel Bot 列表中外部 Bot 显示连接状态指示器（绿点=已连接，红点=断开）
+  - 新增 `ExternalBotConfig.vue` — 外部 Bot 配置组件
+- **验证方案**:
+  1. 创建外部 Bot，配置 Token 和端点
+  2. 外部程序通过反向 WebSocket 连接到 PurrChat
+  3. 在群聊中发送消息，外部 Bot 收到并回复
+  4. 断开外部 Bot 连接，验证心跳检测和自动清理
+  5. 速率限制验证：超过限制后消息被丢弃
+  6. IP 白名单验证：非白名单 IP 连接被拒绝
+
 #### FEAT-011: 消息多媒体扩展
 
 - 语音消息: 录音、播放
@@ -154,6 +233,7 @@
 - 开机自启动
 - 原生通知
 - 文件拖拽发送
+- 多窗口查看聊天会话
 
 #### FEAT-016: 国际化 (i18n)
 
@@ -171,7 +251,7 @@
 | FEAT-002 | 消息撤回与删除 | 高 | 待实现 | - |
 | FEAT-003 | 离线消息推送 | 高 | 待实现 | - |
 | FEAT-004 | 消息已读回执 | 高 | 待实现 | - |
-| FEAT-005 | 群聊管理功能 | 中 | 待实现 | - |
+| FEAT-005 | 群聊管理功能 | 中 | ✅ 基础已完成 | - |
 | FEAT-006 | 文件消息完整支持 | 中 | 待实现 | - |
 | FEAT-007 | 用户在线状态 | 中 | 待实现 | - |
 | FEAT-008 | 消息搜索 | 中 | 待实现 | - |
@@ -183,6 +263,7 @@
 | FEAT-014 | 黑名单与屏蔽 | 低 | 待实现 | - |
 | FEAT-015 | 桌面端增强 | 低 | 待实现 | - |
 | FEAT-016 | 国际化 | 低 | 待实现 | - |
+| FEAT-017 | 外部 Bot 接入 (OneBot 11) | 低 | 规划中 | - |
 
 ---
 
@@ -202,3 +283,7 @@
 - [x] 多客户端支持 (Web/Tauri)
 - [x] 时区统一 (UTC 存储)
 - [x] 头像/背景旧文件自动清理 (cleanupOldFile bug 修复: 查询排除新文件 ID)
+- [x] Bot Studio — Bot CRUD、部署到会话、触发与回复系统 (Phase 1-2)
+- [x] Bot 特殊模式 (Agent) — 事件链引擎、Python 沙箱、DAG 编辑器、调试面板 (Phase 3)
+- [x] Bot 系统消息 — Bot 部署/移除/模式启停的系统通知消息 (Phase 4 Track B)
+- [x] Bot 发现与分享 — 分页搜索、部署统计、部署到群聊弹窗 (Phase 4 Track A)
