@@ -23,7 +23,6 @@ type ChatService struct {
 	friendshipRepo          repository.FriendshipRepository
 	enrollmentRepo          repository.EnrollmentRepository
 	conversationMessageRepo repository.ConversationMessageRepository
-	botDeployRepo           repository.BotDeploymentRepository // 可选
 	botRepo                 repository.BotRepository           // 可选
 	botEngine               *botengine.BotEngine               // 可选的 Bot 引擎，为 nil 时不处理 Bot
 }
@@ -47,9 +46,8 @@ func NewChatService(
 	}
 }
 
-// SetBotRepos 设置 Bot 相关仓储（在 main.go 中初始化后注入）
-func (s *ChatService) SetBotRepos(deployRepo repository.BotDeploymentRepository, botRepo repository.BotRepository) {
-	s.botDeployRepo = deployRepo
+// SetBotRepo 设置 Bot 仓储（在 main.go 中初始化后注入）
+func (s *ChatService) SetBotRepo(botRepo repository.BotRepository) {
 	s.botRepo = botRepo
 }
 
@@ -96,30 +94,6 @@ func (s *ChatService) GetConversations(ctx context.Context, userID string) ([]*m
 				}
 			}
 			conv.Members = members
-
-			// 为有 Bot 部署的会话补充虚拟 Bot 成员
-			if s.botDeployRepo != nil && s.botRepo != nil {
-				deployments, depErr := s.botDeployRepo.FindActiveByConversation(ctx, conv.ID)
-				if depErr == nil {
-					for _, dep := range deployments {
-						bot, botErr := s.botRepo.FindByID(ctx, dep.BotID)
-						if botErr != nil {
-							continue
-						}
-						// 构造虚拟 enrollment，用 Bot 信息填充 User 字段
-						botUser := &models.User{
-							ID:        bot.ID,
-							Username:  bot.Name,
-							AvatarURL: bot.AvatarURL,
-						}
-						virtualMember := &models.Enrollment{
-							UserID: bot.ID,
-							User:   botUser,
-						}
-						conv.Members = append(conv.Members, virtualMember)
-					}
-				}
-			}
 		}
 
 		// 为私聊会话设置名称（如果还没有）
@@ -674,6 +648,12 @@ func (s *ChatService) AddMemberToConversation(ctx context.Context, conversationI
 		return errors.New("user already in conversation")
 	}
 
+	// 如果目标是 Bot，强制角色为 member
+	targetUser, err := s.userRepo.FindByID(ctx, targetUUID)
+	if err == nil && targetUser.IsBot {
+		role = models.EnrollmentRoleMember
+	}
+
 	// 添加成员（使用UTC时间）
 	newEnrollment := &models.Enrollment{
 		ConversationID: conversationID,
@@ -853,6 +833,15 @@ func (s *ChatService) UpdateMemberRole(ctx context.Context, conversationIDStr, u
 	// 不能修改自己的角色
 	if req.UserID == userUUID {
 		return errors.New("cannot update your own role")
+	}
+
+	// 禁止修改 Bot 的角色（Bot 只能是 member）
+	targetUser, _ := s.userRepo.FindByID(ctx, req.UserID)
+	if targetUser != nil && targetUser.IsBot {
+		if models.EnrollmentRole(req.Role) != models.EnrollmentRoleMember {
+			return errors.New("bot can only be member")
+		}
+		return errors.New("bot can only be member")
 	}
 
 	// 如果目标是 owner 且要降级，需要同时转让群主
@@ -1061,6 +1050,70 @@ func (s *ChatService) SendFriendRequest(ctx context.Context, userID, targetUserI
 		// 如果是 blocked 状态，允许重新发送请求
 	}
 
+	// 检查目标是否是 Bot，走不同的好友添加逻辑
+	if targetUser.IsBot && s.botRepo != nil {
+		bot, botErr := s.botRepo.FindByID(ctx, targetUUID)
+		if botErr != nil {
+			return nil, errors.New("bot not found")
+		}
+
+		// private Bot 不允许被添加为好友
+		if bot.Visibility == models.BotVisibilityPrivate {
+			return nil, errors.New("this bot is private")
+		}
+
+		// 创建会话（双方 enrollment）
+		conversation, err := s.CreateConversation(ctx, userID, targetUserID)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to create conversation for bot friend request: %v", err)
+			return nil, err
+		}
+
+		// 创建好友关系
+		autoAccept := bot.Visibility == models.BotVisibilityGlobal
+		friendshipStatus := models.FriendshipStatusAccepted
+		if !autoAccept {
+			friendshipStatus = models.FriendshipStatusPending
+		}
+
+		friendship := &models.Friendship{
+			UserID:         userUUID,
+			FriendID:       targetUUID,
+			ConversationID: conversation.ID,
+			Status:         friendshipStatus,
+		}
+		err = s.friendshipRepo.Create(ctx, friendship)
+		if err != nil {
+			return nil, err
+		}
+
+		// WebSocket 通知
+		if websocket.GlobalHub != nil {
+			if autoAccept {
+				websocket.GlobalHub.SendToUser(userUUID, "friend_request_update", map[string]interface{}{
+					"conversation_id": conversation.ID.String(),
+					"status":          "accepted",
+					"action":          "auto_accept",
+				})
+			} else {
+				websocket.GlobalHub.SendToUser(bot.OwnerID, "new_friend_request", map[string]interface{}{
+					"conversation_id": conversation.ID.String(),
+					"sender_id":       userID,
+					"status":          "pending",
+					"bot_id":          bot.ID.String(),
+				})
+				websocket.GlobalHub.SendToUser(userUUID, "friend_request_update", map[string]interface{}{
+					"conversation_id": conversation.ID.String(),
+					"status":          "pending",
+					"action":          "sent",
+				})
+			}
+		}
+
+		logger.InfofWithCaller("Bot friend request processed: user=%s, bot=%s, visibility=%s, autoAccept=%v", userID, targetUserID, bot.Visibility, autoAccept)
+		return conversation, nil
+	}
+
 	// 创建会话
 	conversation, err := s.CreateConversation(ctx, userID, targetUserID)
 	if err != nil {
@@ -1140,6 +1193,15 @@ func (s *ChatService) HandleFriendRequest(ctx context.Context, userID, conversat
 	if friendship == nil {
 		logger.ErrorfWithCaller("No pending friend request found for user %s", userID)
 		return errors.New("no pending friend request found")
+	}
+
+	// 检查是否是 Bot 好友请求：验证当前处理者是 Bot 的 owner
+	senderUser, senderErr := s.userRepo.FindByID(ctx, senderUUID)
+	if senderErr == nil && senderUser.IsBot && s.botRepo != nil {
+		bot, botErr := s.botRepo.FindByID(ctx, senderUUID)
+		if botErr == nil && bot.OwnerID != userUUID {
+			return errors.New("only bot owner can approve bot friend requests")
+		}
 	}
 
 	// 如果提供了 conversation_id，使用它；否则查找对应的会话

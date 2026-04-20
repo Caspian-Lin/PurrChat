@@ -21,6 +21,7 @@ type BotService struct {
 	botRepo          repository.BotRepository
 	botDeployRepo    repository.BotDeploymentRepository
 	userRepo         repository.UserRepository
+	friendshipRepo   repository.FriendshipRepository
 	conversationRepo repository.ConversationRepository
 	enrollmentRepo   repository.EnrollmentRepository
 	messageRepo      repository.ConversationMessageRepository
@@ -31,6 +32,7 @@ func NewBotService(
 	botRepo repository.BotRepository,
 	botDeployRepo repository.BotDeploymentRepository,
 	userRepo repository.UserRepository,
+	friendshipRepo repository.FriendshipRepository,
 	conversationRepo repository.ConversationRepository,
 	enrollmentRepo repository.EnrollmentRepository,
 	messageRepo repository.ConversationMessageRepository,
@@ -39,6 +41,7 @@ func NewBotService(
 		botRepo:          botRepo,
 		botDeployRepo:    botDeployRepo,
 		userRepo:         userRepo,
+		friendshipRepo:   friendshipRepo,
 		conversationRepo: conversationRepo,
 		enrollmentRepo:   enrollmentRepo,
 		messageRepo:      messageRepo,
@@ -70,6 +73,63 @@ func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.
 	err = s.botRepo.Create(ctx, bot)
 	if err != nil {
 		return nil, err
+	}
+
+	// 自动创建 owner ↔ bot 的双向好友关系（已接受状态）
+	friendship1 := &models.Friendship{
+		UserID:   ownerUUID,
+		FriendID: bot.ID,
+		Status:   models.FriendshipStatusAccepted,
+	}
+	friendship2 := &models.Friendship{
+		UserID:   bot.ID,
+		FriendID: ownerUUID,
+		Status:   models.FriendshipStatusAccepted,
+	}
+	if err := s.friendshipRepo.Create(ctx, friendship1); err != nil {
+		logger.ErrorfWithCaller("[BotService] Failed to create friendship owner→bot: %v", err)
+	}
+	if err := s.friendshipRepo.Create(ctx, friendship2); err != nil {
+		logger.ErrorfWithCaller("[BotService] Failed to create friendship bot→owner: %v", err)
+	}
+
+	// 自动创建 owner ↔ bot 的私聊会话
+	conversation := &models.Conversation{
+		ConversationType: models.ConversationTypeDirect,
+		CreatedBy:        &ownerUUID,
+	}
+	if err := s.conversationRepo.Create(ctx, conversation); err != nil {
+		logger.ErrorfWithCaller("[BotService] Failed to create bot direct conversation: %v", err)
+	} else {
+		ownerEnrollment := &models.Enrollment{
+			ConversationID: conversation.ID,
+			UserID:         ownerUUID,
+			Role:           models.EnrollmentRoleOwner,
+			JoinedAt:       time.Now().UTC(),
+		}
+		if err := s.enrollmentRepo.Create(ctx, ownerEnrollment); err != nil {
+			logger.ErrorfWithCaller("[BotService] Failed to enroll owner in bot conversation: %v", err)
+		}
+
+		botEnrollment := &models.Enrollment{
+			ConversationID: conversation.ID,
+			UserID:         bot.ID,
+			Role:           models.EnrollmentRoleMember,
+			JoinedAt:       time.Now().UTC(),
+		}
+		if err := s.enrollmentRepo.Create(ctx, botEnrollment); err != nil {
+			logger.ErrorfWithCaller("[BotService] Failed to enroll bot in conversation: %v", err)
+		}
+
+		// 更新 friendship 关联 conversation_id
+		friendship1.ConversationID = conversation.ID
+		friendship2.ConversationID = conversation.ID
+		if err := s.friendshipRepo.Update(ctx, friendship1); err != nil {
+			logger.ErrorfWithCaller("[BotService] Failed to update friendship1 conversation_id: %v", err)
+		}
+		if err := s.friendshipRepo.Update(ctx, friendship2); err != nil {
+			logger.ErrorfWithCaller("[BotService] Failed to update friendship2 conversation_id: %v", err)
+		}
 	}
 
 	return bot, nil
@@ -288,13 +348,24 @@ func (s *BotService) DeployBot(ctx context.Context, botID, userID string, req *m
 		return nil, errors.New("not a participant in this conversation")
 	}
 
-	// 检查是否已部署
-	_, err = s.botDeployRepo.FindByBotAndConversation(ctx, botUUID, req.ConversationID)
+	// 检查 Bot 是否已是 enrollment 成员
+	_, err = s.enrollmentRepo.FindByConversationAndUser(ctx, req.ConversationID, botUUID)
 	if err == nil {
-		return nil, errors.New("bot already deployed to this conversation")
+		return nil, errors.New("bot is already a member of this conversation")
 	}
 
-	// 创建部署
+	// 创建 enrollment（role=member）
+	botEnrollment := &models.Enrollment{
+		ConversationID: req.ConversationID,
+		UserID:         botUUID,
+		Role:           models.EnrollmentRoleMember,
+		JoinedAt:       time.Now().UTC(),
+	}
+	if err := s.enrollmentRepo.Create(ctx, botEnrollment); err != nil {
+		return nil, err
+	}
+
+	// 创建 deployment 记录（审计用途）
 	deployment := &models.BotDeployment{
 		BotID:          botUUID,
 		ConversationID: req.ConversationID,
@@ -304,13 +375,11 @@ func (s *BotService) DeployBot(ctx context.Context, botID, userID string, req *m
 
 	err = s.botDeployRepo.Create(ctx, deployment)
 	if err != nil {
-		return nil, err
+		// deployment 创建失败不影响 enrollment
+		logger.ErrorfWithCaller("[BotService] Failed to create deployment record: %v", err)
 	}
 
-	// 标记会话有 Bot
-	_, _ = database.GetPool().Exec(ctx, "UPDATE conversations SET bot_enabled = TRUE WHERE id = $1", req.ConversationID)
-
-	// 插入系统消息：Bot 已加入对话
+	// 插入系统消息：Bot 已加入对话（sender_id = bot 的 user_id）
 	sysContent := &models.SystemMessageContent{
 		Type:    "bot_deployed",
 		BotID:   botID,
@@ -318,7 +387,7 @@ func (s *BotService) DeployBot(ctx context.Context, botID, userID string, req *m
 	}
 	sysJSON, _ := json.Marshal(sysContent)
 	sysMessage := &models.Message{
-		SenderID: uuid.Nil,
+		SenderID: bot.ID, // Bot 现在是真实用户
 		Content:  string(sysJSON),
 		MsgType:  models.MsgTypeSystem,
 	}
@@ -358,41 +427,41 @@ func (s *BotService) UndeployBot(ctx context.Context, botID, conversationID, use
 		return err
 	}
 
-	// 验证部署存在
-	deployment, err := s.botDeployRepo.FindByBotAndConversation(ctx, botUUID, convUUID)
+	// 获取 Bot 信息（用于系统消息和权限验证）
+	bot, err := s.botRepo.FindByID(ctx, botUUID)
 	if err != nil {
-		return errors.New("bot not deployed to this conversation")
+		return errors.New("bot not found")
 	}
 
-	// 验证权限：部署者或 Bot owner 可以移除
+	// 验证权限：Bot owner 可以移除，或会话管理员/群主可以移除
 	userUUID, _ := uuid.Parse(userID)
-	if deployment.DeployedBy != userUUID {
-		bot, err := s.botRepo.FindByID(ctx, botUUID)
-		if err != nil || bot.OwnerID != userUUID {
+	if bot.OwnerID != userUUID {
+		// 检查操作者是否是会话管理员/群主
+		operatorEnrollment, err := s.enrollmentRepo.FindByConversationAndUser(ctx, convUUID, userUUID)
+		if err != nil || (operatorEnrollment.Role != models.EnrollmentRoleAdmin && operatorEnrollment.Role != models.EnrollmentRoleOwner) {
 			return errors.New("not authorized")
 		}
 	}
 
-	err = s.botDeployRepo.DeleteByBotAndConversation(ctx, botUUID, convUUID)
-	if err != nil {
-		return err
+	// 移除 Bot 的 enrollment
+	if err := s.enrollmentRepo.DeleteByConversationAndUser(ctx, convUUID, botUUID); err != nil {
+		logger.ErrorfWithCaller("[BotService] Failed to remove bot enrollment: %v", err)
 	}
 
-	// 获取 Bot 名称用于系统消息
-	botName := "Bot"
-	if bot, err := s.botRepo.FindByID(ctx, botUUID); err == nil {
-		botName = bot.Name
+	// 删除 deployment 记录
+	if err := s.botDeployRepo.DeleteByBotAndConversation(ctx, botUUID, convUUID); err != nil {
+		logger.ErrorfWithCaller("[BotService] Failed to remove deployment record: %v", err)
 	}
 
-	// 插入系统消息：Bot 已离开对话
+	// 插入系统消息：Bot 已离开对话（sender_id = bot 的 user_id）
 	undeploySysContent := &models.SystemMessageContent{
 		Type:    "bot_undeployed",
 		BotID:   botID,
-		BotName: botName,
+		BotName: bot.Name,
 	}
 	undeploySysJSON, _ := json.Marshal(undeploySysContent)
 	undeploySysMessage := &models.Message{
-		SenderID: uuid.Nil,
+		SenderID: bot.ID, // Bot 现在是真实用户
 		Content:  string(undeploySysJSON),
 		MsgType:  models.MsgTypeSystem,
 	}
@@ -495,50 +564,70 @@ func (s *BotService) DeactivateSpecialMode(ctx context.Context, botID, userID st
 }
 
 // CreateBotConversation 创建与 Bot 的私聊会话
+// Bot 现在是 users 表中的真实用户，私聊统一走 chatService.CreateConversation
+// 此方法保留用于兼容：查找已有的 owner↔bot 私聊会话
 func (s *BotService) CreateBotConversation(ctx context.Context, botID, userID string) (*models.Conversation, error) {
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 验证 Bot 存在且状态正常
-	_, err = s.botRepo.FindByID(ctx, uuid.MustParse(botID))
-	if err != nil {
-		return nil, errors.New("bot not found")
-	}
-
-	// 创建会话（使用一个特殊的占位逻辑）
-	// Bot 不是 users 表中的用户，所以我们需要一种方式来表示 Bot 会话
-	// 方案：创建一个以 user 为 owner 的 direct 会话，Bot 的部署记录关联到此会话
-	conversation := &models.Conversation{
-		ConversationType: models.ConversationTypeDirect,
-		Name:             "", // 后续动态设置
-		CreatedBy:        &userUUID,
-	}
-
-	err = s.conversationRepo.Create(ctx, conversation)
+	botUUID, err := uuid.Parse(botID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 创建用户 enrollment
-	userEnrollment := &models.Enrollment{
+	// 验证 Bot 存在
+	_, err = s.botRepo.FindByID(ctx, botUUID)
+	if err != nil {
+		return nil, errors.New("bot not found")
+	}
+
+	// 查找已有的私聊会话
+	existingConv, err := s.conversationRepo.FindByUsers(ctx, userUUID, botUUID)
+	if err == nil {
+		return existingConv, nil
+	}
+
+	// 不存在则创建新的私聊会话（Bot 作为真实用户参与）
+	conversation := &models.Conversation{
+		ConversationType: models.ConversationTypeDirect,
+		CreatedBy:        &userUUID,
+	}
+
+	if err := s.conversationRepo.Create(ctx, conversation); err != nil {
+		return nil, err
+	}
+
+	ownerEnrollment := &models.Enrollment{
 		ConversationID: conversation.ID,
 		UserID:         userUUID,
 		Role:           models.EnrollmentRoleOwner,
 		JoinedAt:       time.Now().UTC(),
 	}
-	if err := s.enrollmentRepo.Create(ctx, userEnrollment); err != nil {
-		logger.ErrorfWithCaller("[BotService] Failed to enroll bot owner: %v", err)
+	if err := s.enrollmentRepo.Create(ctx, ownerEnrollment); err != nil {
+		return nil, err
 	}
 
-	// 自动部署 Bot 到此会话
-	_, err = s.DeployBot(ctx, botID, userID, &models.DeployBotRequest{
+	botEnrollment := &models.Enrollment{
 		ConversationID: conversation.ID,
-	})
-	if err != nil {
-		// 部署失败不影响会话创建
-		logger.ErrorfWithCaller("Failed to auto-deploy bot %s to conversation %s: %v", botID, conversation.ID, err)
+		UserID:         botUUID,
+		Role:           models.EnrollmentRoleMember,
+		JoinedAt:       time.Now().UTC(),
+	}
+	if err := s.enrollmentRepo.Create(ctx, botEnrollment); err != nil {
+		return nil, err
+	}
+
+	// 创建 deployment 记录（审计用途）
+	deployment := &models.BotDeployment{
+		BotID:          botUUID,
+		ConversationID: conversation.ID,
+		DeployedBy:     userUUID,
+		Status:         models.BotDeploymentActive,
+	}
+	if err := s.botDeployRepo.Create(ctx, deployment); err != nil {
+		logger.ErrorfWithCaller("[BotService] Failed to create deployment record for bot conversation: %v", err)
 	}
 
 	return conversation, nil

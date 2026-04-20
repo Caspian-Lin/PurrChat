@@ -112,6 +112,12 @@ func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 		return nil, errors.New("invalid email or password")
 	}
 
+	// Bot 账号不能登录
+	if user.IsBot {
+		logger.InfofWithCaller("Bot account login attempt rejected: %s", user.Username)
+		return nil, errors.New("bot accounts cannot login")
+	}
+
 	// 验证密码
 	valid, err := hash.VerifyPassword(req.Password, user.PasswordHash, user.Salt)
 	if err != nil || !valid {

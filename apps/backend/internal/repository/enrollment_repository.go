@@ -17,6 +17,7 @@ type EnrollmentRepository interface {
 	Create(ctx context.Context, enrollment *models.Enrollment) error
 	FindByID(ctx context.Context, id uuid.UUID) (*models.Enrollment, error)
 	FindByConversationID(ctx context.Context, conversationID uuid.UUID) ([]*models.Enrollment, error)
+	FindBotEnrollmentsByConversationID(ctx context.Context, conversationID uuid.UUID) ([]*models.Enrollment, error)
 	FindByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Enrollment, error)
 	FindByConversationAndUser(ctx context.Context, conversationID, userID uuid.UUID) (*models.Enrollment, error)
 	Update(ctx context.Context, enrollment *models.Enrollment) error
@@ -101,6 +102,42 @@ func (r *enrollmentRepository) FindByConversationID(ctx context.Context, convers
         WHERE conversation_id = $1
         ORDER BY joined_at ASC
     `
+
+	rows, err := database.GetPool().Query(ctx, query, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var enrollments []*models.Enrollment
+	for rows.Next() {
+		enrollment := &models.Enrollment{}
+		err := rows.Scan(
+			&enrollment.ID,
+			&enrollment.ConversationID,
+			&enrollment.UserID,
+			&enrollment.Role,
+			&enrollment.JoinedAt,
+			&enrollment.LastReadAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		enrollments = append(enrollments, enrollment)
+	}
+
+	return enrollments, nil
+}
+
+// FindBotEnrollmentsByConversationID 查找会话中所有 Bot 成员（通过 users.is_bot 判断）
+func (r *enrollmentRepository) FindBotEnrollmentsByConversationID(ctx context.Context, conversationID uuid.UUID) ([]*models.Enrollment, error) {
+	query := `
+		SELECT e.id, e.conversation_id, e.user_id, e.role, e.joined_at, e.last_read_at
+		FROM enrollments e
+		JOIN users u ON e.user_id = u.id
+		WHERE e.conversation_id = $1 AND u.is_bot = TRUE
+		ORDER BY e.joined_at ASC
+	`
 
 	rows, err := database.GetPool().Query(ctx, query, conversationID)
 	if err != nil {

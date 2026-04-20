@@ -62,16 +62,28 @@ func (r *botRepository) Create(ctx context.Context, bot *models.Bot) error {
 		bot.MechanismConfig = json.RawMessage(`[]`)
 	}
 
-	query := `
-        INSERT INTO bots (id, owner_id, name, avatar_url, description, status, visibility, trigger_config, reply_config, special_mode_config, mechanism_config, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-    `
+	// 在事务中同时创建 user 记录和 bot 记录，共用同一 ID
+	err := pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
+		// 1. 创建 Bot 对应的 user 记录
+		_, err := tx.Exec(ctx, `
+			INSERT INTO users (id, username, password_hash, salt, avatar_url, is_bot, created_at)
+			VALUES ($1, $2, '', '', $3, TRUE, $4)
+		`, bot.ID, bot.Name, bot.AvatarURL, bot.CreatedAt)
+		if err != nil {
+			return fmt.Errorf("failed to create bot user record: %w", err)
+		}
 
-	_, err := database.GetPool().Exec(ctx, query,
-		bot.ID, bot.OwnerID, bot.Name, bot.AvatarURL, bot.Description,
-		bot.Status, bot.Visibility, bot.TriggerConfig, bot.ReplyConfig,
-		bot.SpecialModeConfig, bot.MechanismConfig, bot.CreatedAt, bot.UpdatedAt,
-	)
+		// 2. 创建 bot 记录
+		_, err = tx.Exec(ctx, `
+			INSERT INTO bots (id, owner_id, name, avatar_url, description, status, visibility, trigger_config, reply_config, special_mode_config, mechanism_config, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		`,
+			bot.ID, bot.OwnerID, bot.Name, bot.AvatarURL, bot.Description,
+			bot.Status, bot.Visibility, bot.TriggerConfig, bot.ReplyConfig,
+			bot.SpecialModeConfig, bot.MechanismConfig, bot.CreatedAt, bot.UpdatedAt,
+		)
+		return err
+	})
 
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to create bot: %v", err)
@@ -227,16 +239,28 @@ func (r *botRepository) FindPublicWithDetails(ctx context.Context, q string, lim
 func (r *botRepository) Update(ctx context.Context, bot *models.Bot) error {
 	bot.UpdatedAt = time.Now().UTC()
 
-	query := `
-        UPDATE bots SET name = $1, avatar_url = $2, description = $3, status = $4, visibility = $5,
-            trigger_config = $6, reply_config = $7, special_mode_config = $8, mechanism_config = $9, updated_at = $10
-        WHERE id = $11
-    `
+	// 在事务中同时更新 users 表和 bots 表
+	err := pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
+		// 1. 同步更新 users 表的 username 和 avatar_url
+		_, err := tx.Exec(ctx, `
+			UPDATE users SET username = $1, avatar_url = $2
+			WHERE id = $3 AND is_bot = TRUE
+		`, bot.Name, bot.AvatarURL, bot.ID)
+		if err != nil {
+			return err
+		}
 
-	_, err := database.GetPool().Exec(ctx, query,
-		bot.Name, bot.AvatarURL, bot.Description, bot.Status, bot.Visibility,
-		bot.TriggerConfig, bot.ReplyConfig, bot.SpecialModeConfig, bot.MechanismConfig, bot.UpdatedAt, bot.ID,
-	)
+		// 2. 更新 bots 表
+		_, err = tx.Exec(ctx, `
+			UPDATE bots SET name = $1, avatar_url = $2, description = $3, status = $4, visibility = $5,
+				trigger_config = $6, reply_config = $7, special_mode_config = $8, mechanism_config = $9, updated_at = $10
+			WHERE id = $11
+		`,
+			bot.Name, bot.AvatarURL, bot.Description, bot.Status, bot.Visibility,
+			bot.TriggerConfig, bot.ReplyConfig, bot.SpecialModeConfig, bot.MechanismConfig, bot.UpdatedAt, bot.ID,
+		)
+		return err
+	})
 
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to update bot %s: %v", bot.ID, err)
@@ -246,7 +270,31 @@ func (r *botRepository) Update(ctx context.Context, bot *models.Bot) error {
 }
 
 func (r *botRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	_, err := database.GetPool().Exec(ctx, "DELETE FROM bots WHERE id = $1", id)
+	// 在事务中清理所有关联数据
+	err := pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
+		// 1. 删除 enrollments（Bot 在所有会话中的成员身份）
+		if _, err := tx.Exec(ctx, "DELETE FROM enrollments WHERE user_id = $1", id); err != nil {
+			return err
+		}
+		// 2. 删除 friendships
+		if _, err := tx.Exec(ctx, "DELETE FROM friendships WHERE user_id = $1 OR friend_id = $1", id); err != nil {
+			return err
+		}
+		// 3. 删除 bot_deployments
+		if _, err := tx.Exec(ctx, "DELETE FROM bot_deployments WHERE bot_id = $1", id); err != nil {
+			return err
+		}
+		// 4. 删除 bots 记录
+		if _, err := tx.Exec(ctx, "DELETE FROM bots WHERE id = $1", id); err != nil {
+			return err
+		}
+		// 5. 删除 users 记录
+		if _, err := tx.Exec(ctx, "DELETE FROM users WHERE id = $1 AND is_bot = TRUE", id); err != nil {
+			return err
+		}
+		return nil
+	})
+
 	return err
 }
 

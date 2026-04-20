@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"purr-chat-server/internal/botengine"
 	"purr-chat-server/internal/models"
@@ -12,6 +13,27 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+// containsBadInput 判断错误是否属于客户端输入错误（应返回 400）
+// 数据库约束冲突、唯一键冲突等也属于客户端可预见错误
+func containsBadInput(errMsg string) bool {
+	lower := strings.ToLower(errMsg)
+	// 唯一键/约束冲突
+	if strings.Contains(lower, "duplicate") || strings.Contains(lower, "unique constraint") {
+		return true
+	}
+	// 应用层已明确返回的业务错误
+	businessErrors := []string{
+		"bot not found", "not the bot owner", "not authorized",
+		"this bot is private", "already a member", "invalid",
+	}
+	for _, s := range businessErrors {
+		if strings.Contains(lower, s) {
+			return true
+		}
+	}
+	return false
+}
 
 // BotHandler Bot HTTP 处理器
 type BotHandler struct {
@@ -64,10 +86,19 @@ func (h *BotHandler) CreateBot(c *gin.Context) {
 	bot, err := h.botService.CreateBot(c.Request.Context(), userIDStr, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to create bot: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
-			Success: false,
-			Message: err.Error(),
-		})
+		// 区分客户端错误和服务端内部错误
+		errMsg := err.Error()
+		if containsBadInput(errMsg) {
+			c.JSON(http.StatusBadRequest, models.MessageResponse{
+				Success: false,
+				Message: errMsg,
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, models.MessageResponse{
+				Success: false,
+				Message: "Internal server error",
+			})
+		}
 		return
 	}
 
