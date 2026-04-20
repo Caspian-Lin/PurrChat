@@ -56,9 +56,16 @@
             class="w-full px-3 py-2 text-xs font-mono rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary placeholder:text-text-quaternary outline-none focus:ring-1 focus:ring-[var(--theme-primary)] resize-none"
             @input="emitUpdate()"
           />
-          <p class="text-xs text-text-quaternary mt-1">
-            可用变量: {'{input}'}, {'{username}'}, {'{time}'}
-          </p>
+          <div class="text-xs text-text-quaternary mt-1.5 space-y-1">
+            <p class="font-medium text-text-tertiary">可用变量</p>
+            <div class="grid grid-cols-2 gap-x-4 gap-y-0.5">
+              <span><code class="text-text-secondary">{'{' + 'input}'}</code> 用户消息</span>
+              <span><code class="text-text-secondary">{'{' + 'username}'}</code> 发送者名称</span>
+              <span><code class="text-text-secondary">{'{' + 'time}'}</code> 当前时间</span>
+              <span><code class="text-text-secondary">{'{' + 'args}'}</code> 除首个词外的参数</span>
+              <span><code class="text-text-secondary">{'{' + 'args:N}'}</code> 第 N 个词（0 起）</span>
+            </div>
+          </div>
         </div>
       </div>
 

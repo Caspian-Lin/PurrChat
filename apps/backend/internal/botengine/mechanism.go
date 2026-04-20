@@ -6,8 +6,36 @@ import (
 	"fmt"
 	"math/rand"
 	"regexp"
+	"strconv"
 	"strings"
 )
+
+// argsIndexRe 匹配 {args:N} 模式，N 为非负整数
+var argsIndexRe = regexp.MustCompile(`\{args:(\d+)\}`)
+
+// ReplaceArgsVars 在模板字符串中替换 {args} 和 {args:N} 变量。
+// {args} 返回 input 按空格分隔后跳过索引 0 的所有部分（空格连接）。
+// {args:N} 返回第 N 个部分，索引越界返回空字符串。
+func ReplaceArgsVars(result string, input string) string {
+	parts := strings.Fields(input)
+
+	// 先替换 {args:N}（带索引），再替换 {args}（无索引）
+	result = argsIndexRe.ReplaceAllStringFunc(result, func(match string) string {
+		indexStr := match[len("{args:") : len(match)-1]
+		index, err := strconv.Atoi(indexStr)
+		if err != nil || index < 0 || index >= len(parts) {
+			return ""
+		}
+		return parts[index]
+	})
+
+	if len(parts) > 1 {
+		result = strings.ReplaceAll(result, "{args}", strings.Join(parts[1:], " "))
+	} else {
+		result = strings.ReplaceAll(result, "{args}", "")
+	}
+	return result
+}
 
 // ===== 机制配置模型 =====
 
@@ -289,6 +317,9 @@ func generatePredefinedReply(config *PredefinedConfig, input string, vars map[st
 		// 替换变量
 		result = strings.ReplaceAll(result, "{input}", input)
 		result = strings.ReplaceAll(result, "{username}", senderName)
+
+		// 替换 args 变量（{args}, {args:N}）
+		result = ReplaceArgsVars(result, input)
 
 		// 替换自定义变量
 		for k, v := range vars {

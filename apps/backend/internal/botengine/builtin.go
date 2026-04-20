@@ -21,7 +21,7 @@ func executeBuiltinHandler(config map[string]any, input string, variables map[st
 	case "count":
 		return builtinCount(config, variables)
 	case "template":
-		return builtinTemplate(config, variables)
+		return builtinTemplate(config, input, variables)
 	default:
 		return "", fmt.Errorf("unknown builtin type: %s", builtinType)
 	}
@@ -105,7 +105,7 @@ func builtinCount(config map[string]any, variables map[string]string) (string, e
 }
 
 // builtinTemplate 模板渲染
-func builtinTemplate(config map[string]any, variables map[string]string) (string, error) {
+func builtinTemplate(config map[string]any, input string, variables map[string]string) (string, error) {
 	template := getStringField(config, "template")
 	if template == "" {
 		return "", fmt.Errorf("template is empty")
@@ -115,6 +115,9 @@ func builtinTemplate(config map[string]any, variables map[string]string) (string
 	for key, value := range variables {
 		result = strings.ReplaceAll(result, "{"+key+"}", value)
 	}
+
+	// 替换 args 变量（{args}, {args:N}）
+	result = ReplaceArgsVars(result, input)
 
 	return result, nil
 }

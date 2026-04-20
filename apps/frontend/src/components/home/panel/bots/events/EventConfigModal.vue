@@ -160,6 +160,11 @@
                   rows="3"
                   placeholder="你好，{input}！"
                 />
+                <p class="form-hint">
+                  可用变量：{'{input}'} 当前消息 · {'{username}'} 发送者 · {'{time}'} 时间 ·
+                  {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）·
+                  以及事件链中其他事件设置的变量
+                </p>
               </div>
             </div>
           </template>
@@ -199,7 +204,11 @@
                 rows="3"
                 placeholder="使用 $事件ID.output 引用其他事件的输出"
               />
-              <p class="form-hint">用 $evt_1.output 引用事件输出，用 || 分隔表示默认值</p>
+              <p class="form-hint">
+                可用变量：{'{input}'} 当前消息 · {'{username}'} 发送者 · {'{time}'} 时间 ·
+                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）。
+                用 $事件ID.output 引用事件输出，用 || 分隔表示默认值
+              </p>
             </div>
           </template>
 

@@ -420,6 +420,9 @@ func (e *BotEngine) executeReplyEvent(_ context.Context, session *SpecialModeSes
 		result = strings.ReplaceAll(result, "$"+key, value)
 	}
 
+	// 替换 args 变量（{args}, {args:N}）
+	result = ReplaceArgsVars(result, input)
+
 	return result, nil
 }
 
