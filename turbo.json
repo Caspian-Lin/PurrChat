@@ -31,7 +31,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*", "tsconfig.json", "vite.config.ts", "tailwind.config.js"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env*",
+        "tsconfig.json",
+        "vite.config.ts",
+        "tailwind.config.js"
+      ],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**", "bin/**"],
       "env": ["NODE_ENV"]
     },

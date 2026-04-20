@@ -27,17 +27,17 @@ type Mechanism struct {
 
 // TriggerSpec 触发规格
 type TriggerSpec struct {
-	Type       string        `json:"type"`                  // "rule" | "probability"
-	Rules      []TriggerRule `json:"rules,omitempty"`       // 仅 rule 类型
-	Probability float64      `json:"probability,omitempty"` // 仅 probability 类型 (0.0-1.0)
+	Type        string        `json:"type"`                  // "rule" | "probability"
+	Rules       []TriggerRule `json:"rules,omitempty"`       // 仅 rule 类型
+	Probability float64       `json:"probability,omitempty"` // 仅 probability 类型 (0.0-1.0)
 }
 
 // ReplySpec 回复规格
 type ReplySpec struct {
 	Type        string            `json:"type"` // "predefined" | "llm" | "special_mode"
-	Predefined  *PredefinedConfig  `json:"predefined,omitempty"`
-	LLM         *LLMConfig         `json:"llm,omitempty"`
-	SpecialMode *SpecialModeSpec   `json:"special_mode,omitempty"`
+	Predefined  *PredefinedConfig `json:"predefined,omitempty"`
+	LLM         *LLMConfig        `json:"llm,omitempty"`
+	SpecialMode *SpecialModeSpec  `json:"special_mode,omitempty"`
 }
 
 // SpecialModeSpec 特殊模式规格（嵌套在机制中）

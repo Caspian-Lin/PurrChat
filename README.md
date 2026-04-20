@@ -12,11 +12,11 @@
 
 PurrChat 是一个基于 Turborepo monorepo 的全栈实时聊天应用。
 
-| 服务 | 技术栈 | 说明 |
-|------|--------|------|
-| Frontend | Vue 3 + Vite + Tailwind CSS + Tauri | Web 端 + 桌面端 |
-| Backend | Go + Gin + PostgreSQL | REST API + WebSocket |
-| Storage | Go + MinIO / Cloudflare R2 | 文件上传/下载 |
+| 服务     | 技术栈                              | 说明                 |
+| -------- | ----------------------------------- | -------------------- |
+| Frontend | Vue 3 + Vite + Tailwind CSS + Tauri | Web 端 + 桌面端      |
+| Backend  | Go + Gin + PostgreSQL               | REST API + WebSocket |
+| Storage  | Go + MinIO / Cloudflare R2          | 文件上传/下载        |
 
 ## 快速开始
 
@@ -78,14 +78,14 @@ VITE_API_BASE_URL=http://localhost:8080
 
 ## 文档
 
-| 文档 | 说明 |
-|------|------|
-| [部署指南](docs/DEPLOYMENT.md) | Docker 部署、Nginx 配置、多客户端构建 |
-| [安全修复列表](docs/SECURITY_ISSUES.md) | 已发现的安全漏洞及修复进度 |
-| [开发路线图](docs/ROADMAP.md) | 待实现功能列表及开发计划 |
-| [提交规范](docs/COMMIT_CONVENTION.md) | Git commit message 规范 |
-| [WebSocket 架构](docs/WEBSOCKET_ARCHITECTURE.md) | 前端 WebSocket 事件管理架构 |
-| [WebSocket 调试](docs/WEBSOCKET_DEBUG_GUIDE.md) | WebSocket 问题排查指南 |
+| 文档                                             | 说明                                  |
+| ------------------------------------------------ | ------------------------------------- |
+| [部署指南](docs/DEPLOYMENT.md)                   | Docker 部署、Nginx 配置、多客户端构建 |
+| [安全修复列表](docs/SECURITY_ISSUES.md)          | 已发现的安全漏洞及修复进度            |
+| [开发路线图](docs/ROADMAP.md)                    | 待实现功能列表及开发计划              |
+| [提交规范](docs/COMMIT_CONVENTION.md)            | Git commit message 规范               |
+| [WebSocket 架构](docs/WEBSOCKET_ARCHITECTURE.md) | 前端 WebSocket 事件管理架构           |
+| [WebSocket 调试](docs/WEBSOCKET_DEBUG_GUIDE.md)  | WebSocket 问题排查指南                |
 
 ## 已实现功能
 

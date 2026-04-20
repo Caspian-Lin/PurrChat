@@ -16,6 +16,7 @@ PurrChat 前端采用独立的事件管理架构来处理 WebSocket 事件，确
 - **重连机制**：自动重连失败的连接
 
 **核心功能**：
+
 ```typescript
 export const websocketService = new WebSocketService();
 export function useWebSocket() {
@@ -23,8 +24,8 @@ export function useWebSocket() {
     connect,
     disconnect,
     send,
-    on,    // 注册事件处理器
-    off,   // 移除事件处理器
+    on, // 注册事件处理器
+    off, // 移除事件处理器
   };
 }
 ```
@@ -34,6 +35,7 @@ export function useWebSocket() {
 独立的事件管理器，负责处理所有 WebSocket 事件并自动更新数据结构和视图。
 
 **核心功能**：
+
 - 统一处理所有 WebSocket 事件
 - 自动更新 Pinia stores（消息、会话等）
 - 提供回调机制通知组件更新
@@ -41,15 +43,15 @@ export function useWebSocket() {
 
 **事件类型**：
 
-| 事件类型 | 数据类型 | 处理逻辑 |
-|---------|---------|---------|
-| `new_message` | `NewMessageEventData` | 更新消息 store，触发消息更新回调，通知会话列表更新 |
-| `new_friend_request` | `NewFriendRequestEventData` | 触发好友请求回调，通知会话列表更新 |
-| `friend_request_update` | `FriendRequestUpdateEventData` | 触发好友请求回调，通知会话列表更新 |
-| `new_group_conversation` | `NewGroupConversationEventData` | 通知会话列表更新 |
-| `conversation_member_added` | `ConversationMemberAddedEventData` | 通知会话列表更新 |
-| `conversation_member_removed` | `ConversationMemberRemovedEventData` | 清理消息，通知会话列表更新 |
-| `user_online_status` | `UserOnlineStatusEventData` | 更新在线状态缓存，触发在线状态回调 |
+| 事件类型                      | 数据类型                             | 处理逻辑                                           |
+| ----------------------------- | ------------------------------------ | -------------------------------------------------- |
+| `new_message`                 | `NewMessageEventData`                | 更新消息 store，触发消息更新回调，通知会话列表更新 |
+| `new_friend_request`          | `NewFriendRequestEventData`          | 触发好友请求回调，通知会话列表更新                 |
+| `friend_request_update`       | `FriendRequestUpdateEventData`       | 触发好友请求回调，通知会话列表更新                 |
+| `new_group_conversation`      | `NewGroupConversationEventData`      | 通知会话列表更新                                   |
+| `conversation_member_added`   | `ConversationMemberAddedEventData`   | 通知会话列表更新                                   |
+| `conversation_member_removed` | `ConversationMemberRemovedEventData` | 清理消息，通知会话列表更新                         |
+| `user_online_status`          | `UserOnlineStatusEventData`          | 更新在线状态缓存，触发在线状态回调                 |
 
 **回调机制**：
 
@@ -105,11 +107,13 @@ offConversationUpdate(callback);
 #### HomeView 组件
 
 **职责**：
+
 - 建立 WebSocket 连接
 - 注册全局事件回调
 - 处理通知和全局数据更新
 
 **实现**：
+
 ```typescript
 onMounted(async () => {
   await auth.checkAuth();
@@ -136,11 +140,13 @@ onUnmounted(() => {
 #### ChatPanel 组件
 
 **职责**：
+
 - 管理当前选中的会话
 - 响应消息更新事件
 - 自动滚动到最新消息
 
 **实现**：
+
 ```typescript
 // 设置当前会话
 const handleSelectConversation = async (conversation: Conversation) => {
@@ -161,10 +167,12 @@ const handleMessageUpdate = async (conversationId: string, message: Message) => 
 #### FriendsPanel 组件
 
 **职责**：
+
 - 响应好友请求更新
 - 自动刷新好友列表和待处理请求
 
 **实现**：
+
 ```typescript
 const handleFriendRequestUpdate = async (friendship: Friendship) => {
   // 重新加载相关数据
@@ -301,6 +309,7 @@ const isOnline = getUserOnlineStatus(userId);
 后端需要发送以下类型的 WebSocket 事件：
 
 #### 1. 新消息事件
+
 ```json
 {
   "type": "new_message",
@@ -321,6 +330,7 @@ const isOnline = getUserOnlineStatus(userId);
 ```
 
 #### 2. 新好友请求事件
+
 ```json
 {
   "type": "new_friend_request",
@@ -338,6 +348,7 @@ const isOnline = getUserOnlineStatus(userId);
 ```
 
 #### 3. 好友请求更新事件
+
 ```json
 {
   "type": "friend_request_update",
@@ -351,6 +362,7 @@ const isOnline = getUserOnlineStatus(userId);
 ```
 
 #### 4. 新群聊创建事件
+
 ```json
 {
   "type": "new_group_conversation",
@@ -367,6 +379,7 @@ const isOnline = getUserOnlineStatus(userId);
 ```
 
 #### 5. 会话成员添加事件
+
 ```json
 {
   "type": "conversation_member_added",
@@ -386,6 +399,7 @@ const isOnline = getUserOnlineStatus(userId);
 ```
 
 #### 6. 会话成员移除事件
+
 ```json
 {
   "type": "conversation_member_removed",
@@ -401,6 +415,7 @@ const isOnline = getUserOnlineStatus(userId);
 ```
 
 #### 7. 用户在线状态事件
+
 ```json
 {
   "type": "user_online_status",
@@ -421,6 +436,7 @@ const isOnline = getUserOnlineStatus(userId);
 3. **状态变化时**：向所有相关用户发送 `user_online_status` 事件
 
 **建议实现**：
+
 - 使用 Redis 或内存缓存维护在线状态
 - 定期清理过期的在线状态
 - 只向相关用户（好友、群成员）发送状态变化事件
@@ -430,11 +446,13 @@ const isOnline = getUserOnlineStatus(userId);
 ### 问题：消息没有自动滚动到底部
 
 **原因**：
+
 1. 没有设置当前会话 ID
 2. ChatWindow 的 ref 没有正确设置
 3. scrollToBottom 方法没有被调用
 
 **解决方案**：
+
 ```typescript
 // 确保在选择会话时设置当前会话 ID
 const handleSelectConversation = (conversation: Conversation) => {
@@ -449,10 +467,12 @@ const handleSelectConversation = (conversation: Conversation) => {
 ### 问题：会话列表没有更新
 
 **原因**：
+
 1. 没有注册 conversationUpdate 回调
 2. loadConversations 没有被调用
 
 **解决方案**：
+
 ```typescript
 // 确保注册了回调
 onConversationUpdate(async (conversation) => {
@@ -463,10 +483,12 @@ onConversationUpdate(async (conversation) => {
 ### 问题：好友请求没有刷新
 
 **原因**：
+
 1. 没有注册 friendRequest 回调
 2. loadPendingRequests 没有被调用
 
 **解决方案**：
+
 ```typescript
 // 确保注册了回调
 onFriendRequest(async (friendship) => {
@@ -486,6 +508,7 @@ PurrChat 的 WebSocket 事件管理架构通过以下方式确保数据更新与
 5. **当前会话跟踪**：跟踪当前选中的会话，实现精确的消息更新
 
 这种架构确保了：
+
 - 数据一致性：所有组件看到的数据是同步的
 - 自动刷新：收到事件后自动更新视图
 - 性能优化：只更新需要更新的组件

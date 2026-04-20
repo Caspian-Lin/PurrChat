@@ -18,11 +18,11 @@
 
 PurrChat 使用 monorepo 架构，由以下服务组成：
 
-| 服务 | 技术栈 | 端口 |
-|------|--------|------|
+| 服务     | 技术栈                      | 端口                   |
+| -------- | --------------------------- | ---------------------- |
 | Frontend | Vue 3 + Vite + Tailwind CSS | 5173 (dev) / 80 (prod) |
-| Backend | Go + Gin + PostgreSQL | 8080 |
-| Storage | Go + MinIO / Cloudflare R2 | 8081 |
+| Backend  | Go + Gin + PostgreSQL       | 8080                   |
+| Storage  | Go + MinIO / Cloudflare R2  | 8081                   |
 
 ## 前置要求
 
@@ -42,6 +42,7 @@ pnpm dev
 ```
 
 服务地址:
+
 - 前端: http://localhost:5173
 - 后端 API: http://localhost:8080
 - 存储服务: http://localhost:8081
@@ -189,11 +190,11 @@ pnpm tauri:build:win64
 
 ### 环境变量说明
 
-| 变量 | 说明 | Web | Tauri |
-|------|------|-----|-------|
-| `VITE_API_BASE_URL` | API 地址 | `/` (相对路径) | `https://your-server.com` |
-| `VITE_APP_ENV` | 环境标识 | `production` | `production` |
-| `VITE_APP_CLIENT` | 客户端类型 | `web` | `tauri` |
+| 变量                | 说明       | Web            | Tauri                     |
+| ------------------- | ---------- | -------------- | ------------------------- |
+| `VITE_API_BASE_URL` | API 地址   | `/` (相对路径) | `https://your-server.com` |
+| `VITE_APP_ENV`      | 环境标识   | `production`   | `production`              |
+| `VITE_APP_CLIENT`   | 客户端类型 | `web`          | `tauri`                   |
 
 ## 数据库迁移
 
@@ -216,6 +217,7 @@ docker compose exec -T postgres psql -U postgres -d purrchat -f /path/to/migrati
 ### GitHub Actions
 
 配置 Secrets:
+
 - `DOCKER_USERNAME`, `DOCKER_PASSWORD`
 - `DEV_SERVER_HOST`, `DEV_SERVER_USER`, `DEV_SERVER_SSH_KEY`
 - `PROD_SERVER_HOST`, `PROD_SERVER_USER`, `PROD_SERVER_SSH_KEY`
@@ -239,9 +241,9 @@ docker compose exec -T postgres psql -U postgres purrchat < backup.sql
 
 ## 故障排查
 
-| 问题 | 排查命令 |
-|------|---------|
-| 容器无法启动 | `docker compose logs backend` |
+| 问题           | 排查命令                                                                  |
+| -------------- | ------------------------------------------------------------------------- |
+| 容器无法启动   | `docker compose logs backend`                                             |
 | 数据库连接失败 | `docker compose exec postgres psql -U postgres -d purrchat -c "SELECT 1"` |
-| 端口冲突 | `sudo lsof -i :8080` |
-| WebSocket 断连 | 检查 Nginx `proxy_read_timeout` 和 `Upgrade` 头配置 |
+| 端口冲突       | `sudo lsof -i :8080`                                                      |
+| WebSocket 断连 | 检查 Nginx `proxy_read_timeout` 和 `Upgrade` 头配置                       |

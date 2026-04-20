@@ -13,6 +13,7 @@
 纯 SQL 脚本，用于删除并重建整个 PurrChat 数据库。
 
 #### 功能
+
 - 终止所有连接到 purrchat 数据库的会话
 - 删除整个 purrchat 数据库
 - 创建新的 purrchat 数据库
@@ -30,6 +31,7 @@ psql -h localhost -p 5432 -U postgres -d postgres -f scripts/cleanup_database.sq
 ```
 
 #### 安全特性
+
 - 执行前显示 5 秒倒计时，允许取消操作
 - 自动终止所有连接，避免删除失败
 - 详细的日志输出，显示每个操作步骤
@@ -40,6 +42,7 @@ psql -h localhost -p 5432 -U postgres -d postgres -f scripts/cleanup_database.sq
 Shell 包装脚本，提供更友好的用户界面和额外功能。
 
 #### 功能
+
 - ✅ 自动备份数据库（可选）
 - ✅ 交互式确认提示
 - ✅ 彩色输出，易于阅读
@@ -70,21 +73,21 @@ DB_PASSWORD=mypassword \
 
 #### 命令行选项
 
-| 选项 | 说明 |
-|------|------|
+| 选项           | 说明               |
+| -------------- | ------------------ |
 | `-b, --backup` | 在清理前备份数据库 |
-| `-y, --yes` | 跳过确认提示 |
-| `-h, --help` | 显示帮助信息 |
+| `-y, --yes`    | 跳过确认提示       |
+| `-h, --help`   | 显示帮助信息       |
 
 #### 环境变量
 
-| 变量 | 说明 | 默认值 |
-|--------|------|---------|
-| `DB_HOST` | 数据库主机 | `localhost` |
-| `DB_PORT` | 数据库端口 | `5432` |
-| `DB_NAME` | 连接的数据库名称（用于删除 purrchat 数据库） | `postgres` |
-| `DB_USER` | 数据库用户 | `postgres` |
-| `DB_PASSWORD` | 数据库密码 | （空） |
+| 变量          | 说明                                         | 默认值      |
+| ------------- | -------------------------------------------- | ----------- |
+| `DB_HOST`     | 数据库主机                                   | `localhost` |
+| `DB_PORT`     | 数据库端口                                   | `5432`      |
+| `DB_NAME`     | 连接的数据库名称（用于删除 purrchat 数据库） | `postgres`  |
+| `DB_USER`     | 数据库用户                                   | `postgres`  |
+| `DB_PASSWORD` | 数据库密码                                   | （空）      |
 
 ## 使用场景
 

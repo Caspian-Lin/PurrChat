@@ -16,29 +16,29 @@
 
 ## Type 类型
 
-| Type | 说明 | 示例 |
-|------|------|------|
-| `feat` | 新功能 | `feat(frontend): add user profile page` |
-| `fix` | 修复 Bug | `fix(backend): resolve authentication token expiration` |
-| `docs` | 文档更新 | `docs: update deployment guide` |
-| `style` | 代码格式调整（不影响功能） | `style(frontend): format code with prettier` |
-| `refactor` | 重构（既不是新功能也不是修复） | `refactor(backend): simplify user repository` |
-| `perf` | 性能优化 | `perf(frontend): optimize image loading` |
-| `test` | 测试相关 | `test(backend): add integration tests for auth` |
-| `chore` | 构建过程或辅助工具的变动 | `chore: update dependencies` |
-| `ci` | CI/CD 配置变更 | `ci: add GitHub Actions workflow` |
-| `revert` | 回退提交 | `revert: feat(api): remove deprecated endpoint` |
+| Type       | 说明                           | 示例                                                    |
+| ---------- | ------------------------------ | ------------------------------------------------------- |
+| `feat`     | 新功能                         | `feat(frontend): add user profile page`                 |
+| `fix`      | 修复 Bug                       | `fix(backend): resolve authentication token expiration` |
+| `docs`     | 文档更新                       | `docs: update deployment guide`                         |
+| `style`    | 代码格式调整（不影响功能）     | `style(frontend): format code with prettier`            |
+| `refactor` | 重构（既不是新功能也不是修复） | `refactor(backend): simplify user repository`           |
+| `perf`     | 性能优化                       | `perf(frontend): optimize image loading`                |
+| `test`     | 测试相关                       | `test(backend): add integration tests for auth`         |
+| `chore`    | 构建过程或辅助工具的变动       | `chore: update dependencies`                            |
+| `ci`       | CI/CD 配置变更                 | `ci: add GitHub Actions workflow`                       |
+| `revert`   | 回退提交                       | `revert: feat(api): remove deprecated endpoint`         |
 
 ## Scope 范围
 
-| Scope | 说明 |
-|-------|------|
-| `frontend` | 前端相关 (Vue 3 应用) |
-| `backend` | 后端相关 (Go API) |
-| `ci` | CI/CD 相关 (GitLab CI / GitHub Actions) |
-| `docker` | Docker 相关 (Dockerfile, docker-compose) |
-| `docs` | 文档相关 |
-| `deps` | 依赖更新 |
+| Scope      | 说明                                     |
+| ---------- | ---------------------------------------- |
+| `frontend` | 前端相关 (Vue 3 应用)                    |
+| `backend`  | 后端相关 (Go API)                        |
+| `ci`       | CI/CD 相关 (GitLab CI / GitHub Actions)  |
+| `docker`   | Docker 相关 (Dockerfile, docker-compose) |
+| `docs`     | 文档相关                                 |
+| `deps`     | 依赖更新                                 |
 
 ## Subject 标题
 
@@ -198,6 +198,7 @@ git commit -m "feat: add new feature"
 ```
 
 lint-staged 会自动：
+
 - 运行 ESLint 检查前端代码
 - 运行 Prettier 格式化代码
 - 运行 golangci-lint 检查后端代码

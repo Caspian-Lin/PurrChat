@@ -97,6 +97,11 @@ lint-frontend:
 # 后端 Lint
 lint-backend:
 	@echo "运行后端 Lint..."
+	@if ! cd apps/backend && gofmt -l . | grep -q .; then \
+		echo "❌ Go 文件格式不正确，请运行 make format 修复："; \
+		gofmt -l .; \
+		exit 1; \
+	fi
 	cd apps/backend && golangci-lint run --timeout=5m
 
 # 前端测试
@@ -112,10 +117,14 @@ test-backend:
 # 自动修复代码问题
 lint-fix:
 	pnpm run lint:fix
+	@echo "格式化后端代码..."
+	cd apps/backend && gofmt -w .
 
 # 格式化代码
 format:
 	pnpm run format
+	@echo "格式化后端代码..."
+	cd apps/backend && gofmt -w .
 
 # 类型检查
 type-check:

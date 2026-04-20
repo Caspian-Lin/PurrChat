@@ -9,7 +9,7 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "test": "turbo run test",
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,md,json,go}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,md,json}\"",
     "clean": "turbo run clean && rm -rf node_modules",
     "type-check": "turbo run type-check",
     "docker:build": "docker-compose build",

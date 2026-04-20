@@ -15,11 +15,11 @@
 
 PurrChat 支持多种客户端类型，每种客户端通过不同的方式连接到后端 API：
 
-| 客户端类型 | API 配置 | WebSocket 配置 | 部署方式 |
-|-----------|---------|---------------|---------|
-| 网页端 | 相对路径 `/` | 相对路径 `/api/ws` | 通过 Nginx 反向代理 |
-| Tauri 桌面端 | 绝对 URL | 绝对 URL | 独立安装包 |
-| 移动端 | 绝对 URL | 绝对 URL | 应用商店分发 |
+| 客户端类型   | API 配置     | WebSocket 配置     | 部署方式            |
+| ------------ | ------------ | ------------------ | ------------------- |
+| 网页端       | 相对路径 `/` | 相对路径 `/api/ws` | 通过 Nginx 反向代理 |
+| Tauri 桌面端 | 绝对 URL     | 绝对 URL           | 独立安装包          |
+| 移动端       | 绝对 URL     | 绝对 URL           | 应用商店分发        |
 
 ### 环境变量
 
@@ -42,6 +42,7 @@ VITE_APP_ENV=development
 ```
 
 使用方式：
+
 ```bash
 pnpm dev
 ```
@@ -60,6 +61,7 @@ VITE_APP_CLIENT=web
 ```
 
 使用方式：
+
 ```bash
 pnpm run build:prod
 ```
@@ -79,6 +81,7 @@ VITE_APP_CLIENT=tauri
 ```
 
 使用方式：
+
 ```bash
 pnpm run tauri:build:win64
 ```
@@ -98,6 +101,7 @@ VITE_APP_CLIENT=mobile
 ```
 
 使用方式：
+
 ```bash
 pnpm run build:mobile
 ```
@@ -107,12 +111,14 @@ pnpm run build:mobile
 ### 网页端部署
 
 1. **构建生产版本**：
+
    ```bash
    cd apps/frontend
    pnpm run build:prod
    ```
 
 2. **部署到服务器**：
+
    ```bash
    # 将 dist 目录上传到服务器
    scp -r dist/* user@server:/var/www/purrchat/
@@ -124,11 +130,13 @@ pnpm run build:mobile
 
 1. **配置服务器地址**：
    编辑 `.env.tauri`，设置正确的服务器地址：
+
    ```bash
    VITE_API_BASE_URL=https://your-server.com
    ```
 
 2. **构建 Windows 版本**：
+
    ```bash
    cd apps/frontend
    pnpm run tauri:build:win64
@@ -144,6 +152,7 @@ pnpm run build:mobile
    编辑 `.env.mobile`，设置正确的服务器地址
 
 2. **构建移动应用**：
+
    ```bash
    cd apps/frontend
    pnpm run build:mobile
@@ -280,25 +289,30 @@ const wsUrl = `wss://your-server.com/api/ws?token=${token}&user_id=${userId}`;
 ### 1. 如何更改服务器地址？
 
 **网页端**：
+
 - 修改 Nginx 配置中的 `proxy_pass` 地址
 
 **Tauri 桌面端**：
+
 - 修改 `.env.tauri` 文件中的 `VITE_API_BASE_URL`
 - 重新构建应用
 
 **移动端**：
+
 - 修改 `.env.mobile` 文件中的 `VITE_API_BASE_URL`
 - 重新构建应用
 
 ### 2. WebSocket 连接失败
 
 **检查项**：
+
 1. 确认后端 WebSocket 服务正常运行
 2. 检查 Nginx 配置中的 WebSocket 代理设置
 3. 确认防火墙允许 WebSocket 连接
 4. 检查浏览器控制台的错误信息
 
 **常见错误**：
+
 - `WebSocket connection failed`: 检查后端服务是否运行
 - `404 Not Found`: 检查 Nginx 配置中的路径是否正确
 - `Connection refused`: 检查后端端口是否正确
@@ -306,12 +320,14 @@ const wsUrl = `wss://your-server.com/api/ws?token=${token}&user_id=${userId}`;
 ### 3. 如何在本地测试生产环境配置？
 
 1. **启动后端服务**：
+
    ```bash
    cd apps/backend
    go run cmd/server/main.go
    ```
 
 2. **启动前端开发服务器**：
+
    ```bash
    cd apps/frontend
    pnpm dev
@@ -323,6 +339,7 @@ const wsUrl = `wss://your-server.com/api/ws?token=${token}&user_id=${userId}`;
 ### 4. 如何添加新的客户端类型？
 
 1. **创建新的环境配置文件**：
+
    ```bash
    # .env.newclient
    VITE_API_BASE_URL=https://your-server.com
@@ -332,6 +349,7 @@ const wsUrl = `wss://your-server.com/api/ws?token=${token}&user_id=${userId}`;
 
 2. **添加构建脚本**：
    在 `package.json` 中添加：
+
    ```json
    "build:newclient": "vue-tsc -b && vite build --mode newclient"
    ```
@@ -342,9 +360,11 @@ const wsUrl = `wss://your-server.com/api/ws?token=${token}&user_id=${userId}`;
 ### 5. 如何处理 CORS 问题？
 
 **网页端**：
+
 - 使用相对路径，通过 Nginx 反向代理，无需处理 CORS
 
 **Tauri 桌面端和移动端**：
+
 - 后端需要配置 CORS 允许跨域请求
 - 在 Go 后端中添加 CORS 中间件
 

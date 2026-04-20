@@ -12,9 +12,9 @@ import (
 
 // PredefinedConfig 预定义回复配置
 type PredefinedConfig struct {
-	Mode      string   `json:"mode"`      // "fixed" | "random" | "template"
-	Replies   []string `json:"replies"`   // 回复列表
-	Template  string   `json:"template"`  // 模板字符串（mode=template 时）
+	Mode     string   `json:"mode"`     // "fixed" | "random" | "template"
+	Replies  []string `json:"replies"`  // 回复列表
+	Template string   `json:"template"` // 模板字符串（mode=template 时）
 }
 
 // LLMConfig LLM 回复配置
@@ -30,7 +30,7 @@ type LLMConfig struct {
 
 // ContextMessage 上下文消息
 type ContextMessage struct {
-	Role    string `json:"role"`    // "user" | "assistant" | "system"
+	Role    string `json:"role"` // "user" | "assistant" | "system"
 	Content string `json:"content"`
 }
 
