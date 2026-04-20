@@ -162,6 +162,15 @@
                     user.username
                   }}</span>
                   <span
+                    v-if="user.is_bot"
+                    class="text-xs px-1.5 py-0.5 rounded-[var(--radius-xs)] flex items-center gap-0.5"
+                    style="background: var(--theme-primary); color: white"
+                  >
+                    <BsCpu :size="10" />
+                    Bot
+                  </span>
+                  <span
+                    v-else
                     class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded-[var(--radius-xs)]"
                     >陌生人</span
                   >
@@ -415,7 +424,7 @@ import BasePanel from './BasePanel.vue';
 import CustomScrollbar from '../../common/CustomScrollbar.vue';
 import BaseListItem from '../../common/BaseListItem.vue';
 import type { User, Friendship, Conversation } from '../../../models/types';
-import { BsX } from 'vue-icons-plus/bs';
+import { BsX, BsCpu } from 'vue-icons-plus/bs';
 
 // Auth
 const auth = useAuthController();

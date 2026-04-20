@@ -77,20 +77,13 @@
           class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5"
         >
           <template v-if="isSearch">
-            <!-- 搜索模式：私聊 + 部署到群聊 -->
+            <!-- 搜索模式：添加好友 -->
             <button
               class="p-1.5 rounded-lg hover:bg-bg-quaternary text-text-tertiary hover:text-text-primary transition-colors"
-              title="开始对话"
+              title="添加好友"
               @click.stop="$emit('create-conversation', bot.id)"
             >
               <BsChatDots :size="14" />
-            </button>
-            <button
-              class="p-1.5 rounded-lg hover:bg-bg-quaternary text-text-tertiary hover:text-text-primary transition-colors"
-              title="部署到群聊"
-              @click.stop="$emit('deploy-to-group', bot.id)"
-            >
-              <BsPeopleFill :size="14" />
             </button>
           </template>
           <template v-else>
@@ -145,7 +138,7 @@
 </template>
 
 <script setup lang="ts">
-import { BsCpu, BsChatDots, BsTrash, BsPeopleFill } from 'vue-icons-plus/bs';
+import { BsCpu, BsChatDots, BsTrash } from 'vue-icons-plus/bs';
 import type { Bot, PublicBotDetail } from '../../../../models/types';
 
 interface Props {
@@ -162,7 +155,6 @@ defineEmits<{
   select: [botId: string];
   delete: [botId: string];
   'create-conversation': [botId: string];
-  'deploy-to-group': [botId: string];
   'load-more': [];
 }>();
 

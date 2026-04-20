@@ -323,7 +323,7 @@ import CustomScrollbar from '../common/CustomScrollbar.vue';
 import { api } from '../../models/api';
 import { getUserAvatar, getUserUsername, getOtherUser } from '../../utils/userHelpers';
 import { useMessage } from '../../composables/useMessage';
-import type { Conversation, Enrollment, BotDeployment } from '../../models/types';
+import type { Conversation, Enrollment } from '../../models/types';
 
 interface Props {
   show: boolean;
@@ -431,39 +431,8 @@ const loadMembers = async () => {
   }
 
   try {
-    const [memberRes, botRes] = await Promise.all([
-      api.getConversationMembers(props.conversation.id),
-      api.getConversationBots(props.conversation.id),
-    ]);
-
-    const memberList: Enrollment[] = memberRes.success && memberRes.data ? memberRes.data : [];
-
-    // 将 Bot 部署转换为虚拟成员追加到列表
-    if (botRes.success && botRes.data) {
-      for (const dep of botRes.data as BotDeployment[]) {
-        if (dep.bot) {
-          memberList.push({
-            id: dep.id,
-            conversation_id: dep.conversation_id,
-            user_id: dep.bot_id,
-            role: 'member',
-            joined_at: dep.deployed_at,
-            user: {
-              id: dep.bot_id,
-              uid: 0,
-              username: dep.bot.name,
-              avatar_url: dep.bot.avatar_url,
-              email_verified: false,
-              phone_verified: false,
-              created_at: dep.deployed_at,
-              is_bot: true,
-            },
-          });
-        }
-      }
-    }
-
-    members.value = memberList;
+    const memberRes = await api.getConversationMembers(props.conversation.id);
+    members.value = memberRes.success && memberRes.data ? memberRes.data : [];
   } catch (error) {
     console.error('Failed to load members:', error);
   }

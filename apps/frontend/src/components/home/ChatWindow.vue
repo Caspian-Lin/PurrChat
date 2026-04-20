@@ -76,7 +76,7 @@
               <!-- 头像 -->
               <div class="size-10 rounded-xl overflow-hidden flex-shrink-0">
                 <!-- Bot 消息头像 -->
-                <template v-if="message.bot_id">
+                <template v-if="message.sender?.is_bot || message.bot_id">
                   <img
                     v-if="message.sender?.avatar_url"
                     :src="message.sender.avatar_url"
@@ -116,9 +116,9 @@
                   v-if="message.sender_id !== currentUserId"
                   class="text-md font-semibold text-text-tertiary mb-0.5"
                 >
-                  {{ message.bot_name || message.sender?.username }}
+                  {{ message.sender?.username || message.bot_name }}
                   <span
-                    v-if="message.bot_id"
+                    v-if="message.sender?.is_bot || message.bot_id"
                     class="inline-flex items-center gap-0.5 ml-1.5 text-[10px] font-normal px-1.5 py-0.5 rounded-full"
                     style="background: var(--theme-primary); color: white"
                   >
@@ -129,11 +129,12 @@
                 <div
                   class="relative px-3.5 py-2.5 rounded-2xl cursor-default"
                   :style="{
-                    background: message.bot_id
-                      ? 'var(--message-bot-background, rgba(90, 143, 78, 0.08))'
-                      : message.sender_id === currentUserId
-                        ? 'var(--message-sent-background)'
-                        : 'var(--message-received-background)',
+                    background:
+                      message.sender?.is_bot || message.bot_id
+                        ? 'var(--message-bot-background, rgba(90, 143, 78, 0.08))'
+                        : message.sender_id === currentUserId
+                          ? 'var(--message-sent-background)'
+                          : 'var(--message-received-background)',
                     color: 'var(--text-color)',
                     wordBreak: 'break-word',
                     overflowWrap: 'break-word',

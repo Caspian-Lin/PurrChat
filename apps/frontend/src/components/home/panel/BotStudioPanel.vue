@@ -49,7 +49,6 @@
             @select="handleSelectBot"
             @delete="handleDeleteBot"
             @create-conversation="handleCreateConversation"
-            @deploy-to-group="handleDeployToGroup"
             @load-more="handleLoadMore"
           />
         </div>
@@ -91,14 +90,6 @@
     @create="handleCreateBot"
     @close="showCreateModal = false"
   />
-
-  <!-- 部署到群聊弹窗 -->
-  <DeployToGroupModal
-    v-if="deployToGroupBotId"
-    :bot-id="deployToGroupBotId"
-    @deployed="() => {}"
-    @close="deployToGroupBotId = null"
-  />
 </template>
 
 <script setup lang="ts">
@@ -108,7 +99,6 @@ import BasePanel from './BasePanel.vue';
 import BotList from './bots/BotList.vue';
 import BotEditor from './bots/BotEditor.vue';
 import CreateBotModal from './bots/CreateBotModal.vue';
-import DeployToGroupModal from './bots/DeployToGroupModal.vue';
 import { useBotStore } from '../../../stores/bot';
 import { useBots } from '../../../composables/useBots';
 import { useRouter } from 'vue-router';
@@ -120,7 +110,6 @@ const router = useRouter();
 const showCreateModal = ref(false);
 const showSearch = ref(false);
 const searchQuery = ref('');
-const deployToGroupBotId = ref<string | null>(null);
 
 onMounted(async () => {
   await botStore.loadBots();
@@ -154,10 +143,6 @@ async function handleCreateConversation(botId: string) {
   if (conversation) {
     router.push('/chat');
   }
-}
-
-function handleDeployToGroup(botId: string) {
-  deployToGroupBotId.value = botId;
 }
 
 async function handleSearch() {
