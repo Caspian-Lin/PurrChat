@@ -125,6 +125,14 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.value.general = { ...settings.value.general, ...update };
   };
 
+  // 即时提交：同时更新 settings、savedSettings 和本地缓存，不产生脏状态
+  // 用于侧边栏主题切换等"即时生效、无需保存"的场景
+  const commitGeneralSettings = (update: Partial<GeneralSettings>) => {
+    settings.value.general = { ...settings.value.general, ...update };
+    savedSettings.value.general = { ...savedSettings.value.general, ...update };
+    saveToCache();
+  };
+
   // ===== 保存到服务端 =====
 
   const save = async () => {
@@ -165,6 +173,7 @@ export const useSettingsStore = defineStore('settings', () => {
     updatePanelSettings,
     updateNotificationSettings,
     updateGeneralSettings,
+    commitGeneralSettings,
     save,
     discard,
   };

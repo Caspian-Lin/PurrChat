@@ -99,11 +99,11 @@ const themeIcon = computed(() => {
 const handleSelect = (key: string) => {
   if (key === 'light' || key === 'dark') {
     themeStore.setMode(key);
-    settingsStore.updateGeneralSettings({ themeMode: key });
+    settingsStore.commitGeneralSettings({ themeMode: key });
   } else if (key.startsWith('color-')) {
     const colorKey = key.replace('color-', '') as keyof typeof themeColors;
     themeStore.setColor(colorKey);
-    settingsStore.updateGeneralSettings({ themeColor: colorKey });
+    settingsStore.commitGeneralSettings({ themeColor: colorKey });
   }
   showModal.value = false;
 };

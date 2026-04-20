@@ -169,9 +169,11 @@ function handleDiscard() {
 
 onMounted(async () => {
   await settingsStore.init();
-  // 用 settingsStore 中的主题值同步 themeStore，确保两边一致
-  themeStore.setMode(settingsStore.settings.general.themeMode);
-  themeStore.setColor(settingsStore.settings.general.themeColor);
+  // 用 themeStore 中的当前主题值同步 settingsStore（即时提交，不产生脏状态）
+  settingsStore.commitGeneralSettings({
+    themeMode: themeStore.mode,
+    themeColor: themeStore.color,
+  });
   // 等待 DOM 更新后设置 scroll spy（BasePanel 可能需要一帧来完成布局）
   await nextTick();
   setupScrollSpy();
