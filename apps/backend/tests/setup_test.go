@@ -111,7 +111,7 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		CREATE TABLE users (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			uid INTEGER UNIQUE NOT NULL DEFAULT nextval('user_uid_seq'),
-			username VARCHAR(20) UNIQUE NOT NULL,
+			username VARCHAR(40) NOT NULL,
 			password_hash VARCHAR(255) NOT NULL,
 			salt VARCHAR(255) NOT NULL,
 			avatar_url TEXT,
@@ -119,11 +119,22 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			email_verified BOOLEAN DEFAULT FALSE,
 			phone VARCHAR(20) UNIQUE,
 			phone_verified BOOLEAN DEFAULT FALSE,
+			is_bot BOOLEAN NOT NULL DEFAULT FALSE,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create users table: %v", err)
+	}
+
+	// 创建 username 部分唯一索引（Bot 和普通用户可同名）
+	_, err = database.GetPool().Exec(ctx, `CREATE UNIQUE INDEX idx_users_username_unique ON users(username) WHERE is_bot = FALSE`)
+	if err != nil {
+		t.Fatalf("Failed to create username unique index: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `CREATE UNIQUE INDEX idx_users_bot_username_unique ON users(username) WHERE is_bot = TRUE`)
+	if err != nil {
+		t.Fatalf("Failed to create bot username unique index: %v", err)
 	}
 
 	// 创建会话表（新结构）

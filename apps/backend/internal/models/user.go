@@ -18,6 +18,7 @@ type User struct {
 	EmailVerified bool      `json:"email_verified" db:"email_verified"`
 	Phone         string    `json:"phone,omitempty" db:"phone"`
 	PhoneVerified bool      `json:"phone_verified" db:"phone_verified"`
+	IsBot         bool      `json:"is_bot" db:"is_bot"`
 	CreatedAt     time.Time `json:"created_at" db:"created_at"`
 }
 
