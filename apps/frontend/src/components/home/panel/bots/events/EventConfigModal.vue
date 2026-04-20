@@ -36,6 +36,20 @@
 
           <!-- LLM 配置 -->
           <template v-if="form.type === 'llm'">
+            <!-- 从 AI 面板导入配置 -->
+            <div v-if="aiStore.configs.length" class="form-group">
+              <label class="form-label">复用 AI 面板配置</label>
+              <select
+                class="form-input"
+                style="cursor: pointer; appearance: none"
+                @change="importFromAiPanel(($event.target as HTMLSelectElement).value)"
+              >
+                <option value="" disabled selected>选择配置...</option>
+                <option v-for="cfg in aiStore.configs" :key="cfg.id" :value="cfg.id">
+                  {{ cfg.name }}
+                </option>
+              </select>
+            </div>
             <div class="form-group">
               <label class="form-label">API URL</label>
               <input
@@ -229,7 +243,9 @@
 <script setup lang="ts">
 import { reactive, computed, watch } from 'vue';
 import { BsX } from 'vue-icons-plus/bs';
-import type { SpecialModeEvent } from '../../../../models/types';
+import { useAiStore } from '../../../../../stores/ai';
+import { useAuthStore } from '../../../../../stores/auth';
+import type { SpecialModeEvent } from '../../../../../models/types';
 
 interface Props {
   visible: boolean;
@@ -249,6 +265,23 @@ const emit = defineEmits<{
 }>();
 
 const isEditing = computed(() => !!props.editingEvent);
+
+const aiStore = useAiStore();
+const authStore = useAuthStore();
+
+// 初始化 AI store（特殊模式编辑器在新标签页打开，AiPanel 不会挂载）
+aiStore.initStore(authStore.currentUser?.id);
+
+function importFromAiPanel(configId: string) {
+  const config = aiStore.configs.find((c) => c.id === configId);
+  if (!config) return;
+  const cfg = form.config as Record<string, any>;
+  cfg.api_url = config.apiUrl;
+  cfg.api_key = config.apiKey;
+  cfg.model = config.model;
+  cfg.temperature = config.temperature;
+  if (config.maxTokens) cfg.max_tokens = config.maxTokens;
+}
 
 const eventTypes = [
   { value: 'llm' as const, label: 'LLM', icon: '🧠' },

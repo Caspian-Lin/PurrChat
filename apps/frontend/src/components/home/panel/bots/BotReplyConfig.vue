@@ -95,6 +95,19 @@
 
     <!-- LLM 回复 -->
     <div v-if="localConfig.type === 'llm'" class="space-y-3">
+      <!-- 从 AI 面板导入配置 -->
+      <div v-if="aiStore.configs.length" class="flex items-center gap-2">
+        <label class="text-xs text-text-secondary whitespace-nowrap">复用 AI 面板配置</label>
+        <select
+          class="flex-1 px-3 py-2 text-xs rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary outline-none focus:ring-1 focus:ring-[var(--theme-primary)] cursor-pointer appearance-none"
+          @change="importFromAiPanel(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="" disabled selected>选择配置...</option>
+          <option v-for="cfg in aiStore.configs" :key="cfg.id" :value="cfg.id">
+            {{ cfg.name }}
+          </option>
+        </select>
+      </div>
       <div>
         <label class="block text-xs text-text-secondary mb-1.5">API URL</label>
         <input
@@ -232,6 +245,7 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue';
 import { BsPlus, BsX, BsBoxArrowUpRight } from 'vue-icons-plus/bs';
+import { useAiStore } from '../../../../stores/ai';
 import type { ReplySpec, SpecialModeSpec } from '../../../../models/types';
 
 interface Props {
@@ -244,6 +258,21 @@ const emit = defineEmits<{
   update: [config: ReplySpec];
   openSpecialModeEditor: [];
 }>();
+
+const aiStore = useAiStore();
+
+function importFromAiPanel(configId: string) {
+  const config = aiStore.configs.find((c) => c.id === configId);
+  if (!config || !localConfig.llm) return;
+  localConfig.llm.api_url = config.apiUrl;
+  localConfig.llm.api_key = config.apiKey;
+  localConfig.llm.model = config.model;
+  localConfig.llm.temperature = config.temperature;
+  if (config.maxTokens) {
+    localConfig.llm.max_tokens = config.maxTokens;
+  }
+  emitUpdate();
+}
 
 const types = [
   { value: 'predefined' as const, label: '预定义' },
