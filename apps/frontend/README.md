@@ -115,6 +115,7 @@ pnpm tauri:build
 ```
 
 支持平台：
+
 - Windows (x86_64, i686)
 - macOS
 - Linux
