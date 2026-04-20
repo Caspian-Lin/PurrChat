@@ -219,7 +219,15 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		t.Fatalf("Failed to create update_conversations_updated_at trigger: %v", err)
 	}
 
-	// 创建用于会话消息表的PostgreSQL函数
+	// 先删除可能已存在的旧版本函数（返回类型变更无法用 CREATE OR REPLACE）
+	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS insert_conversation_message(UUID, UUID, TEXT, VARCHAR(20))`)
+	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS get_conversation_messages(UUID, INT, INT)`)
+	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS get_conversation_messages_incremental(UUID, TIMESTAMP)`)
+	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS get_conversation_last_message(UUID)`)
+	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS create_conversation_message_table(UUID)`)
+	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS drop_conversation_message_table(UUID)`)
+
+	// 创建用于会话消息表的PostgreSQL函数（与迁移 007 保持同步）
 	_, err = database.GetPool().Exec(ctx, `
 		CREATE OR REPLACE FUNCTION create_conversation_message_table(conversation_uuid UUID)
 		RETURNS VOID AS $$
@@ -237,7 +245,9 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 					content TEXT NOT NULL,
 					msg_type VARCHAR(20) NOT NULL DEFAULT ''text'',
 					created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-					CONSTRAINT check_msg_type CHECK (msg_type IN (''text'', ''image''))
+					bot_id UUID,
+					bot_name VARCHAR(100),
+					CONSTRAINT check_msg_type CHECK (msg_type IN (''text'', ''image'', ''file'', ''system''))
 				)',
 			table_name);
 
@@ -278,7 +288,9 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			conversation_uuid UUID,
 			sender_uuid UUID,
 			msg_content TEXT,
-			msg_type VARCHAR(20)
+			msg_type VARCHAR(20),
+			bot_id UUID DEFAULT NULL,
+			bot_name VARCHAR(100) DEFAULT NULL
 		)
 		RETURNS UUID AS $$
 		DECLARE
@@ -287,12 +299,12 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		BEGIN
 			table_name := replace(conversation_uuid::TEXT, '-', '_');
 			EXECUTE format('
-				INSERT INTO conversation_messages.%I (sender_id, content, msg_type)
-				VALUES ($1, $2, $3)
+				INSERT INTO conversation_messages.%I (sender_id, content, msg_type, bot_id, bot_name)
+				VALUES ($1, $2, $3, $4, $5)
 				RETURNING id
 			', table_name)
 			INTO new_message_id
-			USING sender_uuid, msg_content, msg_type;
+			USING sender_uuid, msg_content, msg_type, bot_id, bot_name;
 			RETURN new_message_id;
 		END;
 		$$ LANGUAGE plpgsql
@@ -312,14 +324,16 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			sender_id UUID,
 			content TEXT,
 			msg_type VARCHAR(20),
-			created_at TIMESTAMP
+			created_at TIMESTAMP,
+			bot_id UUID,
+			bot_name VARCHAR(100)
 		) AS $$
 		DECLARE
 			table_name TEXT;
 		BEGIN
 			table_name := replace(conversation_uuid::TEXT, '-', '_');
 			RETURN QUERY EXECUTE format('
-				SELECT id, sender_id, content, msg_type, created_at
+				SELECT id, sender_id, content, msg_type, created_at, bot_id, bot_name
 				FROM conversation_messages.%I
 				ORDER BY created_at DESC
 				LIMIT $1 OFFSET $2
@@ -342,14 +356,16 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			sender_id UUID,
 			content TEXT,
 			msg_type VARCHAR(20),
-			created_at TIMESTAMP
+			created_at TIMESTAMP,
+			bot_id UUID,
+			bot_name VARCHAR(100)
 		) AS $$
 		DECLARE
 			table_name TEXT;
 		BEGIN
 			table_name := replace(conversation_uuid::TEXT, '-', '_');
 			RETURN QUERY EXECUTE format('
-				SELECT id, sender_id, content, msg_type, created_at
+				SELECT id, sender_id, content, msg_type, created_at, bot_id, bot_name
 				FROM conversation_messages.%I
 				WHERE created_at > $1
 				ORDER BY created_at ASC
@@ -391,14 +407,16 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			sender_id UUID,
 			content TEXT,
 			msg_type VARCHAR(20),
-			created_at TIMESTAMP
+			created_at TIMESTAMP,
+			bot_id UUID,
+			bot_name VARCHAR(100)
 		) AS $$
 		DECLARE
 			table_name TEXT;
 		BEGIN
 			table_name := replace(conversation_uuid::TEXT, '-', '_');
 			RETURN QUERY EXECUTE format('
-				SELECT id, sender_id, content, msg_type, created_at
+				SELECT id, sender_id, content, msg_type, created_at, bot_id, bot_name
 				FROM conversation_messages.%I
 				ORDER BY created_at DESC
 				LIMIT 1

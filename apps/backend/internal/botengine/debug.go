@@ -114,10 +114,6 @@ func (e *BotEngine) DebugExecute(ctx context.Context, botID uuid.UUID, req *mode
 	session.Round++
 
 	// 将用户消息加入上下文
-	senderName := req.SenderName
-	if senderName == "" {
-		senderName = "调试用户"
-	}
 	session.ContextBuffer = append(session.ContextBuffer, ContextMessage{
 		Role:    "user",
 		Content: req.Message,

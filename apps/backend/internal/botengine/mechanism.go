@@ -131,9 +131,6 @@ func ValidateMechanisms(config *MechanismConfig) error {
 func validateTriggerSpec(ts *TriggerSpec) error {
 	switch ts.Type {
 	case "rule":
-		if len(ts.Rules) == 0 {
-			// 空规则 = 始终触发（允许，例如用于手动激活的特殊模式）
-		}
 		for j, rule := range ts.Rules {
 			if rule.Type != "keyword" && rule.Type != "regex" && rule.Type != "command" && rule.Type != "equals" {
 				return fmt.Errorf("rule[%d]: invalid type %q", j, rule.Type)
