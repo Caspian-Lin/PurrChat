@@ -71,6 +71,7 @@ type ReplySpec struct {
 // SpecialModeSpec 特殊模式规格（嵌套在机制中）
 type SpecialModeSpec struct {
 	Events        []SpecialModeEvent `json:"events"`
+	Connections   []FlowConnection   `json:"connections,omitempty"` // 端口化连线（新流程引擎）
 	EndConditions []EndCondition     `json:"end_conditions"`
 }
 

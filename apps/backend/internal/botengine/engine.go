@@ -255,7 +255,7 @@ func (e *BotEngine) sendBotReply(ctx context.Context, bot *models.Bot, conversat
 		BotName:        &botName,
 	}
 
-		// 插入消息
+	// 插入消息
 	err := e.messageRepo.InsertMessage(ctx, conversationID, message)
 	if err != nil {
 		logger.ErrorfWithCaller("[BotEngine] Failed to insert bot message: %v", err)

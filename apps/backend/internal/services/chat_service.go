@@ -23,8 +23,8 @@ type ChatService struct {
 	friendshipRepo          repository.FriendshipRepository
 	enrollmentRepo          repository.EnrollmentRepository
 	conversationMessageRepo repository.ConversationMessageRepository
-	botRepo                 repository.BotRepository           // 可选
-	botEngine               *botengine.BotEngine               // 可选的 Bot 引擎，为 nil 时不处理 Bot
+	botRepo                 repository.BotRepository // 可选
+	botEngine               *botengine.BotEngine     // 可选的 Bot 引擎，为 nil 时不处理 Bot
 }
 
 // NewChatService 创建聊天服务

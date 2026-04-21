@@ -15,13 +15,38 @@ import (
 	"github.com/google/uuid"
 )
 
+// EventPort 事件端口定义
+type EventPort struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	DataType  string `json:"dataType"`  // "string" | "number" | "boolean" | "trigger" | "any"
+	Direction string `json:"direction"` // "input" | "output"
+}
+
+// FlowConnection 端口化连线
+type FlowConnection struct {
+	ID           string `json:"id"`
+	SourceNodeID string `json:"sourceNodeId"`
+	SourcePortID string `json:"sourcePortId"`
+	TargetNodeID string `json:"targetNodeId"`
+	TargetPortID string `json:"targetPortId"`
+}
+
+// Position 节点在画布中的位置
+type Position struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
 // SpecialModeEvent 事件链中的单个事件
 type SpecialModeEvent struct {
-	ID     string         `json:"id"`
-	Type   string         `json:"type"` // "llm" | "builtin" | "python" | "reply"
-	Name   string         `json:"name"`
-	Config map[string]any `json:"config"`
-	Next   []string       `json:"next"`
+	ID       string         `json:"id"`
+	Type     string         `json:"type"` // "llm" | "builtin" | "python" | "reply" | "trigger" | "if" | "loop" | "wait" | "end"
+	Name     string         `json:"name"`
+	Config   map[string]any `json:"config"`
+	Next     []string       `json:"next,omitempty"`     // 向后兼容（旧 BFS 模式）
+	Ports    []EventPort    `json:"ports,omitempty"`    // 端口定义（新流程引擎）
+	Position *Position      `json:"position,omitempty"` // 画布位置
 }
 
 // EndCondition 特殊模式结束条件
@@ -238,7 +263,17 @@ func (e *BotEngine) HandleSpecialMode(ctx context.Context, msg *BotMessage, bot 
 	}
 
 	// 执行事件链
-	reply, err := e.executeEventChain(ctx, session, msg.Content)
+	var reply string
+	var err error
+
+	if HasPortedFlow(spec) {
+		// 使用新的端口化流程引擎
+		flowCtx := NewExecutionContext(spec.Events, spec.Connections, session)
+		reply, err = flowCtx.ExecuteFlow(ctx, e, msg.Content)
+	} else {
+		// 回退到旧的 BFS 引擎
+		reply, err = e.executeEventChain(ctx, session, msg.Content)
+	}
 	if err != nil {
 		logger.ErrorfWithCaller("[BotEngine] Event chain execution failed: bot=%s, error=%v", bot.Name, err)
 		reply = "..."
