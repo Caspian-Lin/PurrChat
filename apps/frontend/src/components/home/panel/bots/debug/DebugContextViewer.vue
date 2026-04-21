@@ -35,8 +35,8 @@ defineProps<Props>();
   flex-direction: column;
   height: 280px;
   border-radius: var(--radius-sm, 8px);
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
-  background: var(--bg-quaternary, #faf9f7);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.08));
+  background: var(--surface-secondary-color, #f4f1ec);
   overflow: hidden;
 }
 
@@ -46,7 +46,7 @@ defineProps<Props>();
   justify-content: center;
   flex: 1;
   font-size: 13px;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
 }
 
 .debug-context__list {
@@ -68,17 +68,17 @@ defineProps<Props>();
 }
 
 .debug-context__message--user {
-  background: rgba(90, 143, 78, 0.06);
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 6%, transparent);
 }
 
 .debug-context__message--assistant {
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--surface-tertiary-color, rgba(0, 0, 0, 0.03));
 }
 
 .debug-context__role {
   flex-shrink: 0;
   font-weight: 500;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary-color, #57534e);
   min-width: 28px;
 }
 
@@ -87,15 +87,15 @@ defineProps<Props>();
 }
 
 .debug-context__content {
-  color: var(--text-primary, #1a1a1a);
+  color: var(--text-color, #1c1917);
   word-break: break-word;
 }
 
 .debug-context__footer {
   flex-shrink: 0;
   padding: 6px 12px;
-  border-top: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
+  border-top: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.06));
   font-size: 11px;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
 }
 </style>

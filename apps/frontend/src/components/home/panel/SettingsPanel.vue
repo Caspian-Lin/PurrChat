@@ -124,7 +124,7 @@ function setupScrollSpy() {
         }
       }
 
-      const id = topEntry.target.id.replace('settings-', '') as SettingsCategoryId;
+      const id = topEntry!.target.id.replace('settings-', '') as SettingsCategoryId;
       if (categoryIds.includes(id)) {
         activeCategory.value = id;
       }

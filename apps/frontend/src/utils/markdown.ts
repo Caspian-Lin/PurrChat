@@ -8,7 +8,7 @@ marked.setOptions({
 });
 
 // 配置 DOMPurify：允许代码相关标签和属性
-const PURIFY_CONFIG: DOMPurify.Config = {
+const PURIFY_CONFIG: any = {
   ALLOWED_TAGS: [
     'h1',
     'h2',
@@ -52,5 +52,5 @@ const PURIFY_CONFIG: DOMPurify.Config = {
 export function renderMarkdown(text: string): string {
   if (!text) return '';
   const rawHtml = marked.parse(text) as string;
-  return DOMPurify.sanitize(rawHtml, PURIFY_CONFIG);
+  return DOMPurify.sanitize(rawHtml, PURIFY_CONFIG) as unknown as string;
 }

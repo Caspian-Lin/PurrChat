@@ -13,7 +13,7 @@
             v-if="conversation?.conversation_type === 'group'"
             class="w-16 h-16 roundrect overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-white text-3xl relative group/avatar cursor-pointer"
             style="background: var(--theme-gradient)"
-            @click="canManageMembers && $refs.avatarInput?.click()"
+            @click="canManageMembers && avatarInput?.click()"
           >
             <img
               v-if="conversation?.avatar_url"

@@ -1,4 +1,9 @@
 // 用户数据类型定义
+
+// 端口类型系统（从 portTypes.ts 重导出，供其他模块统一从 types.ts 导入）
+import type { PortDataType, EventType, EventPort, FlowConnection } from '../utils/portTypes';
+export type { PortDataType, EventType, EventPort, FlowConnection };
+
 export interface User {
   id: string;
   uid: number;
@@ -67,6 +72,7 @@ export interface Conversation {
   created_by?: string;
   created_at: string;
   updated_at: string;
+  avatar_url?: string;
   members?: Enrollment[];
   last_message?: Message;
   unread_count?: number;
@@ -504,15 +510,19 @@ export interface ReplySpec {
 // 特殊模式规格（嵌套在机制中）
 export interface SpecialModeSpec {
   events: SpecialModeEvent[];
+  connections?: FlowConnection[];
   end_conditions: SpecialModeEndCondition[];
 }
 
 // 特殊模式事件
 export interface SpecialModeEvent {
   id: string;
-  type: 'llm' | 'builtin' | 'python' | 'reply';
+  type: EventType;
   name: string;
   config: Record<string, any>;
+  ports?: EventPort[];
+  position?: { x: number; y: number };
+  /** @deprecated 使用 connections 代替 */
   next?: string[];
 }
 

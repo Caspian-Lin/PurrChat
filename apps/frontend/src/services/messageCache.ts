@@ -369,13 +369,6 @@ class MessageCacheService {
   }
 
   // 清除当前用户的加密密钥和所有相关缓存
-  private clearCurrentUserEncryptionData() {
-    localStorage.removeItem(this.getEncryptionKey());
-    this.clearAll();
-    this.cryptoKey = null;
-    this.keyInitialized = false;
-  }
-
   // 导出会话消息为JSON文件
   exportConversation(conversationId: string): string | null {
     const cache = this.cache.get(conversationId);

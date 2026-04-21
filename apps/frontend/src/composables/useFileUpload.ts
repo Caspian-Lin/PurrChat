@@ -178,7 +178,7 @@ export function useFileUpload() {
       return result;
     } catch (err: any) {
       error.value = err.message || '上传失败，请重试';
-      message.error(error.value);
+      message.error(error.value ?? '上传失败');
       return null;
     } finally {
       uploading.value = false;

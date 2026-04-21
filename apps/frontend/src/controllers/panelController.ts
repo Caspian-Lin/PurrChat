@@ -13,7 +13,7 @@ export function usePanelController() {
       bots: '/bots',
       settings: '/settings',
     };
-    router.push(routes[panel]);
+    router.push(routes[panel]!);
   };
 
   return {

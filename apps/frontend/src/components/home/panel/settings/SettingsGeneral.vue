@@ -121,7 +121,8 @@ import { getCurrentUserId, clearUserData } from '../../../../utils/storageNamesp
 import { messageCacheService } from '../../../../services/messageCache';
 import { conversationStateCacheService } from '../../../../services/conversationStateCache';
 import { useMessage } from '../../../../composables/useMessage';
-import type { GeneralSettings, ThemeColor } from '../../../../models/types';
+import type { GeneralSettings } from '../../../../models/types';
+import type { ThemeColor } from '../../../../config/theme';
 
 interface Props {
   generalSettings: GeneralSettings;

@@ -323,12 +323,6 @@ const timeDividers = computed(() => computeTimeDividers(props.messages));
 const activeTooltipId = ref<string | null>(null);
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
-const onBubbleMouseEnter = (messageId: string) => {
-  hoverTimer = setTimeout(() => {
-    activeTooltipId.value = messageId;
-  }, 2000);
-};
-
 const onBubbleMouseLeave = () => {
   if (hoverTimer) {
     clearTimeout(hoverTimer);

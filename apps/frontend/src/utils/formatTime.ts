@@ -177,7 +177,7 @@ export const formatTimeDivider = (dateString: string): string => {
  * @returns Map<messageIndex, formattedTime>
  */
 export const computeTimeDividers = (
-  messages: Array<{ id: string; created_at: string }>
+  messages: Array<{ id: string; created_at?: string; createdAt?: string }>
 ): Map<number, string> => {
   const dividers = new Map<number, string>();
   if (messages.length === 0) return dividers;
@@ -185,13 +185,15 @@ export const computeTimeDividers = (
   let lastDividerIndex = -1;
 
   for (let i = 1; i < messages.length; i++) {
-    const prevTime = new Date(messages[i - 1].created_at).getTime();
-    const currTime = new Date(messages[i].created_at).getTime();
+    const prevCreatedAt = messages[i - 1]!.created_at || messages[i - 1]!.createdAt;
+    const currCreatedAt = messages[i]!.created_at || messages[i]!.createdAt;
+    const prevTime = new Date(prevCreatedAt!).getTime();
+    const currTime = new Date(currCreatedAt!).getTime();
     const diffMinutes = (currTime - prevTime) / 60000;
     const messagesSinceDivider = i - lastDividerIndex - 1;
 
     if (diffMinutes > 5 || (messagesSinceDivider >= 30 && diffMinutes > 15)) {
-      dividers.set(i, formatTimeDivider(messages[i].created_at));
+      dividers.set(i, formatTimeDivider(currCreatedAt!));
       lastDividerIndex = i;
     }
   }

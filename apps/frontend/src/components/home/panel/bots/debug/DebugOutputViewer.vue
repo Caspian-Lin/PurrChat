@@ -126,8 +126,8 @@ function statusLabel(status: string): string {
   flex-direction: column;
   height: 280px;
   border-radius: var(--radius-sm, 8px);
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
-  background: var(--bg-quaternary, #faf9f7);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.08));
+  background: var(--surface-secondary-color, #f4f1ec);
   overflow: hidden;
 }
 
@@ -137,7 +137,7 @@ function statusLabel(status: string): string {
   justify-content: center;
   height: 100%;
   font-size: 13px;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
 }
 
 .debug-output__tabs {
@@ -155,21 +155,22 @@ function statusLabel(status: string): string {
   padding: 6px 10px;
   font-size: 12px;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-xs, 4px);
   background: none;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary-color, #57534e);
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
 }
 
 .debug-output__tab:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--surface-tertiary-color, rgba(0, 0, 0, 0.04));
 }
 
 .debug-output__tab--active {
-  color: var(--text-primary, #1a1a1a);
-  border-bottom-color: var(--theme-primary, #5a8f4e);
+  color: var(--text-color, #1c1917);
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 8%, transparent);
+  font-weight: 500;
 }
 
 .debug-output__tab--success .debug-output__tab-icon {
@@ -186,7 +187,7 @@ function statusLabel(status: string): string {
 
 .debug-output__tab-duration {
   font-size: 10px;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
 }
 
 .debug-output__tab-status {
@@ -216,35 +217,35 @@ function statusLabel(status: string): string {
 }
 
 .debug-output__badge--success {
-  background: rgba(90, 143, 78, 0.1);
-  color: #5a8f4e;
+  background: var(--color-success-bg, rgba(22, 163, 74, 0.1));
+  color: var(--color-success, #16a34a);
 }
 
 .debug-output__badge--error {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
+  color: var(--color-error, #dc2626);
 }
 
 .debug-output__badge--pending {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--text-tertiary, #999);
+  background: var(--surface-tertiary-color, rgba(0, 0, 0, 0.05));
+  color: var(--text-tertiary-color, #a8a29e);
 }
 
 .debug-output__badge--running {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+  background: var(--color-info-bg, rgba(37, 99, 235, 0.1));
+  color: var(--color-info, #2563eb);
 }
 
 .debug-output__duration {
   font-size: 11px;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
 }
 
 .debug-output__error {
   padding: 6px 10px;
   border-radius: var(--radius-xs, 4px);
-  background: rgba(239, 68, 68, 0.06);
-  color: #dc2626;
+  background: var(--color-error-bg, rgba(239, 68, 68, 0.06));
+  color: var(--color-error, #dc2626);
   font-size: 12px;
 }
 
@@ -255,7 +256,7 @@ function statusLabel(status: string): string {
 .debug-output__section-title {
   font-size: 11px;
   font-weight: 500;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary-color, #57534e);
   margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -267,8 +268,8 @@ function statusLabel(status: string): string {
   line-height: 1.5;
   padding: 8px 10px;
   border-radius: var(--radius-xs, 4px);
-  background: rgba(0, 0, 0, 0.03);
-  color: var(--text-primary, #1a1a1a);
+  background: var(--surface-tertiary-color, rgba(0, 0, 0, 0.03));
+  color: var(--text-color, #1c1917);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 80px;
@@ -287,7 +288,7 @@ function statusLabel(status: string): string {
 .debug-output__context-item {
   font-size: 11px;
   line-height: 1.4;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary-color, #57534e);
 }
 
 .debug-output__context-role {

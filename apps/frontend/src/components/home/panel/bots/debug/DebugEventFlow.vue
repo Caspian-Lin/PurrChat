@@ -27,8 +27,6 @@
 import { computed, markRaw } from 'vue';
 import { VueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
-import '@vue-flow/core/dist/style.css';
-import '@vue-flow/core/dist/theme-default.css';
 import EventNode from '../events/EventNode.vue';
 import { eventsToFlowNodes, eventsToFlowEdges } from '../../../../../utils/eventFlowUtils';
 import type { SpecialModeEvent, EventTrace } from '../../../../../models/types';
@@ -41,14 +39,14 @@ interface Props {
 
 const props = defineProps<Props>();
 
-const customNodeTypes = {
+const customNodeTypes: Record<string, any> = {
   event: markRaw(EventNode),
 };
 
 const defaultEdgeOptions = {
   type: 'smoothstep',
   animated: false,
-  style: { stroke: 'var(--border-subtle, rgba(0,0,0,0.1))', strokeWidth: 2 },
+  style: { stroke: 'var(--border-subtle-color, rgba(0,0,0,0.1))', strokeWidth: 2 },
 };
 
 // 构建执行状态映射
@@ -79,8 +77,8 @@ const edges = computed<Edge[]>(() => eventsToFlowEdges(props.events));
 .debug-flow {
   height: 280px;
   border-radius: var(--radius-sm, 8px);
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
-  background: var(--bg-quaternary, #faf9f7);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.08));
+  background: var(--surface-secondary-color, #f4f1ec);
   overflow: hidden;
 }
 
@@ -90,7 +88,7 @@ const edges = computed<Edge[]>(() => eventsToFlowEdges(props.events));
   justify-content: center;
   height: 100%;
   font-size: 13px;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
 }
 
 .debug-flow__canvas {

@@ -12,13 +12,30 @@
 
         <!-- 类型选择（仅新建时） -->
         <div v-if="!isEditing" class="modal-body">
-          <div class="type-selector">
+          <!-- 控制流 -->
+          <div class="type-section-label">控制流</div>
+          <div class="type-selector type-selector--control">
             <button
-              v-for="t in eventTypes"
+              v-for="t in controlTypes"
               :key="t.value"
               class="type-card"
               :class="{ 'type-card--active': form.type === t.value }"
-              @click="form.type = t.value"
+              @click="selectType(t.value)"
+            >
+              <span class="type-card__icon">{{ t.icon }}</span>
+              <span class="type-card__label">{{ t.label }}</span>
+            </button>
+          </div>
+
+          <!-- 处理 / 输出 -->
+          <div class="type-section-label">处理 / 输出</div>
+          <div class="type-selector type-selector--process">
+            <button
+              v-for="t in processTypes"
+              :key="t.value"
+              class="type-card"
+              :class="{ 'type-card--active': form.type === t.value }"
+              @click="selectType(t.value)"
             >
               <span class="type-card__icon">{{ t.icon }}</span>
               <span class="type-card__label">{{ t.label }}</span>
@@ -28,11 +45,76 @@
 
         <!-- 配置表单 -->
         <div class="modal-body">
-          <!-- 通用字段 -->
+          <!-- 通用字段：事件名称 -->
           <div class="form-group">
             <label class="form-label">事件名称</label>
             <input v-model="form.name" type="text" class="form-input" placeholder="事件名称" />
+            <p v-if="nameValidationError" class="validation-error">{{ nameValidationError }}</p>
           </div>
+
+          <!-- trigger：仅名称，无额外配置 -->
+
+          <!-- end：仅名称 -->
+
+          <!-- wait 配置 -->
+          <template v-if="form.type === 'wait'">
+            <div class="form-group">
+              <label class="form-label">等待类型</label>
+              <select v-model="form.config.wait_type" class="form-input">
+                <option value="user_message">用户消息</option>
+                <option value="custom">自定义条件</option>
+              </select>
+            </div>
+            <div v-if="form.config.wait_type === 'custom'" class="form-group">
+              <label class="form-label">条件表达式</label>
+              <textarea
+                v-model="form.config.condition"
+                class="form-textarea"
+                rows="3"
+                placeholder="输入等待条件表达式..."
+              />
+            </div>
+          </template>
+
+          <!-- if 配置 -->
+          <template v-if="form.type === 'if'">
+            <div class="form-group">
+              <label class="form-label">条件表达式</label>
+              <textarea
+                v-model="form.config.condition"
+                class="form-textarea"
+                rows="3"
+                placeholder="输入条件表达式..."
+              />
+              <p class="form-hint">
+                可用变量：{'{input}'} 当前消息 · {'{username}'} 发送者 · {'{time}'} 时间 ·
+                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）
+              </p>
+            </div>
+          </template>
+
+          <!-- loop 配置 -->
+          <template v-if="form.type === 'loop'">
+            <div class="form-group">
+              <label class="form-label">条件表达式</label>
+              <textarea
+                v-model="form.config.condition"
+                class="form-textarea"
+                rows="3"
+                placeholder="输入循环条件表达式..."
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">最大迭代次数</label>
+              <input
+                v-model.number="form.config.max_iterations"
+                type="number"
+                min="1"
+                class="form-input"
+              />
+              <p class="form-hint">设置合理的上限以避免无限循环</p>
+            </div>
+          </template>
 
           <!-- LLM 配置 -->
           <template v-if="form.type === 'llm'">
@@ -194,7 +276,24 @@
             </div>
           </template>
 
-          <!-- 回复事件配置 -->
+          <!-- template 配置 -->
+          <template v-if="form.type === 'template'">
+            <div class="form-group">
+              <label class="form-label">模板内容</label>
+              <textarea
+                v-model="form.config.template"
+                class="form-textarea"
+                rows="4"
+                placeholder="使用 {variable} 引用变量..."
+              />
+              <p class="form-hint">
+                可用变量：{'{input}'} 当前消息 · {'{username}'} 发送者 · {'{time}'} 时间 ·
+                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）
+              </p>
+            </div>
+          </template>
+
+          <!-- reply 配置 -->
           <template v-if="form.type === 'reply'">
             <div class="form-group">
               <label class="form-label">回复模板</label>
@@ -206,31 +305,28 @@
               />
               <p class="form-hint">
                 可用变量：{'{input}'} 当前消息 · {'{username}'} 发送者 · {'{time}'} 时间 ·
-                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）。
-                用 $事件ID.output 引用事件输出，用 || 分隔表示默认值
+                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）。 用 $事件ID.output
+                引用事件输出，用 || 分隔表示默认值
               </p>
             </div>
           </template>
 
-          <!-- 下一个事件 -->
-          <div class="form-group">
-            <label class="form-label">下一步事件</label>
-            <div v-if="availableNextEvents.length > 0" class="next-events">
-              <label
-                v-for="evt in availableNextEvents"
-                :key="evt.id"
-                class="next-event-item"
-                :class="{ 'next-event-item--active': form.next.includes(evt.id) }"
-              >
-                <input
-                  type="checkbox"
-                  :checked="form.next.includes(evt.id)"
-                  @change="toggleNext(evt.id)"
-                />
-                <span>{{ evt.name }}</span>
-              </label>
+          <!-- 自定义输入端口（仅处理节点） -->
+          <div v-if="isProcessNode" class="form-group">
+            <label class="form-label">自定义输入端口</label>
+            <div class="custom-ports">
+              <div v-for="(port, idx) in customInputPorts" :key="idx" class="custom-port-row">
+                <input v-model="port.name" placeholder="端口名称" class="form-input" />
+                <select v-model="port.dataType" class="form-input">
+                  <option value="string">字符串</option>
+                  <option value="number">数值</option>
+                  <option value="boolean">布尔</option>
+                  <option value="any">任意</option>
+                </select>
+                <button class="port-remove-btn" @click="removeCustomPort(idx)">×</button>
+              </div>
+              <button class="add-port-btn" @click="addCustomPort">+ 添加端口</button>
             </div>
-            <p v-else class="form-hint">没有可连接的事件</p>
           </div>
         </div>
 
@@ -250,11 +346,12 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch } from 'vue';
+import { reactive, computed, watch, ref } from 'vue';
 import { BsX } from 'vue-icons-plus/bs';
 import { useAiStore } from '../../../../../stores/ai';
 import { useAuthStore } from '../../../../../stores/auth';
-import type { SpecialModeEvent } from '../../../../../models/types';
+import { getDefaultPorts, NODE_TYPE_META, type EventType } from '../../../../../utils/portTypes';
+import type { EventPort, SpecialModeEvent } from '../../../../../models/types';
 
 interface Props {
   visible: boolean;
@@ -281,23 +378,24 @@ const authStore = useAuthStore();
 // 初始化 AI store（特殊模式编辑器在新标签页打开，AiPanel 不会挂载）
 aiStore.initStore(authStore.currentUser?.id);
 
-function importFromAiPanel(configId: string) {
-  const config = aiStore.configs.find((c) => c.id === configId);
-  if (!config) return;
-  const cfg = form.config as Record<string, any>;
-  cfg.api_url = config.apiUrl;
-  cfg.api_key = config.apiKey;
-  cfg.model = config.model;
-  cfg.temperature = config.temperature;
-  if (config.maxTokens) cfg.max_tokens = config.maxTokens;
-}
+// 名称验证错误
+const nameValidationError = ref('');
 
-const eventTypes = [
-  { value: 'llm' as const, label: 'LLM', icon: '🧠' },
-  { value: 'builtin' as const, label: '内置', icon: '⚙' },
-  { value: 'python' as const, label: 'Python', icon: '🐍' },
-  { value: 'reply' as const, label: '回复', icon: '💬' },
-];
+// 自定义端口列表
+const customInputPorts = reactive<{ name: string; dataType: string }[]>([]);
+
+// 类型分组
+const controlTypes = (['trigger', 'end', 'wait', 'if', 'loop'] as EventType[]).map((value) => ({
+  value,
+  ...NODE_TYPE_META[value],
+}));
+
+const processTypes = (['llm', 'builtin', 'python', 'template', 'reply'] as EventType[]).map(
+  (value) => ({ value, ...NODE_TYPE_META[value] })
+);
+
+// 是否为处理节点（支持自定义输入端口）
+const isProcessNode = computed(() => ['llm', 'builtin', 'python', 'template'].includes(form.type));
 
 const builtinTypes = [
   { value: 'random_number', label: '随机数' },
@@ -307,28 +405,96 @@ const builtinTypes = [
   { value: 'template', label: '模板' },
 ];
 
-const defaultForm = (): Omit<SpecialModeEvent, 'id'> => ({
-  type: 'llm',
-  name: '',
-  config: {
-    api_url: '',
-    api_key: '',
-    model: '',
-    system_prompt: '',
-    temperature: 0.7,
-    max_tokens: 1000,
-    context_window: 20,
-  },
-  next: [],
-});
+// 根据类型返回默认 config
+function getDefaultConfig(type: EventType): Record<string, any> {
+  switch (type) {
+    case 'llm':
+      return {
+        api_url: '',
+        api_key: '',
+        model: '',
+        system_prompt: '',
+        temperature: 0.7,
+        max_tokens: 1000,
+        context_window: 20,
+      };
+    case 'builtin':
+      return { builtin_type: 'random_number' };
+    case 'python':
+      return { code: '', timeout_ms: 5000 };
+    case 'template':
+      return { template: '' };
+    case 'reply':
+      return { template: '' };
+    case 'wait':
+      return { wait_type: 'user_message', condition: '' };
+    case 'if':
+      return { condition: '' };
+    case 'loop':
+      return { condition: '', max_iterations: 10 };
+    case 'trigger':
+    case 'end':
+    default:
+      return {};
+  }
+}
 
-const form = reactive<Omit<SpecialModeEvent, 'id'> & { id: string }>({
+interface FormData {
+  id: string;
+  type: EventType;
+  name: string;
+  config: Record<string, any>;
+  ports: EventPort[];
+  position?: { x: number; y: number };
+}
+
+const form = reactive<FormData>({
   id: '',
   type: 'llm',
   name: '',
-  config: {},
-  next: [],
+  config: getDefaultConfig('llm'),
+  ports: getDefaultPorts('llm'),
 });
+
+// 选择类型时重置 config 和 ports
+function selectType(type: EventType) {
+  form.type = type;
+  form.config = getDefaultConfig(type);
+  form.ports = getDefaultPorts(type);
+  customInputPorts.length = 0;
+  nameValidationError.value = '';
+}
+
+function importFromAiPanel(configId: string) {
+  const config = aiStore.configs.find((c) => c.id === configId);
+  if (!config) return;
+  form.config.api_url = config.apiUrl;
+  form.config.api_key = config.apiKey;
+  form.config.model = config.model;
+  form.config.temperature = config.temperature;
+  if (config.maxTokens) form.config.max_tokens = config.maxTokens;
+}
+
+// 自定义端口操作
+function addCustomPort() {
+  customInputPorts.push({ name: '', dataType: 'string' });
+}
+
+function removeCustomPort(idx: number) {
+  customInputPorts.splice(idx, 1);
+}
+
+// 从已有事件的 ports 中提取自定义端口
+function extractCustomPorts(event: SpecialModeEvent): { name: string; dataType: string }[] {
+  if (!event.ports) return [];
+  const defaultPorts = getDefaultPorts(event.type);
+  const defaultInputIds = new Set(
+    defaultPorts.filter((p) => p.direction === 'input').map((p) => p.id)
+  );
+  return event.ports
+    .filter((p) => p.direction === 'input' && !defaultInputIds.has(p.id))
+    .map((p) => ({ name: p.name, dataType: p.dataType }));
+}
 
 watch(
   () => props.visible,
@@ -339,31 +505,61 @@ watch(
         type: props.editingEvent.type,
         name: props.editingEvent.name,
         config: { ...props.editingEvent.config },
-        next: [...(props.editingEvent.next || [])],
+        ports: [...(props.editingEvent.ports || getDefaultPorts(props.editingEvent.type))],
+        position: props.editingEvent.position ? { ...props.editingEvent.position } : undefined,
       });
+      // 恢复自定义端口
+      customInputPorts.length = 0;
+      const extracted = extractCustomPorts(props.editingEvent);
+      extracted.forEach((p) => customInputPorts.push(p));
     } else if (props.visible) {
-      const defaults = defaultForm();
-      Object.assign(form, { ...defaults, id: `evt_${Date.now()}` });
+      const type: EventType = 'llm';
+      Object.assign(form, {
+        id: `evt_${Date.now()}`,
+        type,
+        name: '',
+        config: getDefaultConfig(type),
+        ports: getDefaultPorts(type),
+        position: undefined,
+      });
+      customInputPorts.length = 0;
     }
+    nameValidationError.value = '';
   }
 );
 
-const availableNextEvents = computed(() => {
-  return props.existingEvents.filter((evt) => evt.id !== form.id);
-});
-
-function toggleNext(eventId: string) {
-  const idx = form.next.indexOf(eventId);
-  if (idx >= 0) {
-    form.next.splice(idx, 1);
-  } else {
-    form.next.push(eventId);
-  }
-}
-
 function handleConfirm() {
-  if (!form.name.trim()) return;
-  emit('confirm', { ...form });
+  // 验证名称
+  if (!form.name.trim()) {
+    nameValidationError.value = '事件名称不能为空';
+    return;
+  }
+  nameValidationError.value = '';
+
+  // 合并默认端口和自定义端口
+  const defaultPorts = getDefaultPorts(form.type);
+  const customPorts: EventPort[] = customInputPorts
+    .filter((p) => p.name.trim())
+    .map((p) => ({
+      id: `in_custom_${p.name}`,
+      name: p.name,
+      dataType: p.dataType as EventPort['dataType'],
+      direction: 'input' as const,
+    }));
+
+  const event: SpecialModeEvent = {
+    id: form.id,
+    type: form.type,
+    name: form.name,
+    config: { ...form.config },
+    ports: [...defaultPorts, ...customPorts],
+  };
+
+  if (form.position) {
+    event.position = { ...form.position };
+  }
+
+  emit('confirm', event);
   emit('close');
 }
 </script>
@@ -372,7 +568,7 @@ function handleConfirm() {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--modal-overlay-color, rgba(0, 0, 0, 0.4));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -381,13 +577,13 @@ function handleConfirm() {
 }
 
 .modal-container {
-  background: var(--bg-primary, #fff);
+  background: var(--strong-background-color, #fff);
   border-radius: var(--radius-lg, 12px);
   width: 520px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-lg, 0 8px 32px rgba(28, 25, 23, 0.1));
 }
 
 .modal-header {
@@ -395,25 +591,25 @@ function handleConfirm() {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
+  border-bottom: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.06));
 }
 
 .modal-title {
   font-size: 15px;
   font-weight: 600;
-  color: var(--text-primary, #1a1a1a);
+  color: var(--text-color, #1c1917);
 }
 
 .modal-close {
   padding: 4px;
   border-radius: var(--radius-xs, 4px);
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
   cursor: pointer;
   transition: color 0.15s;
 }
 .modal-close:hover {
-  color: var(--text-primary, #1a1a1a);
-  background: var(--bg-quaternary, #f0efed);
+  color: var(--text-color, #1c1917);
+  background: var(--surface-tertiary-color, #e8e4de);
 }
 
 .modal-body {
@@ -426,7 +622,7 @@ function handleConfirm() {
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  border-top: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
+  border-top: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.06));
 }
 
 .modal-footer__right {
@@ -434,9 +630,22 @@ function handleConfirm() {
   gap: 8px;
 }
 
+.type-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary-color, #a8a29e);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.type-section-label:not(:first-child) {
+  margin-top: 16px;
+}
+
 .type-selector {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
@@ -447,16 +656,18 @@ function handleConfirm() {
   gap: 4px;
   padding: 12px 8px;
   border-radius: var(--radius-sm, 8px);
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.06));
   cursor: pointer;
   transition: all 0.15s;
+  background: none;
+  color: var(--text-secondary-color, #57534e);
 }
 .type-card:hover {
-  background: var(--bg-quaternary, #f0efed);
+  background: var(--surface-tertiary-color, #e8e4de);
 }
 .type-card--active {
   border-color: var(--theme-primary, #5a8f4e);
-  background: rgba(90, 143, 78, 0.06);
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 6%, transparent);
 }
 
 .type-card__icon {
@@ -465,7 +676,6 @@ function handleConfirm() {
 
 .type-card__label {
   font-size: 12px;
-  color: var(--text-secondary, #666);
 }
 
 .form-group {
@@ -475,7 +685,7 @@ function handleConfirm() {
 .form-label {
   display: block;
   font-size: 12px;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary-color, #57534e);
   margin-bottom: 4px;
 }
 
@@ -484,9 +694,9 @@ function handleConfirm() {
   padding: 8px 10px;
   font-size: 13px;
   border-radius: var(--radius-xs, 4px);
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
-  background: var(--bg-quaternary, #f8f7f5);
-  color: var(--text-primary, #1a1a1a);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.1));
+  background: var(--input-background, #fff);
+  color: var(--text-color, #1c1917);
   outline: none;
   transition: border-color 0.15s;
   box-sizing: border-box;
@@ -500,9 +710,9 @@ function handleConfirm() {
   padding: 8px 10px;
   font-size: 13px;
   border-radius: var(--radius-xs, 4px);
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
-  background: var(--bg-quaternary, #f8f7f5);
-  color: var(--text-primary, #1a1a1a);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.1));
+  background: var(--input-background, #fff);
+  color: var(--text-color, #1c1917);
   outline: none;
   resize: vertical;
   font-family: inherit;
@@ -528,32 +738,58 @@ function handleConfirm() {
 
 .form-hint {
   font-size: 11px;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
   margin-top: 4px;
 }
 
-.next-events {
+/* 自定义端口 */
+.custom-ports {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
 }
 
-.next-event-item {
-  display: flex;
+.custom-port-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 32px;
+  gap: 6px;
   align-items: center;
-  gap: 4px;
+}
+
+.add-port-btn {
   padding: 4px 10px;
+  font-size: 11px;
   border-radius: var(--radius-xs, 4px);
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
-  font-size: 12px;
-  color: var(--text-secondary, #666);
+  border: 1px dashed var(--border-subtle-color, rgba(0, 0, 0, 0.1));
+  color: var(--text-tertiary-color, #a8a29e);
+  cursor: pointer;
+  background: none;
+  transition: all 0.15s;
+}
+.add-port-btn:hover {
+  border-color: var(--theme-primary, #5a8f4e);
+  color: var(--theme-primary, #5a8f4e);
+}
+
+.port-remove-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-xs, 4px);
+  border: none;
+  background: none;
+  color: var(--text-tertiary-color, #a8a29e);
   cursor: pointer;
   transition: all 0.15s;
 }
-.next-event-item--active {
-  border-color: var(--theme-primary, #5a8f4e);
-  color: var(--theme-primary, #5a8f4e);
-  background: rgba(90, 143, 78, 0.06);
+.port-remove-btn:hover {
+  color: var(--color-error, #dc2626);
+  background: var(--color-error-bg, rgba(239, 68, 68, 0.06));
+}
+
+.validation-error {
+  font-size: 11px;
+  color: var(--color-error, #dc2626);
+  margin-top: 4px;
 }
 
 .btn {
@@ -566,11 +802,11 @@ function handleConfirm() {
 }
 
 .btn--ghost {
-  background: var(--bg-quaternary, #f0efed);
-  color: var(--text-secondary, #666);
+  background: var(--surface-tertiary-color, #e8e4de);
+  color: var(--text-secondary-color, #57534e);
 }
 .btn--ghost:hover {
-  background: var(--bg-tertiary, #e8e7e5);
+  background: var(--surface-hover-color, #e2ddd7);
 }
 
 .btn--primary {
@@ -582,10 +818,10 @@ function handleConfirm() {
 }
 
 .btn--danger {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  background: var(--color-error-bg, rgba(239, 68, 68, 0.06));
+  color: var(--color-error, #dc2626);
 }
 .btn--danger:hover {
-  background: rgba(239, 68, 68, 0.15);
+  background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
 }
 </style>

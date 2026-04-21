@@ -53,25 +53,61 @@
 
     <!-- 编辑器主体 -->
     <template v-else>
+      <!-- 空状态 -->
+      <div v-if="events.length === 0" class="flex-1 flex items-center justify-center">
+        <div class="text-center">
+          <p class="text-sm text-text-tertiary mb-1">尚未配置事件链</p>
+          <p class="text-xs text-text-quaternary mb-4">添加事件来构建 Agent 的工作流程</p>
+          <button
+            class="inline-flex items-center gap-1.5 px-4 py-2 text-xs text-text-secondary rounded-[var(--radius-sm,8px)] border border-border-subtle bg-bg-quaternary hover:border-[var(--theme-primary)] hover:text-[var(--theme-primary)] transition-colors"
+            @click="showAddModal = true"
+          >
+            <BsPlus :size="14" />
+            添加第一个事件
+          </button>
+        </div>
+      </div>
+
       <!-- VueFlow DAG 编辑器 -->
-      <div class="flex-1 relative overflow-hidden">
+      <div v-else class="flex-1 relative overflow-hidden">
         <div class="editor-toolbar absolute top-3 left-3 z-10 flex gap-2">
           <button class="toolbar-btn" @click="showAddModal = true">
             <BsPlus :size="14" />
             添加事件
           </button>
+          <button class="toolbar-btn" @click="handleAutoLayout">自动布局</button>
+          <span v-if="validationIssues.length" class="toolbar-validation-badge">
+            {{ validationIssues.filter((i) => i.type === 'error').length }} 个问题
+          </span>
+        </div>
+
+        <!-- 验证警告列表 -->
+        <div v-if="validationIssues.length" class="editor-validation absolute top-3 right-3 z-10">
+          <div
+            v-for="(issue, idx) in validationIssues"
+            :key="idx"
+            class="editor-validation__item"
+            :class="`editor-validation__item--${issue.type}`"
+          >
+            {{ issue.type === 'error' ? '×' : '!' }} {{ issue.message }}
+          </div>
         </div>
 
         <VueFlow
-          v-model:nodes="flowNodes"
-          v-model:edges="flowEdges"
+          :nodes="flowNodes"
+          :edges="flowEdges"
           :node-types="customNodeTypes"
+          :edge-types="customEdgeTypes"
           :default-edge-options="defaultEdgeOptions"
+          :is-valid-connection="isValidConnection"
           fit-view-on-init
           :min-zoom="0.3"
           :max-zoom="2"
           class="w-full h-full"
           @node-click="onNodeClick"
+          @connect="onConnect"
+          @edges-change="onEdgesChange"
+          @nodes-change="onNodesChange"
         >
           <Background :gap="20" :size="1" />
           <Controls />
@@ -134,15 +170,28 @@ import { useRoute, useRouter } from 'vue-router';
 import { VueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
-import '@vue-flow/core/dist/style.css';
-import '@vue-flow/core/dist/theme-default.css';
-import '@vue-flow/controls/dist/style.css';
 import { BsArrowLeft, BsPlus } from 'vue-icons-plus/bs';
 import { api } from '../models/api';
-import type { Bot, Mechanism, SpecialModeEvent, SpecialModeEndCondition } from '../models/types';
+import type {
+  Bot,
+  Mechanism,
+  SpecialModeEvent as FullEvent,
+  FlowConnection,
+  SpecialModeEndCondition,
+} from '../models/types';
 import type { Node, Edge } from '@vue-flow/core';
-import { eventsToFlowNodes, eventsToFlowEdges } from '../utils/eventFlowUtils';
+import {
+  eventsToFlowNodes,
+  connectionsToFlowEdges,
+  eventsToFlowEdges,
+  autoLayoutEvents,
+  validateEventChain,
+} from '../utils/eventFlowUtils';
+import type { ValidationIssue } from '../utils/eventFlowUtils';
+import { canConnect, getPortById, getDefaultPorts } from '../utils/portTypes';
+import { needsMigration, ensurePorts, migrateLegacyConnections } from '../utils/eventMigration';
 import EventNode from '../components/home/panel/bots/events/EventNode.vue';
+import EventEdge from '../components/home/panel/bots/events/EventEdge.vue';
 import EventConfigModal from '../components/home/panel/bots/events/EventConfigModal.vue';
 import EndConditionConfig from '../components/home/panel/bots/events/EndConditionConfig.vue';
 import BotDebugPanel from '../components/home/panel/bots/BotDebugPanel.vue';
@@ -159,7 +208,7 @@ const error = ref<string | null>(null);
 const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
 const activeBottomTab = ref<'conditions' | 'debug'>('conditions');
 const showAddModal = ref(false);
-const editingEvent = ref<SpecialModeEvent | null>(null);
+const editingEvent = ref<FullEvent | null>(null);
 
 // 数据
 const bot = ref<Bot | null>(null);
@@ -168,39 +217,54 @@ const localMechanism = ref<Mechanism | null>(null);
 const botName = computed(() => bot.value?.name || 'Bot');
 const mechanismName = computed(() => localMechanism.value?.name || '机制');
 
-const events = computed<SpecialModeEvent[]>(() => {
-  return localMechanism.value?.reply?.special_mode?.events || [];
+const events = computed<FullEvent[]>(() => {
+  const raw = localMechanism.value?.reply?.special_mode?.events || [];
+  return ensurePorts(raw);
 });
 
 const endConditions = computed<SpecialModeEndCondition[]>(() => {
   return localMechanism.value?.reply?.special_mode?.end_conditions || [];
 });
 
+const connections = computed<FlowConnection[]>(() => {
+  return localMechanism.value?.reply?.special_mode?.connections || [];
+});
+
+const validationIssues = computed<ValidationIssue[]>(() => {
+  return validateEventChain(events.value);
+});
+
 // VueFlow 注册
-const customNodeTypes = {
+
+const customNodeTypes: Record<string, any> = {
   event: markRaw(EventNode),
 };
 
-const defaultEdgeOptions = {
-  type: 'smoothstep',
-  animated: true,
-  style: { stroke: 'var(--theme-primary, #5a8f4e)', strokeWidth: 2 },
+const customEdgeTypes: Record<string, any> = {
+  event: markRaw(EventEdge),
 };
 
-const nodePositions: Record<string, { x: number; y: number }> = {};
+const defaultEdgeOptions = {
+  type: 'event',
+};
 
-const flowNodes = computed<Node[]>({
-  get() {
-    return eventsToFlowNodes(events.value, nodePositions);
-  },
-  set() {},
+// 节点位置缓存（普通对象，非响应式，避免 watch→computed→watch 无限循环）
+const positionCache: Record<string, { x: number; y: number }> = {};
+const positionTrigger = ref(0);
+
+const flowNodes = computed<Node[]>(() => {
+  // 读取 positionTrigger 以建立依赖（仅自动布局时递增）
+  positionTrigger.value;
+  return eventsToFlowNodes(events.value, positionCache);
 });
 
-const flowEdges = computed<Edge[]>({
-  get() {
-    return eventsToFlowEdges(events.value);
-  },
-  set() {},
+const flowEdges = computed<Edge[]>(() => {
+  // 优先使用 connections，向后兼容 next[]
+  const conns = connections.value;
+  if (conns && conns.length > 0) {
+    return connectionsToFlowEdges(conns, events.value);
+  }
+  return eventsToFlowEdges(events.value);
 });
 
 // BroadcastChannel 用于主 Tab 同步
@@ -270,8 +334,14 @@ function deepCloneMechanism(m: Mechanism): Mechanism {
       llm: m.reply.llm ? { ...m.reply.llm } : undefined,
       special_mode: m.reply.special_mode
         ? {
-            events: m.reply.special_mode.events.map((e) => ({ ...e, config: { ...e.config } })),
+            events: m.reply.special_mode.events.map((e) => ({
+              ...e,
+              config: e.config ? { ...e.config } : {},
+              ports: e.ports ? e.ports.map((p) => ({ ...p })) : undefined,
+              position: e.position ? { ...e.position } : undefined,
+            })),
             end_conditions: m.reply.special_mode.end_conditions.map((c) => ({ ...c })),
+            connections: m.reply.special_mode.connections?.map((c) => ({ ...c })) || [],
           }
         : undefined,
     },
@@ -283,6 +353,15 @@ async function handleSave() {
   saveState.value = 'saving';
 
   try {
+    // 自动迁移旧数据：next[] → connections[]
+    if (localMechanism.value.reply?.special_mode) {
+      const sm = localMechanism.value.reply.special_mode;
+      if (needsMigration(sm.events || [], sm.connections)) {
+        sm.connections = [...(sm.connections || []), ...migrateLegacyConnections(sm.events || [])];
+        sm.events = (sm.events || []).map((e) => ({ ...e, next: undefined }));
+      }
+    }
+
     // 构建更新后的 mechanism_config
     const mechanisms = bot.value?.mechanism_config?.mechanisms?.map((m) =>
       m.id === mechanismId ? deepCloneMechanism(localMechanism.value!) : m
@@ -329,8 +408,13 @@ function closeModal() {
   editingEvent.value = null;
 }
 
-function handleEventConfirm(event: SpecialModeEvent) {
+function handleEventConfirm(event: FullEvent) {
   if (!localMechanism.value?.reply?.special_mode) return;
+
+  // 确保事件有 ports
+  if (!event.ports || event.ports.length === 0) {
+    event.ports = getDefaultPorts(event.type);
+  }
 
   const currentEvents = [...events.value];
   const existingIndex = currentEvents.findIndex((e) => e.id === event.id);
@@ -355,7 +439,13 @@ function handleEventDelete(eventId: string) {
       next: (e.next || []).filter((n) => n !== eventId),
     }));
 
+  // 删除相关连接
+  const updatedConnections = connections.value.filter(
+    (c) => c.sourceNodeId !== eventId && c.targetNodeId !== eventId
+  );
+
   localMechanism.value.reply.special_mode.events = updatedEvents;
+  localMechanism.value.reply.special_mode.connections = updatedConnections;
   closeModal();
 }
 
@@ -364,12 +454,103 @@ function handleEndConditionsUpdate(conditions: SpecialModeEndCondition[]) {
   localMechanism.value.reply.special_mode.end_conditions = conditions;
 }
 
-// 监听 node position 变化并缓存
+// 监听 flowNodes 变化并缓存位置（写入普通对象，不触发 computed 重算）
 watch(flowNodes, (nodes) => {
   for (const node of nodes) {
-    nodePositions[node.id] = { ...node.position };
+    positionCache[node.id] = { ...node.position };
   }
 });
+
+// 连线创建：端口化连接
+function onConnect(connection: {
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+}) {
+  if (connection.source === connection.target) return;
+
+  if (!localMechanism.value?.reply?.special_mode) return;
+
+  // 获取端口信息进行类型检查
+  const sourceEvent = events.value.find((e) => e.id === connection.source);
+  const targetEvent = events.value.find((e) => e.id === connection.target);
+  if (!sourceEvent || !targetEvent) return;
+
+  const sourcePort = getPortById(sourceEvent.ports || [], connection.sourceHandle || '');
+  const targetPort = getPortById(targetEvent.ports || [], connection.targetHandle || '');
+  if (!sourcePort || !targetPort) return;
+
+  // 类型兼容检查
+  if (!canConnect(sourcePort, targetPort)) {
+    console.warn(`无法连接：${sourcePort.dataType} 端口不能连接到 ${targetPort.dataType} 端口`);
+    return;
+  }
+
+  const newConnection: FlowConnection = {
+    id: `conn_${connection.source}_${connection.sourceHandle}_${connection.target}_${connection.targetHandle}`,
+    sourceNodeId: connection.source,
+    sourcePortId: connection.sourceHandle || '',
+    targetNodeId: connection.target,
+    targetPortId: connection.targetHandle || '',
+  };
+
+  localMechanism.value.reply.special_mode.connections = [...connections.value, newConnection];
+}
+
+// 连线变更：检测删除并同步 connections
+function onEdgesChange(changes: any[]) {
+  const removeChanges = changes.filter((c) => c.type === 'remove');
+  if (removeChanges.length === 0) return;
+
+  if (!localMechanism.value?.reply?.special_mode) return;
+
+  const currentConnections = [...connections.value];
+  const removeIds = new Set(removeChanges.map((c) => c.id));
+  const updated = currentConnections.filter((c) => !removeIds.has(c.id));
+
+  if (updated.length !== currentConnections.length) {
+    localMechanism.value.reply.special_mode.connections = updated;
+  }
+}
+
+// 节点变更：捕获位置变化并缓存（写入普通对象即可，VueFlow 内部已管理位置）
+function onNodesChange(changes: any[]) {
+  for (const change of changes) {
+    if (change.type === 'position' && change.dragging === false && change.position) {
+      positionCache[change.id] = { ...change.position };
+    }
+  }
+}
+
+// 端口类型校验（用于 VueFlow 拖拽时的实时预览）
+function isValidConnection(connection: {
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+}) {
+  if (connection.source === connection.target) return false;
+  const sourceEvent = events.value.find((e) => e.id === connection.source);
+  const targetEvent = events.value.find((e) => e.id === connection.target);
+  if (!sourceEvent || !targetEvent) return false;
+
+  const sourcePort = getPortById(sourceEvent.ports || [], connection.sourceHandle || '');
+  const targetPort = getPortById(targetEvent.ports || [], connection.targetHandle || '');
+  if (!sourcePort || !targetPort) return false;
+
+  return canConnect(sourcePort, targetPort);
+}
+
+// 自动布局：使用 dagre 重新计算节点位置
+function handleAutoLayout() {
+  const layouted = autoLayoutEvents(events.value, 'LR');
+  for (const node of layouted) {
+    positionCache[node.id] = { ...node.position };
+  }
+  // 递增 trigger 以通知 flowNodes computed 使用新位置
+  positionTrigger.value++;
+}
 </script>
 
 <style scoped>
@@ -385,12 +566,12 @@ watch(flowNodes, (nodes) => {
   padding: 6px 12px;
   font-size: 12px;
   border-radius: var(--radius-xs, 4px);
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
-  background: var(--bg-quaternary, #f8f7f5);
-  color: var(--text-secondary, #666);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.1));
+  background: var(--surface-tertiary-color, #e8e4de);
+  color: var(--text-secondary-color, #57534e);
   cursor: pointer;
   transition: all 0.15s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(28, 25, 23, 0.04));
 }
 
 .toolbar-btn:hover {
@@ -398,23 +579,60 @@ watch(flowNodes, (nodes) => {
   color: var(--theme-primary, #5a8f4e);
 }
 
+.toolbar-validation-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: var(--radius-xs, 4px);
+  background: var(--color-error-bg, rgba(239, 68, 68, 0.08));
+  color: var(--color-error, #ef4444);
+}
+
+.editor-validation {
+  max-width: 260px;
+}
+
+.editor-validation__item {
+  padding: 4px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  border-radius: var(--radius-xs, 4px);
+  background: var(--strong-background-color, #fff);
+  color: var(--text-color, #1c1917);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(28, 25, 23, 0.06));
+  margin-bottom: 4px;
+}
+
+.editor-validation__item--error {
+  background: var(--color-error-bg, rgba(239, 68, 68, 0.08));
+  color: var(--color-error, #dc2626);
+}
+
+.editor-validation__item--warning {
+  background: var(--color-warning-bg, rgba(217, 119, 6, 0.08));
+  color: var(--color-warning, #d97706);
+}
+
 .bottom-tab {
-  padding: 8px 16px;
+  padding: 6px 14px;
   font-size: 12px;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-xs, 4px);
   background: none;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .bottom-tab:hover {
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary-color, #57534e);
+  background: var(--surface-tertiary-color, rgba(0, 0, 0, 0.04));
 }
 
 .bottom-tab--active {
-  color: var(--text-primary, #1a1a1a);
-  border-bottom-color: var(--theme-primary, #5a8f4e);
+  color: var(--text-color, #1c1917);
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 8%, transparent);
+  font-weight: 500;
 }
 </style>

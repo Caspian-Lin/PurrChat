@@ -38,7 +38,7 @@ export const useThemeStore = defineStore('theme', () => {
           if (themeColors[config.color as ThemeColor]) {
             color.value = config.color as ThemeColor;
           } else if (legacyColorMap[config.color]) {
-            color.value = legacyColorMap[config.color];
+            color.value = legacyColorMap[config.color]!;
           }
         }
       }

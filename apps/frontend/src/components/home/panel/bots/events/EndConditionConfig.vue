@@ -37,7 +37,7 @@
 
 <script setup lang="ts">
 import { BsX, BsPlus } from 'vue-icons-plus/bs';
-import type { SpecialModeEndCondition } from '../../../../models/types';
+import type { SpecialModeEndCondition } from '../../../../../models/types';
 
 interface Props {
   conditions: SpecialModeEndCondition[];
@@ -56,13 +56,6 @@ function addCondition() {
 
 function removeCondition(index: number) {
   const updated = props.conditions.filter((_, i) => i !== index);
-  emit('update', updated);
-}
-
-function updateCondition(index: number, field: string, value: any) {
-  const updated = props.conditions.map((cond, i) =>
-    i === index ? { ...cond, [field]: value } : cond
-  );
   emit('update', updated);
 }
 </script>
@@ -85,9 +78,9 @@ function updateCondition(index: number, field: string, value: any) {
   padding: 6px 10px;
   font-size: 13px;
   border-radius: var(--radius-xs, 4px);
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
-  background: var(--bg-quaternary, #f8f7f5);
-  color: var(--text-primary, #1a1a1a);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.1));
+  background: var(--input-background, #fff);
+  color: var(--text-color, #1c1917);
   outline: none;
 }
 
@@ -109,14 +102,14 @@ function updateCondition(index: number, field: string, value: any) {
   padding: 4px;
   border: none;
   background: none;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
   cursor: pointer;
   border-radius: var(--radius-xs, 4px);
   flex-shrink: 0;
 }
 .condition-remove:hover {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.08);
+  color: var(--color-error, #dc2626);
+  background: var(--color-error-bg, rgba(239, 68, 68, 0.06));
 }
 
 .condition-add {
@@ -125,10 +118,10 @@ function updateCondition(index: number, field: string, value: any) {
   gap: 4px;
   padding: 6px 12px;
   font-size: 12px;
-  border: 1px dashed var(--border-subtle, rgba(0, 0, 0, 0.12));
+  border: 1px dashed var(--border-subtle-color, rgba(0, 0, 0, 0.12));
   border-radius: var(--radius-xs, 4px);
   background: none;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
   cursor: pointer;
   transition: all 0.15s;
 }

@@ -49,9 +49,12 @@ export const useSettingsStore = defineStore('settings', () => {
         typeof tgtVal === 'object' &&
         !Array.isArray(tgtVal)
       ) {
-        result[key] = deepMerge(tgtVal as Record<string, any>, srcVal as Partial<typeof tgtVal>);
+        result[key] = deepMerge(
+          tgtVal as Record<string, any>,
+          srcVal as Partial<typeof tgtVal>
+        ) as any;
       } else if (srcVal !== undefined) {
-        result[key] = srcVal;
+        result[key] = srcVal as any;
       }
     }
     return result;
