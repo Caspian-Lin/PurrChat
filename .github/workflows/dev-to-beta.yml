@@ -6,7 +6,7 @@ on:
       - dev
 
 env:
-  GO_VERSION: '1.24'
+  GO_VERSION: '1.25'
   NODE_VERSION: '20'
 
 jobs:
@@ -83,9 +83,10 @@ jobs:
       - name: Check Go formatting
         working-directory: ./apps/backend
         run: |
-          if ! gofmt -l . | grep -q .; then
-            echo "❌ Go 文件格式不正确"
-            gofmt -l .
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "❌ Go 文件格式不正确:"
+            echo "$unformatted"
             exit 1
           fi
 
