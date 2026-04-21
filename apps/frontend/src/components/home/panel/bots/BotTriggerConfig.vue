@@ -59,6 +59,7 @@
         <!-- 删除 -->
         <button
           class="p-1.5 rounded-lg hover:bg-red-500/10 text-text-tertiary hover:text-red-500 transition-colors"
+          aria-label="删除规则"
           @click="removeRule(index)"
         >
           <BsX :size="14" />
@@ -103,7 +104,7 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue';
 import { BsPlus, BsX } from 'vue-icons-plus/bs';
-import type { TriggerSpec, TriggerRule } from '../../../../models/types';
+import type { TriggerSpec } from '../../../../models/types';
 
 interface Props {
   config: TriggerSpec;

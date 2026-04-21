@@ -63,7 +63,9 @@
               <span><code class="text-text-secondary">{'{' + 'username}'}</code> 发送者名称</span>
               <span><code class="text-text-secondary">{'{' + 'time}'}</code> 当前时间</span>
               <span><code class="text-text-secondary">{'{' + 'args}'}</code> 除首个词外的参数</span>
-              <span><code class="text-text-secondary">{'{' + 'args:N}'}</code> 第 N 个词（0 起）</span>
+              <span
+                ><code class="text-text-secondary">{'{' + 'args:N}'}</code> 第 N 个词（0 起）</span
+              >
             </div>
           </div>
         </div>
@@ -72,7 +74,7 @@
       <!-- 回复列表（固定/随机模式） -->
       <div v-else class="space-y-2">
         <div
-          v-for="(reply, index) in localConfig.predefined?.replies"
+          v-for="(_reply, index) in localConfig.predefined?.replies"
           :key="index"
           class="flex items-center gap-2"
         >
@@ -85,6 +87,7 @@
           />
           <button
             class="p-1.5 rounded-lg hover:bg-red-500/10 text-text-tertiary hover:text-red-500 transition-colors"
+            aria-label="删除回复"
             @click="removeReply(index)"
           >
             <BsX :size="14" />
@@ -219,7 +222,10 @@
             :key="event.id"
             class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-[var(--radius-xs,4px)] bg-bg-tertiary text-text-secondary"
           >
-            <span class="w-1.5 h-1.5 rounded-full" :class="getEventColor(event.type)" />
+            <span
+              class="w-1.5 h-1.5 rounded-full"
+              :style="{ background: getEventColor(event.type) }"
+            />
             {{ event.name || event.id }}
           </span>
         </div>
@@ -356,12 +362,12 @@ function deepCloneSpecialMode(spec?: SpecialModeSpec): SpecialModeSpec | undefin
 
 function getEventColor(type: string): string {
   const colors: Record<string, string> = {
-    llm: 'bg-blue-400',
-    builtin: 'bg-amber-400',
-    python: 'bg-purple-400',
-    reply: 'bg-green-400',
+    llm: 'var(--theme-primary, #5A8F4E)',
+    builtin: 'var(--color-info, #2563eb)',
+    python: '#E6A23C',
+    reply: 'var(--color-success, #16a34a)',
   };
-  return colors[type] || 'bg-gray-400';
+  return colors[type] || 'var(--text-quaternary-color, #a8a29e)';
 }
 
 function setPredefinedMode(mode: 'fixed' | 'random' | 'template') {

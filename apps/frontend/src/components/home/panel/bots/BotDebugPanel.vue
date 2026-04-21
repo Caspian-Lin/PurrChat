@@ -280,10 +280,10 @@ function handleQuickSend() {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.06));
   border-radius: var(--radius-md, 12px);
   padding: 12px;
-  background: var(--bg-tertiary, #f0efed);
+  background: var(--surface-color, #eeeae5);
 }
 
 /* 工具栏 */
@@ -301,9 +301,9 @@ function handleQuickSend() {
   padding: 5px 12px;
   font-size: 12px;
   border-radius: var(--radius-xs, 4px);
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.1));
   background: var(--strong-background-color, #fff);
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary-color, #57534e);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -320,7 +320,7 @@ function handleQuickSend() {
 
 .debug-toolbar__btn--active {
   border-color: var(--theme-primary, #5a8f4e);
-  background: rgba(90, 143, 78, 0.08);
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 8%, transparent);
   color: var(--theme-primary, #5a8f4e);
 }
 
@@ -336,19 +336,19 @@ function handleQuickSend() {
 }
 
 .debug-toolbar__btn--accent {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-  border-color: rgba(59, 130, 246, 0.3);
+  background: var(--color-info-bg, rgba(37, 99, 235, 0.1));
+  color: var(--color-info, #2563eb);
+  border-color: color-mix(in srgb, var(--color-info, #2563eb) 30%, transparent);
 }
 
 .debug-toolbar__btn--danger {
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
   border-color: transparent;
 }
 
 .debug-toolbar__btn--danger:hover:not(:disabled) {
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
+  color: var(--color-error, #dc2626);
+  border-color: color-mix(in srgb, var(--color-error, #dc2626) 30%, transparent);
 }
 
 /* 输入区 */
@@ -363,9 +363,9 @@ function handleQuickSend() {
   padding: 8px 12px;
   font-size: 13px;
   border-radius: var(--radius-xs, 4px);
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
-  background: var(--strong-background-color, #fff);
-  color: var(--text-primary, #1a1a1a);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.1));
+  background: var(--input-background, #fff);
+  color: var(--text-color, #1c1917);
   outline: none;
   box-sizing: border-box;
   transition: border-color 0.15s;
@@ -389,9 +389,9 @@ function handleQuickSend() {
   padding: 5px 8px;
   font-size: 12px;
   border-radius: var(--radius-xs, 4px);
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
-  background: var(--strong-background-color, #fff);
-  color: var(--text-secondary, #666);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.1));
+  background: var(--input-background, #fff);
+  color: var(--text-secondary-color, #57534e);
   outline: none;
 }
 
@@ -419,28 +419,28 @@ function handleQuickSend() {
 .debug-tabs {
   display: flex;
   gap: 2px;
-  border-bottom: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
-  padding-bottom: 0;
 }
 
 .debug-tabs__btn {
   padding: 6px 12px;
   font-size: 12px;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-xs, 4px);
   background: none;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .debug-tabs__btn:hover {
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary-color, #57534e);
+  background: var(--surface-tertiary-color, rgba(0, 0, 0, 0.04));
 }
 
 .debug-tabs__btn--active {
-  color: var(--text-primary, #1a1a1a);
-  border-bottom-color: var(--theme-primary, #5a8f4e);
+  color: var(--text-color, #1c1917);
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 8%, transparent);
+  font-weight: 500;
 }
 
 .debug-tabs__count {
@@ -448,12 +448,12 @@ function handleQuickSend() {
   margin-left: 4px;
   padding: 0 5px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--text-tertiary, #999);
+  background: var(--surface-tertiary-color, #e8e4de);
+  color: var(--text-tertiary-color, #a8a29e);
 }
 
 .debug-tabs__btn--active .debug-tabs__count {
-  background: rgba(90, 143, 78, 0.1);
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 10%, transparent);
   color: var(--theme-primary, #5a8f4e);
 }
 
@@ -471,9 +471,9 @@ function handleQuickSend() {
 
 .debug-messages__divider {
   font-size: 11px;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
   padding: 4px 0;
-  border-bottom: 1px dashed var(--border-subtle, rgba(0, 0, 0, 0.06));
+  border-bottom: 1px dashed var(--border-subtle-color, rgba(0, 0, 0, 0.06));
   margin-bottom: 6px;
 }
 
@@ -488,7 +488,7 @@ function handleQuickSend() {
 .debug-messages__sender {
   flex-shrink: 0;
   font-weight: 500;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary-color, #57534e);
   min-width: 48px;
 }
 
@@ -497,7 +497,7 @@ function handleQuickSend() {
 }
 
 .debug-messages__text {
-  color: var(--text-primary, #1a1a1a);
+  color: var(--text-color, #1c1917);
   word-break: break-word;
 }
 </style>

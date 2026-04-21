@@ -6,6 +6,7 @@
     >
       <button
         class="p-1.5 rounded-lg hover:bg-hover-bg text-text-tertiary hover:text-text-primary transition-colors"
+        aria-label="返回"
         title="返回"
         @click="$emit('back')"
       >
@@ -30,6 +31,7 @@
       <!-- 导出/导入按钮 -->
       <button
         class="p-1.5 rounded-lg hover:bg-hover-bg text-text-tertiary hover:text-text-primary transition-colors"
+        aria-label="导入配置"
         title="导入配置"
         @click="handleImport"
       >
@@ -37,6 +39,7 @@
       </button>
       <button
         class="p-1.5 rounded-lg hover:bg-hover-bg text-text-tertiary hover:text-text-primary transition-colors"
+        aria-label="导出配置"
         title="导出配置"
         @click="handleExport"
       >
@@ -46,7 +49,7 @@
 
     <!-- 编辑器内容 -->
     <div class="flex-1 overflow-y-auto">
-      <div class="mx-auto p-6 space-y-8">
+      <div class="mx-auto max-w-3xl p-6 space-y-8">
         <!-- 基本信息 -->
         <section>
           <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">

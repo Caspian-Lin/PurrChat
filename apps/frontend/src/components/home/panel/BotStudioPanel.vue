@@ -58,7 +58,7 @@
     <!-- 编辑器 -->
     <BotEditor
       v-if="botStore.activeBot"
-      :key="botStore.activeBotId"
+      :key="botStore.activeBotId ?? undefined"
       :bot="botStore.activeBot"
       @update="handleUpdateBot"
       @back="botStore.setActiveBot(null)"

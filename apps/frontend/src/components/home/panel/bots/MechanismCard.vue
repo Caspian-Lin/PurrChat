@@ -7,6 +7,8 @@
         class="mechanism-card__toggle"
         :class="{ 'mechanism-card__toggle--on': localMechanism.enabled }"
         @click.stop="toggleEnabled"
+        :aria-label="localMechanism.enabled ? '禁用机制' : '启用机制'"
+        :aria-pressed="localMechanism.enabled"
         :title="localMechanism.enabled ? '已启用' : '已禁用'"
       >
         <div class="mechanism-card__toggle-thumb" />
@@ -44,7 +46,7 @@
         <button
           class="mechanism-card__action-btn"
           :disabled="!canMoveUp"
-          title="上移"
+          aria-label="上移"
           @click="emit('moveUp')"
         >
           <BsChevronUp :size="14" />
@@ -53,13 +55,17 @@
         <button
           class="mechanism-card__action-btn"
           :disabled="!canMoveDown"
-          title="下移"
+          aria-label="下移"
           @click="emit('moveDown')"
         >
           <BsChevronDown :size="14" />
         </button>
         <!-- 展开/折叠 -->
-        <button class="mechanism-card__action-btn" :title="expanded ? '折叠' : '展开'">
+        <button
+          class="mechanism-card__action-btn"
+          :aria-label="expanded ? '折叠' : '展开'"
+          :title="expanded ? '折叠' : '展开'"
+        >
           <BsChevronDown
             :size="14"
             class="transition-transform duration-200"
@@ -69,7 +75,7 @@
         <!-- 删除 -->
         <button
           class="mechanism-card__action-btn mechanism-card__action-btn--danger"
-          title="删除"
+          aria-label="删除机制"
           @click="emit('delete')"
         >
           <BsTrash3 :size="13" />
@@ -225,9 +231,9 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
 
 <style scoped>
 .mechanism-card {
-  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.08));
   border-radius: var(--radius-md, 12px);
-  background: var(--bg-tertiary, #f5f4f2);
+  background: var(--surface-secondary-color, #f4f1ec);
   transition:
     opacity 0.15s,
     border-color 0.15s;
@@ -253,7 +259,7 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
   height: 18px;
   border-radius: 9px;
   border: none;
-  background: var(--border-subtle, rgba(0, 0, 0, 0.15));
+  background: var(--border-subtle-color, rgba(0, 0, 0, 0.15));
   cursor: pointer;
   position: relative;
   transition: background 0.2s;
@@ -293,7 +299,7 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
 .mechanism-card__name {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-primary, #1a1a1a);
+  color: var(--text-color, #1c1917);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -302,8 +308,8 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
 .mechanism-card__name-input {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-primary, #1a1a1a);
-  background: var(--bg-quaternary, #f8f7f5);
+  color: var(--text-color, #1c1917);
+  background: var(--input-background, #fff);
   border: 1px solid var(--theme-primary, #5a8f4e);
   border-radius: var(--radius-xs, 4px);
   padding: 1px 6px;
@@ -347,7 +353,7 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
   border-radius: var(--radius-xs, 4px);
   border: none;
   background: none;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary-color, #a8a29e);
   cursor: pointer;
   transition: all 0.15s;
   display: flex;
@@ -356,8 +362,8 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
 }
 
 .mechanism-card__action-btn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--text-secondary, #666);
+  background: var(--hover-background, rgba(0, 0, 0, 0.04));
+  color: var(--text-secondary-color, #57534e);
 }
 
 .mechanism-card__action-btn:disabled {
@@ -373,7 +379,7 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
 /* 展开编辑区 */
 .mechanism-card__body {
   padding: 0 12px 12px;
-  border-top: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
+  border-top: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.06));
   margin-top: 0;
   padding-top: 12px;
 }
@@ -389,7 +395,7 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
 .mechanism-card__section-title {
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary-color, #57534e);
   margin-bottom: 8px;
 }
 </style>
