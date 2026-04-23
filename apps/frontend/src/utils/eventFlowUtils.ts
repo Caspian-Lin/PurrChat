@@ -30,9 +30,10 @@ export function getEventSummary(evt: SpecialModeEvent): string {
     case 'end':
       return '结束';
     case 'wait':
-      return evt.config.wait_type || '等待用户输入';
+      if (evt.config.wait_type === 'custom') return '等待条件';
+      return '等待用户消息';
     case 'if':
-      return '条件分支';
+      return evt.config.condition || '条件分支';
     case 'loop':
       return `循环${evt.config.max_iterations ? ` (最多${evt.config.max_iterations}次)` : ''}`;
     default:
@@ -40,29 +41,171 @@ export function getEventSummary(evt: SpecialModeEvent): string {
   }
 }
 
+// ─── 循环体子节点推断 ──────────────────────────────────────
+
+/**
+ * 从 connections 推断循环体父子关系。
+ * 返回 Map<childEventId, parentLoopId>
+ *
+ * 逻辑：对每个 loop 节点，从 out_body 连接开始 BFS，
+ * 沿 trigger 类型输出连接标记所有可达节点为 loop 的子节点。
+ */
+export function inferLoopChildren(
+  events: SpecialModeEvent[],
+  connections: FlowConnection[]
+): Map<string, string> {
+  const result = new Map<string, string>();
+
+  // 构建 nodeId → outgoing connections
+  const outConns = new Map<string, FlowConnection[]>();
+  for (const conn of connections) {
+    if (!outConns.has(conn.sourceNodeId)) outConns.set(conn.sourceNodeId, []);
+    outConns.get(conn.sourceNodeId)!.push(conn);
+  }
+
+  // 构建端口 ID → dataType 映射
+  const portTypes = new Map<string, string>();
+  for (const evt of events) {
+    for (const port of evt.ports || []) {
+      portTypes.set(`${evt.id}:${port.id}`, port.dataType);
+    }
+  }
+
+  const loopNodes = events.filter((e) => e.type === 'loop');
+
+  for (const loopNode of loopNodes) {
+    const bodyConns = (outConns.get(loopNode.id) || []).filter(
+      (c) => c.sourcePortId === 'out_body'
+    );
+    if (bodyConns.length === 0) continue;
+
+    const firstChildId = bodyConns[0]!.targetNodeId;
+    const visited = new Set<string>();
+    const queue = [firstChildId];
+
+    while (queue.length > 0) {
+      const nodeId = queue.shift()!;
+      if (visited.has(nodeId)) continue;
+      visited.add(nodeId);
+      result.set(nodeId, loopNode.id);
+
+      // 沿 trigger 类型输出连接继续
+      const nextConns = (outConns.get(nodeId) || []).filter((c) => {
+        const dataType = portTypes.get(`${c.sourceNodeId}:${c.sourcePortId}`);
+        return dataType === 'trigger';
+      });
+
+      for (const conn of nextConns) {
+        // 回边到 loop 自身则跳过
+        if (conn.targetNodeId === loopNode.id) continue;
+        queue.push(conn.targetNodeId);
+      }
+    }
+  }
+
+  return result;
+}
+
+// ─── 循环体链末端查找 ──────────────────────────────────────
+
+/**
+ * 获取循环体执行链的末端节点 ID（即回边到 loop 自身的那个节点）。
+ * 用于在链尾插入新节点时定位断开点。
+ */
+export function getLoopChainEnd(
+  loopId: string,
+  connections: FlowConnection[]
+): string | null {
+  for (const conn of connections) {
+    if (conn.targetNodeId === loopId && conn.targetPortId === 'in_exec') {
+      return conn.sourceNodeId;
+    }
+  }
+  return null;
+}
+
 // ─── 节点 & 边转换（端口化模型） ──────────────────────────────
 
+/**
+ * 将 events 转换为 VueFlow Node[]。
+ * 如果提供 connections，loop 节点会渲染为 loopFrame 类型，
+ * 其子节点通过 parentNode 关联。
+ */
 export function eventsToFlowNodes(
   events: SpecialModeEvent[],
-  positions?: Record<string, { x: number; y: number }>
+  positions?: Record<string, { x: number; y: number }>,
+  connections?: FlowConnection[]
 ): Node[] {
-  return events.map((evt, index) => {
+  const parentMap = connections
+    ? inferLoopChildren(events, connections)
+    : new Map<string, string>();
+
+  const nodes: Node[] = [];
+
+  // 第一遍：loop 框体节点（父节点必须排在子节点前面）
+  for (const evt of events) {
+    if (evt.type !== 'loop') continue;
+    const ports = buildDefaultPorts(evt);
+    const meta = NODE_TYPE_META[evt.type];
+    nodes.push({
+      id: evt.id,
+      type: 'loopFrame',
+      position:
+        evt.position || positions?.[evt.id] || { x: 280, y: 50 },
+      style: { width: '500px', height: '300px' },
+      data: {
+        label: evt.name,
+        eventType: evt.type,
+        summary: getEventSummary(evt),
+        icon: meta?.icon || '',
+        ports,
+        config: evt.config,
+      },
+    });
+  }
+
+  // 第二遍：非 loop 节点
+  let childIndex = 0;
+  for (const evt of events) {
+    if (evt.type === 'loop') continue;
     const ports = buildDefaultPorts(evt);
     const meta = NODE_TYPE_META[evt.type as keyof typeof NODE_TYPE_META];
-    return {
+    const parentId = parentMap.get(evt.id);
+
+    const node: Node = {
       id: evt.id,
-      type: 'event',
-      position: evt.position ||
-        positions?.[evt.id] || { x: index * 280, y: 50 + (index % 3) * 120 },
+      type: evt.type === 'if' ? 'ifBranch' : 'event',
+      position: { x: 0, y: 0 },
       data: {
         label: evt.name,
         eventType: evt.type,
         summary: getEventSummary(evt),
         icon: meta?.icon || typeIcons[evt.type] || '',
         ports,
+        config: evt.config,
       },
     };
-  });
+
+    if (parentId) {
+      node.parentNode = parentId;
+      node.extent = 'parent';
+      node.expandParent = true;
+      // 子节点位置相对于父节点
+      node.position = evt.position || { x: 60, y: 60 + childIndex * 90 };
+      childIndex++;
+    } else {
+      node.position =
+        evt.position ||
+        positions?.[evt.id] || {
+          x: (nodes.filter((n) => !n.parentNode).length) * 280,
+          y: 50,
+        };
+    }
+
+    nodes.push(node);
+  }
+
+  return nodes;
 }
 
 /** 将 FlowConnection[] 转换为 VueFlow Edge[]（端口化连线） */
@@ -81,8 +224,28 @@ export function connectionsToFlowEdges(
     }
   }
 
-  return connections.map((conn) => {
-    const sourceDataType = portTypeMap.get(`${conn.sourceNodeId}:${conn.sourcePortId}`) || 'any';
+  // 收集 loop 节点 ID，用于过滤结构边
+  const loopIds = new Set((events || []).filter((e) => e.type === 'loop').map((e) => e.id));
+
+  // 推断循环体子节点关系，用于精确识别回边
+  const childMap = events && events.length > 0
+    ? inferLoopChildren(events, connections)
+    : new Map<string, string>();
+
+  // 过滤循环结构边（入口/出口），这些边由框体视觉隐含
+  const visibleConns = connections.filter((conn) => {
+    // 入口边：loop.out_body → 子节点
+    if (loopIds.has(conn.sourceNodeId) && conn.sourcePortId === 'out_body') return false;
+    // 出口边：子节点 → loop.in_exec（回边）— 仅当 source 是该 loop 的子节点时
+    if (loopIds.has(conn.targetNodeId) && conn.targetPortId === 'in_exec') {
+      if (childMap.get(conn.sourceNodeId) === conn.targetNodeId) return false;
+    }
+    return true;
+  });
+
+  return visibleConns.map((conn) => {
+    const sourceDataType =
+      portTypeMap.get(`${conn.sourceNodeId}:${conn.sourcePortId}`) || 'any';
     return {
       id: conn.id,
       source: conn.sourceNodeId,
@@ -124,13 +287,33 @@ export function eventsToFlowEdges(events: SpecialModeEvent[]): Edge[] {
  */
 export function autoLayoutEvents(
   events: SpecialModeEvent[],
-  direction: 'TB' | 'LR' = 'TB'
+  direction: 'TB' | 'LR' = 'TB',
+  connections?: FlowConnection[]
 ): Node[] {
-  const nodes = eventsToFlowNodes(events);
-  const edges = eventsToFlowEdges(events);
+  const parentMap = connections
+    ? inferLoopChildren(events, connections)
+    : new Map<string, string>();
 
-  if (nodes.length === 0) return nodes;
+  const allNodes = eventsToFlowNodes(events, undefined, connections);
+  const edges = connections
+    ? connectionsToFlowEdges(connections, events)
+    : eventsToFlowEdges(events);
 
+  if (allNodes.length === 0) return allNodes;
+
+  // 分离顶层节点和子节点
+  const topNodes = allNodes.filter((n) => !n.parentNode);
+  const childNodesByParent = new Map<string, Node[]>();
+  for (const node of allNodes) {
+    if (node.parentNode) {
+      if (!childNodesByParent.has(node.parentNode)) {
+        childNodesByParent.set(node.parentNode, []);
+      }
+      childNodesByParent.get(node.parentNode)!.push(node);
+    }
+  }
+
+  // 外层 dagre 布局（仅顶层节点）
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({
@@ -140,25 +323,79 @@ export function autoLayoutEvents(
     edgesep: 30,
   });
 
-  for (const node of nodes) {
-    g.setNode(node.id, { width: 220, height: 60 });
+  for (const node of topNodes) {
+    g.setNode(node.id, {
+      width: node.type === 'loopFrame' ? 500 : 220,
+      height: node.type === 'loopFrame' ? 300 : 60,
+    });
   }
+
+  // 仅添加顶层边（跳过 loop body 内部的边）
   for (const edge of edges) {
+    const srcParent = parentMap.get(edge.source);
+    const tgtParent = parentMap.get(edge.target);
+    if (srcParent && tgtParent && srcParent === tgtParent) continue;
     g.setEdge(edge.source, edge.target);
   }
 
   dagre.layout(g);
 
-  return nodes.map((node) => {
+  const result: Node[] = [];
+
+  for (const node of topNodes) {
     const pos = g.node(node.id);
-    return {
+    const w = node.type === 'loopFrame' ? 500 : 220;
+    const h = node.type === 'loopFrame' ? 300 : 60;
+    result.push({
       ...node,
       position: {
-        x: (pos?.x ?? 0) - 110,
-        y: (pos?.y ?? 0) - 30,
+        x: (pos?.x ?? 0) - w / 2,
+        y: (pos?.y ?? 0) - h / 2,
       },
-    };
-  });
+    });
+
+    // 内层 dagre 布局（loop body 内的子节点）
+    if (childNodesByParent.has(node.id)) {
+      const children = childNodesByParent.get(node.id)!;
+      const childEdges = edges.filter(
+        (e) =>
+          children.some((c) => c.id === e.source) &&
+          children.some((c) => c.id === e.target)
+      );
+
+      if (children.length <= 1) {
+        const child = children[0];
+        if (child) {
+          child.position = { x: 60, y: 80 };
+          result.push(child);
+        }
+      } else {
+        const subG = new dagre.graphlib.Graph();
+        subG.setDefaultEdgeLabel(() => ({}));
+        subG.setGraph({ rankdir: direction, ranksep: 60, nodesep: 40 });
+
+        for (const child of children) {
+          subG.setNode(child.id, { width: 220, height: 60 });
+        }
+        for (const edge of childEdges) {
+          subG.setEdge(edge.source, edge.target);
+        }
+
+        dagre.layout(subG);
+
+        for (const child of children) {
+          const childPos = subG.node(child.id);
+          child.position = {
+            x: 40 + (childPos?.x ?? 0) - 110,
+            y: 60 + (childPos?.y ?? 0) - 30,
+          };
+          result.push(child);
+        }
+      }
+    }
+  }
+
+  return result;
 }
 
 // ─── 验证 ────────────────────────────────────────────────────
@@ -174,11 +411,30 @@ export interface ValidationIssue {
  * 检测：缺少 trigger/end 节点、多个 trigger、环路、孤儿节点、
  * 缺少 reply 类型事件、断开的连线
  */
-export function validateEventChain(events: SpecialModeEvent[]): ValidationIssue[] {
+export function validateEventChain(
+  events: SpecialModeEvent[],
+  connections?: FlowConnection[]
+): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (events.length === 0) return issues;
 
   const eventIds = new Set(events.map((e) => e.id));
+
+  // 循环体内子节点集合，用于排除误报
+  const loopChildSet = connections
+    ? inferLoopChildren(events, connections)
+    : new Map<string, string>();
+
+  // 收集 loop 回边（子节点 → loop 自身），排除在环路检测之外
+  const loopBackTargets = new Set<string>();
+  if (connections) {
+    for (const conn of connections) {
+      const parentLoopId = loopChildSet.get(conn.sourceNodeId);
+      if (parentLoopId && conn.targetNodeId === parentLoopId) {
+        loopBackTargets.add(conn.sourceNodeId);
+      }
+    }
+  }
 
   // 检查 trigger 节点
   const triggerEvents = events.filter((e) => e.type === 'trigger');
@@ -188,7 +444,21 @@ export function validateEventChain(events: SpecialModeEvent[]): ValidationIssue[
     issues.push({ type: 'error', message: '事件链只能有一个起始节点（trigger）' });
   }
 
-  // 检查断开的连线（next 指向不存在的事件）
+  // 检查断开的连线（connections 模式）
+  if (connections && connections.length > 0) {
+    for (const conn of connections) {
+      if (!eventIds.has(conn.sourceNodeId)) {
+        const srcEvt = events.find((e) => e.id === conn.sourceNodeId);
+        issues.push({
+          type: 'error',
+          message: `"${srcEvt?.name || conn.sourceNodeId}" 连接到不存在的事件`,
+          eventId: conn.sourceNodeId,
+        });
+      }
+    }
+  }
+
+  // 检查断开的连线（旧 next[] 模式）
   for (const evt of events) {
     for (const nextId of evt.next || []) {
       if (!eventIds.has(nextId)) {
@@ -201,19 +471,38 @@ export function validateEventChain(events: SpecialModeEvent[]): ValidationIssue[
     }
   }
 
-  // 检测环路（DFS）
+  // 检测环路（DFS）— 排除 loop 回边
   const visiting = new Set<string>();
   const visited = new Set<string>();
+
+  // 构建邻接表（基于 connections 或 next[]）
+  const adj = new Map<string, string[]>();
+  if (connections && connections.length > 0) {
+    for (const conn of connections) {
+      if (!adj.has(conn.sourceNodeId)) adj.set(conn.sourceNodeId, []);
+      adj.get(conn.sourceNodeId)!.push(conn.targetNodeId);
+    }
+  } else {
+    for (const evt of events) {
+      for (const nextId of evt.next || []) {
+        if (!adj.has(evt.id)) adj.set(evt.id, []);
+        adj.get(evt.id)!.push(nextId);
+      }
+    }
+  }
 
   function hasCycle(id: string): boolean {
     if (visiting.has(id)) return true;
     if (visited.has(id)) return false;
     visiting.add(id);
-    const evt = events.find((e) => e.id === id);
-    if (evt) {
-      for (const nextId of evt.next || []) {
-        if (eventIds.has(nextId) && hasCycle(nextId)) return true;
+    for (const nextId of adj.get(id) || []) {
+      // 跳过已知的 loop 回边
+      if (loopBackTargets.has(id) && loopChildSet.has(nextId) && loopChildSet.get(nextId) === loopChildSet.get(id)) {
+        // 这是从 loop 子节点回到 loop 自身的合法回边，跳过
+        // 但只有当 target 是 loop 节点自身时才跳过
+        if (nextId === loopChildSet.get(id)) continue;
       }
+      if (eventIds.has(nextId) && hasCycle(nextId)) return true;
     }
     visiting.delete(id);
     visited.add(id);
@@ -240,16 +529,25 @@ export function validateEventChain(events: SpecialModeEvent[]): ValidationIssue[
     });
   }
 
-  // 检查孤儿节点（没有任何事件连接到它，且它不是 trigger）
+  // 检查孤儿节点（没有任何事件连接到它，且它不是 trigger 且不在 loop body 中）
   const triggerEvent = events.find((e) => e.type === 'trigger') || events[0];
   const isTargetOf = new Set<string>();
+
+  if (connections && connections.length > 0) {
+    for (const conn of connections) {
+      isTargetOf.add(conn.targetNodeId);
+    }
+  }
   for (const evt of events) {
     for (const nextId of evt.next || []) {
       isTargetOf.add(nextId);
     }
   }
+
   for (const evt of events) {
     if (evt.type === 'trigger') continue;
+    // loop body 内的第一个子节点由 out_body 连接，不算孤儿
+    if (loopChildSet.has(evt.id)) continue;
     if (triggerEvent && evt.id !== triggerEvent.id && !isTargetOf.has(evt.id)) {
       issues.push({
         type: 'warning',

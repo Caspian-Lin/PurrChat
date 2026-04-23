@@ -30,6 +30,7 @@
           :edge-types="customEdgeTypes"
           :default-edge-options="defaultEdgeOptions"
           :is-valid-connection="isValidConnection"
+          :connection-mode="ConnectionMode.Loose"
           fit-view-on-init
           :min-zoom="0.3"
           :max-zoom="2"
@@ -64,12 +65,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, markRaw } from 'vue';
-import { VueFlow } from '@vue-flow/core';
+import { ref, computed, watch, markRaw, provide, onMounted, nextTick } from 'vue';
+import { VueFlow, ConnectionMode } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import { BsPlus } from 'vue-icons-plus/bs';
 import EventNode from './events/EventNode.vue';
+import LoopFrameNode from './events/LoopFrameNode.vue';
+import IfBranchNode from './events/IfBranchNode.vue';
 import EventEdge from './events/EventEdge.vue';
 import EventConfigModal from './events/EventConfigModal.vue';
 import EndConditionConfig from './events/EndConditionConfig.vue';
@@ -78,6 +81,7 @@ import {
   connectionsToFlowEdges,
   eventsToFlowEdges,
   autoLayoutEvents,
+  getLoopChainEnd,
 } from '../../../../utils/eventFlowUtils';
 import type {
   SpecialModeEvent as FullEvent,
@@ -109,10 +113,15 @@ const emit = defineEmits<{
 const showAddModal = ref(false);
 const editingEvent = ref<FullEvent | null>(null);
 
+// 循环体事件添加状态
+const pendingLoopId = ref<string | null>(null);
+
 // 注册自定义节点类型
 
 const customNodeTypes: Record<string, any> = {
   event: markRaw(EventNode),
+  loopFrame: markRaw(LoopFrameNode),
+  ifBranch: markRaw(IfBranchNode),
 };
 
 const customEdgeTypes: Record<string, any> = {
@@ -123,18 +132,36 @@ const defaultEdgeOptions = {
   type: 'event',
 };
 
+// provide addToLoop 回调（供 LoopFrameNode 的 "+" 按钮调用）
+provide('addToLoop', (loopId: string) => {
+  pendingLoopId.value = loopId;
+  showAddModal.value = true;
+});
+
 // 节点位置缓存（普通对象，非响应式，避免 watch→computed→watch 无限循环）
 const positionCache: Record<string, { x: number; y: number }> = {};
 const positionTrigger = ref(0);
 
-// 确保 events 都有 ports 字段
-const ensuredEvents = computed(() => ensurePorts(props.events || []));
+// 确保 events 都有 ports 字段，且至少有一个 trigger 节点
+const ensuredEvents = computed(() => {
+  const events = ensurePorts(props.events || []);
+  if (events.length === 0) {
+    return [{
+      id: 'evt_trigger_default',
+      type: 'trigger' as const,
+      name: '触发',
+      config: {},
+      ports: getDefaultPorts('trigger'),
+    }];
+  }
+  return events;
+});
 
 // 将 SpecialModeEvent 转换为 vue-flow Node
 const flowNodes = computed<Node[]>(() => {
   // 读取 positionTrigger 以建立依赖（仅自动布局时递增）
   positionTrigger.value;
-  return eventsToFlowNodes(ensuredEvents.value, positionCache);
+  return eventsToFlowNodes(ensuredEvents.value, positionCache, props.connections);
 });
 
 // 将 connections 或 event.next 转换为 vue-flow Edge
@@ -156,6 +183,7 @@ function onNodeClick({ node }: { node: Node }) {
 function closeModal() {
   showAddModal.value = false;
   editingEvent.value = null;
+  pendingLoopId.value = null;
 }
 
 function handleEventConfirm(event: FullEvent) {
@@ -165,16 +193,75 @@ function handleEventConfirm(event: FullEvent) {
   }
 
   const current = [...(props.events || [])];
+  let currentConnections = [...(props.connections || [])];
   const existingIndex = current.findIndex((e) => e.id === event.id);
 
   if (existingIndex >= 0) {
+    // 编辑已有事件 — 不处理连线
     current[existingIndex] = event;
   } else {
+    // 新建事件
     current.push(event);
+
+    // 如果是从循环体 "+" 按钮添加的，自动连线
+    if (pendingLoopId.value) {
+      currentConnections = autoConnectToLoop(pendingLoopId.value, event.id, currentConnections);
+    }
   }
 
   emit('updateEvents', current);
+  emit('updateConnections', currentConnections);
   closeModal();
+}
+
+/**
+ * 将新事件自动连接到循环体执行链中。
+ */
+function autoConnectToLoop(
+  loopId: string,
+  newEventId: string,
+  currentConnections: FlowConnection[]
+): FlowConnection[] {
+  const result = [...currentConnections];
+
+  const chainEndId = getLoopChainEnd(loopId, currentConnections);
+
+  if (chainEndId) {
+    // 非空循环体：断开回边，插入新节点
+    const backEdgeIdx = result.findIndex(
+      (c) => c.sourceNodeId === chainEndId && c.targetNodeId === loopId && c.targetPortId === 'in_exec'
+    );
+    if (backEdgeIdx >= 0) {
+      result.splice(backEdgeIdx, 1);
+    }
+    result.push({
+      id: `conn_${chainEndId}_out_exec_${newEventId}_in_exec`,
+      sourceNodeId: chainEndId,
+      sourcePortId: 'out_exec',
+      targetNodeId: newEventId,
+      targetPortId: 'in_exec',
+    });
+  } else {
+    // 空循环体：loop.out_body → newEvt.in_exec
+    result.push({
+      id: `conn_${loopId}_out_body_${newEventId}_in_exec`,
+      sourceNodeId: loopId,
+      sourcePortId: 'out_body',
+      targetNodeId: newEventId,
+      targetPortId: 'in_exec',
+    });
+  }
+
+  // 新回边：newEvt.out_exec → loop.in_exec
+  result.push({
+    id: `conn_${newEventId}_out_exec_${loopId}_in_exec`,
+    sourceNodeId: newEventId,
+    sourcePortId: 'out_exec',
+    targetNodeId: loopId,
+    targetPortId: 'in_exec',
+  });
+
+  return result;
 }
 
 function handleEventDelete(eventId: string) {
@@ -285,13 +372,25 @@ function isValidConnection(connection: {
 
 // 自动布局：使用 dagre 重新计算节点位置
 function handleAutoLayout() {
-  const layouted = autoLayoutEvents(ensuredEvents.value, 'LR');
+  const layouted = autoLayoutEvents(ensuredEvents.value, 'LR', props.connections);
   for (const node of layouted) {
     positionCache[node.id] = { ...node.position };
   }
   // 递增 trigger 以通知 flowNodes computed 使用新位置
   positionTrigger.value++;
 }
+
+// 初始化 + 事件变化时自动布局
+onMounted(() => {
+  nextTick(() => handleAutoLayout());
+});
+
+watch(
+  () => [props.events?.length, props.connections?.length],
+  () => {
+    nextTick(() => handleAutoLayout());
+  },
+);
 </script>
 
 <style scoped>

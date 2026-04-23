@@ -96,6 +96,7 @@
         <h4 class="mechanism-card__section-title">回复设置</h4>
         <BotReplyConfig
           :config="localMechanism.reply"
+          :trigger="localMechanism.trigger"
           @update="handleReplyUpdate"
           @open-special-mode-editor="emit('openSpecialModeEditor', localMechanism.id)"
         />
@@ -222,6 +223,7 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
     special_mode: reply.special_mode
       ? {
           events: reply.special_mode.events.map((e) => ({ ...e, config: { ...e.config } })),
+          connections: reply.special_mode.connections?.map((c) => ({ ...c })) || [],
           end_conditions: reply.special_mode.end_conditions.map((c) => ({ ...c })),
         }
       : undefined,

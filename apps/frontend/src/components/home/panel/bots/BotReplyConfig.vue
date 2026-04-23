@@ -12,10 +12,7 @@
             : 'bg-bg-quaternary text-text-secondary hover:bg-hover-bg'
         "
         :style="localConfig.type === type.value ? { background: 'var(--theme-primary)' } : {}"
-        @click="
-          localConfig.type = type.value;
-          emitUpdate();
-        "
+        @click="handleTypeSwitch(type.value)"
       >
         {{ type.label }}
       </button>
@@ -259,10 +256,17 @@
 import { reactive, watch } from 'vue';
 import { BsPlus, BsX, BsBoxArrowUpRight } from 'vue-icons-plus/bs';
 import { useAiStore } from '../../../../stores/ai';
-import type { ReplySpec, SpecialModeSpec } from '../../../../models/types';
+import type {
+  ReplySpec,
+  SpecialModeSpec,
+  TriggerSpec,
+  SpecialModeEvent,
+} from '../../../../models/types';
+import { getDefaultPorts } from '../../../../utils/portTypes';
 
 interface Props {
   config: ReplySpec;
+  trigger?: TriggerSpec;
 }
 
 const props = defineProps<Props>();
@@ -317,8 +321,43 @@ const defaultLLM = {
 
 const defaultSpecialMode: SpecialModeSpec = {
   events: [],
+  connections: [],
   end_conditions: [],
 };
+
+function generateTriggerName(trigger?: TriggerSpec): string {
+  if (!trigger) return '规则触发';
+  if (trigger.type === 'probability') {
+    return `概率触发（${Math.round((trigger.probability ?? 0) * 100)}%）`;
+  }
+  if (!trigger.rules?.length) return '规则触发';
+  return `规则触发（${trigger.rules.length} 条）`;
+}
+
+function createDefaultTriggerEvent(trigger?: TriggerSpec): SpecialModeEvent {
+  return {
+    id: 'evt_trigger_default',
+    type: 'trigger',
+    name: generateTriggerName(trigger),
+    config: {},
+    ports: getDefaultPorts('trigger'),
+  };
+}
+
+function handleTypeSwitch(type: ReplySpec['type']) {
+  localConfig.type = type;
+  if (
+    type === 'special_mode' &&
+    (!localConfig.special_mode || localConfig.special_mode.events.length === 0)
+  ) {
+    localConfig.special_mode = {
+      events: [createDefaultTriggerEvent(props.trigger)],
+      connections: [],
+      end_conditions: [],
+    };
+  }
+  emitUpdate();
+}
 
 function buildLocalConfig(config: ReplySpec): ReplySpec {
   return {
@@ -356,6 +395,7 @@ function deepCloneSpecialMode(spec?: SpecialModeSpec): SpecialModeSpec | undefin
   if (!spec) return undefined;
   return {
     events: spec.events.map((e) => ({ ...e, config: { ...e.config } })),
+    connections: spec.connections?.map((c) => ({ ...c })) || [],
     end_conditions: spec.end_conditions.map((c) => ({ ...c })),
   };
 }

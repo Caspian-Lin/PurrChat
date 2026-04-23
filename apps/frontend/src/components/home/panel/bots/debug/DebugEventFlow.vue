@@ -28,6 +28,8 @@ import { computed, markRaw } from 'vue';
 import { VueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import EventNode from '../events/EventNode.vue';
+import LoopFrameNode from '../events/LoopFrameNode.vue';
+import IfBranchNode from '../events/IfBranchNode.vue';
 import { eventsToFlowNodes, eventsToFlowEdges } from '../../../../../utils/eventFlowUtils';
 import type { SpecialModeEvent, EventTrace } from '../../../../../models/types';
 import type { Node, Edge } from '@vue-flow/core';
@@ -41,6 +43,8 @@ const props = defineProps<Props>();
 
 const customNodeTypes: Record<string, any> = {
   event: markRaw(EventNode),
+  loopFrame: markRaw(LoopFrameNode),
+  ifBranch: markRaw(IfBranchNode),
 };
 
 const defaultEdgeOptions = {

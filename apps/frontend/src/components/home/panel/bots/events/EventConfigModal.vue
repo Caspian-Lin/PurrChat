@@ -456,11 +456,12 @@ const form = reactive<FormData>({
   ports: getDefaultPorts('llm'),
 });
 
-// 选择类型时重置 config 和 ports
+// 选择类型时重置 config、ports 和名称
 function selectType(type: EventType) {
   form.type = type;
   form.config = getDefaultConfig(type);
   form.ports = getDefaultPorts(type);
+  form.name = NODE_TYPE_META[type].label;
   customInputPorts.length = 0;
   nameValidationError.value = '';
 }

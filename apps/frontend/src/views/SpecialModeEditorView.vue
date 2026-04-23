@@ -100,6 +100,7 @@
           :edge-types="customEdgeTypes"
           :default-edge-options="defaultEdgeOptions"
           :is-valid-connection="isValidConnection"
+          :connection-mode="ConnectionMode.Loose"
           fit-view-on-init
           :min-zoom="0.3"
           :max-zoom="2"
@@ -114,10 +115,17 @@
         </VueFlow>
       </div>
 
-      <!-- 底部面板：结束条件 + 调试 -->
+      <!-- 底部面板：指南 + 结束条件 + 调试 -->
       <div class="flex-shrink-0 border-t border-border-subtle bg-bg-secondary">
         <!-- Tab 切换 -->
         <div class="flex border-b border-border-subtle">
+          <button
+            class="bottom-tab"
+            :class="{ 'bottom-tab--active': activeBottomTab === 'guide' }"
+            @click="activeBottomTab = 'guide'"
+          >
+            指南
+          </button>
           <button
             class="bottom-tab"
             :class="{ 'bottom-tab--active': activeBottomTab === 'conditions' }"
@@ -132,6 +140,72 @@
           >
             调试
           </button>
+        </div>
+
+        <!-- 指南面板 -->
+        <div v-if="activeBottomTab === 'guide'" class="guide-panel">
+          <div class="guide-section">
+            <h4 class="guide-section__title">模板变量</h4>
+            <p class="guide-section__desc">
+              触发节点会自动收集当前消息的上下文信息，作为输出端口供下游节点使用。
+              将变量输出端口连接到下游节点的对应输入端口即可传递数据。
+            </p>
+            <div class="guide-vars">
+              <div class="guide-var">
+                <code class="guide-var__code">{input}</code>
+                <span class="guide-var__label">用户消息</span>
+                <span class="guide-var__desc">用户发送的完整消息内容</span>
+              </div>
+              <div class="guide-var">
+                <code class="guide-var__code">{username}</code>
+                <span class="guide-var__label">发送者</span>
+                <span class="guide-var__desc">发送消息的用户名</span>
+              </div>
+              <div class="guide-var">
+                <code class="guide-var__code">{time}</code>
+                <span class="guide-var__label">时间</span>
+                <span class="guide-var__desc">当前时间，格式 HH:MM</span>
+              </div>
+              <div class="guide-var">
+                <code class="guide-var__code">{args}</code>
+                <span class="guide-var__label">参数</span>
+                <span class="guide-var__desc">消息中除首个词外的所有参数</span>
+              </div>
+              <div class="guide-var">
+                <code class="guide-var__code">{args:N}</code>
+                <span class="guide-var__label">第 N 个词</span>
+                <span class="guide-var__desc">按空格分割后的第 N 个词（从 0 开始）</span>
+              </div>
+            </div>
+            <div class="guide-example">
+              <span class="guide-example__prompt">用户发送：</span>
+              <code>天气 北京</code>
+              <div class="guide-example__results">
+                <span><code>{input}</code> → "天气 北京"</span>
+                <span><code>{args}</code> → "北京"</span>
+                <span><code>{args:0}</code> → "天气"</span>
+                <span><code>{args:1}</code> → "北京"</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="guide-section">
+            <h4 class="guide-section__title">连线规则</h4>
+            <p class="guide-section__desc">
+              端口按数据类型严格匹配：<span class="guide-type" style="color: var(--color-success, #16a34a)">▶ 执行流</span>（绿色）只能连接执行流端口；
+              <span class="guide-type" style="color: #3b82f6">数据</span>（蓝色）可连接任意数据输入端口。
+              拖拽连线时，不兼容的端口会自动拒绝。
+            </p>
+          </div>
+
+          <div class="guide-section">
+            <h4 class="guide-section__title">循环与条件</h4>
+            <p class="guide-section__desc">
+              <strong>条件节点</strong>（◇）接收一个布尔值，根据真假走不同分支。
+              <strong>循环节点</strong>（↻）会反复执行框体内的节点，直到条件为假后从「完成」出口退出。
+              循环体通过虚线框可视化，框内节点为循环体内容。
+            </p>
+          </div>
         </div>
 
         <!-- 结束条件面板 -->
@@ -165,9 +239,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, markRaw } from 'vue';
+import { ref, computed, watch, onMounted, nextTick, markRaw, provide } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { VueFlow } from '@vue-flow/core';
+import { VueFlow, ConnectionMode } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import { BsArrowLeft, BsPlus } from 'vue-icons-plus/bs';
@@ -186,11 +260,14 @@ import {
   eventsToFlowEdges,
   autoLayoutEvents,
   validateEventChain,
+  getLoopChainEnd,
 } from '../utils/eventFlowUtils';
 import type { ValidationIssue } from '../utils/eventFlowUtils';
 import { canConnect, getPortById, getDefaultPorts } from '../utils/portTypes';
 import { needsMigration, ensurePorts, migrateLegacyConnections } from '../utils/eventMigration';
 import EventNode from '../components/home/panel/bots/events/EventNode.vue';
+import LoopFrameNode from '../components/home/panel/bots/events/LoopFrameNode.vue';
+import IfBranchNode from '../components/home/panel/bots/events/IfBranchNode.vue';
 import EventEdge from '../components/home/panel/bots/events/EventEdge.vue';
 import EventConfigModal from '../components/home/panel/bots/events/EventConfigModal.vue';
 import EndConditionConfig from '../components/home/panel/bots/events/EndConditionConfig.vue';
@@ -206,9 +283,12 @@ const mechanismId = route.params.mechanismId as string;
 const loading = ref(true);
 const error = ref<string | null>(null);
 const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
-const activeBottomTab = ref<'conditions' | 'debug'>('conditions');
+const activeBottomTab = ref<'guide' | 'conditions' | 'debug'>('conditions');
 const showAddModal = ref(false);
 const editingEvent = ref<FullEvent | null>(null);
+
+// 循环体事件添加状态
+const pendingLoopId = ref<string | null>(null);
 
 // 数据
 const bot = ref<Bot | null>(null);
@@ -231,13 +311,15 @@ const connections = computed<FlowConnection[]>(() => {
 });
 
 const validationIssues = computed<ValidationIssue[]>(() => {
-  return validateEventChain(events.value);
+  return validateEventChain(events.value, connections.value);
 });
 
 // VueFlow 注册
 
 const customNodeTypes: Record<string, any> = {
   event: markRaw(EventNode),
+  loopFrame: markRaw(LoopFrameNode),
+  ifBranch: markRaw(IfBranchNode),
 };
 
 const customEdgeTypes: Record<string, any> = {
@@ -248,6 +330,12 @@ const defaultEdgeOptions = {
   type: 'event',
 };
 
+// provide addToLoop 回调（供 LoopFrameNode 的 "+" 按钮调用）
+provide('addToLoop', (loopId: string) => {
+  pendingLoopId.value = loopId;
+  showAddModal.value = true;
+});
+
 // 节点位置缓存（普通对象，非响应式，避免 watch→computed→watch 无限循环）
 const positionCache: Record<string, { x: number; y: number }> = {};
 const positionTrigger = ref(0);
@@ -255,7 +343,7 @@ const positionTrigger = ref(0);
 const flowNodes = computed<Node[]>(() => {
   // 读取 positionTrigger 以建立依赖（仅自动布局时递增）
   positionTrigger.value;
-  return eventsToFlowNodes(events.value, positionCache);
+  return eventsToFlowNodes(events.value, positionCache, connections.value);
 });
 
 const flowEdges = computed<Edge[]>(() => {
@@ -277,6 +365,7 @@ try {
 
 onMounted(async () => {
   await loadData();
+  nextTick(() => handleAutoLayout());
 
   // 监听来自其他 Tab 的数据变更通知
   channel?.addEventListener('message', (e) => {
@@ -310,6 +399,18 @@ async function loadData() {
 
     // 深拷贝一份用于本地编辑
     localMechanism.value = deepCloneMechanism(found);
+
+    // 防御性检查：确保事件链有 trigger 节点
+    const sm = localMechanism.value.reply?.special_mode;
+    if (sm && sm.events.length === 0) {
+      sm.events = [{
+        id: 'evt_trigger_default',
+        type: 'trigger' as const,
+        name: '触发',
+        config: {},
+        ports: getDefaultPorts('trigger'),
+      }];
+    }
   } catch (err: any) {
     error.value = err.response?.data?.message || '加载失败';
   } finally {
@@ -406,6 +507,7 @@ function onNodeClick({ node }: { node: Node }) {
 function closeModal() {
   showAddModal.value = false;
   editingEvent.value = null;
+  pendingLoopId.value = null;
 }
 
 function handleEventConfirm(event: FullEvent) {
@@ -417,16 +519,79 @@ function handleEventConfirm(event: FullEvent) {
   }
 
   const currentEvents = [...events.value];
+  let currentConnections = [...connections.value];
   const existingIndex = currentEvents.findIndex((e) => e.id === event.id);
 
   if (existingIndex >= 0) {
+    // 编辑已有事件 — 不处理连线
     currentEvents[existingIndex] = event;
   } else {
+    // 新建事件
     currentEvents.push(event);
+
+    // 如果是从循环体 "+" 按钮添加的，自动连线
+    if (pendingLoopId.value) {
+      currentConnections = autoConnectToLoop(pendingLoopId.value, event.id, currentConnections);
+    }
   }
 
   localMechanism.value.reply.special_mode.events = currentEvents;
+  localMechanism.value.reply.special_mode.connections = currentConnections;
   closeModal();
+}
+
+/**
+ * 将新事件自动连接到循环体执行链中。
+ *
+ * 空循环体：loop.out_body → newEvt.in_exec, newEvt.out_exec → loop.in_exec
+ * 非空循环体：找到链末端，断开回边，插入新节点
+ */
+function autoConnectToLoop(
+  loopId: string,
+  newEventId: string,
+  currentConnections: FlowConnection[]
+): FlowConnection[] {
+  const result = [...currentConnections];
+
+  const chainEndId = getLoopChainEnd(loopId, currentConnections);
+
+  if (chainEndId) {
+    // 非空循环体：断开 chainEnd → loop 的回边，插入新节点
+    const backEdgeIdx = result.findIndex(
+      (c) => c.sourceNodeId === chainEndId && c.targetNodeId === loopId && c.targetPortId === 'in_exec'
+    );
+    if (backEdgeIdx >= 0) {
+      result.splice(backEdgeIdx, 1);
+    }
+    // chainEnd.out_exec → newEvt.in_exec
+    result.push({
+      id: `conn_${chainEndId}_out_exec_${newEventId}_in_exec`,
+      sourceNodeId: chainEndId,
+      sourcePortId: 'out_exec',
+      targetNodeId: newEventId,
+      targetPortId: 'in_exec',
+    });
+  } else {
+    // 空循环体：loop.out_body → newEvt.in_exec
+    result.push({
+      id: `conn_${loopId}_out_body_${newEventId}_in_exec`,
+      sourceNodeId: loopId,
+      sourcePortId: 'out_body',
+      targetNodeId: newEventId,
+      targetPortId: 'in_exec',
+    });
+  }
+
+  // 新回边：newEvt.out_exec → loop.in_exec
+  result.push({
+    id: `conn_${newEventId}_out_exec_${loopId}_in_exec`,
+    sourceNodeId: newEventId,
+    sourcePortId: 'out_exec',
+    targetNodeId: loopId,
+    targetPortId: 'in_exec',
+  });
+
+  return result;
 }
 
 function handleEventDelete(eventId: string) {
@@ -544,13 +709,21 @@ function isValidConnection(connection: {
 
 // 自动布局：使用 dagre 重新计算节点位置
 function handleAutoLayout() {
-  const layouted = autoLayoutEvents(events.value, 'LR');
+  const layouted = autoLayoutEvents(events.value, 'LR', connections.value);
   for (const node of layouted) {
     positionCache[node.id] = { ...node.position };
   }
   // 递增 trigger 以通知 flowNodes computed 使用新位置
   positionTrigger.value++;
 }
+
+// 事件变化时自动布局
+watch(
+  () => [events.value.length, connections.value.length],
+  () => {
+    nextTick(() => handleAutoLayout());
+  },
+);
 </script>
 
 <style scoped>
@@ -634,5 +807,125 @@ function handleAutoLayout() {
   color: var(--text-color, #1c1917);
   background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 8%, transparent);
   font-weight: 500;
+}
+
+/* ── Guide panel ─────────────────────────────────────────── */
+
+.guide-panel {
+  padding: 16px 20px;
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.guide-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.guide-section__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-color, #1c1917);
+}
+
+.guide-section__desc {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-secondary-color, #57534e);
+}
+
+.guide-section__desc code {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: var(--radius-xs, 4px);
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 8%, transparent);
+  color: var(--text-color, #1c1917);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.guide-type {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* ── Variable list ───────────────────────────────────────── */
+
+.guide-vars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.guide-var {
+  display: grid;
+  grid-template-columns: 80px 56px 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+}
+
+.guide-var__code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs, 4px);
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 8%, transparent);
+  color: var(--text-color, #1c1917);
+  white-space: nowrap;
+}
+
+.guide-var__label {
+  font-weight: 500;
+  color: var(--text-secondary-color, #57534e);
+}
+
+.guide-var__desc {
+  color: var(--text-tertiary-color, #a8a29e);
+}
+
+/* ── Example ─────────────────────────────────────────────── */
+
+.guide-example {
+  padding: 8px 10px;
+  border-radius: var(--radius-xs, 4px);
+  background: color-mix(in srgb, var(--text-tertiary-color, #a8a29e) 6%, transparent);
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.guide-example__prompt {
+  color: var(--text-secondary-color, #57534e);
+  font-weight: 500;
+}
+
+.guide-example code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: var(--radius-xs, 4px);
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 8%, transparent);
+}
+
+.guide-example__results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.guide-example__results span {
+  font-size: 10px;
+  color: var(--text-secondary-color, #57534e);
+  white-space: nowrap;
+}
+
+.guide-example__results code {
+  color: var(--text-color, #1c1917);
 }
 </style>

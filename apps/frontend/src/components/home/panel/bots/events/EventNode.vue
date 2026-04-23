@@ -22,66 +22,87 @@
       </span>
     </div>
 
-    <!-- Ports -->
+    <!-- Port labels (handles are absolutely positioned on border) -->
     <div v-if="hasPorts" class="event-node__ports">
       <div v-for="(_, rowIndex) in portRowCount" :key="rowIndex" class="event-node__port-row">
-        <!-- Input port -->
-        <div class="event-node__port-cell event-node__port-cell--left">
-          <template v-if="inputPorts[rowIndex]">
-            <Handle
-              type="target"
-              :id="inputPorts[rowIndex].id"
-              :position="Position.Left"
-              class="event-node__handle"
-              :style="handleStyle(inputPorts[rowIndex])"
-            />
-            <span
-              class="event-node__port-label"
-              :title="`${inputPorts[rowIndex].name} (${inputPorts[rowIndex].dataType})`"
-            >
-              <span
-                v-if="inputPorts[rowIndex].dataType === 'trigger'"
-                class="event-node__trigger-icon"
-                >▶</span
-              >
-              {{ inputPorts[rowIndex].name }}
-            </span>
-          </template>
-        </div>
-
-        <!-- Separator -->
-        <div class="event-node__port-separator" />
-
-        <!-- Output port -->
-        <div class="event-node__port-cell event-node__port-cell--right">
-          <template v-if="outputPorts[rowIndex]">
-            <Handle
-              type="source"
-              :id="outputPorts[rowIndex].id"
-              :position="Position.Right"
-              class="event-node__handle"
-              :style="handleStyle(outputPorts[rowIndex])"
-            />
-            <span
-              class="event-node__port-label"
-              :title="`${outputPorts[rowIndex].name} (${outputPorts[rowIndex].dataType})`"
-            >
-              <span
-                v-if="outputPorts[rowIndex].dataType === 'trigger'"
-                class="event-node__trigger-icon"
-                >▶</span
-              >
-              {{ outputPorts[rowIndex].name }}
-            </span>
-          </template>
-        </div>
+        <span
+          v-if="inputPorts[rowIndex]"
+          class="event-node__port-label event-node__port-label--left"
+        >
+          <span
+            v-if="inputPorts[rowIndex].dataType === 'trigger'"
+            class="event-node__port-label-icon"
+            >▶</span
+          >
+          <span
+            v-else
+            class="event-node__port-dot"
+            :style="{ background: PORT_COLORS[inputPorts[rowIndex].dataType] || PORT_COLORS.any }"
+          />
+          <span
+            :style="{
+              color:
+                inputPorts[rowIndex].dataType === 'trigger'
+                  ? undefined
+                  : PORT_COLORS[inputPorts[rowIndex].dataType] || undefined,
+            }"
+            >{{ inputPorts[rowIndex].name }}</span
+          >
+        </span>
+        <span v-else />
+        <span
+          v-if="outputPorts[rowIndex]"
+          class="event-node__port-label event-node__port-label--right"
+        >
+          <span
+            v-if="outputPorts[rowIndex].dataType === 'trigger'"
+            class="event-node__port-label-icon"
+            >▶</span
+          >
+          <span
+            v-else
+            class="event-node__port-dot"
+            :style="{ background: PORT_COLORS[outputPorts[rowIndex].dataType] || PORT_COLORS.any }"
+          />
+          <span
+            :style="{
+              color:
+                outputPorts[rowIndex].dataType === 'trigger'
+                  ? undefined
+                  : PORT_COLORS[outputPorts[rowIndex].dataType] || undefined,
+            }"
+            >{{ outputPorts[rowIndex].name }}</span
+          >
+        </span>
       </div>
     </div>
 
-    <!-- Summary -->
+    <!-- Summary + type indicator -->
     <div v-if="node.data.summary" class="event-node__summary">
       {{ node.data.summary }}
     </div>
+
+    <!-- Input handles (absolute positioned on left border) -->
+    <Handle
+      v-for="(port, idx) in inputPorts"
+      :key="port.id"
+      type="target"
+      :id="port.id"
+      :position="Position.Left"
+      class="event-node__handle"
+      :style="{ background: PORT_COLORS[port.dataType] ?? PORT_COLORS.any, top: handleOffset(idx) }"
+    />
+
+    <!-- Output handles (absolute positioned on right border) -->
+    <Handle
+      v-for="(port, idx) in outputPorts"
+      :key="port.id"
+      type="source"
+      :id="port.id"
+      :position="Position.Right"
+      class="event-node__handle"
+      :style="{ background: PORT_COLORS[port.dataType] ?? PORT_COLORS.any, top: handleOffset(idx) }"
+    />
   </div>
 </template>
 
@@ -110,7 +131,6 @@ const typeIcon = computed(() => {
 
 const traceStatusClass = computed(() => {
   const status = node.data.traceStatus;
-  // 无调试状态时不添加任何 class（避免默认 opacity: 0.5）
   if (!status) return '';
   return `event-node--trace-${status}`;
 });
@@ -118,18 +138,15 @@ const traceStatusClass = computed(() => {
 // ─── Port computations ──────────────────────────────────────
 
 const ports = computed(() => node.data.ports ?? []);
-
 const hasPorts = computed(() => ports.value.length > 0);
-
 const inputPorts = computed(() => ports.value.filter((p) => p.direction === 'input'));
-
 const outputPorts = computed(() => ports.value.filter((p) => p.direction === 'output'));
-
 const portRowCount = computed(() => Math.max(inputPorts.value.length, outputPorts.value.length));
 
-function handleStyle(port: EventPort) {
-  const color = PORT_COLORS[port.dataType] ?? PORT_COLORS.any;
-  return { background: color };
+// ─── Handle offset calculation ─────────────────────────────
+// header(28px) + ports-padding(2px) + row_index * row_height(20px) + half_row(10px)
+function handleOffset(rowIndex: number): string {
+  return `${30 + rowIndex * 20 + 10}px`;
 }
 </script>
 
@@ -138,14 +155,15 @@ function handleStyle(port: EventPort) {
   background: var(--strong-background-color, #fff);
   border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.08));
   border-radius: var(--radius-sm, 8px);
-  min-width: 180px;
+  min-width: 160px;
   max-width: 240px;
-  font-size: 13px;
+  font-size: 12px;
   transition:
     box-shadow 0.2s ease,
     border-color 0.2s ease,
     opacity 0.2s ease;
   box-shadow: var(--shadow-xs, 0 1px 2px rgba(28, 25, 23, 0.04));
+  overflow: visible;
 }
 
 .event-node:hover {
@@ -157,23 +175,20 @@ function handleStyle(port: EventPort) {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-primary, #5a8f4e) 15%, transparent);
 }
 
-/* ── Trace status styles（仅在调试面板中使用） ──────────── */
+/* ── Trace status styles ──────────────────────────────────── */
 
 .event-node--trace-pending {
   opacity: 0.6;
 }
-
 .event-node--trace-success {
   opacity: 1;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-primary, #5a8f4e) 20%, transparent);
 }
-
 .event-node--trace-error {
   opacity: 1;
   box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3);
   border-color: rgba(239, 68, 68, 0.4);
 }
-
 .event-node--trace-running {
   opacity: 1;
   animation: pulse-border 1.5s ease-in-out infinite;
@@ -189,24 +204,25 @@ function handleStyle(port: EventPort) {
   }
 }
 
-/* ── Header ──────────────────────────────────────────────── */
+/* ── Header ───────────────────────────────────────────────── */
 
 .event-node__header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 5px 10px;
   cursor: pointer;
 }
 
 .event-node__icon {
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
-  width: 20px;
+  width: 18px;
   text-align: center;
 }
 
 .event-node__name {
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-color, #1c1917);
   white-space: nowrap;
@@ -219,15 +235,12 @@ function handleStyle(port: EventPort) {
   font-size: 12px;
   flex-shrink: 0;
 }
-
 .event-node__status--success {
   color: var(--color-success, #16a34a);
 }
-
 .event-node__status--error {
   color: var(--color-error, #dc2626);
 }
-
 .event-node__status--pending {
   color: var(--text-tertiary-color, #a8a29e);
   font-size: 14px;
@@ -254,111 +267,84 @@ function handleStyle(port: EventPort) {
   }
 }
 
-/* ── Ports ───────────────────────────────────────────────── */
+/* ── Port labels ──────────────────────────────────────────── */
 
 .event-node__ports {
-  border-top: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.06));
-  padding: 4px 0;
+  padding: 1px 10px 3px;
 }
 
 .event-node__port-row {
   display: flex;
   align-items: center;
-  min-height: 26px;
-  padding: 0 12px;
+  justify-content: space-between;
+  min-height: 20px;
 }
-
-.event-node__port-cell {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-}
-
-.event-node__port-cell--left {
-  justify-content: flex-start;
-  gap: 6px;
-  padding-right: 4px;
-}
-
-.event-node__port-cell--right {
-  justify-content: flex-end;
-  gap: 6px;
-  padding-left: 4px;
-}
-
-/* 右侧端口：label 在右，dot 在左 */
-.event-node__port-cell--right {
-  flex-direction: row-reverse;
-}
-
-.event-node__port-separator {
-  width: 1px;
-  align-self: stretch;
-  margin: 2px 4px;
-  background: var(--border-subtle-color, rgba(0, 0, 0, 0.08));
-}
-
-/* ── Handle（端口圆点） ─────────────────────────────────── */
-
-.event-node__handle {
-  width: 10px !important;
-  height: 10px !important;
-  min-width: 10px;
-  min-height: 10px;
-  border: none !important;
-  border-radius: 50% !important;
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
-  flex-shrink: 0;
-  /* 覆盖 vue-flow 默认绝对定位 — 通过 flex 布局定位 */
-  position: relative !important;
-  top: auto !important;
-  transform: none !important;
-}
-
-.event-node__handle:hover {
-  transform: scale(1.3) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-primary, #5a8f4e) 15%, transparent);
-}
-
-/* ── Port label ──────────────────────────────────────────── */
 
 .event-node__port-label {
   font-size: 10px;
   color: var(--text-tertiary-color, #a8a29e);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   cursor: default;
 }
 
-.event-node__trigger-icon {
+.event-node__port-label--left {
+  padding-left: 4px;
+}
+.event-node__port-label--right {
+  padding-right: 4px;
+}
+
+.event-node__port-label-icon {
   font-size: 7px;
   line-height: 1;
   opacity: 0.85;
 }
 
+.event-node__port-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 /* ── Summary ─────────────────────────────────────────────── */
 
 .event-node__summary {
-  padding: 6px 12px 8px;
+  padding: 2px 10px 5px;
   color: var(--text-tertiary-color, #a8a29e);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 10px;
+  line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-top: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.06));
 }
 
-/* ── 节点类型色调（使用 color-mix 适配暗色模式） ────────── */
+/* ── Handle (rectangular, on border) ──────────────────────── */
 
-/* 控制节点 */
+.event-node__handle {
+  width: 8px !important;
+  height: 18px !important;
+  min-width: 8px !important;
+  min-height: 18px !important;
+  border: none !important;
+  border-radius: 3px !important;
+  transition:
+    scale 0.15s ease,
+    box-shadow 0.15s ease;
+  /* Don't override position — let Vue Flow absolute-position on border */
+  /* Don't override transform — Vue Flow's translateY(-50%) centers handle at computed top */
+}
+
+.event-node__handle:hover {
+  scale: 1.15;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-primary, #5a8f4e) 15%, transparent);
+}
+
+/* ── Node type tints ──────────────────────────────────────── */
+
 .event-node--trigger,
 .event-node--end,
 .event-node--wait,
@@ -371,7 +357,6 @@ function handleStyle(port: EventPort) {
   );
 }
 
-/* 处理节点 */
 .event-node--llm {
   background: color-mix(in srgb, #7c6ff0 6%, var(--strong-background-color, #fff));
 }
@@ -388,7 +373,6 @@ function handleStyle(port: EventPort) {
   background: color-mix(in srgb, #9c78b4 6%, var(--strong-background-color, #fff));
 }
 
-/* 输出节点 */
 .event-node--reply {
   background: color-mix(in srgb, #409eff 6%, var(--strong-background-color, #fff));
 }

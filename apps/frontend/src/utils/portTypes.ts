@@ -97,14 +97,22 @@ function ports(
 }
 
 const DEFAULT_PORTS: Record<EventType, EventPort[]> = {
-  trigger: ports([], [['out_exec', 'trigger', '执行']]),
+  trigger: ports([], [
+    ['out_exec', 'trigger', '执行'],
+    ['out_input', 'string', '用户消息'],
+    ['out_username', 'string', '发送者'],
+    ['out_time', 'string', '时间'],
+    ['out_args', 'string', '参数'],
+  ]),
   end: ports([['in_exec', 'trigger', '执行']], []),
   reply: ports(
     [
       ['in_exec', 'trigger', '执行'],
       ['in_content', 'string', '内容'],
     ],
-    []
+    [
+      ['out_exec', 'trigger', '执行'],
+    ]
   ),
   wait: ports(
     [['in_exec', 'trigger', '执行']],

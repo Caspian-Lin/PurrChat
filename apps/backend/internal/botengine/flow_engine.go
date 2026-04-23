@@ -166,27 +166,10 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 	return nil
 }
 
-// findOutputConnection 找到指定节点指定类型输出端口对应的连接
-func (ctx *ExecutionContext) findOutputConnection(nodeID string, dataType string) *FlowConnection {
-	// 找到源节点的对应输出端口
-	var outPortID string
-	for i := range ctx.Events {
-		if ctx.Events[i].ID == nodeID {
-			for _, port := range ctx.Events[i].Ports {
-				if port.Direction == "output" && port.DataType == dataType {
-					outPortID = port.ID
-					break
-				}
-			}
-			break
-		}
-	}
-	if outPortID == "" {
-		return nil
-	}
-
+// findOutputConnection 找到指定节点指定输出端口的连接
+func (ctx *ExecutionContext) findOutputConnection(nodeID string, portID string) *FlowConnection {
 	for i := range ctx.Connections {
-		if ctx.Connections[i].SourceNodeID == nodeID && ctx.Connections[i].SourcePortID == outPortID {
+		if ctx.Connections[i].SourceNodeID == nodeID && ctx.Connections[i].SourcePortID == portID {
 			return &ctx.Connections[i]
 		}
 	}
@@ -314,6 +297,10 @@ func getDefaultPortsForType(eventType string) []EventPort {
 	case "trigger":
 		return []EventPort{
 			{ID: "out_exec", Name: "执行", DataType: "trigger", Direction: "output"},
+			{ID: "out_input", Name: "用户消息", DataType: "string", Direction: "output"},
+			{ID: "out_username", Name: "发送者", DataType: "string", Direction: "output"},
+			{ID: "out_time", Name: "时间", DataType: "string", Direction: "output"},
+			{ID: "out_args", Name: "参数", DataType: "string", Direction: "output"},
 		}
 	case "end":
 		return []EventPort{
