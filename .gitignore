@@ -68,3 +68,6 @@ tmp/
 
 CLAUDE.md
 r2-cors.json
+
+# Internal documentation (not for public repo)
+docs/SECURITY_ISSUES.md
