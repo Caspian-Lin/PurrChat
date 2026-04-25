@@ -61,6 +61,11 @@ apps/backend/server
 **/target/
 Cargo.lock
 
+# Tauri Mobile
+**/gen/android/app/build/
+**/gen/android/buildSrc/build/
+**/gen/android/.gradle/
+
 # Misc
 .cache/
 .temp/
