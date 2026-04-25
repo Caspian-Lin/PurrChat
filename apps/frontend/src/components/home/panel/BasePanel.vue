@@ -1,5 +1,11 @@
 <template>
-  <div class="flex h-full overflow-hidden">
+  <!-- 移动端：直接全屏显示内容（忽略侧栏） -->
+  <div v-if="isMobile" class="mobile-base-panel">
+    <slot />
+  </div>
+
+  <!-- 桌面端：侧栏 + 主视图 -->
+  <div v-else class="flex h-full overflow-hidden">
     <!-- 侧栏 -->
     <div
       class="base-panel__sidebar flex-shrink-0 overflow-hidden"
@@ -29,6 +35,7 @@
 import { computed } from 'vue';
 import type { PanelId } from '../../../stores/sidebar';
 import { useSidebarStore } from '../../../stores/sidebar';
+import { usePlatform } from '../../../composables/usePlatform';
 import ResizableContainer from '../../common/ResizableContainer.vue';
 
 interface Props {
@@ -44,6 +51,7 @@ const props = withDefaults(defineProps<Props>(), {
   maxSidebarWidth: 500,
 });
 
+const { isMobile } = usePlatform();
 const sidebarStore = useSidebarStore();
 
 const sidebarStyle = computed(() => {
@@ -61,8 +69,15 @@ const sidebarStyle = computed(() => {
 </script>
 
 <style scoped>
-/* 折叠时禁止侧栏内的交互 */
 .base-panel__sidebar--collapsed {
   pointer-events: none;
+}
+
+.mobile-base-panel {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--background-color);
 }
 </style>

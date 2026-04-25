@@ -110,7 +110,7 @@
               </div>
 
               <!-- 消息内容 -->
-              <div class="w-fit max-w-[75%]">
+              <div class="w-fit" style="max-width: var(--msg-bubble-max-width, 75%)">
                 <!-- 对方的消息显示昵称 -->
                 <div
                   v-if="message.sender_id !== currentUserId"

@@ -60,7 +60,8 @@
 
               <!-- 消息内容 -->
               <div
-                class="group relative w-fit max-w-[75%]"
+                class="group relative w-fit"
+                style="max-width: var(--msg-bubble-max-width, 75%)"
                 @mouseenter="hoveredMessageId = message.id"
                 @mouseleave="onBubbleMouseLeave"
                 @dblclick="onBubbleDoubleClick(message.id)"
