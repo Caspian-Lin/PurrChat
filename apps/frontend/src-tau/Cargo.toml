@@ -18,6 +18,17 @@ tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+[lib]
+name = "purr_chat_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+strip = true        # 剥离调试符号 (108MB → ~20MB)
+lto = true          # 链接时优化 (跨 crate 内联，减少重复代码)
+codegen-units = 1   # 单编译单元 (更好的优化，编译更慢)
+opt-level = "z"     # 优化体积而非速度
+panic = "abort"     # 移除 unwind 表 (节省 ~5%)
