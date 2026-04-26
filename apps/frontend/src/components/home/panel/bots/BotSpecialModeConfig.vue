@@ -146,13 +146,15 @@ const positionTrigger = ref(0);
 const ensuredEvents = computed(() => {
   const events = ensurePorts(props.events || []);
   if (events.length === 0) {
-    return [{
-      id: 'evt_trigger_default',
-      type: 'trigger' as const,
-      name: '触发',
-      config: {},
-      ports: getDefaultPorts('trigger'),
-    }];
+    return [
+      {
+        id: 'evt_trigger_default',
+        type: 'trigger' as const,
+        name: '触发',
+        config: {},
+        ports: getDefaultPorts('trigger'),
+      },
+    ];
   }
   return events;
 });
@@ -229,7 +231,8 @@ function autoConnectToLoop(
   if (chainEndId) {
     // 非空循环体：断开回边，插入新节点
     const backEdgeIdx = result.findIndex(
-      (c) => c.sourceNodeId === chainEndId && c.targetNodeId === loopId && c.targetPortId === 'in_exec'
+      (c) =>
+        c.sourceNodeId === chainEndId && c.targetNodeId === loopId && c.targetPortId === 'in_exec'
     );
     if (backEdgeIdx >= 0) {
       result.splice(backEdgeIdx, 1);
@@ -389,7 +392,7 @@ watch(
   () => [props.events?.length, props.connections?.length],
   () => {
     nextTick(() => handleAutoLayout());
-  },
+  }
 );
 </script>
 

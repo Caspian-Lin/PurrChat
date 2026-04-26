@@ -112,10 +112,7 @@ export function inferLoopChildren(
  * 获取循环体执行链的末端节点 ID（即回边到 loop 自身的那个节点）。
  * 用于在链尾插入新节点时定位断开点。
  */
-export function getLoopChainEnd(
-  loopId: string,
-  connections: FlowConnection[]
-): string | null {
+export function getLoopChainEnd(loopId: string, connections: FlowConnection[]): string | null {
   for (const conn of connections) {
     if (conn.targetNodeId === loopId && conn.targetPortId === 'in_exec') {
       return conn.sourceNodeId;
@@ -150,8 +147,7 @@ export function eventsToFlowNodes(
     nodes.push({
       id: evt.id,
       type: 'loopFrame',
-      position:
-        evt.position || positions?.[evt.id] || { x: 280, y: 50 },
+      position: evt.position || positions?.[evt.id] || { x: 280, y: 50 },
       style: { width: '500px', height: '300px' },
       data: {
         label: evt.name,
@@ -194,10 +190,9 @@ export function eventsToFlowNodes(
       node.position = evt.position || { x: 60, y: 60 + childIndex * 90 };
       childIndex++;
     } else {
-      node.position =
-        evt.position ||
+      node.position = evt.position ||
         positions?.[evt.id] || {
-          x: (nodes.filter((n) => !n.parentNode).length) * 280,
+          x: nodes.filter((n) => !n.parentNode).length * 280,
           y: 50,
         };
     }
@@ -228,9 +223,10 @@ export function connectionsToFlowEdges(
   const loopIds = new Set((events || []).filter((e) => e.type === 'loop').map((e) => e.id));
 
   // 推断循环体子节点关系，用于精确识别回边
-  const childMap = events && events.length > 0
-    ? inferLoopChildren(events, connections)
-    : new Map<string, string>();
+  const childMap =
+    events && events.length > 0
+      ? inferLoopChildren(events, connections)
+      : new Map<string, string>();
 
   // 过滤循环结构边（入口/出口），这些边由框体视觉隐含
   const visibleConns = connections.filter((conn) => {
@@ -244,8 +240,7 @@ export function connectionsToFlowEdges(
   });
 
   return visibleConns.map((conn) => {
-    const sourceDataType =
-      portTypeMap.get(`${conn.sourceNodeId}:${conn.sourcePortId}`) || 'any';
+    const sourceDataType = portTypeMap.get(`${conn.sourceNodeId}:${conn.sourcePortId}`) || 'any';
     return {
       id: conn.id,
       source: conn.sourceNodeId,
@@ -358,9 +353,7 @@ export function autoLayoutEvents(
     if (childNodesByParent.has(node.id)) {
       const children = childNodesByParent.get(node.id)!;
       const childEdges = edges.filter(
-        (e) =>
-          children.some((c) => c.id === e.source) &&
-          children.some((c) => c.id === e.target)
+        (e) => children.some((c) => c.id === e.source) && children.some((c) => c.id === e.target)
       );
 
       if (children.length <= 1) {
@@ -497,7 +490,11 @@ export function validateEventChain(
     visiting.add(id);
     for (const nextId of adj.get(id) || []) {
       // 跳过已知的 loop 回边
-      if (loopBackTargets.has(id) && loopChildSet.has(nextId) && loopChildSet.get(nextId) === loopChildSet.get(id)) {
+      if (
+        loopBackTargets.has(id) &&
+        loopChildSet.has(nextId) &&
+        loopChildSet.get(nextId) === loopChildSet.get(id)
+      ) {
         // 这是从 loop 子节点回到 loop 自身的合法回边，跳过
         // 但只有当 target 是 loop 节点自身时才跳过
         if (nextId === loopChildSet.get(id)) continue;

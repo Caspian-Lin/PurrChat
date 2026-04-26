@@ -1,8 +1,5 @@
 <template>
-  <div
-    class="loop-frame"
-    :class="{ 'loop-frame--selected': node.selected }"
-  >
+  <div class="loop-frame" :class="{ 'loop-frame--selected': node.selected }">
     <!-- Header bar (has background for visual hierarchy) -->
     <div class="loop-frame__header">
       <span class="loop-frame__icon">{{ node.data.icon || '↻' }}</span>
@@ -28,7 +25,9 @@
         </span>
       </div>
       <div class="loop-frame__port-labels-right">
-        <span class="loop-frame__port-label loop-frame__port-label--trigger loop-frame__port-label--done">
+        <span
+          class="loop-frame__port-label loop-frame__port-label--trigger loop-frame__port-label--done"
+        >
           完成 <span class="loop-frame__port-label-icon">▶</span>
         </span>
       </div>
@@ -40,7 +39,7 @@
       <div class="loop-frame__internal-port loop-frame__internal-port--condition">
         <span
           class="loop-frame__internal-port-dot"
-          style="background: var(--color-error, #F56C6C)"
+          style="background: var(--color-error, #f56c6c)"
         />
         <span>条件</span>
       </div>
@@ -259,11 +258,7 @@ function handleAddEvent() {
   padding: 2px 8px 2px 5px;
   border-radius: var(--radius-xs, 4px);
   border: 1px dashed var(--border-subtle-color, rgba(0, 0, 0, 0.12));
-  background: color-mix(
-    in srgb,
-    var(--strong-background-color, #fff) 60%,
-    transparent
-  );
+  background: color-mix(in srgb, var(--strong-background-color, #fff) 60%, transparent);
   font-size: 10px;
   color: var(--text-tertiary-color, #a8a29e);
   user-select: none;
@@ -271,7 +266,7 @@ function handleAddEvent() {
 }
 
 .loop-frame__internal-port--condition {
-  color: var(--color-error, #F56C6C);
+  color: var(--color-error, #f56c6c);
   opacity: 0.7;
 }
 
@@ -300,7 +295,9 @@ function handleAddEvent() {
   min-height: 18px !important;
   border: none !important;
   border-radius: 3px !important;
-  transition: scale 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    scale 0.15s ease,
+    box-shadow 0.15s ease;
   z-index: 1;
   pointer-events: auto;
 }

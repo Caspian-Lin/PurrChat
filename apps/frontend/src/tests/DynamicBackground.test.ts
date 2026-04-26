@@ -87,9 +87,15 @@ describe('DynamicBackground Component', () => {
 
     // Mock getBoundingClientRect for predictable calculations
     const mockRect = {
-      width: 1000, height: 800,
-      left: 0, top: 0, right: 1000, bottom: 800,
-      x: 0, y: 0, toJSON: () => ({}),
+      width: 1000,
+      height: 800,
+      left: 0,
+      top: 0,
+      right: 1000,
+      bottom: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
     };
     vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(mockRect as DOMRect);
 

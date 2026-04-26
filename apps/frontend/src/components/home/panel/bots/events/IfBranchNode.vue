@@ -1,10 +1,7 @@
 <template>
   <div
     class="if-branch"
-    :class="[
-      { 'if-branch--selected': node.selected },
-      `if-branch--${node.data.traceStatus || ''}`,
-    ]"
+    :class="[{ 'if-branch--selected': node.selected }, `if-branch--${node.data.traceStatus || ''}`]"
   >
     <!-- Header -->
     <div class="if-branch__header">
@@ -33,7 +30,9 @@
         </span>
       </div>
       <div class="if-branch__port-row">
-        <span class="if-branch__port-label if-branch__port-label--left if-branch__port-label--boolean">
+        <span
+          class="if-branch__port-label if-branch__port-label--left if-branch__port-label--boolean"
+        >
           条件
         </span>
         <span class="if-branch__port-label if-branch__port-label--false">
@@ -138,7 +137,9 @@ function handleOffset(rowIndex: number): string {
 
 /* ── Trace status ────────────────────────────────────────── */
 
-.if-branch--pending { opacity: 0.6; }
+.if-branch--pending {
+  opacity: 0.6;
+}
 .if-branch--success {
   opacity: 1;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-primary, #5a8f4e) 20%, transparent);
@@ -154,8 +155,13 @@ function handleOffset(rowIndex: number): string {
 }
 
 @keyframes pulse-border-if {
-  0%, 100% { box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.3); }
-  50% { box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.15); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.15);
+  }
 }
 
 /* ── Header ──────────────────────────────────────────────── */
@@ -186,10 +192,20 @@ function handleOffset(rowIndex: number): string {
   flex: 1;
 }
 
-.if-branch__status { font-size: 12px; flex-shrink: 0; }
-.if-branch__status--success { color: var(--color-success, #16a34a); }
-.if-branch__status--error { color: var(--color-error, #dc2626); }
-.if-branch__status--pending { color: var(--text-tertiary-color, #a8a29e); font-size: 14px; }
+.if-branch__status {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.if-branch__status--success {
+  color: var(--color-success, #16a34a);
+}
+.if-branch__status--error {
+  color: var(--color-error, #dc2626);
+}
+.if-branch__status--pending {
+  color: var(--text-tertiary-color, #a8a29e);
+  font-size: 14px;
+}
 
 .if-branch__pulse {
   display: inline-block;
@@ -201,8 +217,15 @@ function handleOffset(rowIndex: number): string {
 }
 
 @keyframes pulse-dot-if {
-  0%, 100% { opacity: 0.4; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.2); }
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
 }
 
 /* ── Port labels ─────────────────────────────────────────── */
@@ -228,12 +251,24 @@ function handleOffset(rowIndex: number): string {
   cursor: default;
 }
 
-.if-branch__port-label--left { padding-left: 4px; }
-.if-branch__port-label--right { padding-right: 4px; }
+.if-branch__port-label--left {
+  padding-left: 4px;
+}
+.if-branch__port-label--right {
+  padding-right: 4px;
+}
 
-.if-branch__port-label--boolean { color: PORT_COLORS.boolean; }
-.if-branch__port-label--true { color: var(--color-success, #16a34a); font-weight: 500; }
-.if-branch__port-label--false { color: var(--color-error, #dc2626); font-weight: 500; }
+.if-branch__port-label--boolean {
+  color: PORT_COLORS.boolean;
+}
+.if-branch__port-label--true {
+  color: var(--color-success, #16a34a);
+  font-weight: 500;
+}
+.if-branch__port-label--false {
+  color: var(--color-error, #dc2626);
+  font-weight: 500;
+}
 
 .if-branch__port-label-icon {
   font-size: 7px;
@@ -284,7 +319,9 @@ function handleOffset(rowIndex: number): string {
   min-height: 18px !important;
   border: none !important;
   border-radius: 3px !important;
-  transition: scale 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    scale 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .if-branch__handle:hover {

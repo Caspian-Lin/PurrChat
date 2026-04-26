@@ -192,9 +192,13 @@
           <div class="guide-section">
             <h4 class="guide-section__title">连线规则</h4>
             <p class="guide-section__desc">
-              端口按数据类型严格匹配：<span class="guide-type" style="color: var(--color-success, #16a34a)">▶ 执行流</span>（绿色）只能连接执行流端口；
-              <span class="guide-type" style="color: #3b82f6">数据</span>（蓝色）可连接任意数据输入端口。
-              拖拽连线时，不兼容的端口会自动拒绝。
+              端口按数据类型严格匹配：<span
+                class="guide-type"
+                style="color: var(--color-success, #16a34a)"
+                >▶ 执行流</span
+              >（绿色）只能连接执行流端口；
+              <span class="guide-type" style="color: #3b82f6">数据</span
+              >（蓝色）可连接任意数据输入端口。 拖拽连线时，不兼容的端口会自动拒绝。
             </p>
           </div>
 
@@ -202,7 +206,8 @@
             <h4 class="guide-section__title">循环与条件</h4>
             <p class="guide-section__desc">
               <strong>条件节点</strong>（◇）接收一个布尔值，根据真假走不同分支。
-              <strong>循环节点</strong>（↻）会反复执行框体内的节点，直到条件为假后从「完成」出口退出。
+              <strong>循环节点</strong
+              >（↻）会反复执行框体内的节点，直到条件为假后从「完成」出口退出。
               循环体通过虚线框可视化，框内节点为循环体内容。
             </p>
           </div>
@@ -403,13 +408,15 @@ async function loadData() {
     // 防御性检查：确保事件链有 trigger 节点
     const sm = localMechanism.value.reply?.special_mode;
     if (sm && sm.events.length === 0) {
-      sm.events = [{
-        id: 'evt_trigger_default',
-        type: 'trigger' as const,
-        name: '触发',
-        config: {},
-        ports: getDefaultPorts('trigger'),
-      }];
+      sm.events = [
+        {
+          id: 'evt_trigger_default',
+          type: 'trigger' as const,
+          name: '触发',
+          config: {},
+          ports: getDefaultPorts('trigger'),
+        },
+      ];
     }
   } catch (err: any) {
     error.value = err.response?.data?.message || '加载失败';
@@ -558,7 +565,8 @@ function autoConnectToLoop(
   if (chainEndId) {
     // 非空循环体：断开 chainEnd → loop 的回边，插入新节点
     const backEdgeIdx = result.findIndex(
-      (c) => c.sourceNodeId === chainEndId && c.targetNodeId === loopId && c.targetPortId === 'in_exec'
+      (c) =>
+        c.sourceNodeId === chainEndId && c.targetNodeId === loopId && c.targetPortId === 'in_exec'
     );
     if (backEdgeIdx >= 0) {
       result.splice(backEdgeIdx, 1);
@@ -722,7 +730,7 @@ watch(
   () => [events.value.length, connections.value.length],
   () => {
     nextTick(() => handleAutoLayout());
-  },
+  }
 );
 </script>
 

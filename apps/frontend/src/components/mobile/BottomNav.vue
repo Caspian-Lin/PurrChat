@@ -1,8 +1,5 @@
 <template>
-  <nav
-    class="mobile-bottom-nav"
-    :style="{ paddingBottom: safeAreaBottom }"
-  >
+  <nav class="mobile-bottom-nav" :style="{ paddingBottom: safeAreaBottom }">
     <button
       v-for="tab in tabs"
       :key="tab.panel"
@@ -12,10 +9,22 @@
       <component
         :is="tab.icon"
         :size="22"
-        :class="['mobile-nav-icon', { 'text-white': activePanel === tab.panel, 'text-text-tertiary': activePanel !== tab.panel }]"
+        :class="[
+          'mobile-nav-icon',
+          {
+            'text-white': activePanel === tab.panel,
+            'text-text-tertiary': activePanel !== tab.panel,
+          },
+        ]"
       />
       <span
-        :class="['mobile-nav-label', { 'text-white': activePanel === tab.panel, 'text-text-tertiary': activePanel !== tab.panel }]"
+        :class="[
+          'mobile-nav-label',
+          {
+            'text-white': activePanel === tab.panel,
+            'text-text-tertiary': activePanel !== tab.panel,
+          },
+        ]"
       >
         {{ tab.label }}
       </span>
@@ -25,13 +34,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import {
-  BsChatLeftDots,
-  BsFillPersonLinesFill,
-  BsRobot,
-  BsCpu,
-  BsGear,
-} from 'vue-icons-plus/bs';
+import { BsChatLeftDots, BsFillPersonLinesFill, BsRobot, BsCpu, BsGear } from 'vue-icons-plus/bs';
 import { useRoute } from 'vue-router';
 import { usePanelController } from '../../controllers/panelController';
 
