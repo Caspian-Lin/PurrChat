@@ -211,12 +211,12 @@ make docker-down      # Docker 停止
 ### Android 构建
 
 ```bash
-make android:dev            # 开发模式 (需连接设备或模拟器)
-make android:build:debug    # 构建 debug APK
-make android:build:release  # 构建 release APK (按 CPU 架构拆分)
-make android:build:apk      # 构建 release 通用 APK
-make android:keystore       # 生成 release 签名 keystore
-make android:clean          # 清理构建产物
+make android-dev            # 开发模式 (需连接设备或模拟器)
+make android-build-debug    # 构建 debug APK
+make android-build-release  # 构建 release APK (按 CPU 架构拆分)
+make android-build-apk      # 构建 release 通用 APK
+make android-keystore       # 生成 release 签名 keystore
+make android-clean          # 清理构建产物
 ```
 
 > 环境变量 `ANDROID_HOME`、`NDK_HOME`、`JAVA_HOME` 需在 `~/.bashrc` 中配置。

@@ -1,5 +1,5 @@
 .PHONY: help install dev build test lint lint-fix clean format type-check docker-up docker-down docker-logs docker-build migrate \
-        android:dev android:build:debug android:build:release android:build:apk android:clean
+        android-dev android-build-debug android-build-release android-build-apk android-keystore android-clean
 
 # 日志目录
 LOG_DIR := logs
@@ -19,12 +19,12 @@ help:
 	@echo "  make type-check   - 类型检查"
 	@echo ""
 	@echo "Android 命令:"
-	@echo "  make android:dev       - Android 开发模式 (需连接设备/模拟器)"
-	@echo "  make android:build:debug  - 构建 Android debug APK"
-	@echo "  make android:build:release - 构建 Android release APK (按 ABI 拆分)"
-	@echo "  make android:build:apk    - 构建 Android release 通用 APK"
-	@echo "  make android:keystore     - 生成 release 签名 keystore"
-	@echo "  make android:clean        - 清理 Android 构建产物"
+	@echo "  make android-dev       - Android 开发模式 (需连接设备/模拟器)"
+	@echo "  make android-build-debug  - 构建 Android debug APK"
+	@echo "  make android-build-release - 构建 Android release APK (按 ABI 拆分)"
+	@echo "  make android-build-apk    - 构建 Android release 通用 APK"
+	@echo "  make android-keystore     - 生成 release 签名 keystore"
+	@echo "  make android-clean        - 清理 Android 构建产物"
 	@echo ""
 	@echo "Docker 命令:"
 	@echo "  make docker-up    - 启动 Docker 容器"
@@ -181,23 +181,23 @@ docker-build:
 # ==================== Android (Tauri 2 Mobile) ====================
 
 # Android 开发模式 (需连接设备或启动模拟器)
-android:dev:
+android-dev:
 	cd apps/frontend && npx tauri android dev
 
 # 构建 Android debug APK (含所有 CPU 架构，用于调试)
-android:build:debug:
+android-build-debug:
 	cd apps/frontend && npx tauri android build --debug
 
 # 构建 Android release APK (按 CPU 架构拆分，用于分发)
-android:build:release:
+android-build-release:
 	cd apps/frontend && npx tauri android build --split-per-abi
 
 # 构建 Android release 通用 APK (所有架构打包在一起)
-android:build:apk:
+android-build-apk:
 	cd apps/frontend && npx tauri android build --apk
 
 # 生成 release 签名 keystore (首次配置执行一次)
-android:keystore:
+android-keystore:
 	@keytool -genkeypair -v \
 		-keystore apps/frontend/src-tau/gen/android/app/purrchat-release.jks \
 		-keyalg RSA -keysize 2048 -validity 10000 \
@@ -205,7 +205,7 @@ android:keystore:
 	@echo "请编辑 gen/android/keystore.properties 填入密码信息"
 
 # 清理 Android 构建产物
-android:clean:
+android-clean:
 	rm -rf apps/frontend/src-tau/gen/android/app/build
 	rm -rf apps/frontend/src-tau/gen/android/buildSrc/build
 	rm -rf apps/frontend/src-tau/gen/android/.gradle
