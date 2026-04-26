@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"purr-chat-server/pkg/cookie"
 	"purr-chat-server/pkg/jwt"
 	"purr-chat-server/pkg/logger"
 
@@ -17,8 +18,9 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	Subprotocols:    []string{"bearer"},
 	CheckOrigin: func(r *http.Request) bool {
-		return true // 允许所有来源，生产环境应该更严格
+		return true
 	},
 }
 
@@ -76,9 +78,32 @@ func detectDeviceType(userAgent string) DeviceType {
 }
 
 // HandleWebSocket 处理WebSocket连接
+// Token 获取优先级: Cookie → Sec-WebSocket-Protocol → URL query (向后兼容)
 func HandleWebSocket(c *gin.Context) {
-	// 从查询参数获取token
-	token := c.Query("token")
+	var token string
+
+	// 1. 优先从 Cookie 中获取 token（浏览器 WebSocket 自动携带）
+	if t, ok := cookie.GetTokenFromCookie(c.Request); ok {
+		token = t
+	}
+
+	// 2. 回退: 从 Sec-WebSocket-Protocol 子协议中提取 token
+	//    格式: Sec-WebSocket-Protocol: bearer,<token>
+	//    兼容 Tauri 等可能不自动发 Cookie 的客户端
+	if token == "" {
+		for _, proto := range c.Request.Header["Sec-Websocket-Protocol"] {
+			if strings.HasPrefix(proto, "bearer,") {
+				token = strings.TrimPrefix(proto, "bearer,")
+				break
+			}
+		}
+	}
+
+	// 3. 最终回退: 从 query 参数获取（向后兼容旧客户端）
+	if token == "" {
+		token = c.Query("token")
+	}
+
 	if token == "" {
 		logger.ErrorfWithCaller("WebSocket connection rejected: missing token")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})

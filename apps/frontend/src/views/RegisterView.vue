@@ -47,6 +47,11 @@
           />
         </BaseFormItem>
 
+        <!-- Cloudflare Turnstile 人机验证 -->
+        <div v-if="turnstileEnabled" class="flex justify-center">
+          <div id="turnstile-container"></div>
+        </div>
+
         <BaseAlert v-if="auth.error.value" type="error" class="mb-4">
           {{ auth.error }}
         </BaseAlert>
@@ -76,8 +81,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useAuthController } from '../controllers/authController';
+import { api } from '../models/api';
 import ThemeSwitcher from '../components/ThemeSwitcher.vue';
 import DynamicBackground from '../components/DynamicBackground.vue';
 import BaseInput from '../components/common/BaseInput.vue';
@@ -90,6 +96,58 @@ const email = ref('');
 const phone = ref('');
 const password = ref('');
 const confirmPassword = ref('');
+
+// Turnstile 状态
+const turnstileEnabled = ref(false);
+const turnstileToken = ref('');
+
+onMounted(async () => {
+  try {
+    const config = await api.getTurnstileConfig();
+    if (config.enabled && config.site_key) {
+      turnstileEnabled.value = true;
+      loadTurnstileScript(config.site_key);
+    }
+  } catch {
+    // Turnstile 不可用时，允许继续注册（后端也会跳过验证）
+  }
+});
+
+function loadTurnstileScript(siteKey: string) {
+  // 避免重复加载
+  if (document.querySelector('script[src*="challenges.cloudflare.com"]')) {
+    renderWidget(siteKey);
+    return;
+  }
+  const script = document.createElement('script');
+  script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  script.async = true;
+  script.onload = () => renderWidget(siteKey);
+  document.head.appendChild(script);
+}
+
+function renderWidget(siteKey: string) {
+  const container = document.getElementById('turnstile-container');
+  if (!container) return;
+
+  // @ts-ignore - Turnstile 全局对象
+  if (window.turnstile) {
+    container.innerHTML = '';
+    // @ts-ignore
+    window.turnstile.render(container, {
+      sitekey: siteKey,
+      callback: (token: string) => {
+        turnstileToken.value = token;
+      },
+      'error-callback': () => {
+        turnstileToken.value = '';
+      },
+      'expired-callback': () => {
+        turnstileToken.value = '';
+      },
+    });
+  }
+}
 
 const handleSubmit = async () => {
   // 清除之前的错误信息
@@ -125,7 +183,13 @@ const handleSubmit = async () => {
     return;
   }
 
-  await auth.handleRegister(username.value, password.value, email.value, phone.value);
+  await auth.handleRegister(
+    username.value,
+    password.value,
+    email.value,
+    phone.value,
+    turnstileToken.value || undefined
+  );
 };
 </script>
 

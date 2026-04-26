@@ -52,8 +52,8 @@ function getErrorMessage(backendError: string): string {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  // 认证状态
-  const token = ref<string | null>(localStorage.getItem('token'));
+  // 认证状态 — token 仅存储在内存中（Pinia ref），由 HttpOnly Cookie 管理实际认证
+  const token = ref<string | null>(null);
   const user = ref<User | null>(
     localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null
   );
@@ -68,7 +68,7 @@ export const useAuthStore = defineStore('auth', () => {
   function setAuth(authToken: string, authUser: User) {
     token.value = authToken;
     user.value = authUser;
-    localStorage.setItem('token', authToken);
+    // 仅保存用户信息到 localStorage（不再保存 token）
     localStorage.setItem('user', JSON.stringify(authUser));
     // 切换缓存服务到当前用户（不删除其他用户数据）
     switchStorageUser(authUser.id);
@@ -87,16 +87,27 @@ export const useAuthStore = defineStore('auth', () => {
   function clearAuth() {
     token.value = null;
     user.value = null;
-    localStorage.removeItem('token');
     localStorage.removeItem('user');
   }
 
   // 用户注册
-  async function register(username: string, password: string, email: string, phone: string) {
+  async function register(
+    username: string,
+    password: string,
+    email: string,
+    phone: string,
+    turnstileToken?: string
+  ) {
     loading.value = true;
     error.value = null;
     try {
-      const response = await api.register({ username, password, email, phone });
+      const response = await api.register({
+        username,
+        password,
+        email,
+        phone,
+        turnstile_token: turnstileToken,
+      });
       if (response.success && response.data) {
         setAuth(response.data.token, response.data.user);
         return true;
@@ -158,8 +169,13 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // 登出
-  function logout() {
+  // 登出 — 调用后端清除 Cookie
+  async function logout() {
+    try {
+      await api.logout();
+    } catch {
+      // 即使后端调用失败，也清除本地状态
+    }
     clearAuth();
   }
 

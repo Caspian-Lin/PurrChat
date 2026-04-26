@@ -6,23 +6,30 @@ import (
 
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/services"
+	"purr-chat-server/pkg/config"
+	"purr-chat-server/pkg/cookie"
 	"purr-chat-server/pkg/jwt"
 	"purr-chat-server/pkg/logger"
+	"purr-chat-server/pkg/turnstile"
 
 	"github.com/gin-gonic/gin"
 )
 
 // AuthHandler 认证处理器
 type AuthHandler struct {
-	authService *services.AuthService
-	jwtSecret   string
+	authService  *services.AuthService
+	jwtSecret    string
+	isSecure     bool
+	turnstileCfg *config.TurnstileConfig
 }
 
 // NewAuthHandler 创建认证处理器
-func NewAuthHandler(authService *services.AuthService, jwtSecret string) *AuthHandler {
+func NewAuthHandler(authService *services.AuthService, jwtSecret string, isSecure bool, turnstileCfg *config.TurnstileConfig) *AuthHandler {
 	return &AuthHandler{
-		authService: authService,
-		jwtSecret:   jwtSecret,
+		authService:  authService,
+		jwtSecret:    jwtSecret,
+		isSecure:     isSecure,
+		turnstileCfg: turnstileCfg,
 	}
 }
 
@@ -45,6 +52,30 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// Turnstile 人机验证（启用时强制要求）
+	if h.turnstileCfg != nil && h.turnstileCfg.Enabled {
+		if req.TurnstileToken == "" {
+			c.JSON(http.StatusBadRequest, models.AuthResponse{
+				Success: false,
+				Message: "人机验证 token 不能为空",
+			})
+			return
+		}
+		result, err := turnstile.Verify(
+			h.turnstileCfg.SecretKey,
+			req.TurnstileToken,
+			c.ClientIP(),
+		)
+		if err != nil || !result.Success {
+			logger.ErrorfWithCaller("Turnstile verification failed: %v, error codes: %v", err, result.ErrorCodes)
+			c.JSON(http.StatusForbidden, models.AuthResponse{
+				Success: false,
+				Message: "人机验证失败，请重试",
+			})
+			return
+		}
+	}
+
 	resp, err := h.authService.Register(c.Request.Context(), &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Registration failed for username %s: %v", req.Username, err)
@@ -56,6 +87,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	logger.InfofWithCaller("User registered successfully: %s (ID: %s)", resp.User.Username, resp.User.ID)
+
+	// SEC-006: 通过 HttpOnly Cookie 设置 token
+	cookie.SetAuthCookie(c.Writer, resp.Token, h.isSecure)
 
 	c.JSON(http.StatusOK, models.AuthResponse{
 		Success: true,
@@ -95,10 +129,36 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	logger.InfofWithCaller("User logged in successfully: %s (ID: %s)", resp.User.Username, resp.User.ID)
 
+	// SEC-006: 通过 HttpOnly Cookie 设置 token
+	cookie.SetAuthCookie(c.Writer, resp.Token, h.isSecure)
+
 	c.JSON(http.StatusOK, models.AuthResponse{
 		Success: true,
 		Message: "Login successful",
 		Data:    resp,
+	})
+}
+
+// Logout 用户登出
+func (h *AuthHandler) Logout(c *gin.Context) {
+	cookie.ClearAuthCookie(c.Writer)
+	c.JSON(http.StatusOK, models.AuthResponse{
+		Success: true,
+		Message: "Logged out successfully",
+	})
+}
+
+// TurnstileConfig 返回 Turnstile 公开配置（site_key）
+func (h *AuthHandler) TurnstileConfig(c *gin.Context) {
+	if h.turnstileCfg == nil || !h.turnstileCfg.Enabled {
+		c.JSON(http.StatusOK, gin.H{
+			"enabled": false,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"enabled":  true,
+		"site_key": h.turnstileCfg.SiteKey,
 	})
 }
 
@@ -185,17 +245,29 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 }
 
 // AuthMiddleware JWT认证中间件
+// 支持 Bearer header 和 HttpOnly Cookie 两种认证方式
 func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var tokenString string
+
+		// 优先从 Authorization header 获取 token
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			logger.ErrorfWithCaller("Missing Authorization header for %s %s", c.Request.Method, c.Request.URL.Path)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+		if authHeader != "" {
+			tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+		} else {
+			// 回退到 Cookie
+			if token, ok := cookie.GetTokenFromCookie(c.Request); ok {
+				tokenString = token
+			}
+		}
+
+		if tokenString == "" {
+			logger.ErrorfWithCaller("Missing auth token for %s %s", c.Request.Method, c.Request.URL.Path)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization required"})
 			c.Abort()
 			return
 		}
 
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		userID, err := jwt.ExtractUserID(tokenString, jwtSecret)
 		if err != nil {
 			logger.ErrorfWithCaller("Invalid token for %s %s: %v", c.Request.Method, c.Request.URL.Path, err)

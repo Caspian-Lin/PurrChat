@@ -11,6 +11,7 @@ import (
 	"purr-chat-server/internal/websocket"
 	"purr-chat-server/pkg/database"
 	"purr-chat-server/pkg/logger"
+	"purr-chat-server/pkg/utils"
 
 	"github.com/google/uuid"
 )
@@ -275,11 +276,17 @@ func (s *ChatService) SendMessage(ctx context.Context, senderID string, req *mod
 	_ = enrollment // 避免未使用变量警告
 
 	// 创建消息（使用UTC时间）
+	// 对 text 类型消息内容进行 HTML 转义，防御存储型 XSS
+	content := req.Content
+	if req.MsgType == "text" {
+		content = utils.EscapeHTML(content)
+	}
+
 	message := &models.Message{
 		ID:             uuid.New(),
 		ConversationID: req.ConversationID,
 		SenderID:       senderUUID,
-		Content:        req.Content,
+		Content:        content,
 		MsgType:        models.MsgType(req.MsgType),
 		CreatedAt:      time.Now().UTC(),
 	}

@@ -469,7 +469,7 @@ func SetupTestRouter() {
 	authService := services.NewAuthService(userRepo, jwtSecret)
 	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
 
-	authHandler = handlers.NewAuthHandler(authService, jwtSecret)
+	authHandler = handlers.NewAuthHandler(authService, jwtSecret, false, nil)
 	chatHandler = handlers.NewChatHandler(authService, chatService)
 
 	// 配置路由

@@ -23,6 +23,7 @@ export interface RegisterRequest {
   password: string;
   email: string;
   phone: string;
+  turnstile_token?: string;
 }
 
 // 登录请求

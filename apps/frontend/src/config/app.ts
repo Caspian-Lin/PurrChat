@@ -71,24 +71,21 @@ export const getStorageApiBaseUrl = (): string => {
   return getApiBaseUrl();
 };
 
-// 获取 WebSocket URL
-export const getWebSocketUrl = (token: string, userId: string): string => {
+// 获取 WebSocket URL（不再传递 token，通过 Cookie/子协议认证）
+export const getWebSocketUrl = (userId: string): string => {
   const baseUrl = appConfig.apiBaseUrl;
   let wsUrl: string;
 
   if (baseUrl.startsWith('/')) {
-    // 相对路径，使用当前协议和主机
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    // 如果 baseUrl 是 '/' 或空，直接使用 /api/ws
     const basePath = baseUrl === '/' ? '' : baseUrl;
-    wsUrl = `${protocol}//${host}${basePath}/api/ws?token=${encodeURIComponent(token)}&user_id=${userId}`;
+    wsUrl = `${protocol}//${host}${basePath}/api/ws?user_id=${userId}`;
   } else {
-    // 绝对路径
     const url = new URL(baseUrl);
     const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = url.host;
-    wsUrl = `${protocol}//${host}/api/ws?token=${encodeURIComponent(token)}&user_id=${userId}`;
+    wsUrl = `${protocol}//${host}/api/ws?user_id=${userId}`;
   }
 
   return wsUrl;

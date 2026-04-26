@@ -1,7 +1,7 @@
 import { ref, onUnmounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useConnectionStore } from '../stores/connection';
-import { getWebSocketUrl, logger } from '../config/app';
+import { getWebSocketUrl, logger, appConfig } from '../config/app';
 
 export interface WebSocketMessage {
   type: string;
@@ -87,8 +87,8 @@ class WebSocketService {
     this.on('pong', this.handlePong.bind(this));
   }
 
-  // 连接WebSocket
-  connect(token: string, userId: string) {
+  // 连接WebSocket（token 通过 Cookie 或子协议传递，不再通过 URL query）
+  connect(userId: string) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       logger.log('WebSocket already connected');
       return;
@@ -98,13 +98,24 @@ class WebSocketService {
     this.connectionStore.setConnecting(true);
     this.isManualClose = false;
 
-    // 构建WebSocket URL - 使用配置工具
-    const wsUrl = getWebSocketUrl(token, userId);
-
+    const wsUrl = getWebSocketUrl(userId);
     logger.info('Connecting to WebSocket', { url: wsUrl });
 
     try {
-      this.ws = new WebSocket(wsUrl);
+      if (appConfig.isTauri) {
+        // Tauri 环境: 使用 Sec-WebSocket-Protocol 子协议传递 token
+        const auth = useAuthStore();
+        if (!auth.token) {
+          logger.error('No auth token available for Tauri WebSocket');
+          this.connecting.value = false;
+          this.connectionStore.setConnecting(false);
+          return;
+        }
+        this.ws = new WebSocket(wsUrl, [`bearer,${auth.token}`]);
+      } else {
+        // Web/Mobile 环境: 依赖浏览器自动携带 Cookie
+        this.ws = new WebSocket(wsUrl);
+      }
 
       this.ws.onopen = this.handleOpen.bind(this);
       this.ws.onmessage = this.handleMessage.bind(this);
@@ -234,8 +245,8 @@ class WebSocketService {
 
     setTimeout(() => {
       const auth = useAuthStore();
-      if (auth.token && auth.user) {
-        this.connect(auth.token, auth.user.id);
+      if (auth.isAuthenticated && auth.user) {
+        this.connect(auth.user.id);
       }
     }, delay);
   }
@@ -303,8 +314,8 @@ export const websocketService = new WebSocketService();
 export function useWebSocket() {
   const connect = () => {
     const auth = useAuthStore();
-    if (auth.token && auth.user) {
-      websocketService.connect(auth.token, auth.user.id);
+    if (auth.isAuthenticated && auth.user) {
+      websocketService.connect(auth.user.id);
     }
   };
 

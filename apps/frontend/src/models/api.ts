@@ -48,6 +48,7 @@ const apiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // 启用 Cookie 携带
 });
 
 // 记录配置信息
@@ -57,7 +58,7 @@ logger.info('API 配置', {
   client: import.meta.env.VITE_APP_CLIENT,
 });
 
-// 请求拦截器 - 添加 token
+// 请求拦截器 - 日志记录（Cookie 由浏览器自动发送）
 apiClient.interceptors.request.use(
   (config) => {
     console.log('[axios] 请求拦截器', {
@@ -65,13 +66,8 @@ apiClient.interceptors.request.use(
       url: config.url,
       baseURL: config.baseURL,
       fullURL: `${config.baseURL}${config.url}`,
-      headers: config.headers,
       data: config.data,
     });
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
     return config;
   },
   (error) => {
@@ -102,10 +98,8 @@ apiClient.interceptors.response.use(
       // 只有在非登录/注册接口返回 401 时才跳转到登录页
       // 登录和注册接口返回 401 是正常的业务错误（如密码错误），不应触发页面刷新
       if (!url.includes('/api/login') && !url.includes('/api/register')) {
-        // Token 过期或无效，清除本地存储
-        localStorage.removeItem('token');
+        // Cookie 过期或无效，清除本地用户信息并跳转登录页
         localStorage.removeItem('user');
-        // 跳转到登录页
         window.location.href = '/login';
       }
     }
@@ -164,6 +158,16 @@ export const api = {
   // 修改密码
   changePassword: (data: ChangePasswordRequest): Promise<ApiResponse<void>> => {
     return apiClient.put('/api/password', data).then((res) => res.data);
+  },
+
+  // 用户登出（清除服务端 Cookie）
+  logout: (): Promise<ApiResponse<void>> => {
+    return apiClient.post('/api/logout').then((res) => res.data);
+  },
+
+  // 获取 Turnstile 配置（site_key）
+  getTurnstileConfig: (): Promise<{ enabled: boolean; site_key?: string }> => {
+    return apiClient.get('/api/turnstile-config').then((res) => res.data);
   },
 
   // 搜索用户
@@ -424,15 +428,12 @@ const storageApiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // 启用 Cookie 携带
 });
 
-// 存储服务请求拦截器 - 添加 token
+// 存储服务请求拦截器 - Cookie 由浏览器自动发送
 storageApiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
     return config;
   },
   (error) => {

@@ -14,6 +14,13 @@ type Config struct {
 	Log       LogConfig
 	WebSocket WebSocketConfig
 	RateLimit RateLimitConfig
+	Turnstile TurnstileConfig
+}
+
+type TurnstileConfig struct {
+	SiteKey   string
+	SecretKey string
+	Enabled   bool
 }
 
 type RateLimitConfig struct {
@@ -88,6 +95,11 @@ func Load() *Config {
 			UserBurst:           getEnvInt("RATE_LIMIT_USER_BURST", 60),       // 允许 60 个突发
 			SensitiveRatePerSec: getEnvFloat("RATE_LIMIT_SENSITIVE_RPS", 0.5), // 每 2 秒 1 次
 			SensitiveBurst:      getEnvInt("RATE_LIMIT_SENSITIVE_BURST", 10),  // 允许 10 次突发
+		},
+		Turnstile: TurnstileConfig{
+			SiteKey:   getEnv("TURNSTILE_SITE_KEY", ""),
+			SecretKey: getEnv("TURNSTILE_SECRET_KEY", ""),
+			Enabled:   getEnv("TURNSTILE_ENABLED", "false") == "true",
 		},
 	}
 }

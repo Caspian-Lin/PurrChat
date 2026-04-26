@@ -24,10 +24,11 @@ type User struct {
 
 // RegisterRequest 注册请求
 type RegisterRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=20"`
-	Password string `json:"password" binding:"required,min=6"`
-	Email    string `json:"email" binding:"omitempty,email"`
-	Phone    string `json:"phone" binding:"omitempty,max=20"`
+	Username       string `json:"username" binding:"required,min=3,max=20"`
+	Password       string `json:"password" binding:"required,min=6"`
+	Email          string `json:"email" binding:"omitempty,email"`
+	Phone          string `json:"phone" binding:"omitempty,max=20"`
+	TurnstileToken string `json:"turnstile_token" binding:"omitempty"`
 }
 
 // LoginRequest 登录请求

@@ -207,10 +207,9 @@ const storageBreakdown = computed(() => {
   const settingsSize = settingsData ? settingsData.length * 2 : 0;
   if (settingsSize > 0) breakdown.push({ label: '应用设置', size: formatBytes(settingsSize) });
 
-  // 账号信息
-  const tokenData = localStorage.getItem('token');
+  // 账号信息（Cookie token 不在 localStorage 中）
   const userData = localStorage.getItem('user');
-  const authSize = (tokenData ? tokenData.length * 2 : 0) + (userData ? userData.length * 2 : 0);
+  const authSize = userData ? userData.length * 2 : 0;
   if (authSize > 0) breakdown.push({ label: '账号信息', size: formatBytes(authSize) });
 
   return breakdown;

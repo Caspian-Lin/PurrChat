@@ -43,6 +43,8 @@ const PURIFY_CONFIG: any = {
     'img',
   ],
   ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt', 'class'],
+  ALLOW_DATA_ATTR: false,
+  ALLOW_UNKNOWN_PROTOCOLS: false,
 };
 
 /**

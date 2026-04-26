@@ -51,7 +51,7 @@ describe('Auth Store', () => {
 
       expect(auth.token).toBe('test-token');
       expect(auth.user).toEqual(mockUser);
-      expect(localStorage.getItem('token')).toBe('test-token');
+      expect(localStorage.getItem('token')).toBeNull(); // token 不再存 localStorage
       expect(localStorage.getItem('user')).toBe(JSON.stringify(mockUser));
     });
   });
@@ -79,7 +79,6 @@ describe('Auth Store', () => {
       expect(auth.token).toBeNull();
       expect(auth.user).toBeNull();
       expect(auth.isAuthenticated).toBe(false);
-      expect(localStorage.getItem('token')).toBeNull();
       expect(localStorage.getItem('user')).toBeNull();
     });
   });

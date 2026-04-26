@@ -18,6 +18,7 @@ vi.mock('../models/api', () => ({
     register: vi.fn(),
     login: vi.fn(),
     me: vi.fn(),
+    logout: vi.fn(),
   },
 }));
 
@@ -41,6 +42,7 @@ describe('Auth Controller', () => {
     vi.mocked(api.register).mockReset();
     vi.mocked(api.login).mockReset();
     vi.mocked(api.me).mockReset();
+    vi.mocked(api.logout).mockReset();
   });
 
   describe('handleRegister', () => {
@@ -146,7 +148,7 @@ describe('Auth Controller', () => {
   });
 
   describe('handleLogout', () => {
-    it('should handle logout and redirect to login', () => {
+    it('should handle logout and redirect to login', async () => {
       // Set up authenticated state
       authStore.token = 'test-token';
       authStore.user = {
@@ -161,8 +163,10 @@ describe('Auth Controller', () => {
         created_at: '2024-01-01T00:00:00Z',
       };
 
+      vi.mocked(api.logout).mockResolvedValueOnce(undefined);
+
       const controller = useAuthController();
-      controller.handleLogout();
+      await controller.handleLogout();
 
       expect(authStore.token).toBe(null);
       expect(authStore.user).toBe(null);

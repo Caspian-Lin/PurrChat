@@ -44,6 +44,14 @@ func (h *ChatHandler) SearchUsers(c *gin.Context) {
 		return
 	}
 
+	if len(query) > 50 {
+		c.JSON(http.StatusBadRequest, models.AuthResponse{
+			Success: false,
+			Message: "搜索关键词过长，最多50个字符",
+		})
+		return
+	}
+
 	userID, exists := c.Get("user_id")
 	if !exists {
 		logger.ErrorfWithCaller("Unauthorized access attempt for user search")

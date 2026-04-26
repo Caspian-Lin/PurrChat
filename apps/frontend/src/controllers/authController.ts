@@ -15,9 +15,10 @@ export function useAuthController() {
     username: string,
     password: string,
     email: string,
-    phone: string
+    phone: string,
+    turnstileToken?: string
   ) => {
-    const success = await auth.register(username, password, email, phone);
+    const success = await auth.register(username, password, email, phone, turnstileToken);
     if (success) {
       router.push('/');
     }
@@ -37,8 +38,8 @@ export function useAuthController() {
   };
 
   // 登出处理
-  const handleLogout = () => {
-    auth.logout();
+  const handleLogout = async () => {
+    await auth.logout();
     router.push('/login');
   };
 

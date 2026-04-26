@@ -204,12 +204,16 @@ func main() {
 		10*time.Minute, // visitor 条目过期时间
 	))
 
-	// 配置 CORS 中间件
+	// 配置 CORS 中间件（支持 Cookie 认证）
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := c.Request.Header.Get("Origin")
+		if origin != "" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		}
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+		c.Writer.Header().Set("Access-Control-Expose-Headers", "Set-Cookie")
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
@@ -231,7 +235,7 @@ func main() {
 	botRepo := repository.NewBotRepository()
 	botDeployRepo := repository.NewBotDeploymentRepository()
 	botService := services.NewBotService(botRepo, botDeployRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, conversationMessageRepo)
-	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret)
+	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret, cfg.Port == "443" || os.Getenv("FORCE_SECURE_COOKIES") == "true", &cfg.Turnstile)
 	chatHandler := handlers.NewChatHandler(authService, chatService)
 	botEngine := botengine.NewBotEngine(botDeployRepo, botRepo, conversationMessageRepo, enrollmentRepo)
 	botHandler := handlers.NewBotHandler(botService, botEngine)
@@ -283,8 +287,10 @@ func main() {
 	// 认证路由（严格 per-IP 限流）
 	auth := r.Group("/api")
 	{
+		auth.GET("/turnstile-config", authHandler.TurnstileConfig)
 		auth.POST("/register", authRateLimit, authHandler.Register)
 		auth.POST("/login", authRateLimit, authHandler.Login)
+		auth.POST("/logout", handlers.AuthMiddleware(cfg.JWT.Secret), authHandler.Logout)
 		auth.GET("/me", handlers.AuthMiddleware(cfg.JWT.Secret), userRateLimit, authHandler.Me)
 		auth.PUT("/profile", handlers.AuthMiddleware(cfg.JWT.Secret), userRateLimit, chatHandler.UpdateProfile)
 		auth.PUT("/password", handlers.AuthMiddleware(cfg.JWT.Secret), userRateLimit, authHandler.ChangePassword)
@@ -340,7 +346,7 @@ func main() {
 		friends.POST("/handle", sensitiveRateLimit, chatHandler.HandleFriendRequest) // 处理好友请求严格限流
 	}
 
-	// WebSocket路由（不使用AuthMiddleware，因为WebSocket通过查询参数传递token）
+	// WebSocket路由（通过 Cookie/子协议/query 传递 token，不使用 AuthMiddleware）
 	r.GET("/api/ws", websocket.HandleWebSocket)
 
 	// Bot 路由（per-User 限流）

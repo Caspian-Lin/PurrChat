@@ -10,6 +10,7 @@ import (
 	"purr-chat-server/pkg/hash"
 	"purr-chat-server/pkg/jwt"
 	"purr-chat-server/pkg/logger"
+	"purr-chat-server/pkg/utils"
 
 	"github.com/google/uuid"
 )
@@ -170,10 +171,12 @@ func (s *AuthService) SearchUsers(ctx context.Context, query string) ([]*models.
 		return nil, err
 	}
 
-	// 清除密码相关字段
+	// 清除密码相关字段，并对隐私信息进行脱敏
 	for _, user := range users {
 		user.PasswordHash = ""
 		user.Salt = ""
+		user.Email = utils.MaskEmail(user.Email)
+		user.Phone = utils.MaskPhone(user.Phone)
 	}
 
 	return users, nil
