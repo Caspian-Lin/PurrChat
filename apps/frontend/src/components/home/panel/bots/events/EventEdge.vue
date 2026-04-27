@@ -24,7 +24,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { BaseEdge, getSmoothStepPath, useVueFlow } from '@vue-flow/core';
+import { BaseEdge, getBezierPath, useVueFlow } from '@vue-flow/core';
 import { PORT_COLORS } from '../../../../../utils/portTypes';
 
 const props = defineProps<{
@@ -51,14 +51,14 @@ const hovered = ref(false);
 const { removeEdges } = useVueFlow();
 
 const path = computed(() =>
-  getSmoothStepPath({
+  getBezierPath({
     sourceX: props.sourceX,
     sourceY: props.sourceY,
     targetX: props.targetX,
     targetY: props.targetY,
     sourcePosition: props.sourcePosition,
     targetPosition: props.targetPosition,
-    borderRadius: 8,
+    curvature: 0.3,
   })
 );
 

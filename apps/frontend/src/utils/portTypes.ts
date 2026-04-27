@@ -19,7 +19,8 @@ export type EventType =
   | 'builtin'
   | 'python'
   | 'reply'
-  | 'template';
+  | 'template'
+  | 'history';
 
 // ─── 端口 & 连线 ────────────────────────────────────────────
 
@@ -68,6 +69,7 @@ export const NODE_TYPE_META: Record<EventType, NodeTypeMeta> = {
   python: { label: 'Python', icon: '🐍', category: 'process', description: 'Python 脚本' },
   template: { label: '模板', icon: '📋', category: 'process', description: '模板渲染' },
   reply: { label: '回复', icon: '💬', category: 'output', description: '发送回复' },
+  history: { label: '历史消息', icon: '📜', category: 'process', description: '获取历史消息记录' },
 };
 
 // ─── 类型兼容性 ──────────────────────────────────────────────
@@ -125,7 +127,8 @@ const DEFAULT_PORTS: Record<EventType, EventPort[]> = {
   if: ports(
     [
       ['in_exec', 'trigger', '执行'],
-      ['in_condition', 'boolean', '条件'],
+      ['in_left', 'any', '左操作数'],
+      ['in_right', 'any', '右操作数'],
     ],
     [
       ['out_true', 'trigger', '真'],
@@ -180,6 +183,16 @@ const DEFAULT_PORTS: Record<EventType, EventPort[]> = {
     [
       ['out_exec', 'trigger', '执行'],
       ['out_output', 'string', '输出'],
+    ]
+  ),
+  history: ports(
+    [
+      ['in_exec', 'trigger', '执行'],
+      ['in_count', 'number', '消息数量'],
+    ],
+    [
+      ['out_exec', 'trigger', '执行'],
+      ['out_history', 'string', '历史记录'],
     ]
   ),
 };

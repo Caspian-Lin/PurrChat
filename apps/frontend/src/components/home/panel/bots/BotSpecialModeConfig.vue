@@ -70,9 +70,17 @@ import { VueFlow, ConnectionMode } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import { BsPlus } from 'vue-icons-plus/bs';
-import EventNode from './events/EventNode.vue';
-import LoopFrameNode from './events/LoopFrameNode.vue';
-import IfBranchNode from './events/IfBranchNode.vue';
+import TriggerNode from './events/TriggerNode.vue';
+import EndNode from './events/EndNode.vue';
+import WaitNode from './events/WaitNode.vue';
+import IfNode from './events/IfNode.vue';
+import LoopNode from './events/LoopNode.vue';
+import LlmNode from './events/LlmNode.vue';
+import BuiltinNode from './events/BuiltinNode.vue';
+import PythonNode from './events/PythonNode.vue';
+import TemplateNode from './events/TemplateNode.vue';
+import ReplyNode from './events/ReplyNode.vue';
+import HistoryNode from './events/HistoryNode.vue';
 import EventEdge from './events/EventEdge.vue';
 import EventConfigModal from './events/EventConfigModal.vue';
 import EndConditionConfig from './events/EndConditionConfig.vue';
@@ -119,9 +127,17 @@ const pendingLoopId = ref<string | null>(null);
 // 注册自定义节点类型
 
 const customNodeTypes: Record<string, any> = {
-  event: markRaw(EventNode),
-  loopFrame: markRaw(LoopFrameNode),
-  ifBranch: markRaw(IfBranchNode),
+  trigger: markRaw(TriggerNode),
+  end: markRaw(EndNode),
+  wait: markRaw(WaitNode),
+  if: markRaw(IfNode),
+  loop: markRaw(LoopNode),
+  llm: markRaw(LlmNode),
+  builtin: markRaw(BuiltinNode),
+  python: markRaw(PythonNode),
+  template: markRaw(TemplateNode),
+  reply: markRaw(ReplyNode),
+  history: markRaw(HistoryNode),
 };
 
 const customEdgeTypes: Record<string, any> = {
@@ -132,7 +148,7 @@ const defaultEdgeOptions = {
   type: 'event',
 };
 
-// provide addToLoop 回调（供 LoopFrameNode 的 "+" 按钮调用）
+// provide addToLoop 回调（供 LoopNode 的 "+" 按钮调用）
 provide('addToLoop', (loopId: string) => {
   pendingLoopId.value = loopId;
   showAddModal.value = true;

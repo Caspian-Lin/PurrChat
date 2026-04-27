@@ -3,6 +3,7 @@ package botengine
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"purr-chat-server/pkg/logger"
@@ -86,12 +87,29 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 		ctx.Session.EventOutputs[event.ID] = output
 
 	case "if":
-		condition := ctx.getPortValue(event.ID, "in_condition")
-		condBool, ok := condition.(bool)
-		if !ok {
-			condStr, _ := condition.(string)
-			condBool = ctx.evaluateCondition(condStr)
+		operator := "=="
+		if op, ok := event.Config["operator"].(string); ok {
+			operator = op
 		}
+
+		leftVal := ctx.getPortValue(event.ID, "in_left")
+		rightVal := ctx.getPortValue(event.ID, "in_right")
+
+		// 如果端口未连接（值为空字符串），使用默认值
+		leftStr, _ := leftVal.(string)
+		if leftStr == "" {
+			if def, ok := event.Config["left_default"].(string); ok {
+				leftStr = def
+			}
+		}
+		rightStr, _ := rightVal.(string)
+		if rightStr == "" {
+			if def, ok := event.Config["right_default"].(string); ok {
+				rightStr = def
+			}
+		}
+
+		condBool := ctx.evaluateOperatorCondition(leftStr, rightStr, operator)
 
 		var nextPort string
 		if condBool {
@@ -143,6 +161,23 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 			userMsg := ctx.Session.ContextBuffer[len(ctx.Session.ContextBuffer)-1].Content
 			ctx.PortValues[event.ID+":out_user_input"] = userMsg
 		}
+
+	case "history":
+		// 历史消息节点：获取前 N 条消息并格式化为 prompt 字符串
+		n := 20 // 默认 20 条
+		if v, ok := event.Config["count"].(float64); ok && v > 0 {
+			n = int(v)
+		}
+		// 从输入端口读取 N（如果有连接）
+		if nVal := ctx.getPortValue(event.ID, "in_count"); nVal != "" {
+			if nStr, ok := nVal.(string); ok {
+				if parsed, err := strconv.Atoi(nStr); err == nil && parsed > 0 {
+					n = parsed
+				}
+			}
+		}
+		historyPrompt := ctx.buildHistoryPrompt(n)
+		ctx.PortValues[event.ID+":out_history"] = historyPrompt
 
 	case "end":
 		return nil
@@ -279,6 +314,89 @@ func (ctx *ExecutionContext) evaluateCondition(condition string) bool {
 	return resolved != ""
 }
 
+// evaluateOperatorCondition 使用指定的运算符比较两个值
+func (ctx *ExecutionContext) evaluateOperatorCondition(left, right, operator string) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+
+	switch operator {
+	case "==":
+		return left == right
+	case "!=":
+		return left != right
+	case "contains":
+		return strings.Contains(left, right)
+	case ">":
+		return compareNumeric(left, right) > 0
+	case "<":
+		return compareNumeric(left, right) < 0
+	default:
+		return left == right
+	}
+}
+
+// compareNumeric 尝试将两个字符串解析为 float64 进行比较
+// 无法解析时回退到字符串比较
+func compareNumeric(a, b string) int {
+	af, aErr := strconv.ParseFloat(a, 64)
+	bf, bErr := strconv.ParseFloat(b, 64)
+	if aErr != nil || bErr != nil {
+		// 无法解析为数字时回退到字符串比较
+		if a < b {
+			return -1
+		} else if a > b {
+			return 1
+		}
+		return 0
+	}
+	if af < bf {
+		return -1
+	} else if af > bf {
+		return 1
+	}
+	return 0
+}
+
+// buildHistoryPrompt 从 ContextBuffer 中取最近 N 条消息，格式化为 prompt 字符串
+// 图片消息用 "[图片]" 占位
+func (ctx *ExecutionContext) buildHistoryPrompt(n int) string {
+	buf := ctx.Session.ContextBuffer
+	if len(buf) == 0 {
+		return ""
+	}
+
+	start := 0
+	if len(buf) > n {
+		start = len(buf) - n
+	}
+
+	var sb strings.Builder
+	for i := start; i < len(buf); i++ {
+		msg := buf[i]
+		roleLabel := msg.Role
+		if roleLabel == "assistant" {
+			roleLabel = "助手"
+		} else if roleLabel == "system" {
+			roleLabel = "系统"
+		} else {
+			roleLabel = "用户"
+		}
+
+		content := msg.Content
+		if msg.MsgType == "image" {
+			content = "[图片]"
+		}
+
+		sb.WriteString(roleLabel)
+		sb.WriteString(": ")
+		sb.WriteString(content)
+		if i < len(buf)-1 {
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
+}
+
 // ===== 端口兼容性 =====
 
 // ensureEventPorts 确保事件有端口定义（向后兼容旧数据）
@@ -314,7 +432,8 @@ func getDefaultPortsForType(eventType string) []EventPort {
 	case "if":
 		return []EventPort{
 			{ID: "in_exec", Name: "执行", DataType: "trigger", Direction: "input"},
-			{ID: "in_condition", Name: "条件", DataType: "boolean", Direction: "input"},
+			{ID: "in_left", Name: "左操作数", DataType: "any", Direction: "input"},
+			{ID: "in_right", Name: "右操作数", DataType: "any", Direction: "input"},
 			{ID: "out_true", Name: "真", DataType: "trigger", Direction: "output"},
 			{ID: "out_false", Name: "假", DataType: "trigger", Direction: "output"},
 		}
@@ -330,6 +449,13 @@ func getDefaultPortsForType(eventType string) []EventPort {
 			{ID: "in_exec", Name: "执行", DataType: "trigger", Direction: "input"},
 			{ID: "out_user_input", Name: "用户输入", DataType: "string", Direction: "output"},
 			{ID: "out_exec", Name: "执行", DataType: "trigger", Direction: "output"},
+		}
+	case "history":
+		return []EventPort{
+			{ID: "in_exec", Name: "执行", DataType: "trigger", Direction: "input"},
+			{ID: "in_count", Name: "消息数量", DataType: "number", Direction: "input"},
+			{ID: "out_exec", Name: "执行", DataType: "trigger", Direction: "output"},
+			{ID: "out_history", Name: "历史记录", DataType: "string", Direction: "output"},
 		}
 	default:
 		// 处理节点（llm, builtin, python, template）默认端口

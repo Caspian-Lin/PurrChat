@@ -36,6 +36,8 @@ export function getEventSummary(evt: SpecialModeEvent): string {
       return evt.config.condition || '条件分支';
     case 'loop':
       return `循环${evt.config.max_iterations ? ` (最多${evt.config.max_iterations}次)` : ''}`;
+    case 'history':
+      return `最近 ${evt.config.count || 20} 条消息`;
     default:
       return '';
   }
@@ -125,7 +127,7 @@ export function getLoopChainEnd(loopId: string, connections: FlowConnection[]): 
 
 /**
  * 将 events 转换为 VueFlow Node[]。
- * 如果提供 connections，loop 节点会渲染为 loopFrame 类型，
+ * 如果提供 connections，loop 节点会渲染为 loop 类型，
  * 其子节点通过 parentNode 关联。
  */
 export function eventsToFlowNodes(
@@ -146,7 +148,7 @@ export function eventsToFlowNodes(
     const meta = NODE_TYPE_META[evt.type];
     nodes.push({
       id: evt.id,
-      type: 'loopFrame',
+      type: 'loop',
       position: evt.position || positions?.[evt.id] || { x: 280, y: 50 },
       style: { width: '500px', height: '300px' },
       data: {
@@ -170,7 +172,7 @@ export function eventsToFlowNodes(
 
     const node: Node = {
       id: evt.id,
-      type: evt.type === 'if' ? 'ifBranch' : 'event',
+      type: evt.type,
       position: { x: 0, y: 0 },
       data: {
         label: evt.name,
@@ -320,8 +322,8 @@ export function autoLayoutEvents(
 
   for (const node of topNodes) {
     g.setNode(node.id, {
-      width: node.type === 'loopFrame' ? 500 : 220,
-      height: node.type === 'loopFrame' ? 300 : 60,
+      width: node.type === 'loop' ? 500 : 220,
+      height: node.type === 'loop' ? 300 : 60,
     });
   }
 
@@ -339,8 +341,8 @@ export function autoLayoutEvents(
 
   for (const node of topNodes) {
     const pos = g.node(node.id);
-    const w = node.type === 'loopFrame' ? 500 : 220;
-    const h = node.type === 'loopFrame' ? 300 : 60;
+    const w = node.type === 'loop' ? 500 : 220;
+    const h = node.type === 'loop' ? 300 : 60;
     result.push({
       ...node,
       position: {

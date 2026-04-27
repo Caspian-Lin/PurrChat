@@ -1,15 +1,15 @@
 <template>
-  <div class="loop-frame" :class="{ 'loop-frame--selected': node.selected }">
-    <!-- Header bar (has background for visual hierarchy) -->
-    <div class="loop-frame__header">
-      <span class="loop-frame__icon">{{ node.data.icon || '↻' }}</span>
-      <span class="loop-frame__name">{{ node.data.label }}</span>
-      <span v-if="node.data.summary" class="loop-frame__summary">
+  <div class="loop-node" :class="{ 'loop-node--selected': node.selected }">
+    <!-- Header bar -->
+    <div class="loop-node__header">
+      <span class="loop-node__icon">{{ node.data.icon || '↻' }}</span>
+      <span class="loop-node__name">{{ node.data.label }}</span>
+      <span v-if="node.data.summary" class="loop-node__summary">
         {{ node.data.summary }}
       </span>
       <button
         v-if="addToLoop"
-        class="loop-frame__add-btn"
+        class="loop-node__add-btn"
         title="添加事件到循环体"
         @click.stop="handleAddEvent"
       >
@@ -18,34 +18,32 @@
     </div>
 
     <!-- Port labels (border only) -->
-    <div class="loop-frame__port-labels">
-      <div class="loop-frame__port-labels-left">
-        <span class="loop-frame__port-label loop-frame__port-label--trigger">
-          <span class="loop-frame__port-label-icon">▶</span> 执行
+    <div class="loop-node__port-labels">
+      <div class="loop-node__port-labels-left">
+        <span class="loop-node__port-label loop-node__port-label--trigger">
+          <span class="base-node__port-label-icon">▶</span> 执行
         </span>
       </div>
-      <div class="loop-frame__port-labels-right">
+      <div class="loop-node__port-labels-right">
         <span
-          class="loop-frame__port-label loop-frame__port-label--trigger loop-frame__port-label--done"
+          class="loop-node__port-label loop-node__port-label--trigger loop-node__port-label--done"
         >
-          完成 <span class="loop-frame__port-label-icon">▶</span>
+          完成 <span class="base-node__port-label-icon">▶</span>
         </span>
       </div>
     </div>
 
     <!-- Internal ports row: condition input + body entry output -->
-    <div class="loop-frame__internal-ports">
-      <!-- Condition input (inside frame) -->
-      <div class="loop-frame__internal-port loop-frame__internal-port--condition">
+    <div class="loop-node__internal-ports">
+      <div class="loop-node__internal-port loop-node__internal-port--condition">
         <span
-          class="loop-frame__internal-port-dot"
+          class="loop-node__internal-port-dot"
           style="background: var(--color-error, #f56c6c)"
         />
         <span>条件</span>
       </div>
-      <!-- Body entry output (inside frame) -->
-      <div class="loop-frame__internal-port loop-frame__internal-port--entry">
-        <span class="loop-frame__entry-icon">▶</span>
+      <div class="loop-node__internal-port loop-node__internal-port--entry">
+        <span class="loop-node__entry-icon">▶</span>
         <span>循环体入口</span>
       </div>
     </div>
@@ -55,25 +53,25 @@
       type="target"
       id="in_exec"
       :position="Position.Left"
-      class="loop-frame__handle"
-      :style="{ background: PORT_COLORS.trigger, top: handleOffset(0) }"
+      class="loop-node__handle"
+      :style="{ background: PORT_COLORS.trigger, top: loopHandleOffset(0) }"
     />
 
-    <!-- in_condition: condition input (left border, aligned with internal label) -->
+    <!-- in_condition: condition input (left border) -->
     <Handle
       type="target"
       id="in_condition"
       :position="Position.Left"
-      class="loop-frame__handle"
+      class="loop-node__handle"
       :style="{ background: PORT_COLORS.boolean, top: '78px' }"
     />
 
-    <!-- out_body: loop body entry (right border, aligned with internal label) -->
+    <!-- out_body: loop body entry (right border) -->
     <Handle
       type="source"
       id="out_body"
       :position="Position.Right"
-      class="loop-frame__handle"
+      class="loop-node__handle"
       :style="{ background: PORT_COLORS.trigger, top: '78px' }"
     />
 
@@ -82,8 +80,8 @@
       type="source"
       id="out_done"
       :position="Position.Right"
-      class="loop-frame__handle"
-      :style="{ background: PORT_COLORS.trigger, top: handleOffset(0) }"
+      class="loop-node__handle"
+      :style="{ background: PORT_COLORS.trigger, top: loopHandleOffset(0) }"
     />
   </div>
 </template>
@@ -93,24 +91,15 @@ import { Handle, Position, useNode } from '@vue-flow/core';
 import { inject } from 'vue';
 import { BsPlus } from 'vue-icons-plus/bs';
 import { PORT_COLORS } from '../../../../../utils/portTypes';
+import type { BaseNodeData } from './BaseNode.vue';
+import { handleOffset } from './useNodeLayout';
 
-interface LoopFrameData {
-  label: string;
-  eventType: string;
-  summary?: string;
-  icon?: string;
-  config?: Record<string, any>;
-  [key: string]: any;
-}
-
-const { node } = useNode<LoopFrameData>();
+const { node } = useNode<BaseNodeData>();
 
 const addToLoop = inject<(loopId: string) => void>('addToLoop');
 
-// header(~24px) + labels-padding(2px) + row_index * row_height(20px) + half_row(10px)
-function handleOffset(rowIndex: number): string {
-  return `${26 + rowIndex * 20 + 10}px`;
-}
+// LoopNode header 比标准节点矮 4px
+const loopHandleOffset = (rowIndex: number) => handleOffset(rowIndex, 26);
 
 function handleAddEvent() {
   addToLoop?.(node.id);
@@ -118,7 +107,7 @@ function handleAddEvent() {
 </script>
 
 <style scoped>
-.loop-frame {
+.loop-node {
   min-width: 500px;
   min-height: 300px;
   width: 100%;
@@ -133,14 +122,14 @@ function handleAddEvent() {
     box-shadow 0.2s ease;
 }
 
-.loop-frame--selected {
+.loop-node--selected {
   border-color: var(--theme-primary, #5a8f4e);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-primary, #5a8f4e) 12%, transparent);
 }
 
 /* ── Header bar ─────────────────────────────────────────── */
 
-.loop-frame__header {
+.loop-node__header {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -155,12 +144,12 @@ function handleAddEvent() {
   pointer-events: auto;
 }
 
-.loop-frame__icon {
+.loop-node__icon {
   font-size: 13px;
   line-height: 1;
 }
 
-.loop-frame__name {
+.loop-node__name {
   font-size: 11px;
   font-weight: 500;
   color: var(--text-secondary-color, #57534e);
@@ -169,7 +158,7 @@ function handleAddEvent() {
   text-overflow: ellipsis;
 }
 
-.loop-frame__summary {
+.loop-node__summary {
   font-size: 10px;
   color: var(--text-tertiary-color, #a8a29e);
   white-space: nowrap;
@@ -178,7 +167,7 @@ function handleAddEvent() {
   margin-left: auto;
 }
 
-.loop-frame__add-btn {
+.loop-node__add-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -196,27 +185,27 @@ function handleAddEvent() {
     border-color 0.15s ease;
 }
 
-.loop-frame__add-btn:hover {
+.loop-node__add-btn:hover {
   background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 10%, transparent);
   border-style: solid;
 }
 
 /* ── Port labels (border) ────────────────────────────────── */
 
-.loop-frame__port-labels {
+.loop-node__port-labels {
   display: flex;
   justify-content: space-between;
   padding: 1px 10px 0;
 }
 
-.loop-frame__port-labels-left,
-.loop-frame__port-labels-right {
+.loop-node__port-labels-left,
+.loop-node__port-labels-right {
   display: flex;
   flex-direction: column;
   gap: 0;
 }
 
-.loop-frame__port-label {
+.loop-node__port-label {
   font-size: 10px;
   color: var(--text-tertiary-color, #57534e);
   white-space: nowrap;
@@ -227,23 +216,17 @@ function handleAddEvent() {
   cursor: default;
 }
 
-.loop-frame__port-label--trigger {
+.loop-node__port-label--trigger {
   color: var(--text-tertiary-color, #57534e);
 }
 
-.loop-frame__port-label--done {
+.loop-node__port-label--done {
   align-items: flex-end;
-}
-
-.loop-frame__port-label-icon {
-  font-size: 7px;
-  line-height: 1;
-  opacity: 0.85;
 }
 
 /* ── Internal ports row ──────────────────────────────────── */
 
-.loop-frame__internal-ports {
+.loop-node__internal-ports {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -251,7 +234,7 @@ function handleAddEvent() {
   pointer-events: auto;
 }
 
-.loop-frame__internal-port {
+.loop-node__internal-port {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -265,30 +248,30 @@ function handleAddEvent() {
   white-space: nowrap;
 }
 
-.loop-frame__internal-port--condition {
+.loop-node__internal-port--condition {
   color: var(--color-error, #f56c6c);
   opacity: 0.7;
 }
 
-.loop-frame__internal-port--entry {
+.loop-node__internal-port--entry {
   color: var(--theme-primary, #5a8f4e);
   opacity: 0.7;
 }
 
-.loop-frame__internal-port-dot {
+.loop-node__internal-port-dot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.loop-frame__entry-icon {
+.loop-node__entry-icon {
   font-size: 8px;
 }
 
 /* ── Handle (rectangular, on border) ──────────────────────── */
 
-.loop-frame__handle {
+.loop-node__handle {
   width: 8px !important;
   height: 18px !important;
   min-width: 8px !important;
@@ -302,7 +285,7 @@ function handleAddEvent() {
   pointer-events: auto;
 }
 
-.loop-frame__handle:hover {
+.loop-node__handle:hover {
   scale: 1.15;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-primary, #5a8f4e) 15%, transparent);
 }

@@ -27,9 +27,17 @@
 import { computed, markRaw } from 'vue';
 import { VueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
-import EventNode from '../events/EventNode.vue';
-import LoopFrameNode from '../events/LoopFrameNode.vue';
-import IfBranchNode from '../events/IfBranchNode.vue';
+import TriggerNode from '../events/TriggerNode.vue';
+import EndNode from '../events/EndNode.vue';
+import WaitNode from '../events/WaitNode.vue';
+import IfNode from '../events/IfNode.vue';
+import LoopNode from '../events/LoopNode.vue';
+import LlmNode from '../events/LlmNode.vue';
+import BuiltinNode from '../events/BuiltinNode.vue';
+import PythonNode from '../events/PythonNode.vue';
+import TemplateNode from '../events/TemplateNode.vue';
+import ReplyNode from '../events/ReplyNode.vue';
+import HistoryNode from '../events/HistoryNode.vue';
 import { eventsToFlowNodes, eventsToFlowEdges } from '../../../../../utils/eventFlowUtils';
 import type { SpecialModeEvent, EventTrace } from '../../../../../models/types';
 import type { Node, Edge } from '@vue-flow/core';
@@ -42,9 +50,17 @@ interface Props {
 const props = defineProps<Props>();
 
 const customNodeTypes: Record<string, any> = {
-  event: markRaw(EventNode),
-  loopFrame: markRaw(LoopFrameNode),
-  ifBranch: markRaw(IfBranchNode),
+  trigger: markRaw(TriggerNode),
+  end: markRaw(EndNode),
+  wait: markRaw(WaitNode),
+  if: markRaw(IfNode),
+  loop: markRaw(LoopNode),
+  llm: markRaw(LlmNode),
+  builtin: markRaw(BuiltinNode),
+  python: markRaw(PythonNode),
+  template: markRaw(TemplateNode),
+  reply: markRaw(ReplyNode),
+  history: markRaw(HistoryNode),
 };
 
 const defaultEdgeOptions = {

@@ -247,6 +247,7 @@ func (e *BotEngine) HandleSpecialMode(ctx context.Context, msg *BotMessage, bot 
 	session.ContextBuffer = append(session.ContextBuffer, ContextMessage{
 		Role:    "user",
 		Content: msg.Content,
+		MsgType: msg.MsgType,
 	})
 
 	// 限制上下文大小

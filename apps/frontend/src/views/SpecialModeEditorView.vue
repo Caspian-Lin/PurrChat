@@ -70,6 +70,16 @@
 
       <!-- VueFlow DAG 编辑器 -->
       <div v-else class="flex-1 relative overflow-hidden">
+        <!-- 连线提示 toast -->
+        <Transition name="toast-fade">
+          <div
+            v-if="connectionToast.visible"
+            class="connection-toast"
+            :class="`connection-toast--${connectionToast.type}`"
+          >
+            {{ connectionToast.message }}
+          </div>
+        </Transition>
         <div class="editor-toolbar absolute top-3 left-3 z-10 flex gap-2">
           <button class="toolbar-btn" @click="showAddModal = true">
             <BsPlus :size="14" />
@@ -244,7 +254,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick, markRaw, provide } from 'vue';
+import { ref, computed, watch, onMounted, nextTick, markRaw, provide, reactive } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { VueFlow, ConnectionMode } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
@@ -270,9 +280,17 @@ import {
 import type { ValidationIssue } from '../utils/eventFlowUtils';
 import { canConnect, getPortById, getDefaultPorts } from '../utils/portTypes';
 import { needsMigration, ensurePorts, migrateLegacyConnections } from '../utils/eventMigration';
-import EventNode from '../components/home/panel/bots/events/EventNode.vue';
-import LoopFrameNode from '../components/home/panel/bots/events/LoopFrameNode.vue';
-import IfBranchNode from '../components/home/panel/bots/events/IfBranchNode.vue';
+import TriggerNode from '../components/home/panel/bots/events/TriggerNode.vue';
+import EndNode from '../components/home/panel/bots/events/EndNode.vue';
+import WaitNode from '../components/home/panel/bots/events/WaitNode.vue';
+import IfNode from '../components/home/panel/bots/events/IfNode.vue';
+import LoopNode from '../components/home/panel/bots/events/LoopNode.vue';
+import LlmNode from '../components/home/panel/bots/events/LlmNode.vue';
+import BuiltinNode from '../components/home/panel/bots/events/BuiltinNode.vue';
+import PythonNode from '../components/home/panel/bots/events/PythonNode.vue';
+import TemplateNode from '../components/home/panel/bots/events/TemplateNode.vue';
+import ReplyNode from '../components/home/panel/bots/events/ReplyNode.vue';
+import HistoryNode from '../components/home/panel/bots/events/HistoryNode.vue';
 import EventEdge from '../components/home/panel/bots/events/EventEdge.vue';
 import EventConfigModal from '../components/home/panel/bots/events/EventConfigModal.vue';
 import EndConditionConfig from '../components/home/panel/bots/events/EndConditionConfig.vue';
@@ -290,6 +308,24 @@ const error = ref<string | null>(null);
 const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
 const activeBottomTab = ref<'guide' | 'conditions' | 'debug'>('conditions');
 const showAddModal = ref(false);
+
+// 连线提示 toast
+const connectionToast = reactive<{ visible: boolean; message: string; type: 'error' | 'warn' }>({
+  visible: false,
+  message: '',
+  type: 'error',
+});
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showConnectionToast(message: string, type: 'error' | 'warn' = 'error') {
+  if (toastTimer) clearTimeout(toastTimer);
+  connectionToast.visible = true;
+  connectionToast.message = message;
+  connectionToast.type = type;
+  toastTimer = setTimeout(() => {
+    connectionToast.visible = false;
+  }, 3000);
+}
 const editingEvent = ref<FullEvent | null>(null);
 
 // 循环体事件添加状态
@@ -322,9 +358,17 @@ const validationIssues = computed<ValidationIssue[]>(() => {
 // VueFlow 注册
 
 const customNodeTypes: Record<string, any> = {
-  event: markRaw(EventNode),
-  loopFrame: markRaw(LoopFrameNode),
-  ifBranch: markRaw(IfBranchNode),
+  trigger: markRaw(TriggerNode),
+  end: markRaw(EndNode),
+  wait: markRaw(WaitNode),
+  if: markRaw(IfNode),
+  loop: markRaw(LoopNode),
+  llm: markRaw(LlmNode),
+  builtin: markRaw(BuiltinNode),
+  python: markRaw(PythonNode),
+  template: markRaw(TemplateNode),
+  reply: markRaw(ReplyNode),
+  history: markRaw(HistoryNode),
 };
 
 const customEdgeTypes: Record<string, any> = {
@@ -335,7 +379,7 @@ const defaultEdgeOptions = {
   type: 'event',
 };
 
-// provide addToLoop 回调（供 LoopFrameNode 的 "+" 按钮调用）
+// provide addToLoop 回调（供 LoopNode 的 "+" 按钮调用）
 provide('addToLoop', (loopId: string) => {
   pendingLoopId.value = loopId;
   showAddModal.value = true;
@@ -634,6 +678,11 @@ watch(flowNodes, (nodes) => {
   }
 });
 
+// 在事件 ports 中查找端口，找不到时 fallback 到 getDefaultPorts
+function findPort(event: FullEvent, portId: string) {
+  return getPortById(event.ports || [], portId) || getPortById(getDefaultPorts(event.type), portId);
+}
+
 // 连线创建：端口化连接
 function onConnect(connection: {
   source: string;
@@ -641,22 +690,36 @@ function onConnect(connection: {
   sourceHandle?: string | null;
   targetHandle?: string | null;
 }) {
-  if (connection.source === connection.target) return;
+  if (connection.source === connection.target) {
+    showConnectionToast('不能连接到自身');
+    return;
+  }
 
   if (!localMechanism.value?.reply?.special_mode) return;
 
-  // 获取端口信息进行类型检查
   const sourceEvent = events.value.find((e) => e.id === connection.source);
   const targetEvent = events.value.find((e) => e.id === connection.target);
-  if (!sourceEvent || !targetEvent) return;
+  if (!sourceEvent || !targetEvent) {
+    showConnectionToast('找不到源或目标节点');
+    return;
+  }
 
-  const sourcePort = getPortById(sourceEvent.ports || [], connection.sourceHandle || '');
-  const targetPort = getPortById(targetEvent.ports || [], connection.targetHandle || '');
-  if (!sourcePort || !targetPort) return;
+  const sourcePort = findPort(sourceEvent, connection.sourceHandle || '');
+  const targetPort = findPort(targetEvent, connection.targetHandle || '');
+  if (!sourcePort) {
+    showConnectionToast(`源节点"${sourceEvent.name}"上找不到端口 ${connection.sourceHandle || ''}`);
+    return;
+  }
+  if (!targetPort) {
+    showConnectionToast(`目标节点"${targetEvent.name}"上找不到端口 ${connection.targetHandle || ''}`);
+    return;
+  }
 
   // 类型兼容检查
   if (!canConnect(sourcePort, targetPort)) {
-    console.warn(`无法连接：${sourcePort.dataType} 端口不能连接到 ${targetPort.dataType} 端口`);
+    showConnectionToast(
+      `类型不兼容：${sourcePort.dataType}（${sourcePort.name}）→ ${targetPort.dataType}（${targetPort.name}）`
+    );
     return;
   }
 
@@ -708,9 +771,9 @@ function isValidConnection(connection: {
   const targetEvent = events.value.find((e) => e.id === connection.target);
   if (!sourceEvent || !targetEvent) return false;
 
-  const sourcePort = getPortById(sourceEvent.ports || [], connection.sourceHandle || '');
-  const targetPort = getPortById(targetEvent.ports || [], connection.targetHandle || '');
-  if (!sourcePort || !targetPort) return false;
+  const sourcePort = findPort(sourceEvent, connection.sourceHandle || '');
+  const targetPort = findPort(targetEvent, connection.targetHandle || '');
+  if (!sourcePort || !targetPort) return true; // 端口未找到时允许连接，由 onConnect 做最终校验
 
   return canConnect(sourcePort, targetPort);
 }
@@ -735,6 +798,42 @@ watch(
 </script>
 
 <style scoped>
+/* ── Connection toast ──────────────────────────────────── */
+
+.connection-toast {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm, 8px);
+  font-size: 12px;
+  color: #fff;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.connection-toast--error {
+  background: var(--color-error, #dc2626);
+}
+
+.connection-toast--warn {
+  background: var(--color-warning, #d97706);
+}
+
+.toast-fade-enter-active,
+.toast-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.toast-fade-enter-from,
+.toast-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-6px);
+}
+
 .editor-toolbar {
   display: flex;
   gap: 8px;

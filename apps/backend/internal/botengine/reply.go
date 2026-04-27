@@ -30,8 +30,9 @@ type LLMConfig struct {
 
 // ContextMessage 上下文消息
 type ContextMessage struct {
-	Role    string `json:"role"` // "user" | "assistant" | "system"
-	Content string `json:"content"`
+	Role    string `json:"role"`    // "user" | "assistant" | "system"
+	Content string `json:"content"` // 消息内容
+	MsgType string `json:"msgType"` // "text" | "image" | "file" | "system"
 }
 
 // CallLLM 调用 LLM 生成回复（独立函数，供机制和事件链复用）

@@ -79,17 +79,38 @@
           <!-- if 配置 -->
           <template v-if="form.type === 'if'">
             <div class="form-group">
-              <label class="form-label">条件表达式</label>
-              <textarea
-                v-model="form.config.condition"
-                class="form-textarea"
-                rows="3"
-                placeholder="输入条件表达式..."
-              />
-              <p class="form-hint">
-                可用变量：{'{input}'} 当前消息 · {'{username}'} 发送者 · {'{time}'} 时间 ·
-                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）
-              </p>
+              <label class="form-label">运算符</label>
+              <select v-model="form.config.operator" class="form-input">
+                <option value="==">等于 ==</option>
+                <option value="!=">不等于 !=</option>
+                <option value="contains">包含</option>
+                <option value=">">&gt; 大于</option>
+                <option value="<">&lt; 小于</option>
+              </select>
+            </div>
+            <p class="form-hint">
+              条件由连接到"左操作数"和"右操作数"输入端口的值决定。
+              断开输入时使用下方默认值。
+            </p>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">左操作数（默认值）</label>
+                <input
+                  v-model="form.config.left_default"
+                  type="text"
+                  class="form-input"
+                  placeholder="未连接时的默认值"
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label">右操作数（默认值）</label>
+                <input
+                  v-model="form.config.right_default"
+                  type="text"
+                  class="form-input"
+                  placeholder="未连接时的默认值"
+                />
+              </div>
             </div>
           </template>
 
@@ -311,13 +332,35 @@
             </div>
           </template>
 
-          <!-- 自定义输入端口（仅处理节点） -->
-          <div v-if="isProcessNode" class="form-group">
-            <label class="form-label">自定义输入端口</label>
+          <!-- history 配置 -->
+          <template v-if="form.type === 'history'">
+            <div class="form-group">
+              <label class="form-label">获取消息条数</label>
+              <input
+                v-model.number="form.config.count"
+                type="number"
+                min="1"
+                max="100"
+                class="form-input"
+                placeholder="20"
+              />
+              <p class="form-hint">
+                获取最近 N 条会话消息，格式化为 prompt 字符串。图片消息将显示为 [图片]。
+              </p>
+            </div>
+          </template>
+
+          <!-- 自定义端口 -->
+          <div v-if="supportsCustomPorts" class="form-group">
+            <label class="form-label">自定义端口</label>
             <div class="custom-ports">
-              <div v-for="(port, idx) in customInputPorts" :key="idx" class="custom-port-row">
+              <div v-for="(port, idx) in customPorts" :key="idx" class="custom-port-row">
+                <select v-model="port.direction" class="form-input" style="width: 70px">
+                  <option value="input">输入</option>
+                  <option value="output">输出</option>
+                </select>
                 <input v-model="port.name" placeholder="端口名称" class="form-input" />
-                <select v-model="port.dataType" class="form-input">
+                <select v-model="port.dataType" class="form-input" style="width: 80px">
                   <option value="string">字符串</option>
                   <option value="number">数值</option>
                   <option value="boolean">布尔</option>
@@ -382,7 +425,7 @@ aiStore.initStore(authStore.currentUser?.id);
 const nameValidationError = ref('');
 
 // 自定义端口列表
-const customInputPorts = reactive<{ name: string; dataType: string }[]>([]);
+const customPorts = reactive<{ name: string; dataType: string; direction: 'input' | 'output' }[]>([]);
 
 // 类型分组
 const controlTypes = (['trigger', 'end', 'wait', 'if', 'loop'] as EventType[]).map((value) => ({
@@ -394,8 +437,10 @@ const processTypes = (['llm', 'builtin', 'python', 'template', 'reply'] as Event
   (value) => ({ value, ...NODE_TYPE_META[value] })
 );
 
-// 是否为处理节点（支持自定义输入端口）
-const isProcessNode = computed(() => ['llm', 'builtin', 'python', 'template'].includes(form.type));
+// 是否为支持自定义端口的节点类型
+const supportsCustomPorts = computed(() =>
+  ['llm', 'builtin', 'python', 'template', 'if', 'wait', 'reply', 'history'].includes(form.type)
+);
 
 const builtinTypes = [
   { value: 'random_number', label: '随机数' },
@@ -424,12 +469,14 @@ function getDefaultConfig(type: EventType): Record<string, any> {
       return { code: '', timeout_ms: 5000 };
     case 'template':
       return { template: '' };
+    case 'history':
+      return { count: 20 };
     case 'reply':
       return { template: '' };
     case 'wait':
       return { wait_type: 'user_message', condition: '' };
     case 'if':
-      return { condition: '' };
+      return { operator: '==', left_default: '', right_default: '' };
     case 'loop':
       return { condition: '', max_iterations: 10 };
     case 'trigger':
@@ -462,7 +509,7 @@ function selectType(type: EventType) {
   form.config = getDefaultConfig(type);
   form.ports = getDefaultPorts(type);
   form.name = NODE_TYPE_META[type].label;
-  customInputPorts.length = 0;
+  customPorts.length = 0;
   nameValidationError.value = '';
 }
 
@@ -478,23 +525,21 @@ function importFromAiPanel(configId: string) {
 
 // 自定义端口操作
 function addCustomPort() {
-  customInputPorts.push({ name: '', dataType: 'string' });
+  customPorts.push({ name: '', dataType: 'string', direction: 'input' });
 }
 
 function removeCustomPort(idx: number) {
-  customInputPorts.splice(idx, 1);
+  customPorts.splice(idx, 1);
 }
 
 // 从已有事件的 ports 中提取自定义端口
-function extractCustomPorts(event: SpecialModeEvent): { name: string; dataType: string }[] {
+function extractCustomPorts(event: SpecialModeEvent): { name: string; dataType: string; direction: 'input' | 'output' }[] {
   if (!event.ports) return [];
   const defaultPorts = getDefaultPorts(event.type);
-  const defaultInputIds = new Set(
-    defaultPorts.filter((p) => p.direction === 'input').map((p) => p.id)
-  );
+  const defaultIds = new Set(defaultPorts.map((p) => p.id));
   return event.ports
-    .filter((p) => p.direction === 'input' && !defaultInputIds.has(p.id))
-    .map((p) => ({ name: p.name, dataType: p.dataType }));
+    .filter((p) => !defaultIds.has(p.id))
+    .map((p) => ({ name: p.name, dataType: p.dataType, direction: p.direction }));
 }
 
 watch(
@@ -510,9 +555,9 @@ watch(
         position: props.editingEvent.position ? { ...props.editingEvent.position } : undefined,
       });
       // 恢复自定义端口
-      customInputPorts.length = 0;
+      customPorts.length = 0;
       const extracted = extractCustomPorts(props.editingEvent);
-      extracted.forEach((p) => customInputPorts.push(p));
+      extracted.forEach((p) => customPorts.push(p));
     } else if (props.visible) {
       const type: EventType = 'llm';
       Object.assign(form, {
@@ -523,7 +568,7 @@ watch(
         ports: getDefaultPorts(type),
         position: undefined,
       });
-      customInputPorts.length = 0;
+      customPorts.length = 0;
     }
     nameValidationError.value = '';
   }
@@ -539,13 +584,13 @@ function handleConfirm() {
 
   // 合并默认端口和自定义端口
   const defaultPorts = getDefaultPorts(form.type);
-  const customPorts: EventPort[] = customInputPorts
+  const customEventPorts: EventPort[] = customPorts
     .filter((p) => p.name.trim())
     .map((p) => ({
-      id: `in_custom_${p.name}`,
+      id: `${p.direction === 'output' ? 'out_custom' : 'in_custom'}_${p.name}`,
       name: p.name,
       dataType: p.dataType as EventPort['dataType'],
-      direction: 'input' as const,
+      direction: p.direction,
     }));
 
   const event: SpecialModeEvent = {
@@ -553,7 +598,7 @@ function handleConfirm() {
     type: form.type,
     name: form.name,
     config: { ...form.config },
-    ports: [...defaultPorts, ...customPorts],
+    ports: [...defaultPorts, ...customEventPorts],
   };
 
   if (form.position) {
@@ -752,7 +797,7 @@ function handleConfirm() {
 
 .custom-port-row {
   display: grid;
-  grid-template-columns: 1fr 100px 32px;
+  grid-template-columns: 70px 1fr 80px 32px;
   gap: 6px;
   align-items: center;
 }
