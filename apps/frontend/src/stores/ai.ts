@@ -116,6 +116,8 @@ export const useAiStore = defineStore('ai', () => {
   const activeConversationId = ref<string | null>(null);
   // 流式更新版本号，每次流式更新时递增以触发 computed 重新计算
   const streamingVersion = ref(0);
+  // 正在流式生成的会话 ID 集合（支持多会话并发）
+  const streamingConversationIds = ref<Set<string>>(new Set());
 
   const activeConversation = computed(() => {
     return conversations.value.find((c) => c.id === activeConversationId.value) || null;
@@ -225,10 +227,168 @@ export const useAiStore = defineStore('ai', () => {
     }
   };
 
+  const setConversationStreaming = (conversationId: string, streaming: boolean) => {
+    const newSet = new Set(streamingConversationIds.value);
+    if (streaming) {
+      newSet.add(conversationId);
+    } else {
+      newSet.delete(conversationId);
+    }
+    streamingConversationIds.value = newSet;
+  };
+
   const setActiveConversation = (id: string | null) => {
     activeConversationId.value = id;
     const { activeConversation: key } = getStorageKeys();
     localStorage.setItem(key, id || '');
+  };
+
+  // 移除会话中最后一条助手消息（用于重新生成）
+  const removeLastAssistantMessage = (conversationId: string): string | null => {
+    const conv = conversations.value.find((c) => c.id === conversationId);
+    if (!conv) return null;
+    for (let i = conv.messages.length - 1; i >= 0; i--) {
+      if (conv.messages[i]!.role === 'assistant') {
+        const removed = conv.messages.splice(i, 1)[0]!;
+        conv.updatedAt = new Date().toISOString();
+        saveConversations();
+        return removed.id;
+      }
+    }
+    return null;
+  };
+
+  // 删除指定消息
+  const deleteMessage = (conversationId: string, messageId: string) => {
+    const conv = conversations.value.find((c) => c.id === conversationId);
+    if (!conv) return;
+    conv.messages = conv.messages.filter((m) => m.id !== messageId);
+    conv.updatedAt = new Date().toISOString();
+    saveConversations();
+    streamingVersion.value++;
+  };
+
+  // 删除指定消息及其之后的所有消息
+  const removeMessagesFrom = (conversationId: string, messageId: string) => {
+    const conv = conversations.value.find((c) => c.id === conversationId);
+    if (!conv) return;
+    const idx = conv.messages.findIndex((m) => m.id === messageId);
+    if (idx >= 0) {
+      conv.messages.splice(idx);
+      conv.updatedAt = new Date().toISOString();
+      saveConversations();
+      streamingVersion.value++;
+    }
+  };
+
+  // 更新消息内容
+  const updateMessageContent = (conversationId: string, messageId: string, content: string) => {
+    const conv = conversations.value.find((c) => c.id === conversationId);
+    if (!conv) return;
+    const msg = conv.messages.find((m) => m.id === messageId);
+    if (msg) {
+      msg.content = content;
+      conv.updatedAt = new Date().toISOString();
+      saveConversations();
+      streamingVersion.value++;
+    }
+  };
+
+  // 将当前 AI 消息内容保存为替代版本（用于分支重新生成）
+  const addAlternative = (conversationId: string, messageId: string): boolean => {
+    const conv = conversations.value.find((c) => c.id === conversationId);
+    if (!conv) return false;
+    const msg = conv.messages.find((m) => m.id === messageId);
+    if (!msg || msg.role !== 'assistant' || !msg.content) return false;
+    if (!msg.alternatives) msg.alternatives = [];
+    msg.alternatives.push({
+      id: crypto.randomUUID(),
+      content: msg.content,
+      thinking: msg.thinking,
+      createdAt: msg.createdAt,
+    });
+    saveConversations();
+    streamingVersion.value++;
+    return true;
+  };
+
+  // 切换到指定替代版本（当前版本推入 alternatives，目标版本弹出设为当前）
+  const switchAlternative = (conversationId: string, messageId: string, altIndex: number) => {
+    const conv = conversations.value.find((c) => c.id === conversationId);
+    if (!conv) return;
+    const msg = conv.messages.find((m) => m.id === messageId);
+    if (!msg || !msg.alternatives || altIndex < 0 || altIndex >= msg.alternatives.length) return;
+    const target = msg.alternatives.splice(altIndex, 1)[0]!;
+    msg.alternatives.push({
+      id: crypto.randomUUID(),
+      content: msg.content,
+      thinking: msg.thinking,
+      createdAt: msg.createdAt,
+    });
+    msg.content = target.content;
+    msg.thinking = target.thinking;
+    saveConversations();
+    streamingVersion.value++;
+  };
+
+  // 创建会话级分支：保存 fromMessageId 及之后的消息，然后删除
+  const createBranch = (conversationId: string, fromMessageId: string): string | null => {
+    const conv = conversations.value.find((c) => c.id === conversationId);
+    if (!conv) return null;
+    const idx = conv.messages.findIndex((m) => m.id === fromMessageId);
+    if (idx < 0) return null;
+    const branchMessages = conv.messages.splice(idx);
+    if (!conv.branches) conv.branches = [];
+    const branchId = crypto.randomUUID();
+    conv.branches.push({
+      id: branchId,
+      fromMessageId,
+      messages: branchMessages,
+      createdAt: new Date().toISOString(),
+    });
+    conv.updatedAt = new Date().toISOString();
+    saveConversations();
+    streamingVersion.value++;
+    return branchId;
+  };
+
+  // 恢复会话级分支：当前尾部保存为新分支，然后恢复目标分支
+  const restoreBranch = (conversationId: string, branchId: string): boolean => {
+    const conv = conversations.value.find((c) => c.id === conversationId);
+    if (!conv || !conv.branches) return false;
+    const branchIdx = conv.branches.findIndex((b) => b.id === branchId);
+    if (branchIdx < 0) return false;
+    // 保存当前尾部为新分支
+    if (conv.messages.length > 0) {
+      const lastMsg = conv.messages[conv.messages.length - 1]!;
+      const newBranchId = crypto.randomUUID();
+      conv.branches.push({
+        id: newBranchId,
+        fromMessageId: lastMsg.id,
+        messages: [...conv.messages],
+        createdAt: new Date().toISOString(),
+      });
+    }
+    // 恢复目标分支
+    const branch = conv.branches.splice(branchIdx, 1)[0]!;
+    conv.messages = branch.messages;
+    conv.updatedAt = new Date().toISOString();
+    saveConversations();
+    streamingVersion.value++;
+    return true;
+  };
+
+  // 设置推理参数
+  const setReasoningSettings = (
+    conversationId: string,
+    enabled: boolean,
+    effort: string,
+  ) => {
+    const conv = conversations.value.find((c) => c.id === conversationId);
+    if (!conv) return;
+    conv.reasoningEnabled = enabled;
+    conv.reasoningEffort = effort;
+    saveConversations();
   };
 
   const deleteConversation = (id: string) => {
@@ -262,6 +422,28 @@ export const useAiStore = defineStore('ai', () => {
     // 从 localStorage 加载当前用户的数据
     loadConfigs();
     loadConversations();
+
+    // 清理被页面刷新中断的流式状态（HTTP 连接已断开，但消息仍标记为 streaming/thinking）
+    let needsSave = false;
+    for (const conv of conversations.value) {
+      for (const msg of conv.messages) {
+        if (msg.isStreaming || msg.isThinking) {
+          msg.isStreaming = false;
+          msg.isThinking = false;
+          msg.isInterrupted = true;
+          needsSave = true;
+        }
+        // 检测旧版错误消息（[错误] 前缀），标记 isError
+        if (msg.content.startsWith('[错误]') && !msg.isError) {
+          msg.isError = true;
+          needsSave = true;
+        }
+      }
+    }
+    if (needsSave) {
+      saveConversations();
+    }
+
     const { activeConfig: actCfgKey, activeConversation: actConvKey } = getStorageKeys();
     // 恢复上次激活的配置
     const savedActiveConfig = localStorage.getItem(actCfgKey);
@@ -288,6 +470,7 @@ export const useAiStore = defineStore('ai', () => {
     activeConversationId,
     activeConversation,
     activeMessages,
+    streamingConversationIds,
     // 配置方法
     addConfig,
     updateConfig,
@@ -300,7 +483,17 @@ export const useAiStore = defineStore('ai', () => {
     updateStreamingThinking,
     setThinkingState,
     finalizeStreamingMessage,
+    setConversationStreaming,
     setActiveConversation,
+    removeLastAssistantMessage,
+    deleteMessage,
+    removeMessagesFrom,
+    updateMessageContent,
+    addAlternative,
+    switchAlternative,
+    createBranch,
+    restoreBranch,
+    setReasoningSettings,
     deleteConversation,
     // 初始化
     initStore,

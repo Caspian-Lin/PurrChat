@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useAiStore } from '../stores/ai';
 import type { AiMessage, AiMessageRole } from '../models/types';
 
@@ -21,35 +21,60 @@ function getThinkingText(delta: StreamDelta): string | null {
 }
 
 export const useAiChat = () => {
-  const isStreaming = ref(false);
   const error = ref<string | null>(null);
-  const abortController = ref<AbortController | null>(null);
+  // 每个会话独立的 AbortController，支持并发流式请求
+  const abortControllers = new Map<string, AbortController>();
 
-  const sendMessage = async (content: string) => {
+  // 基于当前活跃会话计算 isStreaming（切换会话时自动更新）
+  const isStreaming = computed(() => {
+    const store = useAiStore();
+    return (
+      store.activeConversationId != null &&
+      store.streamingConversationIds.has(store.activeConversationId)
+    );
+  });
+
+  /**
+   * 构建发送给 API 的消息列表（排除占位和错误消息）
+   */
+  const buildApiMessages = (
+    messages: AiMessage[],
+    additionalContent?: string,
+  ): Array<{ role: AiMessageRole; content: string }> => {
+    const apiMessages: Array<{ role: AiMessageRole; content: string }> = [];
+    for (const msg of messages) {
+      if (!msg.isStreaming && !msg.isError) {
+        apiMessages.push({ role: msg.role, content: msg.content });
+      }
+    }
+    // 附加额外内容（用于重发/编辑场景，此时新内容尚未在 messages 中）
+    if (additionalContent) {
+      apiMessages.push({ role: 'user', content: additionalContent });
+    }
+    return apiMessages;
+  };
+
+  /**
+   * 核心流式请求逻辑（复用于 sendMessage / retryMessage / regenerateResponse / editAndResend）
+   */
+  const streamRequest = async (options: {
+    conversationId: string;
+    messages: AiMessage[];
+    extraContent?: string;
+  }) => {
     const store = useAiStore();
     const config = store.activeConfig;
-    const conversation = store.activeConversation;
+    const convId = options.conversationId;
 
     if (!config) {
       error.value = '请先选择 AI 配置';
       return;
     }
 
-    if (!conversation) {
-      error.value = '请先创建对话';
-      return;
-    }
+    const conversation = store.conversations.find((c) => c.id === convId);
+    if (!conversation) return;
 
-    // 1. 添加用户消息
-    const userMessage: AiMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content,
-      createdAt: new Date().toISOString(),
-    };
-    store.addMessage(conversation.id, userMessage);
-
-    // 2. 创建 AI 回复占位消息
+    // 创建 AI 回复占位消息
     const assistantId = crypto.randomUUID();
     const assistantMessage: AiMessage = {
       id: assistantId,
@@ -60,21 +85,15 @@ export const useAiChat = () => {
       isStreaming: true,
       isThinking: true,
     };
-    store.addMessage(conversation.id, assistantMessage);
+    store.addMessage(convId, assistantMessage);
 
-    // 3. 构建请求消息列表
-    const apiMessages: Array<{ role: AiMessageRole; content: string }> = [];
-    for (const msg of conversation.messages) {
-      if (!msg.isStreaming) {
-        apiMessages.push({ role: msg.role, content: msg.content });
-      }
-    }
-    apiMessages.push({ role: 'user', content });
+    // 构建请求消息列表
+    const apiMessages = buildApiMessages(options.messages, options.extraContent);
 
-    // 4. 发起请求
-    isStreaming.value = true;
+    // 发起请求
+    store.setConversationStreaming(convId, true);
     error.value = null;
-    abortController.value = new AbortController();
+    abortControllers.set(convId, new AbortController());
 
     let fullContent = '';
     let fullThinking = '';
@@ -94,6 +113,11 @@ export const useAiChat = () => {
         body.max_tokens = config.maxTokens;
       }
 
+      // 推理参数：仅当启用时发送
+      if (conversation.reasoningEnabled !== false && conversation.reasoningEffort) {
+        body.reasoning_effort = conversation.reasoningEffort;
+      }
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -101,7 +125,7 @@ export const useAiChat = () => {
           Authorization: `Bearer ${config.apiKey}`,
         },
         body: JSON.stringify(body),
-        signal: abortController.value.signal,
+        signal: abortControllers.get(convId)!.signal,
       });
 
       if (!response.ok) {
@@ -148,17 +172,17 @@ export const useAiChat = () => {
               const thinkingDelta = getThinkingText(delta);
               if (thinkingDelta) {
                 fullThinking += thinkingDelta;
-                store.updateStreamingThinking(conversation.id, assistantId, fullThinking);
+                store.updateStreamingThinking(convId, assistantId, fullThinking);
               }
 
               // 提取正式回复内容
               if (delta.content) {
                 if (inThinkingPhase) {
                   inThinkingPhase = false;
-                  store.setThinkingState(conversation.id, assistantId, false);
+                  store.setThinkingState(convId, assistantId, false);
                 }
                 fullContent += delta.content;
-                store.updateStreamingMessage(conversation.id, assistantId, fullContent);
+                store.updateStreamingMessage(convId, assistantId, fullContent);
               }
             } catch {
               // 忽略 JSON 解析错误
@@ -174,7 +198,7 @@ export const useAiChat = () => {
           const messageContent = json.choices?.[0]?.message?.content;
           if (messageContent) {
             fullContent = messageContent;
-            store.updateStreamingMessage(conversation.id, assistantId, fullContent);
+            store.updateStreamingMessage(convId, assistantId, fullContent);
           }
         } catch {
           // JSON 解析失败，保持空内容
@@ -183,38 +207,162 @@ export const useAiChat = () => {
 
       // 模型只有思维链无独立 content 阶段
       if (!fullContent && fullThinking && !hasContentDelta) {
-        store.setThinkingState(conversation.id, assistantId, false);
+        store.setThinkingState(convId, assistantId, false);
         fullContent = fullThinking;
-        store.updateStreamingMessage(conversation.id, assistantId, fullContent);
+        store.updateStreamingMessage(convId, assistantId, fullContent);
       }
 
-      store.finalizeStreamingMessage(conversation.id, assistantId);
+      store.finalizeStreamingMessage(convId, assistantId);
       store.saveConversations();
     } catch (err: unknown) {
       const e = err as Error;
       if (e.name === 'AbortError') {
-        store.finalizeStreamingMessage(conversation.id, assistantId);
+        store.finalizeStreamingMessage(convId, assistantId);
         store.saveConversations();
       } else {
         error.value = e.message || '发送消息失败';
         if (!fullContent && !fullThinking) {
           store.updateStreamingMessage(
-            conversation.id,
+            convId,
             assistantId,
-            `[错误] ${e.message || '未知错误'}`
+            `[错误] ${e.message || '未知错误'}`,
           );
         }
-        store.finalizeStreamingMessage(conversation.id, assistantId);
+        // 标记消息为错误状态
+        const conv = store.conversations.find((c) => c.id === convId);
+        if (conv) {
+          const msg = conv.messages.find((m) => m.id === assistantId);
+          if (msg) msg.isError = true;
+        }
+        store.finalizeStreamingMessage(convId, assistantId);
         store.saveConversations();
       }
     } finally {
-      isStreaming.value = false;
-      abortController.value = null;
+      store.setConversationStreaming(convId, false);
+      abortControllers.delete(convId);
     }
   };
 
+  const sendMessage = async (content: string) => {
+    const store = useAiStore();
+    const conversation = store.activeConversation;
+
+    if (!conversation) {
+      error.value = '请先创建对话';
+      return;
+    }
+
+    // 添加用户消息
+    const userMessage: AiMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content,
+      createdAt: new Date().toISOString(),
+    };
+    store.addMessage(conversation.id, userMessage);
+
+    // 发起流式请求
+    await streamRequest({
+      conversationId: conversation.id,
+      messages: conversation.messages,
+    });
+  };
+
+  // 重试错误/中断消息：找到该消息前的用户 prompt，删除错误消息后重发
+  const retryMessage = async (messageId: string) => {
+    const store = useAiStore();
+    const conversation = store.activeConversation;
+    if (!conversation) return;
+
+    // 找到目标消息和其前的用户消息
+    const msgIdx = conversation.messages.findIndex((m) => m.id === messageId);
+    if (msgIdx < 0) return;
+
+    let userContent: string | null = null;
+    for (let i = msgIdx - 1; i >= 0; i--) {
+      if (conversation.messages[i]!.role === 'user') {
+        userContent = conversation.messages[i]!.content;
+        break;
+      }
+    }
+    if (!userContent) return;
+
+    // 删除错误消息
+    store.deleteMessage(conversation.id, messageId);
+
+    // 重发（不额外添加用户消息，extraContent 用于在构建 API messages 时附加）
+    await streamRequest({
+      conversationId: conversation.id,
+      messages: conversation.messages,
+      extraContent: userContent,
+    });
+  };
+
+  // 重新生成 AI 回复（可选分支）
+  const regenerateResponse = async (messageId: string, branch: boolean) => {
+    const store = useAiStore();
+    const conversation = store.activeConversation;
+    if (!conversation) return;
+
+    const msgIdx = conversation.messages.findIndex((m) => m.id === messageId);
+    if (msgIdx < 0) return;
+
+    // 找到该 AI 消息前的用户消息
+    let userContent: string | null = null;
+    for (let i = msgIdx - 1; i >= 0; i--) {
+      if (conversation.messages[i]!.role === 'user') {
+        userContent = conversation.messages[i]!.content;
+        break;
+      }
+    }
+    if (!userContent) return;
+
+    // 分支：保存当前版本为替代
+    if (branch) {
+      store.addAlternative(conversation.id, messageId);
+    }
+
+    // 删除当前 AI 消息
+    store.deleteMessage(conversation.id, messageId);
+
+    // 重发
+    await streamRequest({
+      conversationId: conversation.id,
+      messages: conversation.messages,
+      extraContent: userContent,
+    });
+  };
+
+  // 编辑用户 prompt 并重发（可选分支）
+  const editAndResend = async (
+    messageId: string,
+    newContent: string,
+    branch: boolean,
+  ) => {
+    const store = useAiStore();
+    const conversation = store.activeConversation;
+    if (!conversation) return;
+
+    const msgIdx = conversation.messages.findIndex((m) => m.id === messageId);
+    if (msgIdx < 0) return;
+
+    if (branch) {
+      // 分支模式：保存该消息及之后的消息为分支快照
+      store.createBranch(conversation.id, messageId);
+    } else {
+      // 覆盖模式：直接删除该消息及之后的所有消息
+      store.removeMessagesFrom(conversation.id, messageId);
+    }
+
+    // 发送新消息（通过 sendMessage 会自动添加用户消息 + AI 占位）
+    await sendMessage(newContent);
+  };
+
   const stopGeneration = () => {
-    abortController.value?.abort();
+    const store = useAiStore();
+    if (store.activeConversationId) {
+      abortControllers.get(store.activeConversationId)?.abort();
+    }
   };
 
   const clearError = () => {
@@ -227,5 +375,8 @@ export const useAiChat = () => {
     sendMessage,
     stopGeneration,
     clearError,
+    retryMessage,
+    regenerateResponse,
+    editAndResend,
   };
 };

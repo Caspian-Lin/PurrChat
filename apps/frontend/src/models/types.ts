@@ -230,6 +230,25 @@ export interface AiMessage {
   createdAt: string;
   isStreaming?: boolean;
   isThinking?: boolean; // 是否正在思考（流式思维链阶段）
+  isInterrupted?: boolean; // 流式响应被页面刷新等中断
+  isError?: boolean; // API 调用失败
+  alternatives?: AiMessageAlternative[]; // 分支：该消息的历史版本（仅 assistant）
+}
+
+// AI 消息的替代版本（分支）
+export interface AiMessageAlternative {
+  id: string;
+  content: string;
+  thinking?: string;
+  createdAt: string;
+}
+
+// 会话级分支（prompt 编辑 → branch 时保存旧对话尾部）
+export interface ConversationBranch {
+  id: string;
+  fromMessageId: string; // 分支起点消息 ID
+  messages: AiMessage[]; // 从起点到末尾的完整消息快照
+  createdAt: string;
 }
 
 // AI 会话
@@ -240,6 +259,9 @@ export interface AiConversation {
   messages: AiMessage[];
   createdAt: string;
   updatedAt: string;
+  branches?: ConversationBranch[]; // 会话级分支
+  reasoningEnabled?: boolean; // 是否启用推理（默认 true）
+  reasoningEffort?: string; // 推理强度：'low' | 'medium' | 'high'（默认 'medium'）
 }
 
 // ===== 文件存储相关类型定义 =====

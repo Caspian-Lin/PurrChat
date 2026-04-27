@@ -81,7 +81,13 @@
               </div>
             </template>
 
-            <div class="text-sm font-medium truncate text-text-primary">{{ conv.title }}</div>
+            <div class="text-sm font-medium truncate text-text-primary">
+              {{ conv.title }}
+              <span
+                v-if="streamingIds?.has(conv.id)"
+                class="inline-block w-1.5 h-1.5 rounded-full bg-accent-color ml-1 align-middle streaming-dot"
+              ></span>
+            </div>
             <div class="text-xs text-text-tertiary">
               {{ formatTime(conv.updatedAt) }}
             </div>
@@ -120,6 +126,7 @@ interface Props {
   activeConfigId: string | null;
   conversations: AiConversation[];
   activeConversationId: string | null;
+  streamingIds?: Set<string>;
 }
 
 defineProps<Props>();
@@ -132,3 +139,19 @@ defineEmits<{
   'delete-conversation': [conversationId: string];
 }>();
 </script>
+
+<style scoped>
+.streaming-dot {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+</style>

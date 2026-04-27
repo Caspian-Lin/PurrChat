@@ -61,7 +61,7 @@
               <!-- 消息内容 -->
               <div
                 class="group relative w-fit"
-                style="max-width: var(--msg-bubble-max-width, 75%)"
+                style="max-width: var(--msg-bubble-max-width, 90%)"
                 @mouseenter="hoveredMessageId = message.id"
                 @mouseleave="onBubbleMouseLeave"
                 @dblclick="onBubbleDoubleClick(message.id)"
@@ -86,14 +86,14 @@
                   <Transition name="thinking-expand">
                     <div
                       v-show="message.isThinking || expandedThinking.has(message.id)"
-                      class="mt-1 px-3 py-2 rounded-[var(--radius-md)] text-sm text-text-quaternary overflow-hidden"
+                      class="mt-1 p-4 rounded-[var(--radius-md)] text-sm text-text-quaternary overflow-hidden"
                       :class="message.isThinking ? 'thinking-active' : ''"
                       style="
-                        background: var(--strong-background-color);
-                        border: 1px solid var(--border-color);
-                        max-height: 300px;
+                        background: var(--background-color);
+                        max-height: 400px;
                         overflow-y: auto;
                       "
+                      @wheel.stop
                     >
                       <div style="white-space: pre-wrap; opacity: 0.7">{{ message.thinking }}</div>
                       <span
@@ -117,28 +117,68 @@
                   ></span>
                 </div>
 
+                <!-- ===== 用户消息：内联编辑模式 ===== -->
+                <div v-if="editingMessageId === message.id" class="w-full">
+                  <textarea
+                    ref="editTextareaRef"
+                    v-model="editingContent"
+                    class="w-full p-3 rounded-2xl bg-[var(--theme-primary)] text-white text-base resize-none outline-none"
+                    style="min-height: 60px"
+                    @keydown="handleEditKeyDown"
+                  />
+                  <div class="flex items-center gap-2 mt-1">
+                    <button
+                      class="px-3 py-1 text-xs rounded-[var(--radius-sm)] bg-[var(--theme-primary)] text-white hover:opacity-80 transition-opacity cursor-pointer"
+                      :disabled="!editingContent.trim() || isStreaming"
+                      @click="submitEdit(message.id, false)"
+                    >
+                      发送并覆盖
+                    </button>
+                    <button
+                      class="px-3 py-1 text-xs rounded-[var(--radius-sm)] text-text-quaternary hover:text-text-secondary transition-colors cursor-pointer"
+                      style="border: 1px solid var(--border-color)"
+                      :disabled="!editingContent.trim() || isStreaming"
+                      @click="submitEdit(message.id, true)"
+                    >
+                      发送并分支
+                    </button>
+                    <button
+                      class="px-3 py-1 text-xs rounded-[var(--radius-sm)] text-text-quaternary hover:text-text-secondary transition-colors cursor-pointer"
+                      @click="cancelEdit"
+                    >
+                      取消
+                    </button>
+                  </div>
+                </div>
+
+                <!-- ===== 消息气泡 ===== -->
                 <div
-                  v-if="message.role === 'user' || message.content"
+                  v-else-if="message.role === 'user' || message.content"
                   class="relative px-3.5 py-2.5 rounded-2xl cursor-default"
                   :style="{
                     background:
                       message.role === 'user'
                         ? 'var(--theme-primary)'
-                        : 'var(--strong-background-color)',
-                    color: message.role === 'user' ? '#ffffff' : 'var(--text-color)',
+                        : message.isError
+                          ? 'rgba(220, 38, 38, 0.08)'
+                          : 'var(--strong-background-color)',
+                    color:
+                      message.role === 'user'
+                        ? '#ffffff'
+                        : message.isError
+                          ? 'var(--color-error, #dc2626)'
+                          : 'var(--text-color)',
                     wordBreak: 'break-word',
                     overflowWrap: 'break-word',
                   }"
                 >
                   <!-- AI 消息：Markdown / 纯文本 渲染 -->
                   <template v-if="message.role === 'assistant'">
-                    <!-- Markdown 模式 -->
                     <div
                       v-if="isMarkdownMode(message.id)"
                       class="markdown-body"
                       v-html="renderMarkdownContent(message.content)"
                     ></div>
-                    <!-- 纯文本模式 -->
                     <div v-else style="white-space: pre-wrap">{{ message.content }}</div>
                   </template>
                   <!-- 用户消息：纯文本 -->
@@ -165,39 +205,102 @@
                   </Transition>
                 </div>
 
-                <!-- 复制按钮（hover 时显示） -->
-                <Transition name="fade">
-                  <button
-                    v-if="hoveredMessageId === message.id && message.content"
-                    class="absolute bottom-1 right-1 p-1.5 rounded-md transition-colors z-20"
-                    :class="
-                      message.role === 'user'
-                        ? 'hover:bg-white/20 text-white/70'
-                        : 'hover:bg-black/10 text-text-quaternary'
-                    "
-                    :title="copiedMessageId === message.id ? '已复制' : '复制'"
-                    @click.stop="copyMessage(message)"
-                  >
-                    <BsClipboardCheck v-if="copiedMessageId === message.id" :size="14" />
-                    <BsClipboard v-else :size="14" />
-                  </button>
-                </Transition>
-
-                <!-- Markdown / 纯文本 切换标签（仅 AI 消息，有 content，非流式） -->
+                <!-- ===== AI 消息操作栏 ===== -->
                 <div
-                  v-if="message.role === 'assistant' && message.content && !message.isStreaming"
-                  class="mt-1 flex justify-start"
+                  v-if="message.role === 'assistant' && !message.isStreaming && message.content"
+                  class="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0.5"
                 >
+                  <!-- 错误 / 中断状态 -->
+                  <template v-if="message.isError || message.isInterrupted">
+                    <BsExclamationTriangle :size="11" class="opacity-50" />
+                    <span class="text-xs opacity-50">
+                      {{ message.isError ? '生成失败' : '响应被中断' }}
+                    </span>
+                    <button
+                      class="msg-action"
+                      :disabled="isStreaming"
+                      @click.stop="emit('retry', message.id)"
+                    >
+                      重试
+                    </button>
+                    <span class="msg-action-sep">·</span>
+                    <button
+                      class="msg-action"
+                      :disabled="isStreaming"
+                      @click.stop="emit('regenerate', message.id)"
+                    >
+                      重新生成
+                    </button>
+                    <button
+                      class="msg-action"
+                      :disabled="isStreaming"
+                      @click.stop="emit('branch-regenerate', message.id)"
+                    >
+                      分支重新生成
+                    </button>
+                  </template>
+
+                  <!-- 正常状态 -->
+                  <template v-else>
+                    <!-- Markdown / 纯文本 切换 -->
+                    <button class="msg-action msg-action--active" @click.stop="toggleMarkdownMode(message.id)">
+                      {{ isMarkdownMode(message.id) ? 'Markdown' : '纯文本' }}
+                    </button>
+
+                    <!-- 版本切换 -->
+                    <template v-if="message.alternatives && message.alternatives.length > 0">
+                      <span class="msg-action-sep">·</span>
+                      <button class="msg-action" @click.stop="switchVersion(message.id, -1)">
+                        &lt;
+                      </button>
+                      <span class="text-xs text-text-quaternary tabular-nums">
+                        {{ currentVersionIndex(message) + 1 }}/{{ message.alternatives.length + 1 }}
+                      </span>
+                      <button class="msg-action" @click.stop="switchVersion(message.id, 1)">
+                        &gt;
+                      </button>
+                    </template>
+
+                    <span class="msg-action-sep">·</span>
+                    <button class="msg-action" @click.stop="copyMessage(message)">
+                      {{ copiedMessageId === message.id ? '已复制' : '复制回复' }}
+                    </button>
+                    <button
+                      class="msg-action"
+                      @click.stop="copyParentPrompt(message.id)"
+                    >
+                      {{ copiedMessageId === `prompt-${message.id}` ? '已复制' : '复制Prompt' }}
+                    </button>
+
+                    <span class="msg-action-sep">·</span>
+                    <button class="msg-action" :disabled="isStreaming" @click.stop="emit('regenerate', message.id)">
+                      删除并重新生成
+                    </button>
+                    <button class="msg-action" :disabled="isStreaming" @click.stop="emit('branch-regenerate', message.id)">
+                      分支重新生成
+                    </button>
+                  </template>
+                </div>
+
+                <!-- ===== 用户消息操作栏 ===== -->
+                <div
+                  v-if="message.role === 'user' && !message.isStreaming"
+                  class="mt-1 flex items-center gap-1"
+                >
+                  <button class="msg-action" :disabled="isStreaming" @click.stop="startEdit(message)">
+                    编辑
+                  </button>
+                  <span class="msg-action-sep">·</span>
+                  <button class="msg-action" @click.stop="copyMessage(message)">
+                    {{ copiedMessageId === message.id ? '已复制' : '复制' }}
+                  </button>
+                  <span class="msg-action-sep">·</span>
                   <button
-                    class="text-xs px-2 py-0.5 rounded transition-colors cursor-pointer"
-                    :class="
-                      isMarkdownMode(message.id)
-                        ? 'text-primary hover:opacity-70'
-                        : 'text-text-quaternary hover:text-text-secondary'
-                    "
-                    @click.stop="toggleMarkdownMode(message.id)"
+                    class="msg-action text-red-500/70 hover:!text-red-500"
+                    :disabled="isStreaming"
+                    @click.stop="emit('delete-message', message.id)"
                   >
-                    {{ isMarkdownMode(message.id) ? 'Markdown' : '纯文本' }}
+                    删除
                   </button>
                 </div>
               </div>
@@ -245,6 +348,32 @@
         class="flex flex-col px-4 pt-2 bg-bg-primary border-t border-border-subtle flex-shrink-0"
         :style="{ height: `${inputAreaHeight}px` }"
       >
+        <!-- 推理控件 -->
+        <div class="flex items-center gap-3 pb-1.5 text-xs text-text-quaternary select-none">
+          <button
+            class="flex items-center gap-1.5 px-2 py-0.5 rounded-[var(--radius-xs)] transition-colors cursor-pointer"
+            :class="reasoningEnabled ? 'text-primary bg-primary/10' : 'hover:text-text-secondary'"
+            @click="toggleReasoning"
+          >
+            <BsLightbulb :size="12" />
+            <span>推理</span>
+          </button>
+          <template v-if="reasoningEnabled">
+            <span class="opacity-50">强度</span>
+            <div class="flex gap-0.5">
+              <button
+                v-for="level in (['low', 'medium', 'high'] as const)"
+                :key="level"
+                class="px-2 py-0.5 rounded-[var(--radius-xs)] transition-colors cursor-pointer"
+                :class="reasoningEffort === level ? 'text-primary bg-primary/10' : 'hover:text-text-secondary'"
+                @click="setReasoningEffort(level)"
+              >
+                {{ level === 'low' ? '低' : level === 'medium' ? '中' : '高' }}
+              </button>
+            </div>
+          </template>
+        </div>
+
         <div class="flex-1 min-h-0">
           <textarea
             ref="textareaRef"
@@ -252,6 +381,7 @@
             placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
             class="w-full h-full bg-transparent text-base text-text-primary resize-none outline-none placeholder:text-text-tertiary"
             @keydown="handleKeyDown"
+            @paste="onPaste"
           />
         </div>
 
@@ -294,6 +424,7 @@ import ResizableSplitter from '../common/Splitter.vue';
 import CustomScrollbar from '../common/CustomScrollbar.vue';
 import { formatTimeWithSeconds, computeTimeDividers } from '../../utils/formatTime';
 import { renderMarkdown } from '../../utils/markdown';
+import { useAiStore } from '../../stores/ai';
 import type { AiConfig, AiConversation, AiMessage } from '../../models/types';
 
 interface Props {
@@ -310,7 +441,14 @@ const emit = defineEmits<{
   'send-message': [content: string];
   'stop-generation': [];
   'clear-error': [];
+  'retry': [messageId: string];
+  'regenerate': [messageId: string];
+  'branch-regenerate': [messageId: string];
+  'edit-resend': [payload: { messageId: string; content: string; branch: boolean }];
+  'delete-message': [messageId: string];
 }>();
+
+const store = useAiStore();
 
 const newMessage = ref('');
 const inputAreaHeight = ref(200);
@@ -342,7 +480,6 @@ const onBubbleDoubleClick = (messageId: string) => {
 };
 
 // ===== Markdown 渲染 =====
-// 缓存已渲染的 markdown HTML，避免重复解析
 const markdownCache = new Map<string, string>();
 
 const renderMarkdownContent = (text: string): string => {
@@ -351,7 +488,6 @@ const renderMarkdownContent = (text: string): string => {
   if (cached) return cached;
   const html = renderMarkdown(text);
   markdownCache.set(text, html);
-  // 限制缓存大小
   if (markdownCache.size > 200) {
     const firstKey = markdownCache.keys().next().value;
     if (firstKey) markdownCache.delete(firstKey);
@@ -366,34 +502,43 @@ const hoveredMessageId = ref<string | null>(null);
 const copiedMessageId = ref<string | null>(null);
 let copiedTimer: ReturnType<typeof setTimeout> | null = null;
 
-const copyMessage = async (message: AiMessage) => {
+const copyToClipboard = async (text: string, id: string) => {
   try {
-    await navigator.clipboard.writeText(message.content);
-    copiedMessageId.value = message.id;
-    if (copiedTimer) clearTimeout(copiedTimer);
-    copiedTimer = setTimeout(() => {
-      copiedMessageId.value = null;
-    }, 1500);
+    await navigator.clipboard.writeText(text);
   } catch {
-    // fallback for non-HTTPS contexts
     const textarea = document.createElement('textarea');
-    textarea.value = message.content;
+    textarea.value = text;
     textarea.style.position = 'fixed';
     textarea.style.opacity = '0';
     document.body.appendChild(textarea);
     textarea.select();
     document.execCommand('copy');
     document.body.removeChild(textarea);
-    copiedMessageId.value = message.id;
-    if (copiedTimer) clearTimeout(copiedTimer);
-    copiedTimer = setTimeout(() => {
-      copiedMessageId.value = null;
-    }, 1500);
+  }
+  copiedMessageId.value = id;
+  if (copiedTimer) clearTimeout(copiedTimer);
+  copiedTimer = setTimeout(() => {
+    copiedMessageId.value = null;
+  }, 1500);
+};
+
+const copyMessage = (message: AiMessage) => {
+  copyToClipboard(message.content, message.id);
+};
+
+// 复制 AI 消息对应的用户 prompt
+const copyParentPrompt = (messageId: string) => {
+  const idx = props.messages.findIndex((m) => m.id === messageId);
+  if (idx < 0) return;
+  for (let i = idx - 1; i >= 0; i--) {
+    if (props.messages[i]!.role === 'user') {
+      copyToClipboard(props.messages[i]!.content, `prompt-${messageId}`);
+      return;
+    }
   }
 };
 
 // ===== Markdown / 纯文本 切换 =====
-// true = markdown 模式（默认），false = 纯文本模式
 const plainTextMessages = ref<Set<string>>(new Set());
 
 const isMarkdownMode = (messageId: string): boolean => {
@@ -410,6 +555,29 @@ const toggleMarkdownMode = (messageId: string) => {
   plainTextMessages.value = newSet;
 };
 
+// ===== 版本切换 =====
+const currentVersionIndex = (message: AiMessage): number => {
+  return message.alternatives?.length ?? 0;
+};
+
+const switchVersion = (messageId: string, direction: number) => {
+  const convId = props.conversation.id;
+  const msg = props.messages.find((m) => m.id === messageId);
+  if (!msg || !msg.alternatives || msg.alternatives.length === 0) return;
+  // direction: -1 = 向前（更旧的版本），+1 = 向后（更新的版本）
+  // alternatives[0] 是最旧的，alternatives[length-1] 是最新的
+  // 当前显示的是"主版本"（不在 alternatives 中）
+  // 点击 < ：将主版本推入 alternatives，弹出最新替代版本
+  // 点击 > ：将主版本推入 alternatives 末端，弹出最早的替代版本
+  if (direction < 0) {
+    // 回到上一个版本：弹出 alternatives 末尾（最新保存的）
+    store.switchAlternative(convId, messageId, msg.alternatives.length - 1);
+  } else {
+    // 前进到下一个版本：弹出 alternatives 开头（最早保存的）
+    store.switchAlternative(convId, messageId, 0);
+  }
+};
+
 // ===== 思维链展开/折叠 =====
 const expandedThinking = ref<Set<string>>(new Set());
 
@@ -421,6 +589,65 @@ const toggleThinkingExpand = (messageId: string) => {
     newSet.add(messageId);
   }
   expandedThinking.value = newSet;
+};
+
+// ===== 用户消息内联编辑 =====
+const editingMessageId = ref<string | null>(null);
+const editingContent = ref('');
+const editTextareaRef = ref<HTMLTextAreaElement | null>(null);
+
+const startEdit = (message: AiMessage) => {
+  editingMessageId.value = message.id;
+  editingContent.value = message.content;
+  nextTick(() => {
+    if (editTextareaRef.value) {
+      editTextareaRef.value.focus();
+    }
+  });
+};
+
+const cancelEdit = () => {
+  editingMessageId.value = null;
+  editingContent.value = '';
+};
+
+const submitEdit = (messageId: string, branch: boolean) => {
+  if (!editingContent.value.trim()) return;
+  emit('edit-resend', {
+    messageId,
+    content: editingContent.value.trim(),
+    branch,
+  });
+  editingMessageId.value = null;
+  editingContent.value = '';
+};
+
+const handleEditKeyDown = (event: KeyboardEvent) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    if (editingMessageId.value && editingContent.value.trim()) {
+      submitEdit(editingMessageId.value, false);
+    }
+  }
+  if (event.key === 'Escape') {
+    cancelEdit();
+  }
+};
+
+// ===== 推理控件 =====
+const reasoningEnabled = computed(() => props.conversation.reasoningEnabled !== false);
+const reasoningEffort = computed(() => props.conversation.reasoningEffort || 'medium');
+
+const toggleReasoning = () => {
+  store.setReasoningSettings(
+    props.conversation.id,
+    !reasoningEnabled.value,
+    reasoningEffort.value,
+  );
+};
+
+const setReasoningEffort = (level: string) => {
+  store.setReasoningSettings(props.conversation.id, reasoningEnabled.value, level);
 };
 
 // ===== 滚动到底部 =====
@@ -449,6 +676,19 @@ const handleKeyDown = (event: KeyboardEvent) => {
   }
 };
 
+const onPaste = (event: ClipboardEvent) => {
+  event.preventDefault();
+  const text = event.clipboardData?.getData('text/plain') ?? '';
+  const textarea = event.target as HTMLTextAreaElement;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  textarea.value =
+    textarea.value.substring(0, start) + text + textarea.value.substring(end);
+  const cursorPos = start + text.length;
+  textarea.selectionStart = textarea.selectionEnd = cursorPos;
+  newMessage.value = textarea.value;
+};
+
 const handleSplitterResize = async (height: number) => {
   inputAreaHeight.value = height;
   await nextTick();
@@ -457,7 +697,7 @@ const handleSplitterResize = async (height: number) => {
   }
 };
 
-// 监听消息列表变化（新消息添加或流式内容更新），自动滚动到底部
+// 监听消息列表变化，自动滚动到底部
 watch(
   () => props.messages,
   () => {
@@ -467,7 +707,7 @@ watch(
         scrollToBottom();
       }
     }
-  }
+  },
 );
 
 onMounted(() => {
@@ -490,6 +730,39 @@ defineExpose({ scrollToBottom });
 </script>
 
 <style scoped>
+.msg-action {
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs, 4px);
+  color: var(--text-quaternary-color, var(--color-text-quaternary));
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+.msg-action:hover:not(:disabled) {
+  color: var(--color-text-secondary, var(--text-secondary-color));
+}
+.msg-action:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.msg-action--active {
+  color: var(--color-primary, var(--theme-primary));
+  opacity: 0.8;
+}
+.msg-action--active:hover {
+  opacity: 1;
+}
+.msg-action-sep {
+  font-size: 11px;
+  color: var(--border-color);
+  opacity: 0.5;
+  user-select: none;
+}
+
 .streaming-cursor {
   animation: blink 1s step-end infinite;
 }
@@ -570,7 +843,7 @@ textarea::-webkit-scrollbar {
 }
 </style>
 
-<!-- Markdown 渲染样式（非 scoped，因为 v-html 内容不受 scoped 样式影响） -->
+<!-- Markdown 渲染样式（非 scoped） -->
 <style>
 .markdown-body {
   font-size: 0.9375rem;

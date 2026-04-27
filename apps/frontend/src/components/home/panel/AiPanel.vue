@@ -34,6 +34,7 @@
             :active-config-id="aiStore.activeConfigId"
             :conversations="currentConversations"
             :active-conversation-id="aiStore.activeConversationId"
+            :streaming-ids="aiStore.streamingConversationIds"
             @select-config="handleSelectConfig"
             @edit-config="handleEditConfig"
             @delete-config="handleDeleteConfig"
@@ -56,6 +57,11 @@
       @send-message="handleSendMessage"
       @stop-generation="stopGeneration"
       @clear-error="clearError"
+      @retry="(msgId) => retryMessage(msgId)"
+      @regenerate="(msgId) => regenerateResponse(msgId, false)"
+      @branch-regenerate="(msgId) => regenerateResponse(msgId, true)"
+      @edit-resend="(payload) => editAndResend(payload.messageId, payload.content, payload.branch)"
+      @delete-message="(msgId) => aiStore.removeMessagesFrom(aiStore.activeConversationId!, msgId)"
     />
 
     <!-- 未选择配置的空状态 -->
@@ -110,7 +116,7 @@ import { BsPlusLg, BsGear, BsRobot, BsChatLeftText } from 'vue-icons-plus/bs';
 
 const aiStore = useAiStore();
 const authStore = useAuthStore();
-const { isStreaming, error, sendMessage, stopGeneration, clearError } = useAiChat();
+const { isStreaming, error, sendMessage, stopGeneration, clearError, retryMessage, regenerateResponse, editAndResend } = useAiChat();
 
 const chatWindowRef = ref<InstanceType<typeof AiChatWindow> | null>(null);
 const showConfigModal = ref(false);
