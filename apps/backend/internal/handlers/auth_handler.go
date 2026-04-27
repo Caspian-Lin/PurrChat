@@ -244,6 +244,60 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	})
 }
 
+// DeleteAccount 注销用户账号
+// @Summary 注销用户账号
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body models.DeleteAccountRequest true "注销确认（需输入密码）"
+// @Success 200 {object} models.AuthResponse
+// @Router /api/account [delete]
+func (h *AuthHandler) DeleteAccount(c *gin.Context) {
+	var req models.DeleteAccountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.ErrorfWithCaller("Invalid delete account request: %v", err)
+		c.JSON(http.StatusBadRequest, models.AuthResponse{
+			Success: false,
+			Message: "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.AuthResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	err := h.authService.DeleteAccount(c.Request.Context(), userID.(string), &req)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to delete account for user %s: %v", userID, err)
+		status := http.StatusBadRequest
+		if err.Error() == "user not found" {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, models.AuthResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	logger.InfofWithCaller("Account deleted successfully for user: %s", userID)
+
+	// 清除认证 Cookie
+	cookie.ClearAuthCookie(c.Writer)
+
+	c.JSON(http.StatusOK, models.AuthResponse{
+		Success: true,
+		Message: "Account deleted successfully",
+	})
+}
+
 // AuthMiddleware JWT认证中间件
 // 支持 Bearer header 和 HttpOnly Cookie 两种认证方式
 func AuthMiddleware(jwtSecret string) gin.HandlerFunc {

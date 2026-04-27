@@ -91,6 +91,8 @@ type UserRepository interface {
 	Update(ctx context.Context, user *models.User) error
 	UpdateBotProfile(ctx context.Context, userID uuid.UUID, username, avatarURL string) error
 	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string, salt string) error
+	DeleteUser(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error
+	FindConversationsByUserID(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 }
 
 type userRepository struct{}
@@ -301,4 +303,30 @@ func (r *userRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, p
 	}
 
 	return err
+}
+
+// DeleteUser 在事务中删除用户（仅由注销账号流程使用）
+func (r *userRepository) DeleteUser(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error {
+	_, err := tx.Exec(ctx, "DELETE FROM users WHERE id = $1 AND is_bot = FALSE", userID)
+	return err
+}
+
+// FindConversationsByUserID 查找用户参与的所有会话 ID
+func (r *userRepository) FindConversationsByUserID(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	query := `SELECT conversation_id FROM enrollments WHERE user_id = $1`
+	rows, err := database.GetPool().Query(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var conversationIDs []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		conversationIDs = append(conversationIDs, id)
+	}
+	return conversationIDs, rows.Err()
 }

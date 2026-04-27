@@ -3,28 +3,34 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/repository"
+	"purr-chat-server/pkg/database"
 	"purr-chat-server/pkg/hash"
 	"purr-chat-server/pkg/jwt"
 	"purr-chat-server/pkg/logger"
 	"purr-chat-server/pkg/utils"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // AuthService 认证服务
 type AuthService struct {
 	userRepo repository.UserRepository
+	botRepo  repository.BotRepository
 	jwtKey   string
 }
 
 // NewAuthService 创建认证服务
-func NewAuthService(userRepo repository.UserRepository, jwtKey string) *AuthService {
+func NewAuthService(userRepo repository.UserRepository, botRepo repository.BotRepository, jwtKey string) *AuthService {
 	return &AuthService{
 		userRepo: userRepo,
+		botRepo:  botRepo,
 		jwtKey:   jwtKey,
 	}
 }
@@ -291,5 +297,88 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID string, req *mo
 	}
 
 	logger.InfofWithCaller("Password changed successfully for user: %s", userID)
+	return nil
+}
+
+// deletedUserUUID 系统保留用户 ID，用于消息匿名化
+var deletedUserUUID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
+
+// DeleteAccount 注销用户账号
+func (s *AuthService) DeleteAccount(ctx context.Context, userID string, req *models.DeleteAccountRequest) error {
+	logger.InfofWithCaller("Deleting account for user: %s", userID)
+
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return err
+	}
+
+	// 1. 验证密码
+	user, err := s.userRepo.FindByID(ctx, id)
+	if err != nil {
+		return errors.New("user not found")
+	}
+
+	valid, err := hash.VerifyPassword(req.Password, user.PasswordHash, user.Salt)
+	if err != nil || !valid {
+		return errors.New("invalid password")
+	}
+
+	// 2. 在单一数据库事务中执行所有清理操作
+	err = pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
+		// 2a. 将用户发送的所有消息的 sender_id 迁移到系统保留用户
+		conversationIDs, err := s.userRepo.FindConversationsByUserID(ctx, id)
+		if err != nil {
+			return fmt.Errorf("failed to find user conversations: %w", err)
+		}
+
+		for _, convID := range conversationIDs {
+			tableName := strings.ReplaceAll(convID.String(), "-", "_")
+			_, err := tx.Exec(ctx,
+				fmt.Sprintf("UPDATE conversation_messages.%s SET sender_id = $1 WHERE sender_id = $2", tableName),
+				deletedUserUUID, id,
+			)
+			if err != nil {
+				// 某些会话可能没有消息表（边缘情况），记录日志但继续
+				logger.InfofWithCaller("Failed to anonymize messages in conversation %s: %v", convID, err)
+			}
+		}
+
+		// 2b. 删除用户创建的所有 Bot
+		bots, err := s.botRepo.FindByOwner(ctx, id)
+		if err != nil {
+			return fmt.Errorf("failed to find user bots: %w", err)
+		}
+		for _, bot := range bots {
+			if _, err := tx.Exec(ctx, "DELETE FROM enrollments WHERE user_id = $1", bot.ID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, "DELETE FROM friendships WHERE user_id = $1 OR friend_id = $1", bot.ID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, "DELETE FROM bot_deployments WHERE bot_id = $1", bot.ID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, "DELETE FROM bots WHERE id = $1", bot.ID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, "DELETE FROM users WHERE id = $1 AND is_bot = TRUE", bot.ID); err != nil {
+				return err
+			}
+		}
+
+		// 2c. 删除用户记录（enrollments, friendships, user_settings 通过 CASCADE 自动清除）
+		if err := s.userRepo.DeleteUser(ctx, tx, id); err != nil {
+			return fmt.Errorf("failed to delete user: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to delete account for user %s: %v", userID, err)
+		return errors.New("failed to delete account")
+	}
+
+	logger.InfofWithCaller("Account deleted successfully for user: %s", userID)
 	return nil
 }

@@ -167,6 +167,10 @@ export interface ChangePasswordRequest {
   new_password: string;
 }
 
+export interface DeleteAccountRequest {
+  password: string;
+}
+
 // 创建群聊请求
 export interface CreateGroupRequest {
   name: string;

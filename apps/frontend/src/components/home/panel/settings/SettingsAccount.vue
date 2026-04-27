@@ -162,6 +162,27 @@
       @update:show="showPasswordModal = $event"
       @success="handlePasswordChanged"
     />
+
+    <!-- 危险区域 -->
+    <div class="mt-8 pt-6" style="border-top: 1px solid var(--border-color)">
+      <h3 class="settings-section__subtitle" style="color: var(--color-error)">危险操作</h3>
+      <p class="text-sm mb-3" style="color: var(--text-tertiary-color)">
+        注销账号后，您的所有数据将被永久删除且无法恢复。
+      </p>
+      <button
+        class="px-4 py-2.5 text-sm rounded-[var(--radius-sm)] transition-colors"
+        style="color: var(--color-error); background: var(--color-error-bg, rgba(220, 38, 38, 0.08)); border: 1px solid rgba(220, 38, 38, 0.3)"
+        @click="showDeleteModal = true"
+      >
+        注销账号
+      </button>
+    </div>
+
+    <!-- 注销账号弹窗 -->
+    <DeleteAccountModal
+      :show="showDeleteModal"
+      @update:show="showDeleteModal = $event"
+    />
   </section>
 </template>
 
@@ -170,6 +191,7 @@ import { ref, computed, nextTick } from 'vue';
 import { BsPencil, BsCamera } from 'vue-icons-plus/bs';
 import BaseInput from '../../../common/BaseInput.vue';
 import ChangePasswordModal from './ChangePasswordModal.vue';
+import DeleteAccountModal from './DeleteAccountModal.vue';
 import type { User } from '../../../../models/types';
 import { api } from '../../../../models/api';
 import { useAuthStore } from '../../../../stores/auth';
@@ -276,6 +298,9 @@ async function saveUsername() {
 
 // ===== 密码修改 =====
 const showPasswordModal = ref(false);
+
+// ===== 注销账号 =====
+const showDeleteModal = ref(false);
 
 function handlePasswordChanged() {
   showPasswordModal.value = false;

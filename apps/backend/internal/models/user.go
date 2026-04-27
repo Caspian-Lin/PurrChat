@@ -80,3 +80,8 @@ type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password" binding:"required,min=6"`
 	NewPassword string `json:"new_password" binding:"required,min=6,max=128"`
 }
+
+// DeleteAccountRequest 注销账号请求
+type DeleteAccountRequest struct {
+	Password string `json:"password" binding:"required,min=6"`
+}

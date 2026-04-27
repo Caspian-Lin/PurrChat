@@ -26,6 +26,8 @@ function getErrorMessage(backendError: string): string {
     'User not found': '用户不存在',
     'invalid current password': '当前密码不正确',
     'new password must be different from current password': '新密码不能与当前密码相同',
+    'invalid password': '密码错误，请确认后重试',
+    'failed to delete account': '注销失败，请稍后重试',
   };
 
   // 优先进行精确匹配
@@ -60,8 +62,8 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false);
   const error = ref<string | null>(null);
 
-  // 计算属性
-  const isAuthenticated = computed(() => !!token.value);
+  // 计算属性 — Cookie 认证下以 user 为判断依据（user 通过 localStorage 持久化，新页面可立即恢复）
+  const isAuthenticated = computed(() => !!user.value);
   const currentUser = computed(() => user.value);
 
   // 设置 token 和用户信息
@@ -149,7 +151,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // 获取当前用户信息
+  // 获取当前用户信息（同时用于验证 Cookie 有效性）
   async function fetchUser() {
     loading.value = true;
     error.value = null;
@@ -160,8 +162,14 @@ export const useAuthStore = defineStore('auth', () => {
         localStorage.setItem('user', JSON.stringify(response.data));
         return true;
       }
+      // Cookie 无效或过期，清除本地状态
+      clearAuth();
       return false;
     } catch (err: any) {
+      // 401 由 axios 拦截器处理（重定向到登录页），这里清除本地过期数据
+      if (err.response?.status === 401) {
+        clearAuth();
+      }
       error.value = err.response?.data?.message || '获取用户信息失败';
       return false;
     } finally {
@@ -179,6 +187,26 @@ export const useAuthStore = defineStore('auth', () => {
     clearAuth();
   }
 
+  // 注销账号
+  async function deleteAccount(password: string) {
+    loading.value = true;
+    error.value = null;
+    try {
+      const response = await api.deleteAccount({ password });
+      if (response.success) {
+        clearAuth();
+        return true;
+      }
+      error.value = getErrorMessage(response.message || '注销失败');
+      return false;
+    } catch (err: any) {
+      error.value = err.response?.data?.message || '注销失败';
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
   return {
     // 状态
     token,
@@ -192,6 +220,7 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     login,
     logout,
+    deleteAccount,
     fetchUser,
     setAuth,
     clearAuth,

@@ -466,7 +466,7 @@ func SetupTestRouter() {
 	enrollmentRepo := repository.NewEnrollmentRepository()
 	conversationMessageRepo := repository.NewConversationMessageRepository()
 
-	authService := services.NewAuthService(userRepo, jwtSecret)
+	authService := services.NewAuthService(userRepo, repository.NewBotRepository(), jwtSecret)
 	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
 
 	authHandler = handlers.NewAuthHandler(authService, jwtSecret, false, nil)

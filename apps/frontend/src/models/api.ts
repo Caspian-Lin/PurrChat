@@ -27,6 +27,7 @@ import type {
   UserSettings,
   UpdateSettingsRequest,
   ChangePasswordRequest,
+  DeleteAccountRequest,
   Bot,
   CreateBotRequest,
   UpdateBotRequest,
@@ -163,6 +164,11 @@ export const api = {
   // 用户登出（清除服务端 Cookie）
   logout: (): Promise<ApiResponse<void>> => {
     return apiClient.post('/api/logout').then((res) => res.data);
+  },
+
+  // 注销账号
+  deleteAccount: (data: DeleteAccountRequest): Promise<ApiResponse<void>> => {
+    return apiClient.delete('/api/account', { data }).then((res) => res.data);
   },
 
   // 获取 Turnstile 配置（site_key）

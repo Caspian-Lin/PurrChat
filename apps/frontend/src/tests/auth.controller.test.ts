@@ -176,8 +176,18 @@ describe('Auth Controller', () => {
 
   describe('checkAuth', () => {
     it('should fetch user when authenticated', async () => {
-      // Set up authenticated state
-      authStore.token = 'test-token';
+      // Set up authenticated state (isAuthenticated 基于 user)
+      authStore.user = {
+        id: '1',
+        uid: 1,
+        username: 'testuser',
+        avatar_url: 'http://example.com/avatar.png',
+        email: 'test@example.com',
+        email_verified: true,
+        phone: '1234567890',
+        phone_verified: true,
+        created_at: '2024-01-01T00:00:00Z',
+      };
 
       vi.mocked(api.me).mockResolvedValueOnce({
         success: true,
@@ -220,8 +230,18 @@ describe('Auth Controller', () => {
     });
 
     it('should not redirect when authenticated', () => {
-      // Set up authenticated state
-      authStore.token = 'test-token';
+      // Set up authenticated state (isAuthenticated 基于 user)
+      authStore.user = {
+        id: '1',
+        uid: 1,
+        username: 'testuser',
+        avatar_url: 'http://example.com/avatar.png',
+        email: 'test@example.com',
+        email_verified: true,
+        phone: '1234567890',
+        phone_verified: true,
+        created_at: '2024-01-01T00:00:00Z',
+      };
 
       const controller = useAuthController();
       const result = controller.requireAuth();
@@ -233,8 +253,18 @@ describe('Auth Controller', () => {
 
   describe('requireGuest', () => {
     it('should redirect to home when authenticated', () => {
-      // Set up authenticated state
-      authStore.token = 'test-token';
+      // Set up authenticated state (isAuthenticated 基于 user)
+      authStore.user = {
+        id: '1',
+        uid: 1,
+        username: 'testuser',
+        avatar_url: 'http://example.com/avatar.png',
+        email: 'test@example.com',
+        email_verified: true,
+        phone: '1234567890',
+        phone_verified: true,
+        created_at: '2024-01-01T00:00:00Z',
+      };
 
       const controller = useAuthController();
       const result = controller.requireGuest();

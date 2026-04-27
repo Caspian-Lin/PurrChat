@@ -230,10 +230,10 @@ func main() {
 	friendshipRepo := repository.NewFriendshipRepository()
 	enrollmentRepo := repository.NewEnrollmentRepository()
 	conversationMessageRepo := repository.NewConversationMessageRepository()
-	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
-	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
 	botRepo := repository.NewBotRepository()
 	botDeployRepo := repository.NewBotDeploymentRepository()
+	authService := services.NewAuthService(userRepo, botRepo, cfg.JWT.Secret)
+	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
 	botService := services.NewBotService(botRepo, botDeployRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, conversationMessageRepo)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret, cfg.Port == "443" || os.Getenv("FORCE_SECURE_COOKIES") == "true", &cfg.Turnstile)
 	chatHandler := handlers.NewChatHandler(authService, chatService)
@@ -294,6 +294,7 @@ func main() {
 		auth.GET("/me", handlers.AuthMiddleware(cfg.JWT.Secret), userRateLimit, authHandler.Me)
 		auth.PUT("/profile", handlers.AuthMiddleware(cfg.JWT.Secret), userRateLimit, chatHandler.UpdateProfile)
 		auth.PUT("/password", handlers.AuthMiddleware(cfg.JWT.Secret), userRateLimit, authHandler.ChangePassword)
+		auth.DELETE("/account", handlers.AuthMiddleware(cfg.JWT.Secret), userRateLimit, authHandler.DeleteAccount)
 	}
 
 	// 用户路由（per-User 限流）
