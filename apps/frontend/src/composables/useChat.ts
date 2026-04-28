@@ -1,13 +1,12 @@
 import { ref, nextTick } from 'vue';
 import { api } from '../models/api';
-import { useMessage } from './useMessage';
+import { useNotification } from './useNotification';
 import { useMessageCache } from '../services/messageCache';
 import { useMessageStore } from '../stores/message';
 import type { Message, SendMessageRequest, FileMessageContent } from '../models/types';
 
 export const useChat = () => {
-  const messages = ref<Message[]>([]);
-  const message = useMessage();
+  const notify = useNotification();
   const messageCache = useMessageCache();
   const messageStore = useMessageStore();
   const messagesContainer = ref<HTMLElement | null>(null);
@@ -23,11 +22,10 @@ export const useChat = () => {
         // 后端返回的消息是按created_at DESC排序的（从新到旧）
         // 需要反转顺序，让最新的消息在最下面
         const reversedMessages = [...response.data].reverse();
-        messages.value = reversedMessages;
-        scrollToBottom();
 
-        // 更新message store
+        // 更新message store（唯一数据源）
         messageStore.setMessages(conversationId, reversedMessages);
+        scrollToBottom();
 
         // 缓存消息
         await messageCache.addMessages(conversationId, response.data);
@@ -64,26 +62,29 @@ export const useChat = () => {
           console.log(
             `[useChat] Reconciled ${removedCount} removed messages for conversation ${conversationId}`
           );
-          // 同步从内存消息列表中移除
-          messages.value = messages.value.filter((m) => serverMessageIds.has(m.id));
-          messageStore.setMessages(conversationId, messages.value);
+          // 从 store 中移除已删除的消息
+          const currentStoreMessages = messageStore.getMessages(conversationId);
+          messageStore.setMessages(
+            conversationId,
+            currentStoreMessages.filter((m) => serverMessageIds.has(m.id))
+          );
         }
 
         // 增量消息是按created_at ASC排序的（从旧到新）
-        // 直接添加到消息列表
         const newMessages: Message[] = [];
+        const currentStoreMessages = messageStore.getMessages(conversationId);
         response.data.forEach((msg) => {
           // 检查消息是否已存在
-          const exists = messages.value.some((m) => m.id === msg.id);
+          const exists = currentStoreMessages.some((m) => m.id === msg.id);
           if (!exists) {
-            messages.value.push(msg);
             newMessages.push(msg);
           }
         });
-        scrollToBottom();
 
-        // 更新message store
-        messageStore.addMessages(conversationId, newMessages);
+        if (newMessages.length > 0) {
+          messageStore.addMessages(conversationId, newMessages);
+        }
+        scrollToBottom();
 
         // 缓存新消息
         await messageCache.addMessages(conversationId, response.data);
@@ -146,7 +147,7 @@ export const useChat = () => {
       // 创建临时消息ID（用于匹配WebSocket返回的消息）
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      // 先添加一条带"发送中"状态的消息到列表
+      // 先添加一条带"发送中"状态的消息到store
       const tempMessage: Message = {
         id: tempId,
         conversation_id: conversationId,
@@ -158,11 +159,8 @@ export const useChat = () => {
       };
 
       console.log('[useChat] Adding temporary message with sending status:', tempMessage);
-      messages.value.push(tempMessage);
-      scrollToBottom();
-
-      // 更新message store
       messageStore.addMessage(conversationId, tempMessage);
+      scrollToBottom();
 
       // 发送API请求
       const requestData: SendMessageRequest = {
@@ -177,12 +175,7 @@ export const useChat = () => {
       if (response.success && response.data) {
         console.log('[useChat] Response successful, updating message status to sent');
         // 更新临时消息的状态为"已发送"
-        const tempMessageIndex = messages.value.findIndex((m) => m.id === tempId);
-        if (tempMessageIndex !== -1 && messages.value[tempMessageIndex]) {
-          messages.value[tempMessageIndex].sendStatus = 'sent';
-          // 更新message store
-          messageStore.updateMessageStatus(conversationId, tempId, 'sent');
-        }
+        messageStore.updateMessageStatus(conversationId, tempId, 'sent');
 
         // 注意：这里不直接替换临时消息，而是等待WebSocket事件来更新
         // WebSocket事件会携带完整的消息信息，包括正确的sender_id和created_at
@@ -200,24 +193,16 @@ export const useChat = () => {
       }
       console.log('[useChat] sendMessage response not successful or no data');
       // 更新临时消息的状态为"发送失败"
-      const tempMessageIndex = messages.value.findIndex((m) => m.id === tempId);
-      if (tempMessageIndex !== -1 && messages.value[tempMessageIndex]) {
-        messages.value[tempMessageIndex].sendStatus = 'failed';
-        messageStore.updateMessageStatus(conversationId, tempId, 'failed');
-      }
+      messageStore.updateMessageStatus(conversationId, tempId, 'failed');
       return false;
     } catch (error) {
       console.error('[useChat] Failed to send message:', error);
-      message.error('发送消息失败');
+      notify.error('发送消息失败');
       // 更新临时消息的状态为"发送失败"
-      const tempMessageIndex = messages.value.findIndex((m) => m.id.startsWith('temp-'));
-      if (tempMessageIndex !== -1 && messages.value[tempMessageIndex]) {
-        messages.value[tempMessageIndex].sendStatus = 'failed';
-        messageStore.updateMessageStatus(
-          conversationId,
-          messages.value[tempMessageIndex].id,
-          'failed'
-        );
+      const currentMessages = messageStore.getMessages(conversationId);
+      const tempMessage = currentMessages.find((m) => m.id.startsWith('temp-'));
+      if (tempMessage) {
+        messageStore.updateMessageStatus(conversationId, tempMessage.id, 'failed');
       }
       return false;
     }
@@ -245,13 +230,13 @@ export const useChat = () => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
 
-        message.success(`成功导出 ${response.data.length} 条消息`);
+        notify.success(`成功导出 ${response.data.length} 条消息`);
       } else {
-        message.error('没有可导出的消息');
+        notify.error('没有可导出的消息');
       }
     } catch (error) {
       console.error('Failed to export messages:', error);
-      message.error('导出消息失败');
+      notify.error('导出消息失败');
     }
   };
 
@@ -280,9 +265,8 @@ export const useChat = () => {
         sendStatus: 'sending',
       };
 
-      messages.value.push(tempMessage);
-      scrollToBottom();
       messageStore.addMessage(conversationId, tempMessage);
+      scrollToBottom();
 
       const requestData: SendMessageRequest = {
         conversation_id: conversationId,
@@ -292,11 +276,7 @@ export const useChat = () => {
       const response = await api.sendMessage(requestData);
 
       if (response.success && response.data) {
-        const tempMessageIndex = messages.value.findIndex((m) => m.id === tempId);
-        if (tempMessageIndex !== -1 && messages.value[tempMessageIndex]) {
-          messages.value[tempMessageIndex].sendStatus = 'sent';
-          messageStore.updateMessageStatus(conversationId, tempId, 'sent');
-        }
+        messageStore.updateMessageStatus(conversationId, tempId, 'sent');
 
         try {
           await messageCache.addMessage(conversationId, response.data);
@@ -306,24 +286,16 @@ export const useChat = () => {
         return true;
       }
 
-      const tempMessageIndex = messages.value.findIndex((m) => m.id === tempId);
-      if (tempMessageIndex !== -1 && messages.value[tempMessageIndex]) {
-        messages.value[tempMessageIndex].sendStatus = 'failed';
-        messageStore.updateMessageStatus(conversationId, tempId, 'failed');
-      }
+      messageStore.updateMessageStatus(conversationId, tempId, 'failed');
       return false;
     } catch (error) {
       console.error('[useChat] Failed to send file message:', error);
-      const lastTempIndex = messages.value.findIndex(
+      const currentMessages = messageStore.getMessages(conversationId);
+      const tempMessage = currentMessages.find(
         (m) => m.id.startsWith('temp-file-') && m.sendStatus === 'sending'
       );
-      if (lastTempIndex !== -1 && messages.value[lastTempIndex]) {
-        messages.value[lastTempIndex].sendStatus = 'failed';
-        messageStore.updateMessageStatus(
-          conversationId,
-          messages.value[lastTempIndex].id,
-          'failed'
-        );
+      if (tempMessage) {
+        messageStore.updateMessageStatus(conversationId, tempMessage.id, 'failed');
       }
       return false;
     }
@@ -340,26 +312,25 @@ export const useChat = () => {
   };
 
   /**
-   * 添加新消息到列表（用于WebSocket实时接收）
+   * 添加新消息到store（用于WebSocket实时接收）
    * @param newMessage - 新消息
    */
   const addMessage = (newMessage: Message) => {
-    messages.value.push(newMessage);
-    scrollToBottom();
-
-    // 更新message store
     messageStore.addMessage(newMessage.conversation_id, newMessage);
+    scrollToBottom();
   };
 
   /**
-   * 清空消息列表
+   * 清空指定会话的消息
+   * @param conversationId - 会话ID
    */
-  const clearMessages = () => {
-    messages.value = [];
+  const clearMessages = (conversationId?: string) => {
+    if (conversationId) {
+      messageStore.clearMessages(conversationId);
+    }
   };
 
   return {
-    messages,
     messagesContainer,
     loadMessages,
     loadMessagesIncremental,

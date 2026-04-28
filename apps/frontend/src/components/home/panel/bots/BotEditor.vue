@@ -254,43 +254,9 @@ function extractMechanisms(bot: Bot): Mechanism[] {
     return bot.mechanism_config.mechanisms.map((m) => deepCloneMechanism(m));
   }
 
-  // 兼容旧格式：合并 trigger_config + reply_config 为一个默认机制
+  // 如果没有任何机制，创建一个默认的空规则机制
   const mechanisms: Mechanism[] = [];
 
-  if (bot.trigger_config || bot.reply_config) {
-    mechanisms.push({
-      id: 'mech_default',
-      name: '默认机制',
-      enabled: true,
-      trigger: (bot.trigger_config as any)
-        ? {
-            type: (bot.trigger_config as any).mode === 'probability' ? 'probability' : 'rule',
-            rules: (bot.trigger_config as any).rules,
-            probability: (bot.trigger_config as any).probability,
-          }
-        : { type: 'rule', rules: [] },
-      reply: (bot.reply_config as any) || {
-        type: 'predefined',
-        predefined: { mode: 'random', replies: ['...'] },
-      },
-    });
-  }
-
-  // 如果有 special_mode_config，创建第二个特殊模式机制
-  if (bot.special_mode_config && (bot.special_mode_config as any).events?.length) {
-    mechanisms.push({
-      id: 'mech_special',
-      name: '特殊模式',
-      enabled: true,
-      trigger: { type: 'rule', rules: [] },
-      reply: {
-        type: 'special_mode',
-        special_mode: bot.special_mode_config as any,
-      },
-    });
-  }
-
-  // 如果没有任何机制，创建一个默认的空规则机制
   if (mechanisms.length === 0) {
     mechanisms.push({
       id: 'mech_default',

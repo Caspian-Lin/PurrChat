@@ -24,13 +24,25 @@ func TestNewConversation(t *testing.T) {
 	friendshipRepo := repository.NewFriendshipRepository()
 
 	// 创建service
-	chatService := services.NewChatService(
+	conversationService := services.NewConversationService(
 		userRepo,
 		conversationRepo,
-		nil, // messageRepo
-		friendshipRepo,
 		enrollmentRepo,
 		conversationMessageRepo,
+		friendshipRepo,
+	)
+	messageService := services.NewMessageService(
+		userRepo,
+		conversationRepo,
+		enrollmentRepo,
+		conversationMessageRepo,
+		nil,
+		nil,
+	)
+	memberService := services.NewMemberService(
+		userRepo,
+		conversationRepo,
+		enrollmentRepo,
 	)
 
 	// 测试1: 创建私聊会话
@@ -48,7 +60,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 创建私聊会话
-		conversation, err := chatService.CreateConversation(ctx, user1.ID.String(), user2.ID.String())
+		conversation, err := conversationService.CreateConversation(ctx, user1.ID.String(), user2.ID.String())
 		if err != nil {
 			t.Fatalf("Failed to create direct conversation: %v", err)
 		}
@@ -100,7 +112,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 创建群聊会话
-		conversation, err := chatService.CreateGroupConversation(
+		conversation, err := conversationService.CreateGroupConversation(
 			ctx,
 			owner.ID.String(),
 			"测试群聊",
@@ -196,7 +208,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 创建群聊会话
-		conversation, err := chatService.CreateGroupConversation(
+		conversation, err := conversationService.CreateGroupConversation(
 			ctx,
 			owner.ID.String(),
 			"测试群聊添加成员",
@@ -207,7 +219,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 添加新成员
-		err = chatService.AddMemberToConversation(
+		err = memberService.AddMemberToConversation(
 			ctx,
 			conversation.ID.String(),
 			owner.ID.String(),
@@ -249,7 +261,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 创建群聊会话
-		conversation, err := chatService.CreateGroupConversation(
+		conversation, err := conversationService.CreateGroupConversation(
 			ctx,
 			owner.ID.String(),
 			"测试群聊移除成员",
@@ -260,7 +272,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 移除成员
-		err = chatService.RemoveMemberFromConversation(
+		err = memberService.RemoveMemberFromConversation(
 			ctx,
 			conversation.ID.String(),
 			owner.ID.String(),
@@ -307,7 +319,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 创建群聊会话
-		conversation, err := chatService.CreateGroupConversation(
+		conversation, err := conversationService.CreateGroupConversation(
 			ctx,
 			owner.ID.String(),
 			"测试群聊获取成员",
@@ -318,7 +330,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 获取会话成员
-		members, err := chatService.GetConversationMembers(ctx, conversation.ID.String())
+		members, err := conversationService.GetConversationMembers(ctx, conversation.ID.String())
 		if err != nil {
 			t.Fatalf("Failed to get conversation members: %v", err)
 		}
@@ -368,13 +380,13 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 创建私聊会话
-		conversation, err := chatService.CreateConversation(ctx, user1.ID.String(), user2.ID.String())
+		conversation, err := conversationService.CreateConversation(ctx, user1.ID.String(), user2.ID.String())
 		if err != nil {
 			t.Fatalf("Failed to create conversation: %v", err)
 		}
 
 		// 查找user1的会话
-		conversations, err := chatService.GetConversations(ctx, user1.ID.String())
+		conversations, err := conversationService.GetConversations(ctx, user1.ID.String())
 		if err != nil {
 			t.Fatalf("Failed to get conversations: %v", err)
 		}
@@ -424,7 +436,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 创建群聊会话
-		conversation, err := chatService.CreateGroupConversation(
+		conversation, err := conversationService.CreateGroupConversation(
 			ctx,
 			owner.ID.String(),
 			"测试群聊权限",
@@ -435,7 +447,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 尝试用普通成员添加新成员（应该失败）
-		err = chatService.AddMemberToConversation(
+		err = memberService.AddMemberToConversation(
 			ctx,
 			conversation.ID.String(),
 			member1.ID.String(),
@@ -462,7 +474,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 创建群聊会话
-		conversation, err := chatService.CreateGroupConversation(
+		conversation, err := conversationService.CreateGroupConversation(
 			ctx,
 			owner.ID.String(),
 			"测试群聊移除owner",
@@ -473,7 +485,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 尝试移除owner（应该失败）
-		err = chatService.RemoveMemberFromConversation(
+		err = memberService.RemoveMemberFromConversation(
 			ctx,
 			conversation.ID.String(),
 			owner.ID.String(),
@@ -499,7 +511,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 创建群聊会话
-		conversation, err := chatService.CreateGroupConversation(
+		conversation, err := conversationService.CreateGroupConversation(
 			ctx,
 			owner.ID.String(),
 			"测试群聊消息",
@@ -515,7 +527,7 @@ func TestNewConversation(t *testing.T) {
 			Content:        "Hello, group!",
 			MsgType:        "text",
 		}
-		message, err := chatService.SendMessage(ctx, owner.ID.String(), sendReq)
+		message, err := messageService.SendMessage(ctx, owner.ID.String(), sendReq)
 		if err != nil {
 			t.Fatalf("Failed to send message: %v", err)
 		}

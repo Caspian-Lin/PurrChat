@@ -27,6 +27,8 @@ type ConversationMessageRepository interface {
 	CountMessages(ctx context.Context, conversationID uuid.UUID) (int, error)
 	// FindLastMessage 查找会话中的最后一条消息
 	FindLastMessage(ctx context.Context, conversationID uuid.UUID) (*models.Message, error)
+	// FindByConversationIDSince 增量获取会话中的消息（从指定时间之后）
+	FindByConversationIDSince(ctx context.Context, conversationID uuid.UUID, since time.Time) ([]*models.Message, error)
 }
 
 type conversationMessageRepository struct {
@@ -226,55 +228,41 @@ func (r *conversationMessageRepository) FindLastMessage(ctx context.Context, con
 	return message, nil
 }
 
-// GetConversationParticipants 获取会话参与者ID列表
-func (r *conversationMessageRepository) GetConversationParticipants(ctx context.Context, conversationID uuid.UUID) ([]uuid.UUID, error) {
-	query := `
-        SELECT user_id
-        FROM enrollments
-        WHERE conversation_id = $1
-    `
+// FindByConversationIDSince 增量获取会话中的消息（从指定时间之后）
+func (r *conversationMessageRepository) FindByConversationIDSince(ctx context.Context, conversationID uuid.UUID, since time.Time) ([]*models.Message, error) {
+	logger.InfofWithCaller("Finding messages for conversation %s since %v", conversationID, since)
 
-	rows, err := database.GetPool().Query(ctx, query, conversationID)
+	query := `
+	        SELECT * FROM get_conversation_messages_incremental($1, $2)
+	    `
+
+	rows, err := database.GetPool().Query(ctx, query, conversationID, since)
 	if err != nil {
+		logger.ErrorfWithCaller("Failed to query messages: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
 
-	var participants []uuid.UUID
+	var messages []*models.Message
 	for rows.Next() {
-		var userID uuid.UUID
-		if err := rows.Scan(&userID); err != nil {
+		message := &models.Message{}
+		err := rows.Scan(
+			&message.ID,
+			&message.SenderID,
+			&message.Content,
+			&message.MsgType,
+			&message.CreatedAt,
+			&message.BotID,
+			&message.BotName,
+		)
+		if err != nil {
+			logger.ErrorfWithCaller("Failed to scan message: %v", err)
 			return nil, err
 		}
-		participants = append(participants, userID)
+		message.ConversationID = conversationID
+		messages = append(messages, message)
 	}
 
-	return participants, nil
-}
-
-// BroadcastMessage 广播消息给会话中的所有参与者（不包括发送者）
-// 这个函数返回应该接收消息的用户ID列表
-func (r *conversationMessageRepository) BroadcastMessage(ctx context.Context, conversationID, senderID uuid.UUID) ([]uuid.UUID, error) {
-	query := `
-        SELECT user_id
-        FROM enrollments
-        WHERE conversation_id = $1 AND user_id != $2
-    `
-
-	rows, err := database.GetPool().Query(ctx, query, conversationID, senderID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var recipients []uuid.UUID
-	for rows.Next() {
-		var userID uuid.UUID
-		if err := rows.Scan(&userID); err != nil {
-			return nil, err
-		}
-		recipients = append(recipients, userID)
-	}
-
-	return recipients, nil
+	logger.InfofWithCaller("Found %d new messages for conversation %s", len(messages), conversationID)
+	return messages, nil
 }

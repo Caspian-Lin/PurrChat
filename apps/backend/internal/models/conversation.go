@@ -28,25 +28,11 @@ type Conversation struct {
 	FriendshipStatus *FriendshipStatus `json:"friendship_status,omitempty" db:"-"` // 好友关系状态（仅私聊会话）
 }
 
-// ConversationListResponse 会话列表响应
-type ConversationListResponse struct {
-	Success bool           `json:"success"`
-	Message string         `json:"message,omitempty"`
-	Data    []Conversation `json:"data,omitempty"`
-}
-
 // SendMessageRequest 发送消息请求
 type SendMessageRequest struct {
 	ConversationID uuid.UUID `json:"conversation_id" binding:"required,uuid"`
 	Content        string    `json:"content" binding:"required,max=10000"`
 	MsgType        string    `json:"msg_type" binding:"required,oneof=text image file system"`
-}
-
-// MessageResponse 消息响应
-type MessageResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-	Data    any    `json:"data,omitempty"`
 }
 
 // GetMessagesRequest 获取消息请求
@@ -60,13 +46,6 @@ type GetMessagesRequest struct {
 type GetMessagesIncrementalRequest struct {
 	ConversationID string `form:"conversation_id" binding:"required,uuid"`
 	SinceTimestamp int64  `form:"since_timestamp" binding:"required"` // Unix时间戳（毫秒）
-}
-
-// MessagesResponse 消息列表响应
-type MessagesResponse struct {
-	Success bool      `json:"success"`
-	Message string    `json:"message,omitempty"`
-	Data    []Message `json:"data,omitempty"`
 }
 
 // CreateGroupRequest 创建群聊请求
@@ -86,13 +65,6 @@ type DeleteConversationRequest struct {
 	ConversationID uuid.UUID `json:"conversation_id" binding:"required,uuid"`
 }
 
-// ConversationMemberResponse 会话成员响应
-type ConversationMemberResponse struct {
-	Success bool         `json:"success"`
-	Message string       `json:"message,omitempty"`
-	Data    []Enrollment `json:"data,omitempty"`
-}
-
 // HandleFriendRequestRequest 处理好友请求请求
 type HandleFriendRequestRequest struct {
 	ConversationID uuid.UUID `json:"conversation_id" binding:"omitempty,uuid"`
@@ -100,8 +72,5 @@ type HandleFriendRequestRequest struct {
 }
 
 // HandleFriendRequestResponse 处理好友请求响应
-type HandleFriendRequestResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-	Data    any    `json:"data,omitempty"`
-}
+// Deprecated: 使用 models.APIResponse 替代
+type HandleFriendRequestResponse = APIResponse

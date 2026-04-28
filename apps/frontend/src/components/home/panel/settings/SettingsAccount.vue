@@ -171,7 +171,11 @@
       </p>
       <button
         class="px-4 py-2.5 text-sm rounded-[var(--radius-sm)] transition-colors"
-        style="color: var(--color-error); background: var(--color-error-bg, rgba(220, 38, 38, 0.08)); border: 1px solid rgba(220, 38, 38, 0.3)"
+        style="
+          color: var(--color-error);
+          background: var(--color-error-bg, rgba(220, 38, 38, 0.08));
+          border: 1px solid rgba(220, 38, 38, 0.3);
+        "
         @click="showDeleteModal = true"
       >
         注销账号
@@ -179,10 +183,7 @@
     </div>
 
     <!-- 注销账号弹窗 -->
-    <DeleteAccountModal
-      :show="showDeleteModal"
-      @update:show="showDeleteModal = $event"
-    />
+    <DeleteAccountModal :show="showDeleteModal" @update:show="showDeleteModal = $event" />
   </section>
 </template>
 
@@ -195,7 +196,7 @@ import DeleteAccountModal from './DeleteAccountModal.vue';
 import type { User } from '../../../../models/types';
 import { api } from '../../../../models/api';
 import { useAuthStore } from '../../../../stores/auth';
-import { useMessage } from '../../../../composables/useMessage';
+import { useNotification } from '../../../../composables/useNotification';
 import { useAvatarUpload } from '../../../../composables/useAvatarUpload';
 
 interface Props {
@@ -205,7 +206,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const authStore = useAuthStore();
-const { success, error: showError } = useMessage();
+const { success, error: showError } = useNotification();
 
 // ===== 头像上传 =====
 const fileInputRef = ref<HTMLInputElement | null>(null);

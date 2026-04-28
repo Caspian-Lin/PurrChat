@@ -30,13 +30,6 @@ var GlobalHub *Hub
 // JWT secret 用于验证WebSocket连接
 var jwtSecret string
 
-// InitHub 初始化全局Hub
-func InitHub() {
-	GlobalHub = NewHub(20000, 3) // 默认最大连接数20000，每用户最大连接数3
-	go GlobalHub.Run()
-	logger.Info("WebSocket Hub initialized")
-}
-
 // InitHubWithConfig 使用配置初始化全局Hub
 func InitHubWithConfig(maxConnections, maxUserConnections int) {
 	GlobalHub = NewHub(maxConnections, maxUserConnections)

@@ -5,17 +5,19 @@
         v-for="notification in notifications"
         :key="notification.id"
         :class="[
-          'p-4 rounded-lg shadow-lg border-l-4 min-w-[300px]',
+          'p-4 rounded-lg shadow-lg min-w-[300px] cursor-pointer',
           getNotificationClass(notification.type),
         ]"
         @click="removeNotification(notification.id)"
       >
         <div class="flex items-start gap-3">
           <div class="flex-shrink-0">
-            <span class="text-2xl">{{ getNotificationIcon(notification.type) }}</span>
+            <span class="text-lg font-semibold">{{ getNotificationIcon(notification.type) }}</span>
           </div>
           <div class="flex-1 min-w-0">
-            <div class="font-semibold text-sm mb-1">{{ notification.title }}</div>
+            <div v-if="notification.title" class="font-semibold text-sm mb-1">
+              {{ notification.title }}
+            </div>
             <div class="text-sm opacity-90">{{ notification.message }}</div>
           </div>
           <button
@@ -31,32 +33,21 @@
 </template>
 
 <script setup lang="ts">
-import type { Notification } from '../../composables/useNotification';
+import { useNotification } from '../../composables/useNotification';
 
-interface Props {
-  notifications: Notification[];
-}
+const { notifications, removeNotification } = useNotification();
 
-const props = defineProps<Props>();
-
-const emit = defineEmits<{
-  'remove-notification': [id: string];
-}>();
-
-const getNotificationClass = (type: Notification['type']): string => {
+const getNotificationClass = (type: 'success' | 'info' | 'warning' | 'error'): string => {
   const classes = {
-    success:
-      'bg-green-50 border-green-500 text-green-900 dark:bg-green-900/20 dark:border-green-500 dark:text-green-100',
-    info: 'bg-blue-50 border-blue-500 text-blue-900 dark:bg-blue-900/20 dark:border-blue-500 dark:text-blue-100',
-    warning:
-      'bg-yellow-50 border-yellow-500 text-yellow-900 dark:bg-yellow-900/20 dark:border-yellow-500 dark:text-yellow-100',
-    error:
-      'bg-red-50 border-red-500 text-red-900 dark:bg-red-900/20 dark:border-red-500 dark:text-red-100',
+    success: 'bg-green-50 text-green-900 dark:bg-green-900/20 dark:text-green-100',
+    info: 'bg-blue-50 text-blue-900 dark:bg-blue-900/20 dark:text-blue-100',
+    warning: 'bg-yellow-50 text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-100',
+    error: 'bg-red-50 text-red-900 dark:bg-red-900/20 dark:text-red-100',
   };
   return classes[type] || classes.info;
 };
 
-const getNotificationIcon = (type: Notification['type']): string => {
+const getNotificationIcon = (type: 'success' | 'info' | 'warning' | 'error'): string => {
   const icons = {
     success: '✓',
     info: 'ℹ',
@@ -64,10 +55,6 @@ const getNotificationIcon = (type: Notification['type']): string => {
     error: '✕',
   };
   return icons[type] || icons.info;
-};
-
-const removeNotification = (id: string) => {
-  emit('remove-notification', id);
 };
 </script>
 

@@ -125,23 +125,9 @@ func isAlreadyExistsError(err error) bool {
 	}
 	errStr := err.Error()
 	// 检查常见的"已存在"错误模式
-	return contains(errStr, "already exists") ||
-		contains(errStr, "duplicate") ||
-		contains(errStr, "42P07") // PostgreSQL 错误码：relation already exists
-}
-
-// contains 检查字符串是否包含子串
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(errStr, "already exists") ||
+		strings.Contains(errStr, "duplicate") ||
+		strings.Contains(errStr, "42P07") // PostgreSQL 错误码：relation already exists
 }
 
 func main() {
@@ -226,21 +212,24 @@ func main() {
 	// 初始化依赖
 	userRepo := repository.NewUserRepository()
 	conversationRepo := repository.NewConversationRepository()
-	messageRepo := repository.NewMessageRepository()
 	friendshipRepo := repository.NewFriendshipRepository()
 	enrollmentRepo := repository.NewEnrollmentRepository()
 	conversationMessageRepo := repository.NewConversationMessageRepository()
 	botRepo := repository.NewBotRepository()
 	botDeployRepo := repository.NewBotDeploymentRepository()
 	authService := services.NewAuthService(userRepo, botRepo, cfg.JWT.Secret)
-	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
+	botEngine := botengine.NewBotEngine(botDeployRepo, botRepo, conversationMessageRepo, enrollmentRepo)
+	conversationService := services.NewConversationService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, friendshipRepo)
+	conversationService.SetBotRepo(botRepo)
+	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, botRepo, botEngine)
+	friendService := services.NewFriendService(userRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
+	friendService.SetBotRepo(botRepo)
+	memberService := services.NewMemberService(userRepo, conversationRepo, enrollmentRepo)
+	userService := services.NewUserService(userRepo)
 	botService := services.NewBotService(botRepo, botDeployRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, conversationMessageRepo)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret, cfg.Port == "443" || os.Getenv("FORCE_SECURE_COOKIES") == "true", &cfg.Turnstile)
-	chatHandler := handlers.NewChatHandler(authService, chatService)
-	botEngine := botengine.NewBotEngine(botDeployRepo, botRepo, conversationMessageRepo, enrollmentRepo)
+	chatHandler := handlers.NewChatHandler(authService, userService, conversationService, messageService, friendService, memberService)
 	botHandler := handlers.NewBotHandler(botService, botEngine)
-	chatService.SetBotEngine(botEngine)
-	chatService.SetBotRepo(botRepo)
 	settingsRepo := repository.NewSettingsRepository()
 	settingsService := services.NewSettingsService(settingsRepo)
 	settingsHandler := handlers.NewSettingsHandler(settingsService)
@@ -304,7 +293,6 @@ func main() {
 	{
 		users.GET("/search", chatHandler.SearchUsers)
 		users.GET("/:id", chatHandler.GetUserByID)
-		users.GET("/uid/:uid", chatHandler.GetUserByUID)
 	}
 
 	// 会话路由（per-User 限流）

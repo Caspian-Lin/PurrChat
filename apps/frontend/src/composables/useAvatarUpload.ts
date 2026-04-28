@@ -1,6 +1,7 @@
 import { ref } from 'vue';
-import { storageApi, api } from '../models/api';
+import { api } from '../models/api';
 import { useAuthStore } from '../stores/auth';
+import { threeStageUpload } from '../utils/upload';
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024; // 2MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
@@ -38,45 +39,8 @@ export function useAvatarUpload() {
     previewUrl.value = URL.createObjectURL(file);
 
     try {
-      // 第一步：申请上传（获取预签名 URL）
-      const requestResp = await storageApi.requestUpload({
-        file_name: file.name,
-        file_size: file.size,
-        content_type: file.type,
-        category: 'avatar',
-        usage: 'avatar',
-      });
-
-      if (!requestResp.success || !requestResp.data) {
-        throw new Error(requestResp.message || '申请上传失败');
-      }
-
-      const { upload_id, object_key, upload_url } = requestResp.data;
-
-      // 第二步：使用预签名 URL 直接上传文件到对象存储
-      const uploadResp = await fetch(upload_url, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': file.type,
-        },
-      });
-
-      if (!uploadResp.ok) {
-        throw new Error('文件上传失败');
-      }
-
-      // 第三步：确认上传
-      const confirmResp = await storageApi.confirmUpload({
-        upload_id,
-        object_key,
-      });
-
-      if (!confirmResp.success || !confirmResp.data) {
-        throw new Error(confirmResp.message || '确认上传失败');
-      }
-
-      const publicUrl = confirmResp.data.public_url;
+      // 三阶段上传（申请 → PUT → 确认）
+      const { publicUrl } = await threeStageUpload(file, 'avatar', 'avatar');
       console.log('[avatar-upload] 存储服务返回 public_url:', publicUrl);
 
       // 第四步：更新用户资料中的头像 URL

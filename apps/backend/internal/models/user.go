@@ -60,13 +60,6 @@ type FriendRequest struct {
 	TargetUserID string `json:"target_user_id" binding:"required,uuid"`
 }
 
-// FriendRequestResponse 好友请求响应
-type FriendRequestResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-	Data    any    `json:"data,omitempty"`
-}
-
 // UpdateProfileRequest 更新个人资料请求
 type UpdateProfileRequest struct {
 	Username  string `json:"username,omitempty" binding:"omitempty,min=3,max=20"`

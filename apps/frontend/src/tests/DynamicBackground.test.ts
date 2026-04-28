@@ -5,123 +5,38 @@ import DynamicBackground from '../components/DynamicBackground.vue';
 
 describe('DynamicBackground Component', () => {
   let wrapper: ReturnType<typeof mount>;
+  const originalCreateElement = document.createElement.bind(document);
 
   beforeEach(() => {
     setActivePinia(createPinia());
-  });
+    vi.clearAllMocks();
 
-  afterEach(() => {
-    if (wrapper) wrapper.unmount();
-  });
-
-  it('should render the container element with aria-hidden', () => {
-    wrapper = mount(DynamicBackground);
-    const el = wrapper.find('.dynamic-bg');
-    expect(el.exists()).toBe(true);
-    expect(el.attributes('aria-hidden')).toBe('true');
-  });
-
-  it('should render the tinted surface layer', () => {
-    wrapper = mount(DynamicBackground);
-    expect(wrapper.find('.surface').exists()).toBe(true);
-  });
-
-  it('should render the SVG dot grid with pattern definition', () => {
-    wrapper = mount(DynamicBackground);
-    const svg = wrapper.find('.dot-grid');
-    expect(svg.exists()).toBe(true);
-    expect(svg.element.tagName.toLowerCase()).toBe('svg');
-    expect(svg.find('pattern').exists()).toBe(true);
-    expect(svg.find('circle').exists()).toBe(true);
-  });
-
-  it('should render five cutout shapes with varied shape classes', () => {
-    wrapper = mount(DynamicBackground);
-    const cutouts = wrapper.findAll('.cutout');
-    expect(cutouts.length).toBe(5);
-    // DOM order follows parallax layer grouping: deep(1,3), mid(2,5), near(4)
-    const classSet = new Set(cutouts.flatMap((c) => c.classes()));
-    for (let i = 1; i <= 5; i++) {
-      expect(classSet.has(`cutout-${i}`)).toBe(true);
-    }
-  });
-
-  it('should render three parallax depth layers', () => {
-    wrapper = mount(DynamicBackground);
-    const layers = wrapper.findAll('.parallax');
-    expect(layers.length).toBe(3);
-    expect(layers[0].classes()).toContain('parallax--deep');
-    expect(layers[1].classes()).toContain('parallax--mid');
-    expect(layers[2].classes()).toContain('parallax--near');
-  });
-
-  it('should apply theme-reactive CSS custom properties', () => {
-    wrapper = mount(DynamicBackground);
-    const style = wrapper.find('.dynamic-bg').attributes('style');
-    expect(style).toContain('--surface-color');
-    expect(style).toContain('--grid-color');
-    expect(style).toContain('--mx');
-    expect(style).toContain('--my');
-  });
-
-  it('should use rgba format for surface and grid colors', () => {
-    wrapper = mount(DynamicBackground);
-    const style = wrapper.find('.dynamic-bg').attributes('style') ?? '';
-    const surfaceMatch = style.match(/--surface-color:\s*rgba\([^)]+\)/);
-    expect(surfaceMatch).not.toBeNull();
-    const gridMatch = style.match(/--grid-color:\s*rgba\([^)]+\)/);
-    expect(gridMatch).not.toBeNull();
-  });
-
-  it('should initialize parallax vars at zero', () => {
-    wrapper = mount(DynamicBackground);
-    const style = wrapper.find('.dynamic-bg').attributes('style') ?? '';
-    expect(style).toContain('--mx: 0');
-    expect(style).toContain('--my: 0');
-  });
-
-  it('should update parallax vars in response to mouse movement', async () => {
-    wrapper = mount(DynamicBackground);
-    const container = wrapper.find('.dynamic-bg');
-    const el = container.element as HTMLElement;
-
-    // Mock getBoundingClientRect for predictable calculations
-    const mockRect = {
-      width: 1000,
-      height: 800,
-      left: 0,
-      top: 0,
-      right: 1000,
-      bottom: 800,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
+    // Mock getContext to return a minimal mock canvas context
+    const mockCtx = {
+      fillRect: vi.fn(),
+      clearRect: vi.fn(),
+      createRadialGradient: vi.fn(() => ({
+        addColorStop: vi.fn(),
+      })),
+      save: vi.fn(),
+      restore: vi.fn(),
+      setTransform: vi.fn(),
+      scale: vi.fn(),
+      drawImage: vi.fn(),
+      fill: vi.fn(),
+      stroke: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      quadraticCurveTo: vi.fn(),
+      closePath: vi.fn(),
     };
-    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(mockRect as DOMRect);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      mockCtx as unknown as CanvasRenderingContext2D
+    );
 
-    // Initially parallax is zero
-    let style = container.attributes('style') ?? '';
-    expect(style).toContain('--mx: 0');
-
-    // Move mouse — mx/my should change from zero
-    await container.trigger('mousemove', { clientX: 750, clientY: 600 });
-    style = container.attributes('style') ?? '';
-
-    // Verify values changed (no longer zero)
-    const mxMatch = style.match(/--mx:\s*([^;]+)/);
-    const myMatch = style.match(/--my:\s*([^;]+)/);
-    expect(mxMatch).not.toBeNull();
-    expect(myMatch).not.toBeNull();
-    expect(parseFloat(mxMatch![1])).not.toBe(0);
-    expect(parseFloat(myMatch![1])).not.toBe(0);
-  });
-
-  it('should reset parallax vars to zero on mouse leave', async () => {
-    wrapper = mount(DynamicBackground);
-    const container = wrapper.find('.dynamic-bg');
-    const el = container.element as HTMLElement;
-
-    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+    // Mock getBoundingClientRect for container sizing
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       width: 1000,
       height: 800,
       left: 0,
@@ -133,29 +48,55 @@ describe('DynamicBackground Component', () => {
       toJSON: () => ({}),
     } as DOMRect);
 
-    // Move mouse away from center
-    await container.trigger('mousemove', { clientX: 800, clientY: 200 });
+    // Mock devicePixelRatio
+    vi.spyOn(window, 'devicePixelRatio', 'get').mockReturnValue(1);
 
-    // Leave — should reset to 0
-    await container.trigger('mouseleave');
-
-    const style = container.attributes('style') ?? '';
-    expect(style).toContain('--mx: 0');
-    expect(style).toContain('--my: 0');
+    // Mock matchMedia
+    vi.spyOn(window, 'matchMedia').mockReturnValue({
+      matches: true,
+      media: '',
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    });
   });
 
-  it('should not add document-level event listeners (uses element-level handlers)', () => {
-    const docSpy = vi.spyOn(document, 'addEventListener');
-    const winSpy = vi.spyOn(window, 'addEventListener');
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    vi.restoreAllMocks();
+  });
+
+  it('should render the container element with canvas', () => {
+    wrapper = mount(DynamicBackground);
+    const container = wrapper.find('.dynamic-background');
+    expect(container.exists()).toBe(true);
+    expect(container.find('canvas').exists()).toBe(true);
+  });
+
+  it('should render canvas with background-canvas class', () => {
+    wrapper = mount(DynamicBackground);
+    const canvas = wrapper.find('.background-canvas');
+    expect(canvas.exists()).toBe(true);
+    expect(canvas.element.tagName.toLowerCase()).toBe('canvas');
+  });
+
+  it('should register resize event listener on mount', () => {
+    const resizeSpy = vi.spyOn(window, 'addEventListener');
 
     wrapper = mount(DynamicBackground);
 
-    expect(docSpy).not.toHaveBeenCalledWith('mousemove', expect.any(Function));
-    expect(docSpy).not.toHaveBeenCalledWith('mouseleave', expect.any(Function));
+    expect(resizeSpy).toHaveBeenCalledWith('resize', expect.any(Function));
+  });
 
+  it('should clean up event listeners on unmount', () => {
+    const resizeSpy = vi.spyOn(window, 'removeEventListener');
+
+    wrapper = mount(DynamicBackground);
     wrapper.unmount();
 
-    docSpy.mockRestore();
-    winSpy.mockRestore();
+    expect(resizeSpy).toHaveBeenCalledWith('resize', expect.any(Function));
   });
 });

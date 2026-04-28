@@ -89,8 +89,7 @@
               </select>
             </div>
             <p class="form-hint">
-              条件由连接到"左操作数"和"右操作数"输入端口的值决定。
-              断开输入时使用下方默认值。
+              条件由连接到"左操作数"和"右操作数"输入端口的值决定。 断开输入时使用下方默认值。
             </p>
             <div class="form-row">
               <div class="form-group">
@@ -425,7 +424,9 @@ aiStore.initStore(authStore.currentUser?.id);
 const nameValidationError = ref('');
 
 // 自定义端口列表
-const customPorts = reactive<{ name: string; dataType: string; direction: 'input' | 'output' }[]>([]);
+const customPorts = reactive<{ name: string; dataType: string; direction: 'input' | 'output' }[]>(
+  []
+);
 
 // 类型分组
 const controlTypes = (['trigger', 'end', 'wait', 'if', 'loop'] as EventType[]).map((value) => ({
@@ -533,7 +534,9 @@ function removeCustomPort(idx: number) {
 }
 
 // 从已有事件的 ports 中提取自定义端口
-function extractCustomPorts(event: SpecialModeEvent): { name: string; dataType: string; direction: 'input' | 'output' }[] {
+function extractCustomPorts(
+  event: SpecialModeEvent
+): { name: string; dataType: string; direction: 'input' | 'output' }[] {
   if (!event.ports) return [];
   const defaultPorts = getDefaultPorts(event.type);
   const defaultIds = new Set(defaultPorts.map((p) => p.id));

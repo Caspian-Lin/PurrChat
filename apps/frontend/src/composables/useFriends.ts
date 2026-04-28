@@ -1,12 +1,12 @@
 import { ref } from 'vue';
 import { api } from '../models/api';
-import { useMessage } from './useMessage';
+import { useNotification } from './useNotification';
 import type { Friendship } from '../models/types';
 
 export const useFriends = () => {
   const friends = ref<Friendship[]>([]);
   const pendingRequests = ref<Friendship[]>([]);
-  const message = useMessage();
+  const notify = useNotification();
 
   /**
    * 获取好友列表
@@ -60,16 +60,16 @@ export const useFriends = () => {
 
       if (response.success) {
         console.log('[useFriends] 好友请求发送成功');
-        message.success('好友请求已发送');
+        notify.success('好友请求已发送');
         return true;
       } else {
         console.log('[useFriends] 好友请求发送失败', response.message);
-        message.error('发送好友请求失败');
+        notify.error('发送好友请求失败');
         return false;
       }
     } catch (error) {
       console.error('[useFriends] Failed to send friend request:', error);
-      message.error('发送好友请求失败');
+      notify.error('发送好友请求失败');
       return false;
     }
   };
@@ -94,18 +94,18 @@ export const useFriends = () => {
       if (response.success) {
         const actionText = action === 'accept' ? '已接受' : '已拒绝';
         console.log('[useFriends] 好友请求处理成功', action);
-        message.success(`好友请求${actionText}`);
+        notify.success(`好友请求${actionText}`);
         // 重新加载待处理请求列表
         await loadPendingRequests();
         return true;
       } else {
         console.log('[useFriends] 好友请求处理失败', response.message);
-        message.error('处理好友请求失败');
+        notify.error('处理好友请求失败');
         return false;
       }
     } catch (error) {
       console.error('[useFriends] Failed to handle friend request:', error);
-      message.error('处理好友请求失败');
+      notify.error('处理好友请求失败');
       return false;
     }
   };

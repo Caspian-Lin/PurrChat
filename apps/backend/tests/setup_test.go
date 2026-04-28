@@ -461,16 +461,19 @@ func SetupTestRouter() {
 	// 初始化依赖
 	userRepo := repository.NewUserRepository()
 	conversationRepo := repository.NewConversationRepository()
-	messageRepo := repository.NewMessageRepository()
 	friendshipRepo := repository.NewFriendshipRepository()
 	enrollmentRepo := repository.NewEnrollmentRepository()
 	conversationMessageRepo := repository.NewConversationMessageRepository()
 
 	authService := services.NewAuthService(userRepo, repository.NewBotRepository(), jwtSecret)
-	chatService := services.NewChatService(userRepo, conversationRepo, messageRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
+	conversationService := services.NewConversationService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, friendshipRepo)
+	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, nil, nil)
+	friendService := services.NewFriendService(userRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
+	memberService := services.NewMemberService(userRepo, conversationRepo, enrollmentRepo)
+	userService := services.NewUserService(userRepo)
 
 	authHandler = handlers.NewAuthHandler(authService, jwtSecret, false, nil)
-	chatHandler = handlers.NewChatHandler(authService, chatService)
+	chatHandler = handlers.NewChatHandler(authService, userService, conversationService, messageService, friendService, memberService)
 
 	// 配置路由
 	testRouter.POST("/api/register", authHandler.Register)

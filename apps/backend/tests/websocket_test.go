@@ -155,7 +155,6 @@ func TestHubUnregisterClient(t *testing.T) {
 
 	assert.Equal(t, 0, hub.GetClientCount())
 	assert.Equal(t, 0, hub.GetUserConnectionCount(userID))
-	assert.False(t, hub.IsUserOnline(userID))
 }
 
 // TestHubSendToUser 测试发送消息给用户的所有设备

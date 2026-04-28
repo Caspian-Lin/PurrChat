@@ -58,28 +58,15 @@ func NewBotHandler(botService *services.BotService, botEngine *botengine.BotEngi
 func (h *BotHandler) CreateBot(c *gin.Context) {
 	var req models.CreateBotRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
@@ -89,12 +76,12 @@ func (h *BotHandler) CreateBot(c *gin.Context) {
 		// 区分客户端错误和服务端内部错误
 		errMsg := err.Error()
 		if containsBadInput(errMsg) {
-			c.JSON(http.StatusBadRequest, models.MessageResponse{
+			c.JSON(http.StatusBadRequest, models.APIResponse{
 				Success: false,
 				Message: errMsg,
 			})
 		} else {
-			c.JSON(http.StatusInternalServerError, models.MessageResponse{
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
 				Success: false,
 				Message: "Internal server error",
 			})
@@ -102,7 +89,7 @@ func (h *BotHandler) CreateBot(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Bot created successfully",
 		Data:    bot,
@@ -120,7 +107,7 @@ func (h *BotHandler) CreateBot(c *gin.Context) {
 func (h *BotHandler) GetBot(c *gin.Context) {
 	botID := c.Param("id")
 	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "bot id is required",
 		})
@@ -129,14 +116,14 @@ func (h *BotHandler) GetBot(c *gin.Context) {
 
 	bot, err := h.botService.GetBot(c.Request.Context(), botID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.MessageResponse{
+		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
 			Message: "Bot not found",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    bot,
 	})
@@ -150,41 +137,23 @@ func (h *BotHandler) GetBot(c *gin.Context) {
 // @Success 200 {object} models.MessageResponse
 // @Router /api/bots [get]
 func (h *BotHandler) ListBots(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
 	bots, err := h.botService.ListBots(c.Request.Context(), userIDStr)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.MessageResponse{
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Message: "Failed to get bots",
 		})
 		return
 	}
 
-	var botSlice []models.Bot
-	for _, bot := range bots {
-		botSlice = append(botSlice, *bot)
-	}
-
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
-		Data:    botSlice,
+		Data:    dereferenceSlice(bots),
 	})
 }
 
@@ -212,14 +181,14 @@ func (h *BotHandler) SearchBots(c *gin.Context) {
 
 	result, err := h.botService.SearchPublicBotsPaginated(c.Request.Context(), query, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.MessageResponse{
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Message: "Failed to search bots",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    result,
 	})
@@ -238,7 +207,7 @@ func (h *BotHandler) SearchBots(c *gin.Context) {
 func (h *BotHandler) UpdateBot(c *gin.Context) {
 	botID := c.Param("id")
 	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "bot id is required",
 		})
@@ -247,42 +216,29 @@ func (h *BotHandler) UpdateBot(c *gin.Context) {
 
 	var req models.UpdateBotRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
 	bot, err := h.botService.UpdateBot(c.Request.Context(), botID, userIDStr, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to update bot: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Bot updated successfully",
 		Data:    bot,
@@ -300,42 +256,29 @@ func (h *BotHandler) UpdateBot(c *gin.Context) {
 func (h *BotHandler) DeleteBot(c *gin.Context) {
 	botID := c.Param("id")
 	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "bot id is required",
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
 	err := h.botService.DeleteBot(c.Request.Context(), botID, userIDStr)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to delete bot: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Bot deleted successfully",
 	})
@@ -354,7 +297,7 @@ func (h *BotHandler) DeleteBot(c *gin.Context) {
 func (h *BotHandler) DeployBot(c *gin.Context) {
 	botID := c.Param("id")
 	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "bot id is required",
 		})
@@ -363,42 +306,29 @@ func (h *BotHandler) DeployBot(c *gin.Context) {
 
 	var req models.DeployBotRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
 	deployment, err := h.botService.DeployBot(c.Request.Context(), botID, userIDStr, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to deploy bot: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Bot deployed successfully",
 		Data:    deployment,
@@ -417,7 +347,7 @@ func (h *BotHandler) DeployBot(c *gin.Context) {
 func (h *BotHandler) UndeployBot(c *gin.Context) {
 	botID := c.Param("id")
 	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "bot id is required",
 		})
@@ -426,42 +356,29 @@ func (h *BotHandler) UndeployBot(c *gin.Context) {
 
 	conversationID := c.Query("conversation_id")
 	if conversationID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "conversation_id is required",
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
 	err := h.botService.UndeployBot(c.Request.Context(), botID, conversationID, userIDStr)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to undeploy bot: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Bot undeployed successfully",
 	})
@@ -475,41 +392,23 @@ func (h *BotHandler) UndeployBot(c *gin.Context) {
 // @Success 200 {object} models.MessageResponse
 // @Router /api/bots/deployments [get]
 func (h *BotHandler) GetBotDeployments(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
 	deployments, err := h.botService.GetBotDeployments(c.Request.Context(), userIDStr)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.MessageResponse{
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Message: "Failed to get deployments",
 		})
 		return
 	}
 
-	var depSlice []models.BotDeployment
-	for _, d := range deployments {
-		depSlice = append(depSlice, *d)
-	}
-
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
-		Data:    depSlice,
+		Data:    dereferenceSlice(deployments),
 	})
 }
 
@@ -526,7 +425,7 @@ func (h *BotHandler) GetBotDeployments(c *gin.Context) {
 func (h *BotHandler) UpdateDeploymentStatus(c *gin.Context) {
 	botID := c.Param("id")
 	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "bot id is required",
 		})
@@ -535,42 +434,29 @@ func (h *BotHandler) UpdateDeploymentStatus(c *gin.Context) {
 
 	var req models.UpdateDeploymentStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
 	err := h.botService.UpdateDeploymentStatus(c.Request.Context(), botID, userIDStr, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to update deployment status: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Deployment status updated successfully",
 	})
@@ -587,42 +473,29 @@ func (h *BotHandler) UpdateDeploymentStatus(c *gin.Context) {
 func (h *BotHandler) CreateBotConversation(c *gin.Context) {
 	botID := c.Param("id")
 	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "bot id is required",
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
 	conversation, err := h.botService.CreateBotConversation(c.Request.Context(), botID, userIDStr)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to create bot conversation: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Bot conversation created successfully",
 		Data:    conversation,
@@ -642,28 +515,26 @@ func (h *BotHandler) CreateBotConversation(c *gin.Context) {
 func (h *BotHandler) ActivateSpecialMode(c *gin.Context) {
 	botID := c.Param("id")
 	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "bot id is required"})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
 		return
 	}
 
 	var req models.ActivateSpecialModeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{Success: false, Message: "Unauthorized"})
+	userIDStr, ok := getUserID(c)
+	if !ok {
 		return
 	}
-	userIDStr, _ := userID.(string)
 
 	// 验证权限
 	err := h.botService.ActivateSpecialMode(c.Request.Context(), botID, userIDStr, req.ConversationID)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to activate special mode: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
 		return
 	}
 
@@ -672,11 +543,11 @@ func (h *BotHandler) ActivateSpecialMode(c *gin.Context) {
 	err = h.botEngine.ActivateSpecialMode(c.Request.Context(), botUUID, req.ConversationID)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to activate special mode (engine): %v", err)
-		c.JSON(http.StatusInternalServerError, models.MessageResponse{Success: false, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Success: true, Message: "Special mode activated"})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Special mode activated"})
 }
 
 // DeactivateSpecialMode 停用特殊模式
@@ -692,27 +563,25 @@ func (h *BotHandler) ActivateSpecialMode(c *gin.Context) {
 func (h *BotHandler) DeactivateSpecialMode(c *gin.Context) {
 	botID := c.Param("id")
 	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "bot id is required"})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
 		return
 	}
 
 	var req models.ActivateSpecialModeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{Success: false, Message: "Unauthorized"})
+	userIDStr, ok := getUserID(c)
+	if !ok {
 		return
 	}
-	userIDStr, _ := userID.(string)
 
 	err := h.botService.DeactivateSpecialMode(c.Request.Context(), botID, userIDStr, req.ConversationID)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to deactivate special mode: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
 		return
 	}
 
@@ -721,11 +590,11 @@ func (h *BotHandler) DeactivateSpecialMode(c *gin.Context) {
 	err = h.botEngine.DeactivateSpecialMode(c.Request.Context(), botUUID, req.ConversationID)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to deactivate special mode (engine): %v", err)
-		c.JSON(http.StatusInternalServerError, models.MessageResponse{Success: false, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Success: true, Message: "Special mode deactivated"})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Special mode deactivated"})
 }
 
 // GetDeployableConversations 获取可部署 Bot 的群聊列表
@@ -739,25 +608,23 @@ func (h *BotHandler) DeactivateSpecialMode(c *gin.Context) {
 func (h *BotHandler) GetDeployableConversations(c *gin.Context) {
 	botID := c.Param("id")
 	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "bot id is required"})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{Success: false, Message: "Unauthorized"})
+	userIDStr, ok := getUserID(c)
+	if !ok {
 		return
 	}
-	userIDStr, _ := userID.(string)
 
 	conversations, err := h.botService.GetDeployableConversations(c.Request.Context(), userIDStr, botID)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get deployable conversations: %v", err)
-		c.JSON(http.StatusInternalServerError, models.MessageResponse{Success: false, Message: "Failed to get deployable conversations"})
+		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Failed to get deployable conversations"})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Success: true, Data: conversations})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: conversations})
 }
 
 // DebugBot 调试执行 Bot 事件链
@@ -773,30 +640,30 @@ func (h *BotHandler) GetDeployableConversations(c *gin.Context) {
 func (h *BotHandler) DebugBot(c *gin.Context) {
 	botIDStr := c.Param("id")
 	if botIDStr == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "bot id is required"})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
 		return
 	}
 
 	var req models.DebugBotRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
 		return
 	}
 
 	botID, err := uuid.Parse(botIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "invalid bot id"})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "invalid bot id"})
 		return
 	}
 
 	result, err := h.botEngine.DebugExecute(c.Request.Context(), botID, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to debug bot: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Success: true, Data: result})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: result})
 }
 
 // DebugStep 调试逐步执行
@@ -812,30 +679,30 @@ func (h *BotHandler) DebugBot(c *gin.Context) {
 func (h *BotHandler) DebugStep(c *gin.Context) {
 	botIDStr := c.Param("id")
 	if botIDStr == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "bot id is required"})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
 		return
 	}
 
 	var req models.DebugStepRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
 		return
 	}
 
 	botID, err := uuid.Parse(botIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "invalid bot id"})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "invalid bot id"})
 		return
 	}
 
 	result, err := h.botEngine.DebugStep(c.Request.Context(), botID, req.SessionID)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to debug step: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Success: true, Data: result})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: result})
 }
 
 // DebugReset 重置调试会话
@@ -851,28 +718,28 @@ func (h *BotHandler) DebugStep(c *gin.Context) {
 func (h *BotHandler) DebugReset(c *gin.Context) {
 	var req models.DebugResetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
 		return
 	}
 
 	h.botEngine.DebugReset(req.SessionID)
 
-	c.JSON(http.StatusOK, models.MessageResponse{Success: true, Message: "Debug session reset"})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Debug session reset"})
 }
 
 // GetConversationBots 获取会话中活跃的 Bot 列表
 func (h *BotHandler) GetConversationBots(c *gin.Context) {
 	conversationID := c.Param("id")
 	if conversationID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{Success: false, Message: "conversation id is required"})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "conversation id is required"})
 		return
 	}
 
 	deployments, err := h.botService.GetActiveBotsForConversation(c.Request.Context(), conversationID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.MessageResponse{Success: false, Message: "Failed to get conversation bots"})
+		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Failed to get conversation bots"})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Success: true, Data: deployments})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: deployments})
 }

@@ -44,8 +44,7 @@ type SpecialModeEvent struct {
 	Type     string         `json:"type"` // "llm" | "builtin" | "python" | "reply" | "trigger" | "if" | "loop" | "wait" | "end"
 	Name     string         `json:"name"`
 	Config   map[string]any `json:"config"`
-	Next     []string       `json:"next,omitempty"`     // 向后兼容（旧 BFS 模式）
-	Ports    []EventPort    `json:"ports,omitempty"`    // 端口定义（新流程引擎）
+	Ports    []EventPort    `json:"ports,omitempty"`    // 端口定义（流程引擎）
 	Position *Position      `json:"position,omitempty"` // 画布位置
 }
 
@@ -263,18 +262,9 @@ func (e *BotEngine) HandleSpecialMode(ctx context.Context, msg *BotMessage, bot 
 		return
 	}
 
-	// 执行事件链
-	var reply string
-	var err error
-
-	if HasPortedFlow(spec) {
-		// 使用新的端口化流程引擎
-		flowCtx := NewExecutionContext(spec.Events, spec.Connections, session)
-		reply, err = flowCtx.ExecuteFlow(ctx, e, msg.Content)
-	} else {
-		// 回退到旧的 BFS 引擎
-		reply, err = e.executeEventChain(ctx, session, msg.Content)
-	}
+	// 使用端口化流程引擎执行事件链
+	flowCtx := NewExecutionContext(spec.Events, spec.Connections, session)
+	reply, err := flowCtx.ExecuteFlow(ctx, e, msg.Content)
 	if err != nil {
 		logger.ErrorfWithCaller("[BotEngine] Event chain execution failed: bot=%s, error=%v", bot.Name, err)
 		reply = "..."
@@ -292,106 +282,6 @@ func (e *BotEngine) HandleSpecialMode(ctx context.Context, msg *BotMessage, bot 
 
 	// 发送回复
 	e.sendBotReply(ctx, bot, msg.ConversationID, reply)
-}
-
-// EventStep 事件链遍历中的单步信息
-type EventStep struct {
-	ID    string
-	Input string
-}
-
-// buildEventTraversal 构建 BFS 事件遍历顺序
-func buildEventTraversal(events []SpecialModeEvent, initialInput string) []EventStep {
-	if len(events) == 0 {
-		return nil
-	}
-
-	entryEvent := events[0]
-	queue := []string{entryEvent.ID}
-	visited := map[string]bool{}
-	eventInputs := map[string]string{entryEvent.ID: initialInput}
-	var steps []EventStep
-
-	for len(queue) > 0 {
-		currentID := queue[0]
-		queue = queue[1:]
-
-		if visited[currentID] {
-			continue
-		}
-		visited[currentID] = true
-
-		var event *SpecialModeEvent
-		for i := range events {
-			if events[i].ID == currentID {
-				event = &events[i]
-				break
-			}
-		}
-		if event == nil {
-			continue
-		}
-
-		steps = append(steps, EventStep{ID: currentID, Input: eventInputs[currentID]})
-
-		if len(event.Next) > 0 {
-			for _, nextID := range event.Next {
-				if !visited[nextID] {
-					// 输入在执行后由调用方设置，这里预填入当前步骤的输入作为默认
-					if _, exists := eventInputs[nextID]; !exists {
-						eventInputs[nextID] = eventInputs[currentID]
-					}
-					queue = append(queue, nextID)
-				}
-			}
-		}
-	}
-
-	return steps
-}
-
-// executeEventChain 执行事件链（BFS 遍历 DAG）
-func (e *BotEngine) executeEventChain(ctx context.Context, session *SpecialModeSession, input string) (string, error) {
-	steps := buildEventTraversal(session.Config.Events, input)
-	if len(steps) == 0 {
-		return "", fmt.Errorf("no events defined")
-	}
-
-	var finalOutput string
-	lastOutput := input
-
-	for _, step := range steps {
-		// 更新步骤输入为上一个事件的输出
-		if step.ID != steps[0].ID {
-			step.Input = lastOutput
-		}
-
-		var event *SpecialModeEvent
-		for i := range session.Config.Events {
-			if session.Config.Events[i].ID == step.ID {
-				event = &session.Config.Events[i]
-				break
-			}
-		}
-		if event == nil {
-			continue
-		}
-
-		output, err := e.executeEvent(ctx, session, event, step.Input)
-		if err != nil {
-			logger.ErrorfWithCaller("[BotEngine] Event %s (%s) failed: %v", event.ID, event.Name, err)
-			output = ""
-		}
-
-		session.EventOutputs[event.ID] = output
-		lastOutput = output
-
-		if event.Type == "reply" {
-			finalOutput = output
-		}
-	}
-
-	return finalOutput, nil
 }
 
 // executeEvent 执行单个事件
@@ -550,17 +440,6 @@ func (e *BotEngine) GetActiveSpecialModeSession(conversationID, botID uuid.UUID)
 		return nil
 	}
 	return val.(*SpecialModeSession)
-}
-
-// RestoreSpecialModeFromDB 从数据库恢复活跃的特殊模式会话
-func (e *BotEngine) RestoreSpecialModeFromDB(ctx context.Context) {
-	deployments, err := e.deployRepo.FindActiveByConversation(ctx, uuid.Nil)
-	if err != nil {
-		// uuid.Nil 不会匹配到任何数据，我们需要另一种方式
-		// 跳过恢复
-		return
-	}
-	_ = deployments // 服务器重启后的恢复逻辑（MVP 阶段暂时跳过）
 }
 
 // getStringField 从 map[string]any 中安全获取字符串字段

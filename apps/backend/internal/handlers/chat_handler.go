@@ -13,15 +13,30 @@ import (
 
 // ChatHandler 聊天处理器
 type ChatHandler struct {
-	authService *services.AuthService
-	chatService *services.ChatService
+	authService         *services.AuthService
+	userService         *services.UserService
+	conversationService *services.ConversationService
+	messageService      *services.MessageService
+	friendService       *services.FriendService
+	memberService       *services.MemberService
 }
 
 // NewChatHandler 创建聊天处理器
-func NewChatHandler(authService *services.AuthService, chatService *services.ChatService) *ChatHandler {
+func NewChatHandler(
+	authService *services.AuthService,
+	userService *services.UserService,
+	conversationService *services.ConversationService,
+	messageService *services.MessageService,
+	friendService *services.FriendService,
+	memberService *services.MemberService,
+) *ChatHandler {
 	return &ChatHandler{
-		authService: authService,
-		chatService: chatService,
+		authService:         authService,
+		userService:         userService,
+		conversationService: conversationService,
+		messageService:      messageService,
+		friendService:       friendService,
+		memberService:       memberService,
 	}
 }
 
@@ -52,13 +67,8 @@ func (h *ChatHandler) SearchUsers(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for user search")
-		c.JSON(http.StatusUnauthorized, models.AuthResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
+	userIDStr, ok := getUserID(c)
+	if !ok {
 		return
 	}
 
@@ -75,7 +85,7 @@ func (h *ChatHandler) SearchUsers(c *gin.Context) {
 	// 过滤掉自己
 	var filteredUsers []*models.User
 	for _, user := range users {
-		if user.ID.String() != userID {
+		if user.ID.String() != userIDStr {
 			filteredUsers = append(filteredUsers, user)
 		}
 	}
@@ -108,23 +118,8 @@ func (h *ChatHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for profile update")
-		c.JSON(http.StatusUnauthorized, models.AuthResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for profile update")
-		c.JSON(http.StatusUnauthorized, models.AuthResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
@@ -152,48 +147,29 @@ func (h *ChatHandler) UpdateProfile(c *gin.Context) {
 // @Tags 聊天
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} models.ConversationListResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/conversations [get]
 func (h *ChatHandler) GetConversations(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for get conversations")
-		c.JSON(http.StatusUnauthorized, models.AuthResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for get conversations")
-		c.JSON(http.StatusUnauthorized, models.AuthResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
-	conversations, err := h.chatService.GetConversations(c.Request.Context(), userIDStr)
+	conversations, err := h.conversationService.GetConversations(c.Request.Context(), userIDStr)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get conversations for user %s: %v", userIDStr, err)
-		c.JSON(http.StatusInternalServerError, models.ConversationListResponse{
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Message: "Failed to get conversations",
 		})
 		return
 	}
 
-	// 转换为切片
-	var convSlice []models.Conversation
-	for _, conv := range conversations {
-		convSlice = append(convSlice, *conv)
-	}
+	convSlice := dereferenceSlice(conversations)
 
 	logger.InfofWithCaller("Retrieved %d conversations for user %s", len(convSlice), userIDStr)
 
-	c.JSON(http.StatusOK, models.ConversationListResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    convSlice,
 	})
@@ -207,38 +183,34 @@ func (h *ChatHandler) GetConversations(c *gin.Context) {
 // @Param conversation_id query string true "会话ID"
 // @Param limit query int false "限制数量" default(50)
 // @Param offset query int false "偏移量" default(0)
-// @Success 200 {object} models.MessagesResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/messages [get]
 func (h *ChatHandler) GetMessages(c *gin.Context) {
 	var req models.GetMessagesRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		logger.ErrorfWithCaller("Invalid get messages request: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessagesResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	messages, err := h.chatService.GetMessages(c.Request.Context(), req.ConversationID, req.Limit, req.Offset)
+	messages, err := h.messageService.GetMessages(c.Request.Context(), req.ConversationID, req.Limit, req.Offset)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get messages for conversation %s: %v", req.ConversationID, err)
-		c.JSON(http.StatusInternalServerError, models.MessagesResponse{
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Message: "Failed to get messages",
 		})
 		return
 	}
 
-	// 转换为切片
-	var msgSlice []models.Message
-	for _, msg := range messages {
-		msgSlice = append(msgSlice, *msg)
-	}
+	msgSlice := dereferenceSlice(messages)
 
 	logger.InfofWithCaller("Retrieved %d messages for conversation %s", len(msgSlice), req.ConversationID)
 
-	c.JSON(http.StatusOK, models.MessagesResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    msgSlice,
 	})
@@ -250,38 +222,34 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param conversation_id query string true "会话ID"
-// @Success 200 {object} models.MessagesResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/messages/export [get]
 func (h *ChatHandler) ExportMessages(c *gin.Context) {
 	conversationID := c.Query("conversation_id")
 	if conversationID == "" {
 		logger.ErrorfWithCaller("Missing conversation_id parameter for export messages")
-		c.JSON(http.StatusBadRequest, models.MessagesResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "conversation_id is required",
 		})
 		return
 	}
 
-	messages, err := h.chatService.GetAllMessages(c.Request.Context(), conversationID)
+	messages, err := h.messageService.ExportMessages(c.Request.Context(), conversationID)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to export messages for conversation %s: %v", conversationID, err)
-		c.JSON(http.StatusInternalServerError, models.MessagesResponse{
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Message: "Failed to export messages",
 		})
 		return
 	}
 
-	// 转换为切片
-	var msgSlice []models.Message
-	for _, msg := range messages {
-		msgSlice = append(msgSlice, *msg)
-	}
+	msgSlice := dereferenceSlice(messages)
 
 	logger.InfofWithCaller("Exported %d messages for conversation %s", len(msgSlice), conversationID)
 
-	c.JSON(http.StatusOK, models.MessagesResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    msgSlice,
 	})
@@ -294,38 +262,34 @@ func (h *ChatHandler) ExportMessages(c *gin.Context) {
 // @Security BearerAuth
 // @Param conversation_id query string true "会话ID"
 // @Param since_timestamp query int64 true "起始时间戳（毫秒）"
-// @Success 200 {object} models.MessagesResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/messages/incremental [get]
 func (h *ChatHandler) GetMessagesIncremental(c *gin.Context) {
 	var req models.GetMessagesIncrementalRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		logger.ErrorfWithCaller("Invalid get incremental messages request: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessagesResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	messages, err := h.chatService.GetMessagesIncremental(c.Request.Context(), req.ConversationID, req.SinceTimestamp)
+	messages, err := h.messageService.GetMessagesIncremental(c.Request.Context(), req.ConversationID, req.SinceTimestamp)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get incremental messages for conversation %s: %v", req.ConversationID, err)
-		c.JSON(http.StatusInternalServerError, models.MessagesResponse{
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Message: "Failed to get incremental messages",
 		})
 		return
 	}
 
-	// 转换为切片
-	var msgSlice []models.Message
-	for _, msg := range messages {
-		msgSlice = append(msgSlice, *msg)
-	}
+	msgSlice := dereferenceSlice(messages)
 
 	logger.InfofWithCaller("Retrieved %d incremental messages for conversation %s", len(msgSlice), req.ConversationID)
 
-	c.JSON(http.StatusOK, models.MessagesResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    msgSlice,
 	})
@@ -338,43 +302,28 @@ func (h *ChatHandler) GetMessagesIncremental(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.SendMessageRequest true "消息信息"
-// @Success 200 {object} models.MessageResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/messages [post]
 func (h *ChatHandler) SendMessage(c *gin.Context) {
 	var req models.SendMessageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.ErrorfWithCaller("Invalid send message request: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for send message")
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for send message")
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
-	message, err := h.chatService.SendMessage(c.Request.Context(), userIDStr, &req)
+	message, err := h.messageService.SendMessage(c.Request.Context(), userIDStr, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to send message from user %s to conversation %s: %v", userIDStr, req.ConversationID, err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -383,7 +332,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 
 	logger.InfofWithCaller("Message sent successfully: ID=%s, ConversationID=%s, SenderID=%s", message.ID, message.ConversationID, message.SenderID)
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Message sent successfully",
 		Data:    message,
@@ -397,43 +346,28 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.FriendRequest true "目标用户ID"
-// @Success 200 {object} models.MessageResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/conversations [post]
 func (h *ChatHandler) CreateConversation(c *gin.Context) {
 	var req models.FriendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.ErrorfWithCaller("Invalid create conversation request: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for create conversation")
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for create conversation")
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
-	conversation, err := h.chatService.CreateConversation(c.Request.Context(), userIDStr, req.TargetUserID)
+	conversation, err := h.conversationService.CreateConversation(c.Request.Context(), userIDStr, req.TargetUserID)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to create conversation between %s and %s: %v", userIDStr, req.TargetUserID, err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -442,7 +376,7 @@ func (h *ChatHandler) CreateConversation(c *gin.Context) {
 
 	logger.InfofWithCaller("Conversation created successfully: ID=%s, Name=%s", conversation.ID, conversation.Name)
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Conversation created successfully",
 		Data:    conversation,
@@ -454,48 +388,29 @@ func (h *ChatHandler) CreateConversation(c *gin.Context) {
 // @Tags 好友
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} models.FriendListResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/friends [get]
 func (h *ChatHandler) GetFriends(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for get friends")
-		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for get friends")
-		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
-	friendships, err := h.chatService.GetFriends(c.Request.Context(), userIDStr)
+	friendships, err := h.friendService.GetFriends(c.Request.Context(), userIDStr)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get friends for user %s: %v", userIDStr, err)
-		c.JSON(http.StatusInternalServerError, models.FriendListResponse{
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Message: "Failed to get friends",
 		})
 		return
 	}
 
-	// 转换为切片
-	var fsSlice []models.Friendship
-	for _, fs := range friendships {
-		fsSlice = append(fsSlice, *fs)
-	}
+	fsSlice := dereferenceSlice(friendships)
 
 	logger.InfofWithCaller("Retrieved %d friends for user %s", len(fsSlice), userIDStr)
 
-	c.JSON(http.StatusOK, models.FriendListResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    fsSlice,
 	})
@@ -506,48 +421,29 @@ func (h *ChatHandler) GetFriends(c *gin.Context) {
 // @Tags 好友
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} models.FriendListResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/friends/pending [get]
 func (h *ChatHandler) GetPendingFriendRequests(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for get pending friend requests")
-		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for get pending friend requests")
-		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
-	friendships, err := h.chatService.GetPendingFriendRequests(c.Request.Context(), userIDStr)
+	friendships, err := h.friendService.GetPendingFriendRequests(c.Request.Context(), userIDStr)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get pending friend requests for user %s: %v", userIDStr, err)
-		c.JSON(http.StatusInternalServerError, models.FriendListResponse{
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Message: "Failed to get pending friend requests",
 		})
 		return
 	}
 
-	// 转换为切片
-	var fsSlice []models.Friendship
-	for _, fs := range friendships {
-		fsSlice = append(fsSlice, *fs)
-	}
+	fsSlice := dereferenceSlice(friendships)
 
 	logger.InfofWithCaller("Retrieved %d pending friend requests for user %s", len(fsSlice), userIDStr)
 
-	c.JSON(http.StatusOK, models.FriendListResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    fsSlice,
 	})
@@ -558,48 +454,29 @@ func (h *ChatHandler) GetPendingFriendRequests(c *gin.Context) {
 // @Tags 好友
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} models.FriendListResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/friends/requests [get]
 func (h *ChatHandler) GetAllFriendRequests(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for get all friend requests")
-		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for get all friend requests")
-		c.JSON(http.StatusUnauthorized, models.FriendListResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
-	friendships, err := h.chatService.GetAllFriendRequests(c.Request.Context(), userIDStr)
+	friendships, err := h.friendService.GetAllFriendRequests(c.Request.Context(), userIDStr)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get all friend requests for user %s: %v", userIDStr, err)
-		c.JSON(http.StatusInternalServerError, models.FriendListResponse{
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Message: "Failed to get all friend requests",
 		})
 		return
 	}
 
-	// 转换为切片
-	var fsSlice []models.Friendship
-	for _, fs := range friendships {
-		fsSlice = append(fsSlice, *fs)
-	}
+	fsSlice := dereferenceSlice(friendships)
 
 	logger.InfofWithCaller("Retrieved %d friend requests for user %s", len(fsSlice), userIDStr)
 
-	c.JSON(http.StatusOK, models.FriendListResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    fsSlice,
 	})
@@ -635,7 +512,7 @@ func (h *ChatHandler) GetUserByID(c *gin.Context) {
 		return
 	}
 
-	user, err := h.chatService.GetUserByID(c.Request.Context(), id)
+	user, err := h.userService.GetUserByID(c.Request.Context(), id)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get user by ID %s: %v", id, err)
 		c.JSON(http.StatusNotFound, models.AuthResponse{
@@ -653,33 +530,6 @@ func (h *ChatHandler) GetUserByID(c *gin.Context) {
 	})
 }
 
-// GetUserByUID 根据UID获取用户信息
-// @Summary 根据UID获取用户信息
-// @Tags 用户
-// @Produce json
-// @Security BearerAuth
-// @Param uid path string true "用户UID"
-// @Success 200 {object} models.AuthResponse
-// @Router /api/users/uid/{uid} [get]
-func (h *ChatHandler) GetUserByUID(c *gin.Context) {
-	uidStr := c.Param("uid")
-	if uidStr == "" {
-		logger.ErrorfWithCaller("Missing user uid parameter")
-		c.JSON(http.StatusBadRequest, models.AuthResponse{
-			Success: false,
-			Message: "user uid is required",
-		})
-		return
-	}
-
-	// 暂时返回错误
-	logger.ErrorfWithCaller("GetUserByUID not implemented yet for uid %s", uidStr)
-	c.JSON(http.StatusNotImplemented, models.AuthResponse{
-		Success: false,
-		Message: "Not implemented yet",
-	})
-}
-
 // SendFriendRequest 发送好友请求
 // @Summary 发送好友请求
 // @Tags 好友
@@ -687,44 +537,29 @@ func (h *ChatHandler) GetUserByUID(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.FriendRequest true "好友请求信息"
-// @Success 200 {object} models.FriendRequestResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/friends/request [post]
 func (h *ChatHandler) SendFriendRequest(c *gin.Context) {
 	var req models.FriendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.ErrorfWithCaller("Invalid send friend request: %v", err)
-		c.JSON(http.StatusBadRequest, models.FriendRequestResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for send friend request")
-		c.JSON(http.StatusUnauthorized, models.FriendRequestResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for send friend request")
-		c.JSON(http.StatusUnauthorized, models.FriendRequestResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
-	// 发送好友请求（会创建好友关系记录和会话）
-	conversation, err := h.chatService.SendFriendRequest(c.Request.Context(), userIDStr, req.TargetUserID)
+	// 发送好友请求（需要创建会话，使用 conversationService 的方法）
+	conversation, err := h.friendService.SendFriendRequest(c.Request.Context(), userIDStr, req.TargetUserID, h.conversationService.CreateConversation)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to send friend request from %s to %s: %v", userIDStr, req.TargetUserID, err)
-		c.JSON(http.StatusBadRequest, models.FriendRequestResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -733,7 +568,7 @@ func (h *ChatHandler) SendFriendRequest(c *gin.Context) {
 
 	logger.InfofWithCaller("Friend request sent successfully from %s to %s", userIDStr, req.TargetUserID)
 
-	c.JSON(http.StatusOK, models.FriendRequestResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Friend request sent successfully",
 		Data:    conversation,
@@ -747,43 +582,28 @@ func (h *ChatHandler) SendFriendRequest(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.HandleFriendRequestRequest true "处理好友请求信息"
-// @Success 200 {object} models.HandleFriendRequestResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/friends/handle [post]
 func (h *ChatHandler) HandleFriendRequest(c *gin.Context) {
 	var req models.HandleFriendRequestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.ErrorfWithCaller("Invalid handle friend request: %v", err)
-		c.JSON(http.StatusBadRequest, models.HandleFriendRequestResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for handle friend request")
-		c.JSON(http.StatusUnauthorized, models.HandleFriendRequestResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for handle friend request")
-		c.JSON(http.StatusUnauthorized, models.HandleFriendRequestResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
 	// 验证操作
 	if req.Action != "accept" && req.Action != "reject" {
 		logger.ErrorfWithCaller("Invalid action for handle friend request: %s", req.Action)
-		c.JSON(http.StatusBadRequest, models.HandleFriendRequestResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid action. Must be 'accept' or 'reject'",
 		})
@@ -791,10 +611,10 @@ func (h *ChatHandler) HandleFriendRequest(c *gin.Context) {
 	}
 
 	// 处理好友请求
-	err := h.chatService.HandleFriendRequest(c.Request.Context(), userIDStr, req.ConversationID.String(), req.Action)
+	err := h.friendService.HandleFriendRequest(c.Request.Context(), userIDStr, req.ConversationID.String(), req.Action)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to handle friend request: %v", err)
-		c.JSON(http.StatusBadRequest, models.HandleFriendRequestResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -803,7 +623,7 @@ func (h *ChatHandler) HandleFriendRequest(c *gin.Context) {
 
 	logger.InfofWithCaller("Friend request %s successfully by user %s", req.Action, userIDStr)
 
-	c.JSON(http.StatusOK, models.HandleFriendRequestResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Friend request " + req.Action + "ed successfully",
 	})
@@ -816,43 +636,28 @@ func (h *ChatHandler) HandleFriendRequest(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.CreateGroupRequest true "群聊信息"
-// @Success 200 {object} models.MessageResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/conversations/group [post]
 func (h *ChatHandler) CreateGroupConversation(c *gin.Context) {
 	var req models.CreateGroupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.ErrorfWithCaller("Invalid create group conversation request: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for create group conversation")
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for create group conversation")
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
-	conversation, err := h.chatService.CreateGroupConversation(c.Request.Context(), userIDStr, req.Name, req.Members)
+	conversation, err := h.conversationService.CreateGroupConversation(c.Request.Context(), userIDStr, req.Name, req.Members)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to create group conversation: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -861,7 +666,7 @@ func (h *ChatHandler) CreateGroupConversation(c *gin.Context) {
 
 	logger.InfofWithCaller("Group conversation created successfully: ID=%s, Name=%s", conversation.ID, conversation.Name)
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Group conversation created successfully",
 		Data:    conversation,
@@ -875,43 +680,28 @@ func (h *ChatHandler) CreateGroupConversation(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.AddMemberRequest true "添加成员信息"
-// @Success 200 {object} models.MessageResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/conversations/members [post]
 func (h *ChatHandler) AddMemberToConversation(c *gin.Context) {
 	var req models.AddMemberRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.ErrorfWithCaller("Invalid add member request: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for add member")
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for add member")
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
-	err := h.chatService.AddMemberToConversation(c.Request.Context(), req.ConversationID.String(), userIDStr, req.UserID.String(), models.EnrollmentRole(req.Role))
+	err := h.memberService.AddMemberToConversation(c.Request.Context(), req.ConversationID.String(), userIDStr, req.UserID.String(), models.EnrollmentRole(req.Role))
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to add member to conversation: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -920,7 +710,7 @@ func (h *ChatHandler) AddMemberToConversation(c *gin.Context) {
 
 	logger.InfofWithCaller("Member %s added to conversation %s successfully", req.UserID, req.ConversationID)
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Member added successfully",
 	})
@@ -933,43 +723,28 @@ func (h *ChatHandler) AddMemberToConversation(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.RemoveMemberRequest true "移除成员信息"
-// @Success 200 {object} models.MessageResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/conversations/members [delete]
 func (h *ChatHandler) RemoveMemberFromConversation(c *gin.Context) {
 	var req models.RemoveMemberRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.ErrorfWithCaller("Invalid remove member request: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		logger.ErrorfWithCaller("Unauthorized access attempt for remove member")
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		logger.ErrorfWithCaller("Invalid user ID type for remove member")
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
-	err := h.chatService.RemoveMemberFromConversation(c.Request.Context(), req.ConversationID.String(), userIDStr, req.UserID.String())
+	err := h.memberService.RemoveMemberFromConversation(c.Request.Context(), req.ConversationID.String(), userIDStr, req.UserID.String())
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to remove member from conversation: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -978,7 +753,7 @@ func (h *ChatHandler) RemoveMemberFromConversation(c *gin.Context) {
 
 	logger.InfofWithCaller("Member %s removed from conversation %s successfully", req.UserID, req.ConversationID)
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Member removed successfully",
 	})
@@ -990,38 +765,34 @@ func (h *ChatHandler) RemoveMemberFromConversation(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param conversation_id query string true "会话ID"
-// @Success 200 {object} models.ConversationMemberResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/conversations/members [get]
 func (h *ChatHandler) GetConversationMembers(c *gin.Context) {
 	conversationID := c.Query("conversation_id")
 	if conversationID == "" {
 		logger.ErrorfWithCaller("Missing conversation_id parameter for get conversation members")
-		c.JSON(http.StatusBadRequest, models.ConversationMemberResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "conversation_id is required",
 		})
 		return
 	}
 
-	members, err := h.chatService.GetConversationMembers(c.Request.Context(), conversationID)
+	members, err := h.conversationService.GetConversationMembers(c.Request.Context(), conversationID)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get conversation members: %v", err)
-		c.JSON(http.StatusInternalServerError, models.ConversationMemberResponse{
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Message: "Failed to get conversation members",
 		})
 		return
 	}
 
-	// 转换为切片
-	var memberSlice []models.Enrollment
-	for _, member := range members {
-		memberSlice = append(memberSlice, *member)
-	}
+	memberSlice := dereferenceSlice(members)
 
 	logger.InfofWithCaller("Retrieved %d members for conversation %s", len(memberSlice), conversationID)
 
-	c.JSON(http.StatusOK, models.ConversationMemberResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    memberSlice,
 	})
@@ -1034,51 +805,38 @@ func (h *ChatHandler) GetConversationMembers(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.UpdateConversationRequest true "更新会话信息"
-// @Success 200 {object} models.MessageResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/conversations [put]
 func (h *ChatHandler) UpdateConversation(c *gin.Context) {
 	var req models.UpdateConversationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.ErrorfWithCaller("Invalid update conversation request: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
 	// 从查询参数获取 conversation_id
 	conversationID := c.Query("conversation_id")
 	if conversationID == "" {
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "conversation_id is required",
 		})
 		return
 	}
 
-	conversation, err := h.chatService.UpdateConversation(c.Request.Context(), conversationID, userIDStr, &req)
+	conversation, err := h.conversationService.UpdateConversation(c.Request.Context(), conversationID, userIDStr, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to update conversation: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -1087,7 +845,7 @@ func (h *ChatHandler) UpdateConversation(c *gin.Context) {
 
 	logger.InfofWithCaller("Conversation %s updated successfully", conversationID)
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Conversation updated successfully",
 		Data:    conversation,
@@ -1101,41 +859,28 @@ func (h *ChatHandler) UpdateConversation(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.UpdateMemberRoleRequest true "更新成员角色"
-// @Success 200 {object} models.MessageResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/conversations/members/role [put]
 func (h *ChatHandler) UpdateMemberRole(c *gin.Context) {
 	var req models.UpdateMemberRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.ErrorfWithCaller("Invalid update member role request: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
-	err := h.chatService.UpdateMemberRole(c.Request.Context(), req.ConversationID.String(), userIDStr, &req)
+	err := h.memberService.UpdateMemberRole(c.Request.Context(), req.ConversationID.String(), userIDStr, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to update member role: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -1144,7 +889,7 @@ func (h *ChatHandler) UpdateMemberRole(c *gin.Context) {
 
 	logger.InfofWithCaller("Member %s role updated to %s", req.UserID, req.Role)
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Member role updated successfully",
 	})
@@ -1157,41 +902,28 @@ func (h *ChatHandler) UpdateMemberRole(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.DeleteConversationRequest true "删除会话"
-// @Success 200 {object} models.MessageResponse
+// @Success 200 {object} models.APIResponse
 // @Router /api/conversations [delete]
 func (h *ChatHandler) DeleteConversation(c *gin.Context) {
 	var req models.DeleteConversationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.ErrorfWithCaller("Invalid delete conversation request: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		})
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
-
-	userIDStr, ok := userID.(string)
+	userIDStr, ok := getUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.MessageResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
 		return
 	}
 
-	err := h.chatService.DeleteConversation(c.Request.Context(), req.ConversationID.String(), userIDStr)
+	err := h.conversationService.DeleteConversation(c.Request.Context(), req.ConversationID.String(), userIDStr)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to delete conversation: %v", err)
-		c.JSON(http.StatusBadRequest, models.MessageResponse{
+		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -1200,7 +932,7 @@ func (h *ChatHandler) DeleteConversation(c *gin.Context) {
 
 	logger.InfofWithCaller("Conversation %s deleted successfully", req.ConversationID)
 
-	c.JSON(http.StatusOK, models.MessageResponse{
+	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Conversation deleted successfully",
 	})

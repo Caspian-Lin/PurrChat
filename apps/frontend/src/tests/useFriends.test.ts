@@ -12,14 +12,16 @@ vi.mock('../models/api', () => ({
   },
 }));
 
-// Mock the useMessage composable
-const mockMessage = {
+// Mock the useNotification composable
+const mockNotification = {
   success: vi.fn(),
   error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
 };
 
-vi.mock('../composables/useMessage', () => ({
-  useMessage: vi.fn(() => mockMessage),
+vi.mock('../composables/useNotification', () => ({
+  useNotification: vi.fn(() => mockNotification),
 }));
 
 describe('useFriends', () => {
@@ -153,7 +155,7 @@ describe('useFriends', () => {
         target_user_id: 'user2',
       });
       expect(result).toBe(true);
-      expect(mockMessage.success).toHaveBeenCalledWith('好友请求已发送');
+      expect(mockNotification.success).toHaveBeenCalledWith('好友请求已发送');
     });
 
     it('应该处理发送好友请求失败的情况', async () => {
@@ -170,7 +172,7 @@ describe('useFriends', () => {
         target_user_id: 'user2',
       });
       expect(result).toBe(false);
-      expect(mockMessage.error).toHaveBeenCalledWith('发送好友请求失败');
+      expect(mockNotification.error).toHaveBeenCalledWith('发送好友请求失败');
     });
   });
 
@@ -204,7 +206,7 @@ describe('useFriends', () => {
         action: 'accept',
       });
       expect(result).toBe(true);
-      expect(mockMessage.success).toHaveBeenCalledWith('好友请求已接受');
+      expect(mockNotification.success).toHaveBeenCalledWith('好友请求已接受');
     });
 
     it('应该能够拒绝好友请求', async () => {
@@ -226,7 +228,7 @@ describe('useFriends', () => {
         action: 'reject',
       });
       expect(result).toBe(true);
-      expect(mockMessage.success).toHaveBeenCalledWith('好友请求已拒绝');
+      expect(mockNotification.success).toHaveBeenCalledWith('好友请求已拒绝');
     });
 
     it('应该处理处理好友请求失败的情况', async () => {
@@ -244,7 +246,7 @@ describe('useFriends', () => {
         action: 'accept',
       });
       expect(result).toBe(false);
-      expect(mockMessage.error).toHaveBeenCalledWith('处理好友请求失败');
+      expect(mockNotification.error).toHaveBeenCalledWith('处理好友请求失败');
     });
   });
 });

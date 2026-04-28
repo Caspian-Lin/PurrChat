@@ -116,7 +116,16 @@ import { BsPlusLg, BsGear, BsRobot, BsChatLeftText } from 'vue-icons-plus/bs';
 
 const aiStore = useAiStore();
 const authStore = useAuthStore();
-const { isStreaming, error, sendMessage, stopGeneration, clearError, retryMessage, regenerateResponse, editAndResend } = useAiChat();
+const {
+  isStreaming,
+  error,
+  sendMessage,
+  stopGeneration,
+  clearError,
+  retryMessage,
+  regenerateResponse,
+  editAndResend,
+} = useAiChat();
 
 const chatWindowRef = ref<InstanceType<typeof AiChatWindow> | null>(null);
 const showConfigModal = ref(false);

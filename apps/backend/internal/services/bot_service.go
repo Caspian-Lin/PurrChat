@@ -155,11 +155,6 @@ func (s *BotService) ListBots(ctx context.Context, ownerID string) ([]*models.Bo
 	return s.botRepo.FindByOwner(ctx, id)
 }
 
-// SearchPublicBots 搜索公开 Bot
-func (s *BotService) SearchPublicBots(ctx context.Context, query string, limit, offset int) ([]*models.Bot, error) {
-	return s.botRepo.FindPublic(ctx, query, limit, offset)
-}
-
 // SearchPublicBotsPaginated 分页搜索公开 Bot（含统计信息）
 func (s *BotService) SearchPublicBotsPaginated(ctx context.Context, query string, limit, offset int) (*models.PaginatedSearchResult, error) {
 	bots, err := s.botRepo.FindPublicWithDetails(ctx, query, limit, offset)
@@ -273,15 +268,6 @@ func (s *BotService) UpdateBot(ctx context.Context, botID string, userID string,
 	}
 	if req.Visibility != "" {
 		bot.Visibility = req.Visibility
-	}
-	if req.TriggerConfig != nil {
-		bot.TriggerConfig = req.TriggerConfig
-	}
-	if req.ReplyConfig != nil {
-		bot.ReplyConfig = req.ReplyConfig
-	}
-	if req.SpecialModeConfig != nil {
-		bot.SpecialModeConfig = req.SpecialModeConfig
 	}
 	if req.MechanismConfig != nil {
 		bot.MechanismConfig = req.MechanismConfig

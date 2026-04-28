@@ -322,7 +322,7 @@ import AddMemberModal from './AddMemberModal.vue';
 import CustomScrollbar from '../common/CustomScrollbar.vue';
 import { api } from '../../models/api';
 import { getUserAvatar, getUserUsername, getOtherUser } from '../../utils/userHelpers';
-import { useMessage } from '../../composables/useMessage';
+import { useNotification } from '../../composables/useNotification';
 import type { Conversation, Enrollment } from '../../models/types';
 
 interface Props {
@@ -341,7 +341,7 @@ const emit = defineEmits<{
   'conversation-updated': [];
 }>();
 
-const message = useMessage();
+const notify = useNotification();
 const showAddMemberModal = ref(false);
 const members = ref<Enrollment[]>([]);
 const isEditingName = ref(false);
@@ -463,12 +463,12 @@ async function handleSaveName() {
     });
     if (response.success) {
       isEditingName.value = false;
-      message.success('群名称已更新');
+      notify.success('群名称已更新');
       emit('conversation-updated');
     }
   } catch (error) {
     console.error('Failed to update conversation name:', error);
-    message.error('更新群名称失败');
+    notify.error('更新群名称失败');
   }
 }
 
@@ -489,7 +489,7 @@ async function handleAvatarChange(event: Event) {
     });
 
     if (!uploadResponse.success || !uploadResponse.data) {
-      message.error('上传申请失败');
+      notify.error('上传申请失败');
       return;
     }
 
@@ -504,7 +504,7 @@ async function handleAvatarChange(event: Event) {
     });
 
     if (!confirmResponse.success || !confirmResponse.data) {
-      message.error('上传确认失败');
+      notify.error('上传确认失败');
       return;
     }
 
@@ -513,12 +513,12 @@ async function handleAvatarChange(event: Event) {
     });
 
     if (updateResponse.success) {
-      message.success('群头像已更新');
+      notify.success('群头像已更新');
       emit('conversation-updated');
     }
   } catch (error) {
     console.error('Failed to update group avatar:', error);
-    message.error('更新群头像失败');
+    notify.error('更新群头像失败');
   }
 
   // 清空 input，允许重复选择同一文件
@@ -545,12 +545,12 @@ async function handleToggleAdmin(member: Enrollment) {
       role: newRole,
     });
     if (response.success) {
-      message.success(`${member.user?.username} 已${actionText}`);
+      notify.success(`${member.user?.username} 已${actionText}`);
       await loadMembers();
     }
   } catch (error) {
     console.error('Failed to update member role:', error);
-    message.error(`${actionText}失败`);
+    notify.error(`${actionText}失败`);
   }
 }
 
@@ -567,13 +567,13 @@ async function handleTransferOwner(member: Enrollment) {
       role: 'owner',
     });
     if (response.success) {
-      message.success('群主已转让给 ' + member.user?.username);
+      notify.success('群主已转让给 ' + member.user?.username);
       await loadMembers();
       emit('conversation-updated');
     }
   } catch (error) {
     console.error('Failed to transfer owner:', error);
-    message.error('转让群主失败');
+    notify.error('转让群主失败');
   }
 }
 
@@ -587,13 +587,13 @@ async function handleLeaveGroup() {
       user_id: props.currentUserId!,
     });
     if (response.success) {
-      message.success('已退出群聊');
+      notify.success('已退出群聊');
       emit('conversation-updated');
       emit('update:show', false);
     }
   } catch (error) {
     console.error('Failed to leave group:', error);
-    message.error('退出群聊失败');
+    notify.error('退出群聊失败');
   }
 }
 
@@ -605,13 +605,13 @@ async function handleDisbandGroup() {
   try {
     const response = await api.deleteConversation(props.conversation.id);
     if (response.success) {
-      message.success('群聊已解散');
+      notify.success('群聊已解散');
       emit('conversation-updated');
       emit('update:show', false);
     }
   } catch (error) {
     console.error('Failed to disband group:', error);
-    message.error('解散群聊失败');
+    notify.error('解散群聊失败');
   }
 }
 

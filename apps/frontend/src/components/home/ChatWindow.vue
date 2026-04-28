@@ -383,7 +383,7 @@ import CustomScrollbar from '../common/CustomScrollbar.vue';
 import EmojiPicker from '../common/EmojiPicker.vue';
 import ImagePreviewModal from '../common/ImagePreviewModal.vue';
 import { useFileUpload } from '../../composables/useFileUpload';
-import { useMessage } from '../../composables/useMessage';
+import { useNotification } from '../../composables/useNotification';
 import { api } from '../../models/api';
 import { websocketEventManager } from '../../services/websocketEventManager';
 import type {
@@ -550,7 +550,7 @@ async function handleFileChange(event: Event) {
   input.value = '';
 
   if (file.size > 50 * 1024 * 1024) {
-    useMessage().error('文件大小不能超过 50MB');
+    useNotification().error('文件大小不能超过 50MB');
     return;
   }
 
@@ -565,7 +565,7 @@ function handleDrop(event: DragEvent) {
   clearFile();
 
   if (file.size > 50 * 1024 * 1024) {
-    useMessage().error('文件大小不能超过 50MB');
+    useNotification().error('文件大小不能超过 50MB');
     return;
   }
 
@@ -603,7 +603,7 @@ async function handleFileDownload(message: Message) {
     URL.revokeObjectURL(url);
   } catch (error) {
     console.error('下载文件失败:', error);
-    useMessage().error('下载文件失败');
+    useNotification().error('下载文件失败');
   }
 }
 

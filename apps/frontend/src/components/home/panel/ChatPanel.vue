@@ -101,8 +101,6 @@
       @members-changed="handleGroupUpdated"
       @start-chat="handleStartChatFromDetail"
     />
-
-    <NotificationList :notifications="notifications" @remove-notification="removeNotification" />
   </div>
 
   <!-- ========== 桌面端布局（原始） ========== -->
@@ -240,9 +238,6 @@
       @members-changed="handleGroupUpdated"
       @start-chat="handleStartChatFromDetail"
     />
-
-    <!-- 通知列表 -->
-    <NotificationList :notifications="notifications" @remove-notification="removeNotification" />
   </div>
 </template>
 
@@ -255,7 +250,6 @@ import { useChat } from '../../../composables/useChat';
 import { usePlatform } from '../../../composables/usePlatform';
 import { useMessageCache } from '../../../services/messageCache';
 import { useMessageStore } from '../../../stores/message';
-import { useNotification } from '../../../composables/useNotification';
 import { useWebSocketEventManager } from '../../../services/websocketEventManager';
 import { useConversationStateCache } from '../../../services/conversationStateCache';
 import { useRoute, useRouter } from 'vue-router';
@@ -266,7 +260,6 @@ import UserProfileModal from '../UserProfileModal.vue';
 import UserActionsModal from '../UserActionsModal.vue';
 import CreateGroupModal from '../CreateGroupModal.vue';
 import ConversationDetailModal from '../ConversationDetailModal.vue';
-import NotificationList from '../../common/NotificationList.vue';
 import BasePanel from './BasePanel.vue';
 import type {
   User,
@@ -298,7 +291,6 @@ const {
   clearMessages,
 } = useChat();
 const { addMessage: cacheMessage } = useMessageCache();
-const { notifications, removeNotification } = useNotification();
 const messageStore = useMessageStore();
 const {
   setCurrentConversation,
@@ -472,8 +464,9 @@ const handleMobileSelectConversation = handleSelectConversation;
 
 // 移动端：返回会话列表
 const handleMobileBack = () => {
+  const convId = selectedConversation.value?.id;
   selectedConversation.value = null;
-  clearMessages();
+  clearMessages(convId);
   setCurrentConversation(null);
 };
 
@@ -529,7 +522,7 @@ const handleDeleteConversation = async (conversationId: string) => {
 
   if (selectedConversation.value?.id === conversationId) {
     selectedConversation.value = null;
-    clearMessages();
+    clearMessages(conversationId);
   }
 };
 
@@ -744,7 +737,7 @@ watch(
 watch(selectedConversation, async (newConv, oldConv) => {
   if (newConv && newConv.id !== oldConv?.id) {
     console.log('[ChatPanel] selectedConversation changed, loading messages for', newConv.id);
-    clearMessages();
+    clearMessages(oldConv?.id);
     await loadMessages(newConv.id);
     console.log('[ChatPanel] Messages loaded for conversation', newConv.id);
   }

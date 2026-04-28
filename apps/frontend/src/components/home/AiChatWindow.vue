@@ -243,7 +243,10 @@
                   <!-- 正常状态 -->
                   <template v-else>
                     <!-- Markdown / 纯文本 切换 -->
-                    <button class="msg-action msg-action--active" @click.stop="toggleMarkdownMode(message.id)">
+                    <button
+                      class="msg-action msg-action--active"
+                      @click.stop="toggleMarkdownMode(message.id)"
+                    >
                       {{ isMarkdownMode(message.id) ? 'Markdown' : '纯文本' }}
                     </button>
 
@@ -265,18 +268,23 @@
                     <button class="msg-action" @click.stop="copyMessage(message)">
                       {{ copiedMessageId === message.id ? '已复制' : '复制回复' }}
                     </button>
-                    <button
-                      class="msg-action"
-                      @click.stop="copyParentPrompt(message.id)"
-                    >
+                    <button class="msg-action" @click.stop="copyParentPrompt(message.id)">
                       {{ copiedMessageId === `prompt-${message.id}` ? '已复制' : '复制Prompt' }}
                     </button>
 
                     <span class="msg-action-sep">·</span>
-                    <button class="msg-action" :disabled="isStreaming" @click.stop="emit('regenerate', message.id)">
+                    <button
+                      class="msg-action"
+                      :disabled="isStreaming"
+                      @click.stop="emit('regenerate', message.id)"
+                    >
                       删除并重新生成
                     </button>
-                    <button class="msg-action" :disabled="isStreaming" @click.stop="emit('branch-regenerate', message.id)">
+                    <button
+                      class="msg-action"
+                      :disabled="isStreaming"
+                      @click.stop="emit('branch-regenerate', message.id)"
+                    >
                       分支重新生成
                     </button>
                   </template>
@@ -287,7 +295,11 @@
                   v-if="message.role === 'user' && !message.isStreaming"
                   class="mt-1 flex items-center gap-1"
                 >
-                  <button class="msg-action" :disabled="isStreaming" @click.stop="startEdit(message)">
+                  <button
+                    class="msg-action"
+                    :disabled="isStreaming"
+                    @click.stop="startEdit(message)"
+                  >
                     编辑
                   </button>
                   <span class="msg-action-sep">·</span>
@@ -362,10 +374,14 @@
             <span class="opacity-50">强度</span>
             <div class="flex gap-0.5">
               <button
-                v-for="level in (['low', 'medium', 'high'] as const)"
+                v-for="level in ['low', 'medium', 'high'] as const"
                 :key="level"
                 class="px-2 py-0.5 rounded-[var(--radius-xs)] transition-colors cursor-pointer"
-                :class="reasoningEffort === level ? 'text-primary bg-primary/10' : 'hover:text-text-secondary'"
+                :class="
+                  reasoningEffort === level
+                    ? 'text-primary bg-primary/10'
+                    : 'hover:text-text-secondary'
+                "
                 @click="setReasoningEffort(level)"
               >
                 {{ level === 'low' ? '低' : level === 'medium' ? '中' : '高' }}
@@ -415,8 +431,6 @@ import {
   BsStars,
   BsStopFill,
   BsExclamationTriangle,
-  BsClipboard,
-  BsClipboardCheck,
   BsChevronDown,
   BsLightbulb,
 } from 'vue-icons-plus/bs';
@@ -441,8 +455,8 @@ const emit = defineEmits<{
   'send-message': [content: string];
   'stop-generation': [];
   'clear-error': [];
-  'retry': [messageId: string];
-  'regenerate': [messageId: string];
+  retry: [messageId: string];
+  regenerate: [messageId: string];
   'branch-regenerate': [messageId: string];
   'edit-resend': [payload: { messageId: string; content: string; branch: boolean }];
   'delete-message': [messageId: string];
@@ -639,11 +653,7 @@ const reasoningEnabled = computed(() => props.conversation.reasoningEnabled !== 
 const reasoningEffort = computed(() => props.conversation.reasoningEffort || 'medium');
 
 const toggleReasoning = () => {
-  store.setReasoningSettings(
-    props.conversation.id,
-    !reasoningEnabled.value,
-    reasoningEffort.value,
-  );
+  store.setReasoningSettings(props.conversation.id, !reasoningEnabled.value, reasoningEffort.value);
 };
 
 const setReasoningEffort = (level: string) => {
@@ -682,8 +692,7 @@ const onPaste = (event: ClipboardEvent) => {
   const textarea = event.target as HTMLTextAreaElement;
   const start = textarea.selectionStart;
   const end = textarea.selectionEnd;
-  textarea.value =
-    textarea.value.substring(0, start) + text + textarea.value.substring(end);
+  textarea.value = textarea.value.substring(0, start) + text + textarea.value.substring(end);
   const cursorPos = start + text.length;
   textarea.selectionStart = textarea.selectionEnd = cursorPos;
   newMessage.value = textarea.value;
@@ -707,7 +716,7 @@ watch(
         scrollToBottom();
       }
     }
-  },
+  }
 );
 
 onMounted(() => {
@@ -738,7 +747,9 @@ defineExpose({ scrollToBottom });
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
   white-space: nowrap;
   line-height: 1.6;
 }

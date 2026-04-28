@@ -379,11 +379,7 @@ export const useAiStore = defineStore('ai', () => {
   };
 
   // 设置推理参数
-  const setReasoningSettings = (
-    conversationId: string,
-    enabled: boolean,
-    effort: string,
-  ) => {
+  const setReasoningSettings = (conversationId: string, enabled: boolean, effort: string) => {
     const conv = conversations.value.find((c) => c.id === conversationId);
     if (!conv) return;
     conv.reasoningEnabled = enabled;

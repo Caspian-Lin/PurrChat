@@ -3,7 +3,10 @@
     <!-- 警告说明 -->
     <div
       class="rounded-[var(--radius-sm)] p-4 mb-5"
-      style="background: var(--color-error-bg, rgba(220, 38, 38, 0.08)); border: 1px solid rgba(220, 38, 38, 0.2)"
+      style="
+        background: var(--color-error-bg, rgba(220, 38, 38, 0.08));
+        border: 1px solid rgba(220, 38, 38, 0.2);
+      "
     >
       <div class="flex items-start gap-3">
         <BsExclamationTriangle
@@ -14,7 +17,10 @@
         <div class="text-sm" style="color: var(--text-secondary-color)">
           <p class="font-medium mb-1.5" style="color: var(--color-error)">此操作不可逆</p>
           <p class="mb-2">注销后，您的所有数据将被永久删除，包括：</p>
-          <ul class="list-disc list-inside space-y-0.5 text-xs" style="color: var(--text-tertiary-color)">
+          <ul
+            class="list-disc list-inside space-y-0.5 text-xs"
+            style="color: var(--text-tertiary-color)"
+          >
             <li>个人资料和账号信息</li>
             <li>所有好友关系</li>
             <li>创建的 Bot 及其部署</li>

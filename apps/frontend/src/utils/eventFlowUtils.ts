@@ -2,7 +2,7 @@ import dagre from '@dagrejs/dagre';
 import type { SpecialModeEvent, FlowConnection } from '../models/types';
 import type { Node, Edge } from '@vue-flow/core';
 import { NODE_TYPE_META } from './portTypes';
-import { buildDefaultPorts } from './eventMigration';
+import { buildDefaultPorts } from './eventPorts';
 
 // ─── 节点类型图标（兼容旧代码，新代码优先使用 NODE_TYPE_META） ──
 
@@ -260,20 +260,16 @@ export function connectionsToFlowEdges(
   });
 }
 
-/** 将旧 next[] 转换为 VueFlow Edge[]（向后兼容） */
-export function eventsToFlowEdges(events: SpecialModeEvent[]): Edge[] {
-  const edges: Edge[] = [];
-  for (const evt of events) {
-    for (const nextId of evt.next || []) {
-      edges.push({
-        id: `${evt.id}-${nextId}`,
-        source: evt.id,
-        target: nextId,
-        type: 'event',
-      });
-    }
+/** 将 FlowConnection[] 转换为 VueFlow Edge[] */
+export function eventsToFlowEdges(
+  events: SpecialModeEvent[],
+  connections?: FlowConnection[]
+): Edge[] {
+  if (connections && connections.length > 0) {
+    return connectionsToFlowEdges(connections, events);
   }
-  return edges;
+  // 无连接时返回空数组
+  return [];
 }
 
 // ─── 自动布局（dagre） ───────────────────────────────────────
@@ -292,9 +288,7 @@ export function autoLayoutEvents(
     : new Map<string, string>();
 
   const allNodes = eventsToFlowNodes(events, undefined, connections);
-  const edges = connections
-    ? connectionsToFlowEdges(connections, events)
-    : eventsToFlowEdges(events);
+  const edges = eventsToFlowEdges(events, connections);
 
   if (allNodes.length === 0) return allNodes;
 
@@ -453,36 +447,19 @@ export function validateEventChain(
     }
   }
 
-  // 检查断开的连线（旧 next[] 模式）
-  for (const evt of events) {
-    for (const nextId of evt.next || []) {
-      if (!eventIds.has(nextId)) {
-        issues.push({
-          type: 'error',
-          message: `"${evt.name}" 连接到不存在的事件`,
-          eventId: evt.id,
-        });
-      }
-    }
-  }
+  // 检查断开的连线
+  // （已由上方 connections 检查覆盖，无需额外检查）
 
   // 检测环路（DFS）— 排除 loop 回边
   const visiting = new Set<string>();
   const visited = new Set<string>();
 
-  // 构建邻接表（基于 connections 或 next[]）
+  // 构建邻接表（基于 connections）
   const adj = new Map<string, string[]>();
   if (connections && connections.length > 0) {
     for (const conn of connections) {
       if (!adj.has(conn.sourceNodeId)) adj.set(conn.sourceNodeId, []);
       adj.get(conn.sourceNodeId)!.push(conn.targetNodeId);
-    }
-  } else {
-    for (const evt of events) {
-      for (const nextId of evt.next || []) {
-        if (!adj.has(evt.id)) adj.set(evt.id, []);
-        adj.get(evt.id)!.push(nextId);
-      }
     }
   }
 
@@ -535,11 +512,6 @@ export function validateEventChain(
   if (connections && connections.length > 0) {
     for (const conn of connections) {
       isTargetOf.add(conn.targetNodeId);
-    }
-  }
-  for (const evt of events) {
-    for (const nextId of evt.next || []) {
-      isTargetOf.add(nextId);
     }
   }
 

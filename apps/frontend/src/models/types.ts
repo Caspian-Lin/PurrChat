@@ -366,12 +366,6 @@ export interface Bot {
   status: BotStatus;
   visibility: BotVisibility;
   mechanism_config?: MechanismConfig;
-  /** @deprecated 使用 mechanism_config */
-  trigger_config?: TriggerConfig;
-  /** @deprecated 使用 mechanism_config */
-  reply_config?: ReplyConfig;
-  /** @deprecated 使用 mechanism_config */
-  special_mode_config?: SpecialModeConfig;
   created_at: string;
   updated_at: string;
 }
@@ -429,12 +423,6 @@ export interface UpdateBotRequest {
   status?: BotStatus;
   visibility?: BotVisibility;
   mechanism_config?: MechanismConfig;
-  /** @deprecated 使用 mechanism_config */
-  trigger_config?: TriggerConfig;
-  /** @deprecated 使用 mechanism_config */
-  reply_config?: ReplyConfig;
-  /** @deprecated 使用 mechanism_config */
-  special_mode_config?: SpecialModeConfig;
 }
 
 // 部署 Bot 请求
@@ -448,34 +436,11 @@ export interface UpdateDeploymentStatusRequest {
   status: 'active' | 'paused';
 }
 
-// 触发配置
-/** @deprecated 使用 TriggerSpec（在 MechanismConfig 中） */
-export interface TriggerConfig {
-  mode: 'rule' | 'probability' | 'conditional';
-  rules?: TriggerRule[];
-  probability?: number;
-  condition?: ConditionConfig;
-}
-
 // 触发规则
 export interface TriggerRule {
   type: 'keyword' | 'regex' | 'command' | 'equals';
   pattern: string;
   case_sensitive?: boolean;
-}
-
-/** @deprecated 使用 TriggerSpec（在 MechanismConfig 中） */
-export interface ConditionConfig {
-  start_expression: string;
-  end_expression: string;
-}
-
-// 回复配置
-/** @deprecated 使用 ReplySpec（在 MechanismConfig 中） */
-export interface ReplyConfig {
-  type: 'predefined' | 'llm';
-  predefined?: PredefinedConfig;
-  llm?: LLMConfig;
 }
 
 // 预定义回复配置
@@ -494,13 +459,6 @@ export interface LLMConfig {
   temperature?: number;
   max_tokens?: number;
   context_window?: number;
-}
-
-// 特殊模式配置（事件链）
-/** @deprecated 使用 SpecialModeSpec（在 MechanismConfig 中） */
-export interface SpecialModeConfig {
-  events?: SpecialModeEvent[];
-  end_conditions?: SpecialModeEndCondition[];
 }
 
 // ===== 机制列表类型定义 =====
@@ -549,8 +507,6 @@ export interface SpecialModeEvent {
   config: Record<string, any>;
   ports?: EventPort[];
   position?: { x: number; y: number };
-  /** @deprecated 使用 connections 代替 */
-  next?: string[];
 }
 
 // LLM 事件配置
@@ -642,7 +598,7 @@ export interface DebugBotRequest {
   step_mode?: boolean;
   session_id?: string;
   sender_name?: string;
-  special_mode_config?: SpecialModeConfig;
+  special_mode_config?: SpecialModeSpec;
 }
 
 export interface DebugStepRequest {

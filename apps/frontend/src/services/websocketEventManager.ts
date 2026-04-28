@@ -71,8 +71,8 @@ export type MessageUpdateCallback = (_conversationId: string, _message: Message)
 export type FriendRequestCallback = (_request: Friendship) => void;
 export type OnlineStatusCallback = (_userId: string, _online: boolean) => void;
 export type SpecialModeChangeCallback = (
-  event: 'started' | 'ended',
-  data: { bot_id: string; bot_name: string; conversation_id: string }
+  _event: 'started' | 'ended',
+  _data: { bot_id: string; bot_name: string; conversation_id: string }
 ) => void;
 
 /**

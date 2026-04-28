@@ -34,12 +34,8 @@ type Bot struct {
 	Status          BotStatus       `json:"status"`
 	Visibility      BotVisibility   `json:"visibility"`
 	MechanismConfig json.RawMessage `json:"mechanism_config"`
-	// 旧字段保留用于向后兼容（迁移过渡期）
-	TriggerConfig     json.RawMessage `json:"trigger_config,omitempty"`
-	ReplyConfig       json.RawMessage `json:"reply_config,omitempty"`
-	SpecialModeConfig json.RawMessage `json:"special_mode_config,omitempty"`
-	CreatedAt         time.Time       `json:"created_at"`
-	UpdatedAt         time.Time       `json:"updated_at"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 // CreateBotRequest 创建 Bot 请求
@@ -58,10 +54,6 @@ type UpdateBotRequest struct {
 	Status          BotStatus       `json:"status" binding:"omitempty,oneof=active disabled"`
 	Visibility      BotVisibility   `json:"visibility" binding:"omitempty,oneof=private public global"`
 	MechanismConfig json.RawMessage `json:"mechanism_config"`
-	// 旧字段保留用于向后兼容
-	TriggerConfig     json.RawMessage `json:"trigger_config,omitempty"`
-	ReplyConfig       json.RawMessage `json:"reply_config,omitempty"`
-	SpecialModeConfig json.RawMessage `json:"special_mode_config,omitempty"`
 }
 
 // DeployBotRequest 部署 Bot 请求

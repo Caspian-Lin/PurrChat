@@ -4,8 +4,11 @@ import appConfig from '../config/app';
 /**
  * 平台检测 composable
  * 基于运行时环境 + appConfig.client 综合判断
+ * 使用懒初始化，避免模块级副作用
  */
+
 const isMobile = ref(false);
+let initialized = false;
 
 function detectMobile(): boolean {
   // 1. 环境变量显式声明
@@ -29,18 +32,25 @@ function detectMobile(): boolean {
   return false;
 }
 
-// 初始化检测
-isMobile.value = detectMobile();
+function initialize() {
+  if (initialized) return;
+  initialized = true;
 
-// 监听窗口尺寸变化（桌面端调整窗口大小时也能响应）
-if (typeof window !== 'undefined' && window.matchMedia) {
-  const mql = window.matchMedia('(max-width: 768px)');
-  mql.addEventListener('change', (e) => {
-    isMobile.value = e.matches;
-  });
+  // 初始化检测
+  isMobile.value = detectMobile();
+
+  // 监听窗口尺寸变化（桌面端调整窗口大小时也能响应）
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    const mql = window.matchMedia('(max-width: 768px)');
+    mql.addEventListener('change', (e) => {
+      isMobile.value = e.matches;
+    });
+  }
 }
 
 export function usePlatform() {
+  initialize();
+
   const isDesktop = computed(() => !isMobile.value);
 
   return {

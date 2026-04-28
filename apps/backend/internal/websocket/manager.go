@@ -339,27 +339,6 @@ func (h *Hub) SendToUser(userID uuid.UUID, messageType string, data interface{})
 	}
 }
 
-// GetOnlineUsers 获取在线用户列表
-func (h *Hub) GetOnlineUsers() []uuid.UUID {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	users := make([]uuid.UUID, 0, len(h.userClients))
-	for userID := range h.userClients {
-		users = append(users, userID)
-	}
-	return users
-}
-
-// IsUserOnline 检查用户是否在线
-func (h *Hub) IsUserOnline(userID uuid.UUID) bool {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	_, ok := h.userClients[userID]
-	return ok
-}
-
 // GetClientCount 获取客户端数量
 func (h *Hub) GetClientCount() int {
 	h.mu.RLock()

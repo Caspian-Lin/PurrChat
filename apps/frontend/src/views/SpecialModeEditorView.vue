@@ -271,7 +271,6 @@ import type {
 import type { Node, Edge } from '@vue-flow/core';
 import {
   eventsToFlowNodes,
-  connectionsToFlowEdges,
   eventsToFlowEdges,
   autoLayoutEvents,
   validateEventChain,
@@ -279,7 +278,7 @@ import {
 } from '../utils/eventFlowUtils';
 import type { ValidationIssue } from '../utils/eventFlowUtils';
 import { canConnect, getPortById, getDefaultPorts } from '../utils/portTypes';
-import { needsMigration, ensurePorts, migrateLegacyConnections } from '../utils/eventMigration';
+import { ensurePorts } from '../utils/eventPorts';
 import TriggerNode from '../components/home/panel/bots/events/TriggerNode.vue';
 import EndNode from '../components/home/panel/bots/events/EndNode.vue';
 import WaitNode from '../components/home/panel/bots/events/WaitNode.vue';
@@ -396,12 +395,9 @@ const flowNodes = computed<Node[]>(() => {
 });
 
 const flowEdges = computed<Edge[]>(() => {
-  // 优先使用 connections，向后兼容 next[]
+  // 优先使用 connections
   const conns = connections.value;
-  if (conns && conns.length > 0) {
-    return connectionsToFlowEdges(conns, events.value);
-  }
-  return eventsToFlowEdges(events.value);
+  return eventsToFlowEdges(events.value, conns);
 });
 
 // BroadcastChannel 用于主 Tab 同步
@@ -505,15 +501,6 @@ async function handleSave() {
   saveState.value = 'saving';
 
   try {
-    // 自动迁移旧数据：next[] → connections[]
-    if (localMechanism.value.reply?.special_mode) {
-      const sm = localMechanism.value.reply.special_mode;
-      if (needsMigration(sm.events || [], sm.connections)) {
-        sm.connections = [...(sm.connections || []), ...migrateLegacyConnections(sm.events || [])];
-        sm.events = (sm.events || []).map((e) => ({ ...e, next: undefined }));
-      }
-    }
-
     // 构建更新后的 mechanism_config
     const mechanisms = bot.value?.mechanism_config?.mechanisms?.map((m) =>
       m.id === mechanismId ? deepCloneMechanism(localMechanism.value!) : m
@@ -649,12 +636,7 @@ function autoConnectToLoop(
 function handleEventDelete(eventId: string) {
   if (!localMechanism.value?.reply?.special_mode) return;
 
-  const updatedEvents = events.value
-    .filter((e) => e.id !== eventId)
-    .map((e) => ({
-      ...e,
-      next: (e.next || []).filter((n) => n !== eventId),
-    }));
+  const updatedEvents = events.value.filter((e) => e.id !== eventId);
 
   // 删除相关连接
   const updatedConnections = connections.value.filter(
@@ -711,7 +693,9 @@ function onConnect(connection: {
     return;
   }
   if (!targetPort) {
-    showConnectionToast(`目标节点"${targetEvent.name}"上找不到端口 ${connection.targetHandle || ''}`);
+    showConnectionToast(
+      `目标节点"${targetEvent.name}"上找不到端口 ${connection.targetHandle || ''}`
+    );
     return;
   }
 
@@ -825,7 +809,9 @@ watch(
 
 .toast-fade-enter-active,
 .toast-fade-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
 }
 
 .toast-fade-enter-from,

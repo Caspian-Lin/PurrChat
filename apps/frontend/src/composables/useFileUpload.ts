@@ -1,6 +1,6 @@
 import { ref } from 'vue';
-import { storageApi } from '../models/api';
-import { useMessage } from './useMessage';
+import { useNotification } from './useNotification';
+import { threeStageUpload } from '../utils/upload';
 import type { FileMessageContent } from '../models/types';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -13,7 +13,7 @@ export function useFileUpload() {
   const error = ref<string | null>(null);
   const fileData = ref<FileMessageContent | null>(null);
   const thumbnailDataUrl = ref<string | null>(null);
-  const message = useMessage();
+  const notify = useNotification();
 
   function isImageFile(file: File): boolean {
     return IMAGE_TYPES.includes(file.type);
@@ -81,45 +81,12 @@ export function useFileUpload() {
     });
   }
 
-  // 两阶段上传文件到存储服务
+  // 上传文件到存储服务（使用共享的三阶段上传工具）
   async function uploadFile(
     file: File,
     category: 'chat-image' | 'file'
   ): Promise<{ fileId: string; publicUrl: string }> {
-    const requestResp = await storageApi.requestUpload({
-      file_name: file.name,
-      file_size: file.size,
-      content_type: file.type,
-      category,
-      usage: 'message',
-    });
-    if (!requestResp.success || !requestResp.data) {
-      throw new Error(requestResp.message || '申请上传失败');
-    }
-
-    const { upload_id, object_key, upload_url } = requestResp.data;
-
-    const uploadResp = await fetch(upload_url, {
-      method: 'PUT',
-      body: file,
-      headers: { 'Content-Type': file.type },
-    });
-    if (!uploadResp.ok) {
-      throw new Error('文件上传失败');
-    }
-
-    const confirmResp = await storageApi.confirmUpload({
-      upload_id,
-      object_key,
-    });
-    if (!confirmResp.success || !confirmResp.data) {
-      throw new Error(confirmResp.message || '确认上传失败');
-    }
-
-    return {
-      fileId: confirmResp.data.file_id,
-      publicUrl: confirmResp.data.public_url,
-    };
+    return threeStageUpload(file, category, 'message');
   }
 
   // 完整上传流程
@@ -127,7 +94,7 @@ export function useFileUpload() {
     const validationError = validateFile(file);
     if (validationError) {
       error.value = validationError;
-      message.error(validationError);
+      notify.error(validationError);
       return null;
     }
 
@@ -178,7 +145,7 @@ export function useFileUpload() {
       return result;
     } catch (err: any) {
       error.value = err.message || '上传失败，请重试';
-      message.error(error.value ?? '上传失败');
+      notify.error(error.value ?? '上传失败');
       return null;
     } finally {
       uploading.value = false;

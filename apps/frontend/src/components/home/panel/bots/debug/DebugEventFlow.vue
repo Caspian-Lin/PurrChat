@@ -39,12 +39,13 @@ import TemplateNode from '../events/TemplateNode.vue';
 import ReplyNode from '../events/ReplyNode.vue';
 import HistoryNode from '../events/HistoryNode.vue';
 import { eventsToFlowNodes, eventsToFlowEdges } from '../../../../../utils/eventFlowUtils';
-import type { SpecialModeEvent, EventTrace } from '../../../../../models/types';
+import type { SpecialModeEvent, EventTrace, FlowConnection } from '../../../../../models/types';
 import type { Node, Edge } from '@vue-flow/core';
 
 interface Props {
   events: SpecialModeEvent[];
   eventTraces: EventTrace[];
+  connections?: FlowConnection[];
 }
 
 const props = defineProps<Props>();
@@ -90,7 +91,7 @@ const nodes = computed<Node[]>(() => {
   }));
 });
 
-const edges = computed<Edge[]>(() => eventsToFlowEdges(props.events));
+const edges = computed<Edge[]>(() => eventsToFlowEdges(props.events, props.connections));
 </script>
 
 <style scoped>

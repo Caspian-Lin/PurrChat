@@ -1,9 +1,7 @@
 <template>
   <BaseNode tint="#8b5cf6" :inputs="INPUTS" :outputs="OUTPUTS">
     <template #body>
-      <div v-if="count > 0" class="history-node__info">
-        最近 {{ count }} 条
-      </div>
+      <div v-if="count > 0" class="history-node__info">最近 {{ count }} 条</div>
     </template>
   </BaseNode>
 </template>

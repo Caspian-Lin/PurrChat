@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { api } from '../models/api';
 import { useBotStore } from '../stores/bot';
-import { useMessage } from './useMessage';
+import { useNotification } from './useNotification';
 import type {
   Bot,
   CreateBotRequest,
@@ -13,7 +13,7 @@ import type {
 } from '../models/types';
 
 export const useBots = () => {
-  const message = useMessage();
+  const notify = useNotification();
   const botStore = useBotStore();
   const loading = ref(false);
 
@@ -23,15 +23,15 @@ export const useBots = () => {
     try {
       const response = await api.createBot(data);
       if (response.success && response.data) {
-        message.success('Bot 创建成功');
+        notify.success('Bot 创建成功');
         await botStore.loadBots();
         return response.data;
       }
-      message.error(response.message || '创建 Bot 失败');
+      notify.error(response.message || '创建 Bot 失败');
       return null;
     } catch (err) {
       console.error('[useBots] 创建 Bot 失败:', err);
-      message.error('创建 Bot 失败');
+      notify.error('创建 Bot 失败');
       return null;
     } finally {
       loading.value = false;
@@ -44,15 +44,15 @@ export const useBots = () => {
     try {
       const response = await api.updateBot(botId, data);
       if (response.success) {
-        message.success('Bot 已更新');
+        notify.success('Bot 已更新');
         await botStore.loadBots();
         return true;
       }
-      message.error(response.message || '更新 Bot 失败');
+      notify.error(response.message || '更新 Bot 失败');
       return false;
     } catch (err) {
       console.error('[useBots] 更新 Bot 失败:', err);
-      message.error('更新 Bot 失败');
+      notify.error('更新 Bot 失败');
       return false;
     } finally {
       loading.value = false;
@@ -65,18 +65,18 @@ export const useBots = () => {
     try {
       const response = await api.deleteBot(botId);
       if (response.success) {
-        message.success('Bot 已删除');
+        notify.success('Bot 已删除');
         if (botStore.activeBotId === botId) {
           botStore.setActiveBot(null);
         }
         await botStore.loadBots();
         return true;
       }
-      message.error(response.message || '删除 Bot 失败');
+      notify.error(response.message || '删除 Bot 失败');
       return false;
     } catch (err) {
       console.error('[useBots] 删除 Bot 失败:', err);
-      message.error('删除 Bot 失败');
+      notify.error('删除 Bot 失败');
       return false;
     } finally {
       loading.value = false;
@@ -89,15 +89,15 @@ export const useBots = () => {
       const data: DeployBotRequest = { conversation_id: conversationId };
       const response = await api.deployBot(botId, data);
       if (response.success) {
-        message.success('Bot 已部署');
+        notify.success('Bot 已部署');
         await botStore.loadDeployments();
         return true;
       }
-      message.error(response.message || '部署 Bot 失败');
+      notify.error(response.message || '部署 Bot 失败');
       return false;
     } catch (err) {
       console.error('[useBots] 部署 Bot 失败:', err);
-      message.error('部署 Bot 失败');
+      notify.error('部署 Bot 失败');
       return false;
     }
   }
@@ -107,15 +107,15 @@ export const useBots = () => {
     try {
       const response = await api.undeployBot(botId, conversationId);
       if (response.success) {
-        message.success('Bot 已移除');
+        notify.success('Bot 已移除');
         await botStore.loadDeployments();
         return true;
       }
-      message.error(response.message || '移除 Bot 失败');
+      notify.error(response.message || '移除 Bot 失败');
       return false;
     } catch (err) {
       console.error('[useBots] 移除 Bot 失败:', err);
-      message.error('移除 Bot 失败');
+      notify.error('移除 Bot 失败');
       return false;
     }
   }
@@ -145,11 +145,11 @@ export const useBots = () => {
       if (response.success && response.data) {
         return response.data;
       }
-      message.error(response.message || '创建对话失败');
+      notify.error(response.message || '创建对话失败');
       return null;
     } catch (err) {
       console.error('[useBots] 创建 Bot 对话失败:', err);
-      message.error('创建对话失败');
+      notify.error('创建对话失败');
       return null;
     }
   }

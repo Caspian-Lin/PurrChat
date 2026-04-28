@@ -86,7 +86,6 @@ import EventConfigModal from './events/EventConfigModal.vue';
 import EndConditionConfig from './events/EndConditionConfig.vue';
 import {
   eventsToFlowNodes,
-  connectionsToFlowEdges,
   eventsToFlowEdges,
   autoLayoutEvents,
   getLoopChainEnd,
@@ -98,7 +97,7 @@ import type {
 } from '../../../../models/types';
 import type { Node, Edge } from '@vue-flow/core';
 import { canConnect, getPortById, getDefaultPorts } from '../../../../utils/portTypes';
-import { ensurePorts } from '../../../../utils/eventMigration';
+import { ensurePorts } from '../../../../utils/eventPorts';
 
 interface Props {
   events?: FullEvent[];
@@ -182,13 +181,9 @@ const flowNodes = computed<Node[]>(() => {
   return eventsToFlowNodes(ensuredEvents.value, positionCache, props.connections);
 });
 
-// 将 connections 或 event.next 转换为 vue-flow Edge
+// 将 connections 转换为 vue-flow Edge
 const flowEdges = computed<Edge[]>(() => {
-  const conns = props.connections;
-  if (conns && conns.length > 0) {
-    return connectionsToFlowEdges(conns, ensuredEvents.value);
-  }
-  return eventsToFlowEdges(ensuredEvents.value);
+  return eventsToFlowEdges(ensuredEvents.value, props.connections);
 });
 
 function onNodeClick({ node }: { node: Node }) {
@@ -284,12 +279,7 @@ function autoConnectToLoop(
 }
 
 function handleEventDelete(eventId: string) {
-  const updated = (props.events || [])
-    .filter((e) => e.id !== eventId)
-    .map((e) => ({
-      ...e,
-      next: (e.next || []).filter((n) => n !== eventId),
-    }));
+  const updated = (props.events || []).filter((e) => e.id !== eventId);
 
   // 删除相关连接
   const updatedConnections = (props.connections || []).filter(

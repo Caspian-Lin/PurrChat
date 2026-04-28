@@ -25,8 +25,7 @@ type DebugSession struct {
 	CreatedAt     time.Time
 	// 逐步执行状态
 	StepMode    bool
-	StepQueue   []string          // 待执行事件 ID 队列
-	StepInputs  map[string]string // 每个待执行事件的输入
+	StepQueue   []string // 待执行事件 ID 队列（按 flow 拓扑顺序）
 	StepVisited map[string]bool
 }
 
@@ -40,6 +39,11 @@ func (ds *DebugSession) toSpecialModeSession() *SpecialModeSession {
 		EventOutputs:  ds.EventOutputs,
 		Variables:     ds.Variables,
 	}
+}
+
+// toFlowContext 将 DebugSession 转换为 ExecutionContext
+func (ds *DebugSession) toFlowContext() *ExecutionContext {
+	return NewExecutionContext(ds.Config.Events, ds.Config.Connections, ds.toSpecialModeSession())
 }
 
 // DebugExecute 执行调试（全量或逐步首事件）
@@ -105,7 +109,6 @@ func (e *BotEngine) DebugExecute(ctx context.Context, botID uuid.UUID, req *mode
 			CreatedAt:     time.Now(),
 			StepMode:      req.StepMode,
 			StepVisited:   map[string]bool{},
-			StepInputs:    map[string]string{},
 		}
 		e.debugSessions.Store(sessionID, session)
 	}
@@ -125,9 +128,10 @@ func (e *BotEngine) DebugExecute(ctx context.Context, botID uuid.UUID, req *mode
 		session.ContextBuffer = session.ContextBuffer[len(session.ContextBuffer)-maxContext:]
 	}
 
-	// 构建事件遍历顺序
-	steps := buildEventTraversal(session.Config.Events, req.Message)
-	if len(steps) == 0 {
+	// 构建节点执行顺序（基于 flow 拓扑）
+	flowCtx := session.toFlowContext()
+	nodeOrder := flowCtx.collectNodeOrder()
+	if len(nodeOrder) == 0 {
 		return nil, fmt.Errorf("no events to execute")
 	}
 
@@ -135,34 +139,55 @@ func (e *BotEngine) DebugExecute(ctx context.Context, botID uuid.UUID, req *mode
 
 	if req.StepMode {
 		// 逐步模式：仅执行第一个未访问的事件
-		return e.debugStepFirst(ctx, session, smSession, steps)
+		return e.debugStepFirst(ctx, session, smSession, nodeOrder)
 	}
 
 	// 全量执行
-	return e.debugRunAll(ctx, session, smSession, steps)
+	return e.debugRunAll(ctx, session, smSession, nodeOrder)
 }
 
-// debugRunAll 全量执行所有事件
-func (e *BotEngine) debugRunAll(ctx context.Context, session *DebugSession, smSession *SpecialModeSession, steps []EventStep) (*models.DebugTraceResult, error) {
+// debugRunAll 全量执行所有事件（按 flow 拓扑顺序）
+func (e *BotEngine) debugRunAll(ctx context.Context, session *DebugSession, smSession *SpecialModeSession, nodeOrder []string) (*models.DebugTraceResult, error) {
 	var traces []models.EventTrace
 	var finalOutput string
 
-	for _, step := range steps {
-		// 找到事件定义
-		event := findEvent(session.Config.Events, step.ID)
+	// 将最近用户消息写入 trigger 节点的输出端口
+	if len(session.ContextBuffer) > 0 {
+		userMsg := session.ContextBuffer[len(session.ContextBuffer)-1].Content
+		smSession.EventOutputs["__user_input__"] = userMsg
+	}
+
+	for _, nodeID := range nodeOrder {
+		event := findEventInList(session.Config.Events, nodeID)
 		if event == nil {
 			continue
 		}
 
-		trace := e.executeEventWithTrace(ctx, smSession, event, step.Input)
-		traces = append(traces, trace)
+		// trigger 和 end 节点跳过（不产生输出）
+		if event.Type == "trigger" || event.Type == "end" {
+			continue
+		}
 
-		// 更新调试会话的事件输出
-		session.EventOutputs[event.ID] = trace.Output
-		smSession.EventOutputs[event.ID] = trace.Output
+		// 对于 if/loop/wait/history 节点，flow engine 已处理逻辑，
+		// 在全量调试模式下直接走完整的 flow engine
+		// 但为调试目的，我们对处理节点逐个执行并记录 trace
+		input := ""
+		if event.Type == "llm" || event.Type == "builtin" || event.Type == "python" || event.Type == "reply" {
+			// 从 session.EventOutputs 获取前一个节点的输出作为输入
+			input = smSession.EventOutputs["__last_output__"]
+		}
 
-		if event.Type == "reply" {
-			finalOutput = trace.Output
+		if event.Type == "llm" || event.Type == "builtin" || event.Type == "python" || event.Type == "reply" {
+			trace := e.executeEventWithTrace(ctx, smSession, event, input)
+			traces = append(traces, trace)
+
+			session.EventOutputs[event.ID] = trace.Output
+			smSession.EventOutputs[event.ID] = trace.Output
+			smSession.EventOutputs["__last_output__"] = trace.Output
+
+			if event.Type == "reply" {
+				finalOutput = trace.Output
+			}
 		}
 	}
 
@@ -185,32 +210,31 @@ func (e *BotEngine) debugRunAll(ctx context.Context, session *DebugSession, smSe
 }
 
 // debugStepFirst 逐步模式：执行第一个事件
-func (e *BotEngine) debugStepFirst(ctx context.Context, session *DebugSession, smSession *SpecialModeSession, steps []EventStep) (*models.DebugTraceResult, error) {
-	// 过滤已访问的事件
-	var remainingSteps []EventStep
-	for _, step := range steps {
-		if !session.StepVisited[step.ID] {
-			remainingSteps = append(remainingSteps, step)
+func (e *BotEngine) debugStepFirst(ctx context.Context, session *DebugSession, smSession *SpecialModeSession, nodeOrder []string) (*models.DebugTraceResult, error) {
+	// 构建步骤队列（跳过 trigger/end 节点）
+	session.StepQueue = nil
+	for _, nodeID := range nodeOrder {
+		event := findEventInList(session.Config.Events, nodeID)
+		if event == nil {
+			continue
+		}
+		if event.Type == "trigger" || event.Type == "end" {
+			continue
+		}
+		if !session.StepVisited[nodeID] {
+			session.StepQueue = append(session.StepQueue, nodeID)
 		}
 	}
 
-	if len(remainingSteps) == 0 {
+	if len(session.StepQueue) == 0 {
 		return nil, fmt.Errorf("no more events to execute")
 	}
 
-	// 构建步骤队列
-	session.StepQueue = nil
-	session.StepInputs = nil
-	for i, step := range remainingSteps {
-		session.StepQueue = append(session.StepQueue, step.ID)
-		session.StepInputs[step.ID] = step.Input
-		if i == 0 {
-			// 输入为当前用户消息
-			session.StepInputs[step.ID] = step.Input
-		} else {
-			// 输入默认为前一个步骤的输出（执行后更新）
-			session.StepInputs[step.ID] = remainingSteps[i-1].Input
-		}
+	// 将最近用户消息写入
+	if len(session.ContextBuffer) > 0 {
+		userMsg := session.ContextBuffer[len(session.ContextBuffer)-1].Content
+		smSession.EventOutputs["__user_input__"] = userMsg
+		smSession.EventOutputs["__last_output__"] = userMsg
 	}
 
 	return e.debugExecuteNext(ctx, session, smSession)
@@ -227,24 +251,18 @@ func (e *BotEngine) debugExecuteNext(ctx context.Context, session *DebugSession,
 	session.StepQueue = session.StepQueue[1:]
 	session.StepVisited[nextID] = true
 
-	event := findEvent(session.Config.Events, nextID)
+	event := findEventInList(session.Config.Events, nextID)
 	if event == nil {
 		return nil, fmt.Errorf("event %s not found", nextID)
 	}
 
-	input := session.StepInputs[nextID]
+	input := smSession.EventOutputs["__last_output__"]
 	trace := e.executeEventWithTrace(ctx, smSession, event, input)
 
 	// 更新会话状态
 	session.EventOutputs[event.ID] = trace.Output
 	smSession.EventOutputs[event.ID] = trace.Output
-
-	// 更新后续步骤的输入为当前事件的输出
-	lastOutput := trace.Output
-	if len(session.StepQueue) > 0 {
-		nextStepID := session.StepQueue[0]
-		session.StepInputs[nextStepID] = lastOutput
-	}
+	smSession.EventOutputs["__last_output__"] = trace.Output
 
 	// 构建已执行的 traces（包括之前已执行的）
 	allTraces := session.buildAllTraces()
@@ -372,8 +390,8 @@ func (e *BotEngine) startDebugSessionCleanup() {
 	}()
 }
 
-// findEvent 在事件列表中查找指定 ID 的事件
-func findEvent(events []SpecialModeEvent, id string) *SpecialModeEvent {
+// findEventInList 在事件列表中查找指定 ID 的事件
+func findEventInList(events []SpecialModeEvent, id string) *SpecialModeEvent {
 	for i := range events {
 		if events[i].ID == id {
 			return &events[i]

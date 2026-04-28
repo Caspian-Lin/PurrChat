@@ -20,7 +20,6 @@ type ExecutionContext struct {
 
 // NewExecutionContext 创建执行上下文
 func NewExecutionContext(events []SpecialModeEvent, connections []FlowConnection, session *SpecialModeSession) *ExecutionContext {
-	events = ensureEventPorts(events)
 	return &ExecutionContext{
 		Events:      events,
 		Connections: connections,
@@ -41,8 +40,7 @@ func (ctx *ExecutionContext) ExecuteFlow(engineCtx context.Context, engine *BotE
 		}
 	}
 	if triggerEvent == nil {
-		// 没有 trigger 节点，回退到旧 BFS 模式
-		return engine.executeEventChain(engineCtx, ctx.Session, input)
+		return "", fmt.Errorf("no trigger event found in flow")
 	}
 
 	// 2. 找到 trigger 的 exec 输出连接
@@ -199,6 +197,59 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 		return ctx.followControlFlow(engineCtx, engine, outConn.TargetNodeID, finalReply)
 	}
 	return nil
+}
+
+// collectNodeOrder 收集 flow 的节点执行顺序（用于调试）
+// 不执行事件，仅按控制流遍历收集节点 ID 列表
+func (ctx *ExecutionContext) collectNodeOrder() []string {
+	// 找到 trigger 节点
+	var triggerEvent *SpecialModeEvent
+	for i := range ctx.Events {
+		if ctx.Events[i].Type == "trigger" {
+			triggerEvent = &ctx.Events[i]
+			break
+		}
+	}
+	if triggerEvent == nil {
+		return nil
+	}
+
+	var order []string
+	visited := map[string]bool{}
+	ctx.collectNodeOrderDFS(triggerEvent.ID, &order, visited)
+	return order
+}
+
+// collectNodeOrderDFS 递归收集节点顺序
+func (ctx *ExecutionContext) collectNodeOrderDFS(nodeID string, order *[]string, visited map[string]bool) {
+	if visited[nodeID] {
+		return
+	}
+	visited[nodeID] = true
+	*order = append(*order, nodeID)
+
+	event := ctx.findEvent(nodeID)
+	if event == nil {
+		return
+	}
+
+	// 根据节点类型决定遍历哪些输出端口
+	var portIDs []string
+	switch event.Type {
+	case "if":
+		portIDs = []string{"out_true", "out_false"}
+	case "loop":
+		portIDs = []string{"out_body", "out_done"}
+	default:
+		portIDs = []string{"trigger"}
+	}
+
+	for _, portID := range portIDs {
+		conn := ctx.findOutputConnection(nodeID, portID)
+		if conn != nil {
+			ctx.collectNodeOrderDFS(conn.TargetNodeID, order, visited)
+		}
+	}
 }
 
 // findOutputConnection 找到指定节点指定输出端口的连接
@@ -395,82 +446,6 @@ func (ctx *ExecutionContext) buildHistoryPrompt(n int) string {
 		}
 	}
 	return sb.String()
-}
-
-// ===== 端口兼容性 =====
-
-// ensureEventPorts 确保事件有端口定义（向后兼容旧数据）
-func ensureEventPorts(events []SpecialModeEvent) []SpecialModeEvent {
-	for i := range events {
-		if len(events[i].Ports) == 0 {
-			events[i].Ports = getDefaultPortsForType(events[i].Type)
-		}
-	}
-	return events
-}
-
-// getDefaultPortsForType 返回事件类型的默认端口
-func getDefaultPortsForType(eventType string) []EventPort {
-	switch eventType {
-	case "trigger":
-		return []EventPort{
-			{ID: "out_exec", Name: "执行", DataType: "trigger", Direction: "output"},
-			{ID: "out_input", Name: "用户消息", DataType: "string", Direction: "output"},
-			{ID: "out_username", Name: "发送者", DataType: "string", Direction: "output"},
-			{ID: "out_time", Name: "时间", DataType: "string", Direction: "output"},
-			{ID: "out_args", Name: "参数", DataType: "string", Direction: "output"},
-		}
-	case "end":
-		return []EventPort{
-			{ID: "in_exec", Name: "执行", DataType: "trigger", Direction: "input"},
-		}
-	case "reply":
-		return []EventPort{
-			{ID: "in_exec", Name: "执行", DataType: "trigger", Direction: "input"},
-			{ID: "in_content", Name: "内容", DataType: "string", Direction: "input"},
-		}
-	case "if":
-		return []EventPort{
-			{ID: "in_exec", Name: "执行", DataType: "trigger", Direction: "input"},
-			{ID: "in_left", Name: "左操作数", DataType: "any", Direction: "input"},
-			{ID: "in_right", Name: "右操作数", DataType: "any", Direction: "input"},
-			{ID: "out_true", Name: "真", DataType: "trigger", Direction: "output"},
-			{ID: "out_false", Name: "假", DataType: "trigger", Direction: "output"},
-		}
-	case "loop":
-		return []EventPort{
-			{ID: "in_exec", Name: "执行", DataType: "trigger", Direction: "input"},
-			{ID: "in_condition", Name: "条件", DataType: "boolean", Direction: "input"},
-			{ID: "out_body", Name: "循环体", DataType: "trigger", Direction: "output"},
-			{ID: "out_done", Name: "完成", DataType: "trigger", Direction: "output"},
-		}
-	case "wait":
-		return []EventPort{
-			{ID: "in_exec", Name: "执行", DataType: "trigger", Direction: "input"},
-			{ID: "out_user_input", Name: "用户输入", DataType: "string", Direction: "output"},
-			{ID: "out_exec", Name: "执行", DataType: "trigger", Direction: "output"},
-		}
-	case "history":
-		return []EventPort{
-			{ID: "in_exec", Name: "执行", DataType: "trigger", Direction: "input"},
-			{ID: "in_count", Name: "消息数量", DataType: "number", Direction: "input"},
-			{ID: "out_exec", Name: "执行", DataType: "trigger", Direction: "output"},
-			{ID: "out_history", Name: "历史记录", DataType: "string", Direction: "output"},
-		}
-	default:
-		// 处理节点（llm, builtin, python, template）默认端口
-		return []EventPort{
-			{ID: "in_exec", Name: "执行", DataType: "trigger", Direction: "input"},
-			{ID: "in_prompt", Name: "输入", DataType: "string", Direction: "input"},
-			{ID: "out_exec", Name: "执行", DataType: "trigger", Direction: "output"},
-			{ID: "out_output", Name: "输出", DataType: "string", Direction: "output"},
-		}
-	}
-}
-
-// HasPortedFlow 检查 SpecialModeSpec 是否使用端口化连线
-func HasPortedFlow(spec *SpecialModeSpec) bool {
-	return spec != nil && len(spec.Connections) > 0
 }
 
 // FindTriggerNode 在事件列表中查找 trigger 类型的事件

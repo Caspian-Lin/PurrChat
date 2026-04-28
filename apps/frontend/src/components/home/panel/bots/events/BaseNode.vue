@@ -93,10 +93,7 @@
     </div>
 
     <!-- Output variables reference -->
-    <div
-      v-if="dataOutputPorts.length"
-      class="base-node__vars"
-    >
+    <div v-if="dataOutputPorts.length" class="base-node__vars">
       <div class="base-node__vars-header" @click="varsExpanded = !varsExpanded">
         <span class="base-node__vars-icon">{{ varsExpanded ? '▼' : '▶' }}</span>
         <span class="base-node__vars-label">输出变量</span>

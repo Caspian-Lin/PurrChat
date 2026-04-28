@@ -39,7 +39,7 @@ export const useAiChat = () => {
    */
   const buildApiMessages = (
     messages: AiMessage[],
-    additionalContent?: string,
+    additionalContent?: string
   ): Array<{ role: AiMessageRole; content: string }> => {
     const apiMessages: Array<{ role: AiMessageRole; content: string }> = [];
     for (const msg of messages) {
@@ -222,11 +222,7 @@ export const useAiChat = () => {
       } else {
         error.value = e.message || '发送消息失败';
         if (!fullContent && !fullThinking) {
-          store.updateStreamingMessage(
-            convId,
-            assistantId,
-            `[错误] ${e.message || '未知错误'}`,
-          );
+          store.updateStreamingMessage(convId, assistantId, `[错误] ${e.message || '未知错误'}`);
         }
         // 标记消息为错误状态
         const conv = store.conversations.find((c) => c.id === convId);
@@ -334,11 +330,7 @@ export const useAiChat = () => {
   };
 
   // 编辑用户 prompt 并重发（可选分支）
-  const editAndResend = async (
-    messageId: string,
-    newContent: string,
-    branch: boolean,
-  ) => {
+  const editAndResend = async (messageId: string, newContent: string, branch: boolean) => {
     const store = useAiStore();
     const conversation = store.activeConversation;
     if (!conversation) return;

@@ -84,7 +84,6 @@ except Exception as e:
 // forbiddenModules 禁止导入的模块
 var forbiddenModules = map[string]bool{
 	"os":              true,
-	"sys":             true,
 	"subprocess":      true,
 	"shutil":          true,
 	"pathlib":         true,

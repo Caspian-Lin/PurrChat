@@ -62,8 +62,5 @@ type Friendship struct {
 }
 
 // FriendListResponse 好友列表响应
-type FriendListResponse struct {
-	Success bool         `json:"success"`
-	Message string       `json:"message,omitempty"`
-	Data    []Friendship `json:"data,omitempty"`
-}
+// Deprecated: 使用 models.APIResponse 替代
+type FriendListResponse = APIResponse

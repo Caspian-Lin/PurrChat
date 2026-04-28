@@ -120,7 +120,7 @@ import { themeColors } from '../../../../config/theme';
 import { getCurrentUserId, clearUserData } from '../../../../utils/storageNamespace';
 import { messageCacheService } from '../../../../services/messageCache';
 import { conversationStateCacheService } from '../../../../services/conversationStateCache';
-import { useMessage } from '../../../../composables/useMessage';
+import { useNotification } from '../../../../composables/useNotification';
 import type { GeneralSettings } from '../../../../models/types';
 import type { ThemeColor } from '../../../../config/theme';
 
@@ -135,7 +135,7 @@ const emit = defineEmits<{
 }>();
 
 const themeStore = useThemeStore();
-const { success, error: showError } = useMessage();
+const { success, error: showError } = useNotification();
 
 const themeModes = [
   { value: 'light' as const, label: '浅色' },

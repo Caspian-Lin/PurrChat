@@ -26,13 +26,6 @@ type Enrollment struct {
 	User           *User          `json:"user,omitempty" db:"-"` // 关联的用户信息
 }
 
-// EnrollmentListResponse 会话成员列表响应
-type EnrollmentListResponse struct {
-	Success bool         `json:"success"`
-	Message string       `json:"message,omitempty"`
-	Data    []Enrollment `json:"data,omitempty"`
-}
-
 // AddMemberRequest 添加成员请求
 type AddMemberRequest struct {
 	ConversationID uuid.UUID `json:"conversation_id" binding:"required,uuid"`
