@@ -8,21 +8,23 @@
     :label-classes="LABEL_CLASSES"
   >
     <template #body>
-      <div class="if-node__builder">
-        <select v-model="operator" class="if-node__operator" @change="syncOperator">
-          <option value="==">等于 ==</option>
-          <option value="!=">不等于 !=</option>
-          <option value="contains">包含</option>
-          <option value=">">&gt; 大于</option>
-          <option value="<">&lt; 小于</option>
-        </select>
+      <div class="if-node__summary">
+        <span class="if-node__count">{{ conditionCount }} 个条件</span>
+        <span class="if-node__logic-badge" :class="'if-node__logic-badge--' + logicType">
+          {{ logicType }}
+        </span>
+      </div>
+      <div v-if="preview" class="if-node__preview">
+        <span class="if-node__preview-text">{{ preview.left || '?' }}</span>
+        <span class="if-node__preview-op">{{ preview.operator }}</span>
+        <span class="if-node__preview-text">{{ preview.right || '?' }}</span>
       </div>
     </template>
   </BaseNode>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed } from 'vue';
 import { useNode } from '@vue-flow/core';
 import BaseNode from './BaseNode.vue';
 import type { PortDef } from './BaseNode.vue';
@@ -31,8 +33,6 @@ const { node } = useNode();
 
 const INPUTS: PortDef[] = [
   { id: 'in_exec', name: '执行', dataType: 'trigger' },
-  { id: 'in_left', name: '左操作数', dataType: 'any' },
-  { id: 'in_right', name: '右操作数', dataType: 'any' },
 ];
 
 const OUTPUTS: PortDef[] = [
@@ -43,8 +43,6 @@ const OUTPUTS: PortDef[] = [
 const HANDLE_COLORS: Record<string, string> = {
   out_true: 'var(--color-success, #16a34a)',
   out_false: 'var(--color-error, #dc2626)',
-  in_left: 'var(--text-tertiary-color, #a8a29e)',
-  in_right: 'var(--text-tertiary-color, #a8a29e)',
 };
 
 const LABEL_CLASSES: Record<string, string> = {
@@ -52,19 +50,31 @@ const LABEL_CLASSES: Record<string, string> = {
   out_false: 'if-node__port-label--false',
 };
 
-const operator = ref((node.data.config?.operator as string) || '==');
+const conditions = computed(() => {
+  const raw = node.data.config?.conditions;
+  if (Array.isArray(raw) && raw.length > 0) return raw as { left: string; operator: string; right: string }[];
+  return [];
+});
 
-// 当 config 从外部更新时同步
-watch(
-  () => node.data.config?.operator,
-  (val) => {
-    if (typeof val === 'string') operator.value = val;
+const conditionCount = computed(() => Math.max(conditions.value.length, 1));
+
+const logicType = computed(() => {
+  return (node.data.config?.logic as string) || 'AND';
+});
+
+const preview = computed(() => {
+  if (conditions.value.length > 0) {
+    const c = conditions.value[0];
+    const left = c.left?.replace(/^\{(.+)\}$/, '$1') || c.left || '?';
+    const right = c.right?.replace(/^\{(.+)\}$/, '$1') || c.right || '?';
+    return { left, operator: c.operator || '==', right };
   }
-);
-
-function syncOperator() {
-  node.data.config = { ...node.data.config, operator: operator.value };
-}
+  // 旧格式回退
+  const op = node.data.config?.operator || '==';
+  const left = node.data.config?.left_default || '?';
+  const right = node.data.config?.right_default || '?';
+  return { left, operator: op, right };
+});
 </script>
 
 <style scoped>
@@ -78,33 +88,60 @@ function syncOperator() {
   font-weight: 500;
 }
 
-/* ── Operator selector ──────────────────────────────────── */
-
-.if-node__builder {
-  padding: 2px 10px 5px;
+.if-node__summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 3px;
 }
 
-.if-node__operator {
-  width: 100%;
-  padding: 3px 6px;
+.if-node__count {
   font-size: 10px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  line-height: 1.3;
-  border-radius: var(--radius-xs, 4px);
-  border: 1px solid color-mix(in srgb, var(--color-warning, #d97706) 20%, transparent);
-  background: color-mix(in srgb, var(--color-warning, #d97706) 8%, transparent);
-  color: var(--text-color, #1c1917);
-  cursor: pointer;
-  outline: none;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23a8a29e' d='M2 3l2 2 2-2'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
-  padding-right: 18px;
+  color: var(--text-secondary-color, #57534e);
 }
 
-.if-node__operator:focus {
-  border-color: color-mix(in srgb, var(--color-warning, #d97706) 40%, transparent);
+.if-node__logic-badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs, 4px);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.if-node__logic-badge--AND {
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 15%, transparent);
+  color: var(--theme-primary, #5a8f4e);
+}
+
+.if-node__logic-badge--OR {
+  background: color-mix(in srgb, var(--color-warning, #d97706) 15%, transparent);
+  color: var(--color-warning, #d97706);
+}
+
+.if-node__preview {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 10px 4px;
+  overflow: hidden;
+}
+
+.if-node__preview-text {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 9px;
+  color: var(--text-secondary-color, #57534e);
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.if-node__preview-op {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 9px;
+  color: var(--color-warning, #d97706);
+  font-weight: 600;
+  flex-shrink: 0;
 }
 </style>

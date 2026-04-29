@@ -335,8 +335,23 @@ func (e *BotEngine) executeReplyEvent(_ context.Context, session *SpecialModeSes
 		return input, nil
 	}
 
-	// 替换事件输出变量 $evt_ID.output
 	result := template
+
+	// 替换 {nodeName.portName} 格式（人类可读）
+	if session.Config != nil {
+		for _, evt := range session.Config.Events {
+			for _, port := range evt.Ports {
+				if port.Direction == "output" {
+					ref := "{" + evt.Name + "." + port.Name + "}"
+					if output, ok := session.EventOutputs[evt.ID]; ok && port.ID == "out_output" {
+						result = strings.ReplaceAll(result, ref, output)
+					}
+				}
+			}
+		}
+	}
+
+	// 替换事件输出变量 $evt_ID.output（向后兼容）
 	for evtID, output := range session.EventOutputs {
 		result = strings.ReplaceAll(result, "$"+evtID+".output", output)
 	}
