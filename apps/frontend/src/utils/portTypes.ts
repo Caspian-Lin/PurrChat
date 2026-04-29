@@ -15,6 +15,9 @@ export type EventType =
   | 'wait'
   | 'if'
   | 'loop'
+  | 'switch'
+  | 'merge'
+  | 'tool'
   | 'llm'
   | 'builtin'
   | 'python'
@@ -63,7 +66,10 @@ export const NODE_TYPE_META: Record<EventType, NodeTypeMeta> = {
   end: { label: '结束', icon: '⏹', category: 'control', description: '结束节点' },
   wait: { label: '等待', icon: '⏳', category: 'control', description: '等待条件' },
   if: { label: '条件', icon: '◇', category: 'control', description: '条件分支' },
-  loop: { label: '循环', icon: '↻', category: 'control', description: '循环' },
+  loop: { label: '循环', icon: '↻', category: 'control', description: '循环执行子链（回环模式）' },
+  switch: { label: '分支', icon: '⑂', category: 'control', description: '多条件分支路由' },
+  merge: { label: '汇聚', icon: '⑃', category: 'control', description: '多分支汇聚' },
+  tool: { label: '工具', icon: '🔌', category: 'process', description: 'HTTP 请求 / 外部工具调用' },
   llm: { label: 'LLM', icon: '🧠', category: 'process', description: 'LLM 调用' },
   builtin: { label: '内置', icon: '⚙', category: 'process', description: '内置事件' },
   python: { label: 'Python', icon: '🐍', category: 'process', description: 'Python 脚本' },
@@ -127,8 +133,6 @@ const DEFAULT_PORTS: Record<EventType, EventPort[]> = {
   if: ports(
     [
       ['in_exec', 'trigger', '执行'],
-      ['in_left', 'any', '左操作数'],
-      ['in_right', 'any', '右操作数'],
     ],
     [
       ['out_true', 'trigger', '真'],
@@ -143,6 +147,38 @@ const DEFAULT_PORTS: Record<EventType, EventPort[]> = {
     [
       ['out_body', 'trigger', '循环体'],
       ['out_done', 'trigger', '完成'],
+    ]
+  ),
+  // Switch: 1 input + N cases (config.cases) + 1 default
+  switch: ports(
+    [
+      ['in_exec', 'trigger', '执行'],
+      ['in_value', 'any', '匹配值'],
+    ],
+    [
+      ['out_case_0', 'trigger', '分支 1'],
+      ['out_case_1', 'trigger', '分支 2'],
+      ['out_default', 'trigger', '默认'],
+    ]
+  ),
+  // Merge: N trigger inputs + 1 trigger output
+  merge: ports(
+    [
+      ['in_exec_0', 'trigger', '输入 1'],
+      ['in_exec_1', 'trigger', '输入 2'],
+    ],
+    [['out_exec', 'trigger', '执行']]
+  ),
+  // Tool: HTTP request
+  tool: ports(
+    [
+      ['in_exec', 'trigger', '执行'],
+      ['in_body', 'string', '请求体'],
+    ],
+    [
+      ['out_exec', 'trigger', '执行'],
+      ['out_output', 'string', '响应'],
+      ['out_status', 'number', '状态码'],
     ]
   ),
   llm: ports(

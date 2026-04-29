@@ -79,50 +79,98 @@
           <!-- if 配置 -->
           <template v-if="form.type === 'if'">
             <div class="form-group">
-              <label class="form-label">运算符</label>
-              <select v-model="form.config.operator" class="form-input">
-                <option value="==">等于 ==</option>
-                <option value="!=">不等于 !=</option>
-                <option value="contains">包含</option>
-                <option value=">">&gt; 大于</option>
-                <option value="<">&lt; 小于</option>
-              </select>
+              <label class="form-label">条件逻辑</label>
+              <div class="logic-toggle">
+                <button
+                  class="logic-toggle__btn"
+                  :class="{ 'logic-toggle__btn--active': ifLogic === 'AND' }"
+                  type="button"
+                  @click="ifLogic = 'AND'"
+                >AND（全部满足）</button>
+                <button
+                  class="logic-toggle__btn"
+                  :class="{ 'logic-toggle__btn--active': ifLogic === 'OR' }"
+                  type="button"
+                  @click="ifLogic = 'OR'"
+                >OR（任一满足）</button>
+              </div>
             </div>
-            <p class="form-hint">
-              条件由连接到"左操作数"和"右操作数"输入端口的值决定。 断开输入时使用下方默认值。
-            </p>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">左操作数（默认值）</label>
-                <input
-                  v-model="form.config.left_default"
-                  type="text"
-                  class="form-input"
-                  placeholder="未连接时的默认值"
-                />
+            <div class="form-group">
+              <label class="form-label">条件列表</label>
+              <div class="if-conditions">
+                <div v-for="(cond, idx) in ifConditions" :key="idx" class="if-condition-row">
+                  <span class="if-condition-row__index">{{ idx + 1 }}</span>
+                  <div class="if-condition-row__input-wrap">
+                    <input
+                      :ref="(el: any) => { if (el) ifCondRefs[`${idx}-left`] = el }"
+                      v-model="cond.left"
+                      type="text"
+                      class="form-input if-condition-row__input"
+                      placeholder="{节点.端口}"
+                    />
+                    <button
+                      class="var-insert-btn var-insert-btn--small"
+                      type="button"
+                      title="插入变量"
+                      @click="(e: MouseEvent) => openVarPicker(e, ifCondRefs[`${idx}-left`])"
+                    >{'{ }'}</button>
+                  </div>
+                  <select v-model="cond.operator" class="form-input if-condition-row__operator">
+                    <option value="==">==</option>
+                    <option value="!=">!=</option>
+                    <option value="contains">包含</option>
+                    <option value=">">&gt;</option>
+                    <option value="<">&lt;</option>
+                    <option value="startsWith">开头是</option>
+                    <option value="endsWith">结尾是</option>
+                  </select>
+                  <div class="if-condition-row__input-wrap">
+                    <input
+                      :ref="(el: any) => { if (el) ifCondRefs[`${idx}-right`] = el }"
+                      v-model="cond.right"
+                      type="text"
+                      class="form-input if-condition-row__input"
+                      placeholder="{节点.端口} / 值"
+                    />
+                    <button
+                      class="var-insert-btn var-insert-btn--small"
+                      type="button"
+                      title="插入变量"
+                      @click="(e: MouseEvent) => openVarPicker(e, ifCondRefs[`${idx}-right`])"
+                    >{'{ }'}</button>
+                  </div>
+                  <button
+                    v-if="ifConditions.length > 1"
+                    class="port-remove-btn"
+                    type="button"
+                    @click="ifConditions.splice(idx, 1)"
+                  >&times;</button>
+                </div>
               </div>
-              <div class="form-group">
-                <label class="form-label">右操作数（默认值）</label>
-                <input
-                  v-model="form.config.right_default"
-                  type="text"
-                  class="form-input"
-                  placeholder="未连接时的默认值"
-                />
-              </div>
+              <button class="add-port-btn" type="button" @click="ifConditions.push({ left: '', operator: '==', right: '' })">
+                + 添加条件
+              </button>
+              <p class="form-hint">
+                条件值支持变量引用格式 <code>{'{节点名.端口名}'}</code>，点击输入框右侧的 <code>{'{ }'}</code> 按钮选择。
+              </p>
             </div>
           </template>
 
           <!-- loop 配置 -->
           <template v-if="form.type === 'loop'">
+            <p class="form-hint" style="margin-bottom: 12px">
+              循环节点有两个出口：「循环体」连接循环体起始节点，「完成」连接循环结束后的节点。
+              循环体末尾需要连回循环节点的「执行」入口形成回环。
+            </p>
             <div class="form-group">
               <label class="form-label">条件表达式</label>
               <textarea
                 v-model="form.config.condition"
                 class="form-textarea"
-                rows="3"
-                placeholder="输入循环条件表达式..."
+                rows="2"
+                placeholder="true / false / $变量引用"
               />
+              <p class="form-hint">每轮迭代前求值，为 false 时退出循环。留空则视为 false。</p>
             </div>
             <div class="form-group">
               <label class="form-label">最大迭代次数</label>
@@ -132,8 +180,125 @@
                 min="1"
                 class="form-input"
               />
-              <p class="form-hint">设置合理的上限以避免无限循环</p>
+              <p class="form-hint">
+                安全上限，防止无限循环。循环内可用变量：
+                <code>$loopID:loop_index</code>（当前序号）、
+                <code>$loopID:loop_iterations</code>（总次数）
+              </p>
             </div>
+          </template>
+
+          <!-- switch 配置 -->
+          <template v-if="form.type === 'switch'">
+            <p class="form-hint">
+              根据匹配值路由到不同分支。将上游数据连接到「匹配值」输入端口。
+            </p>
+            <div class="form-group">
+              <label class="form-label">分支列表</label>
+              <div class="switch-cases">
+                <div v-for="(c, idx) in switchCases" :key="idx" class="switch-case-row">
+                  <input
+                    v-model="c.label"
+                    placeholder="分支名称"
+                    class="form-input"
+                    style="flex: 1"
+                  />
+                  <input
+                    v-model="c.value"
+                    placeholder="匹配值（留空则跳过）"
+                    class="form-input"
+                    style="flex: 1"
+                  />
+                  <button
+                    v-if="switchCases.length > 2"
+                    class="port-remove-btn"
+                    @click="switchCases.splice(idx, 1)"
+                  >×</button>
+                </div>
+              </div>
+              <button class="add-port-btn" @click="switchCases.push({ value: '', label: `分支 ${switchCases.length + 1}` })">
+                + 添加分支
+              </button>
+            </div>
+          </template>
+
+          <!-- merge 配置 -->
+          <template v-if="form.type === 'merge'">
+            <p class="form-hint">
+              汇聚多条分支到同一个后续节点。调整输入数量后需重新连接。
+            </p>
+            <div class="form-group">
+              <label class="form-label">输入数量</label>
+              <input
+                v-model.number="form.config.input_count"
+                type="number"
+                min="2"
+                max="10"
+                class="form-input"
+              />
+            </div>
+          </template>
+
+          <!-- tool 配置 -->
+          <template v-if="form.type === 'tool'">
+            <div class="form-group">
+              <label class="form-label">请求方法</label>
+              <select v-model="form.config.method" class="form-input">
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="DELETE">DELETE</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">URL</label>
+              <input
+                v-model="form.config.url"
+                type="text"
+                class="form-input"
+                placeholder="https://api.example.com/data"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Headers（JSON）</label>
+              <textarea
+                v-model="form.config.headers"
+                class="form-textarea form-textarea--code"
+                rows="2"
+                placeholder='{"Authorization": "Bearer ..."}'
+              />
+            </div>
+            <div v-if="form.config.method !== 'GET'" class="form-group">
+              <label class="form-label">请求体</label>
+              <div class="form-input-with-action">
+                <textarea
+                  ref="toolBodyTextarea"
+                  v-model="form.config.body"
+                  class="form-textarea form-textarea--code"
+                  rows="3"
+                  placeholder="请求体内容（可使用变量）"
+                />
+                <button
+                  class="var-insert-btn"
+                  title="插入变量"
+                  @click="(e) => openVarPicker(e, $refs.toolBodyTextarea as HTMLTextAreaElement)"
+                >{'{ }'}</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">超时 (ms)</label>
+              <input
+                v-model.number="form.config.timeout_ms"
+                type="number"
+                min="1000"
+                max="30000"
+                step="1000"
+                class="form-input"
+              />
+            </div>
+            <p class="form-hint">
+              响应内容输出到「响应」端口，HTTP 状态码输出到「状态码」端口。
+            </p>
           </template>
 
           <!-- LLM 配置 -->
@@ -256,16 +421,23 @@
             <div v-if="form.config.builtin_type === 'template'">
               <div class="form-group">
                 <label class="form-label">模板</label>
-                <textarea
-                  v-model="form.config.template"
-                  class="form-textarea"
-                  rows="3"
-                  placeholder="你好，{input}！"
-                />
+                <div class="form-input-with-action">
+                  <textarea
+                    ref="builtinTemplateTextarea"
+                    v-model="form.config.template"
+                    class="form-textarea"
+                    rows="3"
+                    placeholder="你好，{input}！"
+                  />
+                  <button
+                    class="var-insert-btn"
+                    title="插入变量"
+                    @click="(e) => openVarPicker(e, $refs.builtinTemplateTextarea as HTMLTextAreaElement)"
+                  >{'{ }'}</button>
+                </div>
                 <p class="form-hint">
                   可用变量：{'{input}'} 当前消息 · {'{username}'} 发送者 · {'{time}'} 时间 ·
-                  {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）·
-                  以及事件链中其他事件设置的变量
+                  {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）
                 </p>
               </div>
             </div>
@@ -300,15 +472,24 @@
           <template v-if="form.type === 'template'">
             <div class="form-group">
               <label class="form-label">模板内容</label>
-              <textarea
-                v-model="form.config.template"
-                class="form-textarea"
-                rows="4"
-                placeholder="使用 {variable} 引用变量..."
-              />
+              <div class="form-input-with-action">
+                <textarea
+                  ref="templateTextarea"
+                  v-model="form.config.template"
+                  class="form-textarea"
+                  rows="4"
+                  placeholder="使用 {variable} 引用变量..."
+                />
+                <button
+                  class="var-insert-btn"
+                  title="插入变量"
+                  @click="(e) => openVarPicker(e, $refs.templateTextarea as HTMLTextAreaElement)"
+                >{'{ }'}</button>
+              </div>
               <p class="form-hint">
                 可用变量：{'{input}'} 当前消息 · {'{username}'} 发送者 · {'{time}'} 时间 ·
-                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）
+                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）。
+                点击 <strong>{'{}'}</strong> 按钮从上游节点选择变量。
               </p>
             </div>
           </template>
@@ -317,16 +498,24 @@
           <template v-if="form.type === 'reply'">
             <div class="form-group">
               <label class="form-label">回复模板</label>
-              <textarea
-                v-model="form.config.template"
-                class="form-textarea"
-                rows="3"
-                placeholder="使用 $事件ID.output 引用其他事件的输出"
-              />
+              <div class="form-input-with-action">
+                <textarea
+                  ref="replyTextarea"
+                  v-model="form.config.template"
+                  class="form-textarea"
+                  rows="3"
+                  placeholder="使用 {节点名.端口名} 引用其他节点的输出"
+                />
+                <button
+                  class="var-insert-btn"
+                  title="插入变量"
+                  @click="(e) => openVarPicker(e, $refs.replyTextarea as HTMLTextAreaElement)"
+                >{'{ }'}</button>
+              </div>
               <p class="form-hint">
                 可用变量：{'{input}'} 当前消息 · {'{username}'} 发送者 · {'{time}'} 时间 ·
-                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）。 用 $事件ID.output
-                引用事件输出，用 || 分隔表示默认值
+                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）。
+                点击 <strong>{'{}'}</strong> 按钮从上游节点选择变量。
               </p>
             </div>
           </template>
@@ -385,25 +574,39 @@
       </div>
     </div>
   </Teleport>
+
+  <!-- 变量选择器 -->
+  <VarReferencePicker
+    :visible="showVarPicker"
+    :current-node-id="form.id"
+    :events="props.existingEvents"
+    :connections="props.connections"
+    :anchor="varPickerAnchor"
+    @close="showVarPicker = false"
+    @select="handleVarSelect"
+  />
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch, ref } from 'vue';
+import { reactive, computed, watch, ref, nextTick } from 'vue';
 import { BsX } from 'vue-icons-plus/bs';
 import { useAiStore } from '../../../../../stores/ai';
 import { useAuthStore } from '../../../../../stores/auth';
 import { getDefaultPorts, NODE_TYPE_META, type EventType } from '../../../../../utils/portTypes';
-import type { EventPort, SpecialModeEvent } from '../../../../../models/types';
+import type { EventPort, SpecialModeEvent, FlowConnection } from '../../../../../models/types';
+import VarReferencePicker from './VarReferencePicker.vue';
 
 interface Props {
   visible: boolean;
   editingEvent?: SpecialModeEvent | null;
   existingEvents?: SpecialModeEvent[];
+  connections?: FlowConnection[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
   editingEvent: null,
   existingEvents: () => [],
+  connections: () => [],
 });
 
 const emit = defineEmits<{
@@ -423,18 +626,83 @@ aiStore.initStore(authStore.currentUser?.id);
 // 名称验证错误
 const nameValidationError = ref('');
 
+// If 条件配置 — 使用 computed 双向绑定到 form.config.conditions
+const ifCondRefs = reactive<Record<string, HTMLInputElement>>({});
+
+const ifConditions = computed({
+  get: () => {
+    const raw = form.config.conditions;
+    if (Array.isArray(raw) && raw.length > 0) return raw as { left: string; operator: string; right: string }[];
+    // 旧格式迁移：从 operator/left_default/right_default 转换
+    return [{
+      left: (form.config.left_default as string) || '',
+      operator: (form.config.operator as string) || '==',
+      right: (form.config.right_default as string) || '',
+    }];
+  },
+  set: (val) => {
+    form.config.conditions = val;
+    // 清理旧字段
+    delete form.config.operator;
+    delete form.config.left_default;
+    delete form.config.right_default;
+  },
+});
+
+const ifLogic = computed({
+  get: () => (form.config.logic as string) || 'AND',
+  set: (val) => { form.config.logic = val; },
+});
+
+// 变量选择器状态
+const showVarPicker = ref(false);
+const varPickerAnchor = ref({ x: 0, y: 0 });
+const varPickerTarget = ref<HTMLTextAreaElement | HTMLInputElement | null>(null);
+
+function openVarPicker(event: MouseEvent, targetEl: HTMLTextAreaElement | HTMLInputElement) {
+  varPickerTarget.value = targetEl;
+  varPickerAnchor.value = { x: (event.target as HTMLElement).getBoundingClientRect().left, y: (event.target as HTMLElement).getBoundingClientRect().bottom };
+  showVarPicker.value = true;
+}
+
+function handleVarSelect(item: { value: string; ref: string }) {
+  if (!varPickerTarget.value) return;
+  const el = varPickerTarget.value;
+  const start = el.selectionStart ?? el.value.length;
+  const end = el.selectionEnd ?? start;
+  const before = el.value.substring(0, start);
+  const after = el.value.substring(end);
+  const insertText = item.ref; // 使用人类可读格式 {nodeName.portName}
+  el.value = before + insertText + after;
+  // 触发 v-model 更新
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  // 将光标移动到插入内容之后
+  nextTick(() => {
+    const newPos = start + insertText.length;
+    el.focus();
+    el.setSelectionRange(newPos, newPos);
+  });
+}
+
 // 自定义端口列表
 const customPorts = reactive<{ name: string; dataType: string; direction: 'input' | 'output' }[]>(
   []
 );
 
-// 类型分组
-const controlTypes = (['trigger', 'end', 'wait', 'if', 'loop'] as EventType[]).map((value) => ({
-  value,
-  ...NODE_TYPE_META[value],
-}));
+// Switch 分支列表
+const switchCases = computed({
+  get: () => (form.config.cases as { value: string; label: string }[]) || [],
+  set: (val) => { form.config.cases = val; },
+});
 
-const processTypes = (['llm', 'builtin', 'python', 'template', 'reply'] as EventType[]).map(
+// 类型分组
+const controlTypes = (['trigger', 'end', 'wait', 'if', 'loop', 'switch', 'merge'] as EventType[]).map(
+  (value) => ({ value, ...NODE_TYPE_META[value] })
+);
+
+const processTypes = (
+  ['llm', 'builtin', 'python', 'template', 'tool', 'reply'] as EventType[]
+).map(
   (value) => ({ value, ...NODE_TYPE_META[value] })
 );
 
@@ -477,9 +745,15 @@ function getDefaultConfig(type: EventType): Record<string, any> {
     case 'wait':
       return { wait_type: 'user_message', condition: '' };
     case 'if':
-      return { operator: '==', left_default: '', right_default: '' };
+      return { logic: 'AND', conditions: [{ left: '', operator: '==', right: '' }] };
     case 'loop':
       return { condition: '', max_iterations: 10 };
+    case 'switch':
+      return { cases: [{ value: '', label: '分支 1' }, { value: '', label: '分支 2' }] };
+    case 'merge':
+      return { input_count: 2 };
+    case 'tool':
+      return { method: 'GET', url: '', headers: '{}', body: '', timeout_ms: 10000 };
     case 'trigger':
     case 'end':
     default:
@@ -694,7 +968,7 @@ function handleConfirm() {
 
 .type-selector {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
 
@@ -835,6 +1109,80 @@ function handleConfirm() {
   background: var(--color-error-bg, rgba(239, 68, 68, 0.06));
 }
 
+/* ── If condition list ────────────────────────────────── */
+
+.logic-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.logic-toggle__btn {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.1));
+  background: none;
+  color: var(--text-secondary-color, #57534e);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.logic-toggle__btn--active {
+  border-color: var(--theme-primary, #5a8f4e);
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 6%, transparent);
+  color: var(--theme-primary, #5a8f4e);
+  font-weight: 500;
+}
+
+.if-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.if-condition-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.if-condition-row__index {
+  width: 18px;
+  font-size: 10px;
+  color: var(--text-tertiary-color, #a8a29e);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.if-condition-row__input-wrap {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.if-condition-row__input {
+  width: 100%;
+  padding-right: 28px !important;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 11px;
+}
+
+.if-condition-row__operator {
+  width: 88px;
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 5px 4px;
+}
+
+.var-insert-btn--small {
+  width: 22px;
+  height: 22px;
+  font-size: 9px;
+  line-height: 22px;
+  padding: 0;
+}
+
 .validation-error {
   font-size: 11px;
   color: var(--color-error, #dc2626);
@@ -872,5 +1220,50 @@ function handleConfirm() {
 }
 .btn--danger:hover {
   background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
+}
+
+/* 变量插入按钮 */
+.form-input-with-action {
+  position: relative;
+}
+
+.var-insert-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.08));
+  background: var(--strong-background-color, #fff);
+  color: var(--text-tertiary-color, #a8a29e);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  z-index: 1;
+}
+
+.var-insert-btn:hover {
+  border-color: var(--theme-primary, #5a8f4e);
+  color: var(--theme-primary, #5a8f4e);
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 6%, transparent);
+}
+
+/* Switch 分支编辑 */
+.switch-cases {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.switch-case-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 32px;
+  gap: 6px;
+  align-items: center;
 }
 </style>

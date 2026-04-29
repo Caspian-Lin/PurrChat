@@ -32,6 +32,9 @@ import EndNode from '../events/EndNode.vue';
 import WaitNode from '../events/WaitNode.vue';
 import IfNode from '../events/IfNode.vue';
 import LoopNode from '../events/LoopNode.vue';
+import SwitchNode from '../events/SwitchNode.vue';
+import MergeNode from '../events/MergeNode.vue';
+import ToolNode from '../events/ToolNode.vue';
 import LlmNode from '../events/LlmNode.vue';
 import BuiltinNode from '../events/BuiltinNode.vue';
 import PythonNode from '../events/PythonNode.vue';
@@ -56,6 +59,9 @@ const customNodeTypes: Record<string, any> = {
   wait: markRaw(WaitNode),
   if: markRaw(IfNode),
   loop: markRaw(LoopNode),
+  switch: markRaw(SwitchNode),
+  merge: markRaw(MergeNode),
+  tool: markRaw(ToolNode),
   llm: markRaw(LlmNode),
   builtin: markRaw(BuiltinNode),
   python: markRaw(PythonNode),

@@ -2,30 +2,51 @@ package botengine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 	"strings"
+	"regexp"
+	"time"
 
 	"purr-chat-server/pkg/logger"
 )
 
 // ExecutionContext 端口化流程引擎的执行上下文
 type ExecutionContext struct {
-	Events      []SpecialModeEvent
-	Connections []FlowConnection
-	PortValues  map[string]any // "nodeID:portID" -> value
-	Variables   map[string]string
-	Session     *SpecialModeSession
+	Events       []SpecialModeEvent
+	Connections  []FlowConnection
+	PortValues   map[string]any    // "nodeID:portID" -> value
+	Variables    map[string]string
+	Session      *SpecialModeSession
+	nameResolver map[string]string // "nodeName.portName" -> "nodeID:portID"
 }
 
 // NewExecutionContext 创建执行上下文
 func NewExecutionContext(events []SpecialModeEvent, connections []FlowConnection, session *SpecialModeSession) *ExecutionContext {
-	return &ExecutionContext{
+	ctx := &ExecutionContext{
 		Events:      events,
 		Connections: connections,
 		PortValues:  make(map[string]any),
 		Variables:   session.Variables,
 		Session:     session,
+	}
+	ctx.buildNameResolver()
+	return ctx
+}
+
+// buildNameResolver 构建 nodeName.portName → nodeID:portID 的反向映射
+// 用于支持 {name.port} 人类可读变量引用格式
+func (ctx *ExecutionContext) buildNameResolver() {
+	ctx.nameResolver = make(map[string]string)
+	for _, evt := range ctx.Events {
+		for _, port := range evt.Ports {
+			if port.Direction == "output" {
+				ctx.nameResolver[evt.Name+"."+port.Name] = evt.ID + ":" + port.ID
+			}
+		}
 	}
 }
 
@@ -85,29 +106,74 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 		ctx.Session.EventOutputs[event.ID] = output
 
 	case "if":
-		operator := "=="
-		if op, ok := event.Config["operator"].(string); ok {
-			operator = op
-		}
+		var condBool bool
 
-		leftVal := ctx.getPortValue(event.ID, "in_left")
-		rightVal := ctx.getPortValue(event.ID, "in_right")
-
-		// 如果端口未连接（值为空字符串），使用默认值
-		leftStr, _ := leftVal.(string)
-		if leftStr == "" {
-			if def, ok := event.Config["left_default"].(string); ok {
-				leftStr = def
+		if rawConditions, ok := event.Config["conditions"].([]any); ok && len(rawConditions) > 0 {
+			// 新格式：多条件 + AND/OR 逻辑
+			logic := "AND"
+			if l, ok := event.Config["logic"].(string); ok {
+				logic = strings.ToUpper(l)
 			}
-		}
-		rightStr, _ := rightVal.(string)
-		if rightStr == "" {
-			if def, ok := event.Config["right_default"].(string); ok {
-				rightStr = def
-			}
-		}
 
-		condBool := ctx.evaluateOperatorCondition(leftStr, rightStr, operator)
+			if logic == "AND" {
+				condBool = true
+				for _, rc := range rawConditions {
+					condMap, ok := rc.(map[string]any)
+					if !ok {
+						continue
+					}
+					leftStr := ctx.replaceVariables(getStringField(condMap, "left"))
+					operator := getStringField(condMap, "operator")
+					rightStr := ctx.replaceVariables(getStringField(condMap, "right"))
+					if operator == "" {
+						operator = "=="
+					}
+					if !ctx.evaluateOperatorCondition(leftStr, rightStr, operator) {
+						condBool = false
+						break
+					}
+				}
+			} else {
+				condBool = false
+				for _, rc := range rawConditions {
+					condMap, ok := rc.(map[string]any)
+					if !ok {
+						continue
+					}
+					leftStr := ctx.replaceVariables(getStringField(condMap, "left"))
+					operator := getStringField(condMap, "operator")
+					rightStr := ctx.replaceVariables(getStringField(condMap, "right"))
+					if operator == "" {
+						operator = "=="
+					}
+					if ctx.evaluateOperatorCondition(leftStr, rightStr, operator) {
+						condBool = true
+						break
+					}
+				}
+			}
+		} else {
+			// 向后兼容：旧单条件端口模式
+			operator := "=="
+			if op, ok := event.Config["operator"].(string); ok {
+				operator = op
+			}
+			leftVal := ctx.getPortValue(event.ID, "in_left")
+			rightVal := ctx.getPortValue(event.ID, "in_right")
+			leftStr, _ := leftVal.(string)
+			if leftStr == "" {
+				if def, ok := event.Config["left_default"].(string); ok {
+					leftStr = def
+				}
+			}
+			rightStr, _ := rightVal.(string)
+			if rightStr == "" {
+				if def, ok := event.Config["right_default"].(string); ok {
+					rightStr = def
+				}
+			}
+			condBool = ctx.evaluateOperatorCondition(leftStr, rightStr, operator)
+		}
 
 		var nextPort string
 		if condBool {
@@ -128,6 +194,10 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 		}
 
 		for i := 0; i < maxIterations; i++ {
+			// 注入循环迭代变量
+			ctx.PortValues[event.ID+":loop_index"] = i
+			ctx.PortValues[event.ID+":loop_iterations"] = maxIterations
+
 			condition := ctx.getPortValue(event.ID, "in_condition")
 			condBool, ok := condition.(bool)
 			if !ok {
@@ -152,6 +222,65 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 			return ctx.followControlFlow(engineCtx, engine, doneConn.TargetNodeID, finalReply)
 		}
 		return nil
+
+	case "switch":
+		// Switch 节点：根据匹配值路由到对应分支
+		inputVal := ctx.getPortValue(event.ID, "in_value")
+		inputStr, _ := inputVal.(string)
+		inputStr = strings.TrimSpace(inputStr)
+		inputStr = ctx.replaceVariables(inputStr)
+
+		var nextPort string
+		if rawCases, ok := event.Config["cases"].([]interface{}); ok {
+			matched := false
+			for i, rc := range rawCases {
+				caseMap, ok := rc.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				caseValue, _ := caseMap["value"].(string)
+				if caseValue != "" && inputStr == caseValue {
+					nextPort = fmt.Sprintf("out_case_%d", i)
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				nextPort = "out_default"
+			}
+		} else {
+			nextPort = "out_default"
+		}
+
+		conn := ctx.findOutputConnection(event.ID, nextPort)
+		if conn != nil {
+			return ctx.followControlFlow(engineCtx, engine, conn.TargetNodeID, finalReply)
+		}
+		return nil
+
+	case "merge":
+		// Merge 节点：passthrough，直接沿 out_exec 继续执行
+
+	case "tool":
+		// Tool 节点：HTTP 请求
+		method, _ := event.Config["method"].(string)
+		if method == "" {
+			method = "GET"
+		}
+		rawURL, _ := event.Config["url"].(string)
+		rawURL = strings.TrimSpace(ctx.replaceVariables(rawURL))
+
+		body := ""
+		if bodyVal := ctx.getPortValue(event.ID, "in_body"); bodyVal != "" {
+			body, _ = bodyVal.(string)
+		}
+
+		if rawURL != "" {
+			output, status := ctx.executeHTTPRequest(engineCtx, method, rawURL, body, event.Config)
+			ctx.PortValues[event.ID+":out_output"] = output
+			ctx.PortValues[event.ID+":out_status"] = status
+			ctx.Session.EventOutputs[event.ID] = output
+		}
 
 	case "wait":
 		// 等待节点：将最近的用户输入写入 out_user_input
@@ -304,8 +433,27 @@ func (ctx *ExecutionContext) getPortValue(nodeID, portID string) any {
 }
 
 // replaceVariables 替换模板中的变量引用
+// 支持两种格式：
+//   - {nodeName.portName} — 人类可读格式（优先解析）
+//   - $nodeID:portID / $evtID.output / $variable — 机器格式（向后兼容）
 func (ctx *ExecutionContext) replaceVariables(s string) string {
-	// 替换端口值引用 $nodeID:portID
+	// 替换 {name.port} 格式（最高优先级）
+	if ctx.nameResolver != nil {
+		re := regexp.MustCompile(`\{([^}]+)\}`)
+		s = re.ReplaceAllStringFunc(s, func(match string) string {
+			ref := match[1 : len(match)-1] // 去掉 { }
+			if mappedKey, ok := ctx.nameResolver[ref]; ok {
+				if val, ok := ctx.PortValues[mappedKey]; ok {
+					if strVal, ok := val.(string); ok {
+						return strVal
+					}
+				}
+			}
+			return match // 未找到映射，原样返回
+		})
+	}
+
+	// 替换端口值引用 $nodeID:portID（向后兼容）
 	for key, val := range ctx.PortValues {
 		strVal, ok := val.(string)
 		if ok {
@@ -313,12 +461,12 @@ func (ctx *ExecutionContext) replaceVariables(s string) string {
 		}
 	}
 
-	// 替换事件输出引用 $evtID.output
+	// 替换事件输出引用 $evtID.output（向后兼容）
 	for evtID, output := range ctx.Session.EventOutputs {
 		s = strings.ReplaceAll(s, "$"+evtID+".output", output)
 	}
 
-	// 替换会话变量
+	// 替换会话变量（向后兼容）
 	for key, value := range ctx.Variables {
 		s = strings.ReplaceAll(s, "$"+key, value)
 	}
@@ -381,6 +529,13 @@ func (ctx *ExecutionContext) evaluateOperatorCondition(left, right, operator str
 		return compareNumeric(left, right) > 0
 	case "<":
 		return compareNumeric(left, right) < 0
+	case "startsWith":
+		return strings.HasPrefix(left, right)
+	case "endsWith":
+		return strings.HasSuffix(left, right)
+	case "regex":
+		matched, err := regexp.MatchString(right, left)
+		return err == nil && matched
 	default:
 		return left == right
 	}
@@ -492,4 +647,54 @@ func ValidatePortedFlow(events []SpecialModeEvent, connections []FlowConnection)
 	}
 
 	return nil
+}
+
+// executeHTTPRequest 执行 HTTP 请求并返回响应体和状态码
+func (ctx *ExecutionContext) executeHTTPRequest(engineCtx context.Context, method, rawURL, body string, config map[string]interface{}) (string, int) {
+	timeout := 30 * time.Second
+	if v, ok := config["timeout_ms"].(float64); ok && v > 0 {
+		timeout = time.Duration(v) * time.Millisecond
+	}
+
+	ctxHTTP, cancel := context.WithTimeout(engineCtx, timeout)
+	defer cancel()
+
+	var bodyReader io.Reader
+	if body != "" {
+		bodyReader = strings.NewReader(body)
+	}
+
+	req, err := http.NewRequestWithContext(ctxHTTP, method, rawURL, bodyReader)
+	if err != nil {
+		logger.ErrorfWithCaller("[FlowEngine] Failed to create request: %v", err)
+		return fmt.Sprintf("request creation error: %v", err), 0
+	}
+
+	// 设置请求头
+	if rawHeaders, ok := config["headers"].(string); ok && rawHeaders != "" {
+		var headers map[string]string
+		if err := json.Unmarshal([]byte(rawHeaders), &headers); err == nil {
+			for k, v := range headers {
+				req.Header.Set(k, v)
+			}
+		}
+	}
+	if req.Header.Get("Content-Type") == "" && body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logger.ErrorfWithCaller("[FlowEngine] HTTP request failed: %v", err)
+		return fmt.Sprintf("request error: %v", err), 0
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logger.ErrorfWithCaller("[FlowEngine] Failed to read response body: %v", err)
+		return fmt.Sprintf("read body error: %v", err), resp.StatusCode
+	}
+
+	return string(respBody), resp.StatusCode
 }

@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -37,6 +37,7 @@
     "axios": "^1.13.2",
     "dompurify": "^3.4.0",
     "emoji-mart-vue-fast": "^15.0.5",
+    "js-yaml": "^4.1.1",
     "marked": "^18.0.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.24",
@@ -48,6 +49,7 @@
     "@tauri-apps/cli": "^2.9.6",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/vue": "^8.0.3",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.10.1",
     "@typescript-eslint/eslint-plugin": "^8.58.2",
     "@typescript-eslint/parser": "^8.58.2",
