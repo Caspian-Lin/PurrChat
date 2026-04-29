@@ -19,6 +19,15 @@
           添加事件
         </button>
         <button class="toolbar-btn" @click="handleAutoLayout">自动布局</button>
+        <div class="toolbar-spacer" />
+        <button class="toolbar-btn toolbar-btn--subtle" title="导入 YAML 流程" @click="handleYamlImport">
+          <BsUpload :size="13" />
+          YAML
+        </button>
+        <button class="toolbar-btn toolbar-btn--subtle" title="导出 YAML 流程" @click="handleYamlExport">
+          <BsDownload :size="13" />
+          YAML
+        </button>
       </div>
 
       <!-- vue-flow 编辑器 -->
@@ -57,6 +66,7 @@
       :visible="showAddModal || !!editingEvent"
       :editing-event="editingEvent"
       :existing-events="events || []"
+      :connections="connections || []"
       @close="closeModal"
       @confirm="handleEventConfirm"
       @delete="handleEventDelete"
@@ -65,16 +75,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, markRaw, provide, onMounted, nextTick } from 'vue';
+import { ref, computed, watch, markRaw, onMounted, nextTick } from 'vue';
 import { VueFlow, ConnectionMode } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
-import { BsPlus } from 'vue-icons-plus/bs';
+import { BsPlus, BsUpload, BsDownload } from 'vue-icons-plus/bs';
 import TriggerNode from './events/TriggerNode.vue';
 import EndNode from './events/EndNode.vue';
 import WaitNode from './events/WaitNode.vue';
 import IfNode from './events/IfNode.vue';
 import LoopNode from './events/LoopNode.vue';
+import SwitchNode from './events/SwitchNode.vue';
+import MergeNode from './events/MergeNode.vue';
+import ToolNode from './events/ToolNode.vue';
 import LlmNode from './events/LlmNode.vue';
 import BuiltinNode from './events/BuiltinNode.vue';
 import PythonNode from './events/PythonNode.vue';
@@ -88,7 +101,6 @@ import {
   eventsToFlowNodes,
   eventsToFlowEdges,
   autoLayoutEvents,
-  getLoopChainEnd,
 } from '../../../../utils/eventFlowUtils';
 import type {
   SpecialModeEvent as FullEvent,
@@ -98,6 +110,7 @@ import type {
 import type { Node, Edge } from '@vue-flow/core';
 import { canConnect, getPortById, getDefaultPorts } from '../../../../utils/portTypes';
 import { ensurePorts } from '../../../../utils/eventPorts';
+import { flowToYaml, yamlToFlow } from '../../../../utils/yamlIR';
 
 interface Props {
   events?: FullEvent[];
@@ -120,9 +133,6 @@ const emit = defineEmits<{
 const showAddModal = ref(false);
 const editingEvent = ref<FullEvent | null>(null);
 
-// 循环体事件添加状态
-const pendingLoopId = ref<string | null>(null);
-
 // 注册自定义节点类型
 
 const customNodeTypes: Record<string, any> = {
@@ -131,6 +141,9 @@ const customNodeTypes: Record<string, any> = {
   wait: markRaw(WaitNode),
   if: markRaw(IfNode),
   loop: markRaw(LoopNode),
+  switch: markRaw(SwitchNode),
+  merge: markRaw(MergeNode),
+  tool: markRaw(ToolNode),
   llm: markRaw(LlmNode),
   builtin: markRaw(BuiltinNode),
   python: markRaw(PythonNode),
@@ -146,12 +159,6 @@ const customEdgeTypes: Record<string, any> = {
 const defaultEdgeOptions = {
   type: 'event',
 };
-
-// provide addToLoop 回调（供 LoopNode 的 "+" 按钮调用）
-provide('addToLoop', (loopId: string) => {
-  pendingLoopId.value = loopId;
-  showAddModal.value = true;
-});
 
 // 节点位置缓存（普通对象，非响应式，避免 watch→computed→watch 无限循环）
 const positionCache: Record<string, { x: number; y: number }> = {};
@@ -196,7 +203,6 @@ function onNodeClick({ node }: { node: Node }) {
 function closeModal() {
   showAddModal.value = false;
   editingEvent.value = null;
-  pendingLoopId.value = null;
 }
 
 function handleEventConfirm(event: FullEvent) {
@@ -206,76 +212,16 @@ function handleEventConfirm(event: FullEvent) {
   }
 
   const current = [...(props.events || [])];
-  let currentConnections = [...(props.connections || [])];
   const existingIndex = current.findIndex((e) => e.id === event.id);
 
   if (existingIndex >= 0) {
-    // 编辑已有事件 — 不处理连线
     current[existingIndex] = event;
   } else {
-    // 新建事件
     current.push(event);
-
-    // 如果是从循环体 "+" 按钮添加的，自动连线
-    if (pendingLoopId.value) {
-      currentConnections = autoConnectToLoop(pendingLoopId.value, event.id, currentConnections);
-    }
   }
 
   emit('updateEvents', current);
-  emit('updateConnections', currentConnections);
   closeModal();
-}
-
-/**
- * 将新事件自动连接到循环体执行链中。
- */
-function autoConnectToLoop(
-  loopId: string,
-  newEventId: string,
-  currentConnections: FlowConnection[]
-): FlowConnection[] {
-  const result = [...currentConnections];
-
-  const chainEndId = getLoopChainEnd(loopId, currentConnections);
-
-  if (chainEndId) {
-    // 非空循环体：断开回边，插入新节点
-    const backEdgeIdx = result.findIndex(
-      (c) =>
-        c.sourceNodeId === chainEndId && c.targetNodeId === loopId && c.targetPortId === 'in_exec'
-    );
-    if (backEdgeIdx >= 0) {
-      result.splice(backEdgeIdx, 1);
-    }
-    result.push({
-      id: `conn_${chainEndId}_out_exec_${newEventId}_in_exec`,
-      sourceNodeId: chainEndId,
-      sourcePortId: 'out_exec',
-      targetNodeId: newEventId,
-      targetPortId: 'in_exec',
-    });
-  } else {
-    // 空循环体：loop.out_body → newEvt.in_exec
-    result.push({
-      id: `conn_${loopId}_out_body_${newEventId}_in_exec`,
-      sourceNodeId: loopId,
-      sourcePortId: 'out_body',
-      targetNodeId: newEventId,
-      targetPortId: 'in_exec',
-    });
-  }
-
-  // 新回边：newEvt.out_exec → loop.in_exec
-  result.push({
-    id: `conn_${newEventId}_out_exec_${loopId}_in_exec`,
-    sourceNodeId: newEventId,
-    sourcePortId: 'out_exec',
-    targetNodeId: loopId,
-    targetPortId: 'in_exec',
-  });
-
-  return result;
 }
 
 function handleEventDelete(eventId: string) {
@@ -389,6 +335,46 @@ function handleAutoLayout() {
   positionTrigger.value++;
 }
 
+// YAML 导出：将当前 events + connections 导出为 YAML 文件
+function handleYamlExport() {
+  const yamlStr = flowToYaml(ensuredEvents.value, props.connections || []);
+  const blob = new Blob([yamlStr], { type: 'text/yaml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'agent-flow.yaml';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// YAML 导入：从 YAML 文件解析 events + connections
+function handleYamlImport() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.yaml,.yml';
+  input.onchange = (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const result = yamlToFlow(ev.target?.result as string);
+        if (result.errors.length > 0) {
+          console.warn('[YAML Import]', result.errors);
+        }
+        if (result.events.length > 0) {
+          emit('updateEvents', result.events);
+          emit('updateConnections', result.connections);
+        }
+      } catch (err) {
+        console.error('[YAML Import] 解析失败:', err);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
 // 初始化 + 事件变化时自动布局
 onMounted(() => {
   nextTick(() => handleAutoLayout());
@@ -452,6 +438,11 @@ watch(
 .editor-toolbar {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.toolbar-spacer {
+  flex: 1;
 }
 
 .toolbar-btn {
@@ -470,6 +461,16 @@ watch(
 .toolbar-btn:hover {
   border-color: var(--theme-primary, #5a8f4e);
   color: var(--theme-primary, #5a8f4e);
+}
+
+.toolbar-btn--subtle {
+  opacity: 0.7;
+  font-size: 11px;
+  padding: 5px 10px;
+}
+
+.toolbar-btn--subtle:hover {
+  opacity: 1;
 }
 
 .flow-container {

@@ -86,6 +86,14 @@
             添加事件
           </button>
           <button class="toolbar-btn" @click="handleAutoLayout">自动布局</button>
+          <button class="toolbar-btn toolbar-btn--subtle" title="导入 YAML 流程" @click="handleYamlImport">
+            <BsUpload :size="13" />
+            YAML
+          </button>
+          <button class="toolbar-btn toolbar-btn--subtle" title="导出 YAML 流程" @click="handleYamlExport">
+            <BsDownload :size="13" />
+            YAML
+          </button>
           <span v-if="validationIssues.length" class="toolbar-validation-badge">
             {{ validationIssues.filter((i) => i.type === 'error').length }} 个问题
           </span>
@@ -217,8 +225,8 @@
             <p class="guide-section__desc">
               <strong>条件节点</strong>（◇）接收一个布尔值，根据真假走不同分支。
               <strong>循环节点</strong
-              >（↻）会反复执行框体内的节点，直到条件为假后从「完成」出口退出。
-              循环体通过虚线框可视化，框内节点为循环体内容。
+              >（↻）从「循环体」出口开始执行一条子链，子链末尾需要连回循环节点的「执行」入口，
+              形成可见的回环线。当条件为假时，从「完成」出口退出循环。
             </p>
           </div>
         </div>
@@ -246,6 +254,7 @@
       :visible="showAddModal || !!editingEvent"
       :editing-event="editingEvent"
       :existing-events="events"
+      :connections="connections"
       @close="closeModal"
       @confirm="handleEventConfirm"
       @delete="handleEventDelete"
@@ -254,12 +263,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick, markRaw, provide, reactive } from 'vue';
+import { ref, computed, watch, onMounted, nextTick, markRaw, reactive } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { VueFlow, ConnectionMode } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
-import { BsArrowLeft, BsPlus } from 'vue-icons-plus/bs';
+import { BsArrowLeft, BsPlus, BsUpload, BsDownload } from 'vue-icons-plus/bs';
 import { api } from '../models/api';
 import type {
   Bot,
@@ -274,16 +283,19 @@ import {
   eventsToFlowEdges,
   autoLayoutEvents,
   validateEventChain,
-  getLoopChainEnd,
 } from '../utils/eventFlowUtils';
 import type { ValidationIssue } from '../utils/eventFlowUtils';
 import { canConnect, getPortById, getDefaultPorts } from '../utils/portTypes';
 import { ensurePorts } from '../utils/eventPorts';
+import { flowToYaml, yamlToFlow } from '../utils/yamlIR';
 import TriggerNode from '../components/home/panel/bots/events/TriggerNode.vue';
 import EndNode from '../components/home/panel/bots/events/EndNode.vue';
 import WaitNode from '../components/home/panel/bots/events/WaitNode.vue';
 import IfNode from '../components/home/panel/bots/events/IfNode.vue';
 import LoopNode from '../components/home/panel/bots/events/LoopNode.vue';
+import SwitchNode from '../components/home/panel/bots/events/SwitchNode.vue';
+import MergeNode from '../components/home/panel/bots/events/MergeNode.vue';
+import ToolNode from '../components/home/panel/bots/events/ToolNode.vue';
 import LlmNode from '../components/home/panel/bots/events/LlmNode.vue';
 import BuiltinNode from '../components/home/panel/bots/events/BuiltinNode.vue';
 import PythonNode from '../components/home/panel/bots/events/PythonNode.vue';
@@ -327,9 +339,6 @@ function showConnectionToast(message: string, type: 'error' | 'warn' = 'error') 
 }
 const editingEvent = ref<FullEvent | null>(null);
 
-// 循环体事件添加状态
-const pendingLoopId = ref<string | null>(null);
-
 // 数据
 const bot = ref<Bot | null>(null);
 const localMechanism = ref<Mechanism | null>(null);
@@ -362,6 +371,9 @@ const customNodeTypes: Record<string, any> = {
   wait: markRaw(WaitNode),
   if: markRaw(IfNode),
   loop: markRaw(LoopNode),
+  switch: markRaw(SwitchNode),
+  merge: markRaw(MergeNode),
+  tool: markRaw(ToolNode),
   llm: markRaw(LlmNode),
   builtin: markRaw(BuiltinNode),
   python: markRaw(PythonNode),
@@ -377,12 +389,6 @@ const customEdgeTypes: Record<string, any> = {
 const defaultEdgeOptions = {
   type: 'event',
 };
-
-// provide addToLoop 回调（供 LoopNode 的 "+" 按钮调用）
-provide('addToLoop', (loopId: string) => {
-  pendingLoopId.value = loopId;
-  showAddModal.value = true;
-});
 
 // 节点位置缓存（普通对象，非响应式，避免 watch→computed→watch 无限循环）
 const positionCache: Record<string, { x: number; y: number }> = {};
@@ -545,7 +551,6 @@ function onNodeClick({ node }: { node: Node }) {
 function closeModal() {
   showAddModal.value = false;
   editingEvent.value = null;
-  pendingLoopId.value = null;
 }
 
 function handleEventConfirm(event: FullEvent) {
@@ -557,80 +562,16 @@ function handleEventConfirm(event: FullEvent) {
   }
 
   const currentEvents = [...events.value];
-  let currentConnections = [...connections.value];
   const existingIndex = currentEvents.findIndex((e) => e.id === event.id);
 
   if (existingIndex >= 0) {
-    // 编辑已有事件 — 不处理连线
     currentEvents[existingIndex] = event;
   } else {
-    // 新建事件
     currentEvents.push(event);
-
-    // 如果是从循环体 "+" 按钮添加的，自动连线
-    if (pendingLoopId.value) {
-      currentConnections = autoConnectToLoop(pendingLoopId.value, event.id, currentConnections);
-    }
   }
 
   localMechanism.value.reply.special_mode.events = currentEvents;
-  localMechanism.value.reply.special_mode.connections = currentConnections;
   closeModal();
-}
-
-/**
- * 将新事件自动连接到循环体执行链中。
- *
- * 空循环体：loop.out_body → newEvt.in_exec, newEvt.out_exec → loop.in_exec
- * 非空循环体：找到链末端，断开回边，插入新节点
- */
-function autoConnectToLoop(
-  loopId: string,
-  newEventId: string,
-  currentConnections: FlowConnection[]
-): FlowConnection[] {
-  const result = [...currentConnections];
-
-  const chainEndId = getLoopChainEnd(loopId, currentConnections);
-
-  if (chainEndId) {
-    // 非空循环体：断开 chainEnd → loop 的回边，插入新节点
-    const backEdgeIdx = result.findIndex(
-      (c) =>
-        c.sourceNodeId === chainEndId && c.targetNodeId === loopId && c.targetPortId === 'in_exec'
-    );
-    if (backEdgeIdx >= 0) {
-      result.splice(backEdgeIdx, 1);
-    }
-    // chainEnd.out_exec → newEvt.in_exec
-    result.push({
-      id: `conn_${chainEndId}_out_exec_${newEventId}_in_exec`,
-      sourceNodeId: chainEndId,
-      sourcePortId: 'out_exec',
-      targetNodeId: newEventId,
-      targetPortId: 'in_exec',
-    });
-  } else {
-    // 空循环体：loop.out_body → newEvt.in_exec
-    result.push({
-      id: `conn_${loopId}_out_body_${newEventId}_in_exec`,
-      sourceNodeId: loopId,
-      sourcePortId: 'out_body',
-      targetNodeId: newEventId,
-      targetPortId: 'in_exec',
-    });
-  }
-
-  // 新回边：newEvt.out_exec → loop.in_exec
-  result.push({
-    id: `conn_${newEventId}_out_exec_${loopId}_in_exec`,
-    sourceNodeId: newEventId,
-    sourcePortId: 'out_exec',
-    targetNodeId: loopId,
-    targetPortId: 'in_exec',
-  });
-
-  return result;
 }
 
 function handleEventDelete(eventId: string) {
@@ -779,6 +720,47 @@ watch(
     nextTick(() => handleAutoLayout());
   }
 );
+
+// YAML 导出：将当前 events + connections 导出为 YAML 文件
+function handleYamlExport() {
+  const yamlStr = flowToYaml(events.value, connections.value);
+  const blob = new Blob([yamlStr], { type: 'text/yaml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'agent-flow.yaml';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// YAML 导入：从 YAML 文件解析 events + connections
+function handleYamlImport() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.yaml,.yml';
+  input.onchange = (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const result = yamlToFlow(ev.target?.result as string);
+        if (result.errors.length > 0) {
+          console.warn('[YAML Import]', result.errors);
+        }
+        if (result.events.length > 0) {
+          events.value = result.events;
+          connections.value = result.connections;
+          saveFlow();
+        }
+      } catch (err) {
+        console.error('[YAML Import] 解析失败:', err);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
 </script>
 
 <style scoped>
@@ -843,6 +825,16 @@ watch(
 .toolbar-btn:hover {
   border-color: var(--theme-primary, #5a8f4e);
   color: var(--theme-primary, #5a8f4e);
+}
+
+.toolbar-btn--subtle {
+  opacity: 0.7;
+  font-size: 11px;
+  padding: 5px 10px;
+}
+
+.toolbar-btn--subtle:hover {
+  opacity: 1;
 }
 
 .toolbar-validation-badge {
