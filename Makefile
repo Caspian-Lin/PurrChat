@@ -143,10 +143,12 @@ type-check:
 clean:
 	pnpm run clean
 
-# 数据库迁移
+# 数据库迁移（同时执行后端和存储服务的 migration）
 migrate:
 	@echo "执行数据库迁移..."
+	@ln -sf ../../storage/migrations/002_file_metadata.sql apps/backend/migrations/003_storage_file_metadata.sql
 	cd apps/backend && go run cmd/server/main.go migrate
+	@rm -f apps/backend/migrations/003_storage_file_metadata.sql
 
 # 启动存储服务（独立开发）
 dev-storage:
