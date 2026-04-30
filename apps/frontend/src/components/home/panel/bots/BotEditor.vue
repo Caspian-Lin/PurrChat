@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col flex-1 min-h-0">
     <!-- 顶部工具栏 -->
     <div
       class="flex items-center gap-3 px-5 py-3 bg-bg-secondary border-b border-border-subtle flex-shrink-0"
@@ -227,6 +227,7 @@ import type {
 } from '../../../../models/types';
 import MechanismCard from './MechanismCard.vue';
 import BotDebugPanel from './BotDebugPanel.vue';
+import { api } from '../../../../models/api';
 
 interface Props {
   bot: Bot;
@@ -358,8 +359,24 @@ function moveMechanism(index: number, direction: -1 | 1) {
   form.mechanisms.splice(newIndex, 0, temp);
 }
 
-function openSpecialModeEditor(mechanismId: string) {
-  // 阶段 5 实现完整的路由跳转
+async function openSpecialModeEditor(mechanismId: string) {
+  // 先保存当前机制配置到数据库，确保新标签页能找到该机制
+  const mechanismConfig: MechanismConfig = {
+    mechanisms: form.mechanisms.map((m) => deepCloneMechanism(m)),
+  };
+
+  const result = await api.updateBot(props.bot.id, {
+    name: form.name,
+    description: form.description,
+    visibility: form.visibility,
+    status: form.status,
+    mechanism_config: mechanismConfig,
+  });
+
+  if (!result.success) {
+    return;
+  }
+
   const url = `${window.location.origin}/bots/${props.bot.id}/mechanisms/${mechanismId}/special-mode`;
   window.open(url, '_blank');
 }

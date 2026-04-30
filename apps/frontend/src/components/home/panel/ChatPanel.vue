@@ -104,7 +104,7 @@
   </div>
 
   <!-- ========== 桌面端布局（原始） ========== -->
-  <div v-else>
+  <div v-else class="h-full overflow-hidden">
     <BasePanel
       panel-id="chat"
       :initial-sidebar-width="320"
@@ -145,7 +145,7 @@
           </div>
 
           <!-- 会话列表 -->
-          <div class="flex-1 min-h-0">
+          <div class="flex flex-1 min-h-0">
             <ConversationList
               :conversations="filteredConversations"
               :selected-id="selectedConversation?.id"

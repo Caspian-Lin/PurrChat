@@ -17,7 +17,7 @@
   <div v-else class="flex h-screen">
     <SideNavbar :current-user="auth.currentUser" @show-profile="handleShowProfile" />
 
-    <div class="flex-1">
+    <div class="flex-1 overflow-hidden">
       <router-view />
     </div>
 
