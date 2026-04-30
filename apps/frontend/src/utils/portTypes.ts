@@ -18,6 +18,8 @@ export type EventType =
   | 'switch'
   | 'merge'
   | 'tool'
+  | 'dify'
+  | 'n8n'
   | 'llm'
   | 'builtin'
   | 'python'
@@ -70,6 +72,8 @@ export const NODE_TYPE_META: Record<EventType, NodeTypeMeta> = {
   switch: { label: '分支', icon: '⑂', category: 'control', description: '多条件分支路由' },
   merge: { label: '汇聚', icon: '⑃', category: 'control', description: '多分支汇聚' },
   tool: { label: '工具', icon: '🔌', category: 'process', description: 'HTTP 请求 / 外部工具调用' },
+  dify: { label: 'Dify', icon: '🔮', category: 'process', description: '调用 Dify 工作流' },
+  n8n: { label: 'n8n', icon: '⚡', category: 'process', description: '调用 n8n Webhook' },
   llm: { label: 'LLM', icon: '🧠', category: 'process', description: 'LLM 调用' },
   builtin: { label: '内置', icon: '⚙', category: 'process', description: '内置事件' },
   python: { label: 'Python', icon: '🐍', category: 'process', description: 'Python 脚本' },
@@ -179,6 +183,30 @@ const DEFAULT_PORTS: Record<EventType, EventPort[]> = {
       ['out_exec', 'trigger', '执行'],
       ['out_output', 'string', '响应'],
       ['out_status', 'number', '状态码'],
+    ]
+  ),
+  // Dify: external workflow
+  dify: ports(
+    [
+      ['in_exec', 'trigger', '执行'],
+      ['in_input', 'string', '输入'],
+    ],
+    [
+      ['out_exec', 'trigger', '执行'],
+      ['out_output', 'string', '输出'],
+      ['out_error', 'string', '错误'],
+    ]
+  ),
+  // n8n: external webhook
+  n8n: ports(
+    [
+      ['in_exec', 'trigger', '执行'],
+      ['in_input', 'string', '输入'],
+    ],
+    [
+      ['out_exec', 'trigger', '执行'],
+      ['out_output', 'string', '输出'],
+      ['out_error', 'string', '错误'],
     ]
   ),
   llm: ports(

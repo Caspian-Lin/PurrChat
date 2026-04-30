@@ -2,6 +2,7 @@ package botengine
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -280,6 +281,180 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 			ctx.PortValues[event.ID+":out_output"] = output
 			ctx.PortValues[event.ID+":out_status"] = status
 			ctx.Session.EventOutputs[event.ID] = output
+		}
+
+	case "dify":
+		// Dify 节点：调用 Dify Workflow / Chatflow API
+		apiBase := strings.TrimRight(getStringField(event.Config, "api_base"), "/")
+		apiKey := getStringField(event.Config, "api_key")
+		if apiBase == "" || apiKey == "" {
+			ctx.PortValues[event.ID+":out_error"] = "api_base and api_key are required"
+			break
+		}
+
+		appType := getStringField(event.Config, "app_type")
+		if appType == "" {
+			appType = "workflow"
+		}
+
+		// 解析输入变量映射
+		inputsMapping := getStringField(event.Config, "inputs_mapping")
+		inputs := ctx.resolveInputsMapping(inputsMapping)
+
+		// 如果映射为空，尝试从 in_input 端口获取值
+		if len(inputs) == 0 {
+			if inputVal := ctx.getPortValue(event.ID, "in_input"); inputVal != "" {
+				if inputStr, ok := inputVal.(string); ok && inputStr != "" {
+					inputs = map[string]any{"query": inputStr}
+				}
+			}
+		}
+
+		// 根据应用类型选择端点并构造请求
+		var endpoint string
+		var reqBody map[string]any
+
+		switch appType {
+		case "chatflow":
+			endpoint = apiBase + "/v1/chat-messages"
+			query, _ := inputs["query"].(string)
+			reqBody = map[string]any{
+				"query":         query,
+				"inputs":        inputs,
+				"response_mode": getStringField(event.Config, "response_mode"),
+				"user":          "purrchat",
+			}
+			// Chatflow 多轮上下文：传递 conversation_id
+			convKey := "dify_conversation_" + event.ID
+			if convID, ok := ctx.Session.Variables[convKey]; ok && convID != "" {
+				reqBody["conversation_id"] = convID
+			}
+		default: // workflow
+			endpoint = apiBase + "/v1/workflows/run"
+			reqBody = map[string]any{
+				"inputs":        inputs,
+				"response_mode": getStringField(event.Config, "response_mode"),
+				"user":          "purrchat",
+			}
+		}
+
+		reqBodyBytes, _ := json.Marshal(reqBody)
+
+		// 设置认证 header
+		difyConfig := make(map[string]any)
+		for k, v := range event.Config {
+			difyConfig[k] = v
+		}
+		difyConfig["headers"] = fmt.Sprintf(
+			`{"Authorization":"Bearer %s","Content-Type":"application/json"}`,
+			apiKey,
+		)
+
+		respBody, statusCode := ctx.executeHTTPRequest(engineCtx, "POST", endpoint, string(reqBodyBytes), difyConfig)
+
+		// 错误处理
+		if statusCode == 0 {
+			ctx.PortValues[event.ID+":out_error"] = respBody
+			ctx.PortValues[event.ID+":out_output"] = ""
+			break
+		}
+		if statusCode != 200 {
+			ctx.PortValues[event.ID+":out_error"] = fmt.Sprintf("HTTP %d: %s", statusCode, respBody)
+			ctx.PortValues[event.ID+":out_output"] = ""
+			break
+		}
+
+		// 解析响应 JSON
+		var result map[string]any
+		if err := json.Unmarshal([]byte(respBody), &result); err != nil {
+			ctx.PortValues[event.ID+":out_error"] = "JSON parse error: " + err.Error()
+			ctx.PortValues[event.ID+":out_output"] = ""
+			break
+		}
+
+		// 检查工作流执行状态
+		outputPath := getStringField(event.Config, "output_path")
+		output, err := ctx.extractDifyOutput(result, outputPath)
+		if err != nil {
+			ctx.PortValues[event.ID+":out_error"] = err.Error()
+			ctx.PortValues[event.ID+":out_output"] = ""
+		} else {
+			ctx.PortValues[event.ID+":out_output"] = output
+			ctx.Session.EventOutputs[event.ID] = output
+		}
+
+		// Chatflow：保存 conversation_id 用于后续多轮
+		if appType == "chatflow" {
+			convKey := "dify_conversation_" + event.ID
+			if convID := extractJSONPath(result, "data.conversation_id"); convID != nil {
+				if idStr, ok := convID.(string); ok {
+					ctx.Session.Variables[convKey] = idStr
+				}
+			}
+		}
+
+	case "n8n":
+		// n8n 节点：调用 n8n Webhook
+		webhookURL := getStringField(event.Config, "webhook_url")
+		webhookURL = strings.TrimSpace(ctx.replaceVariables(webhookURL))
+		if webhookURL == "" {
+			ctx.PortValues[event.ID+":out_error"] = "webhook_url is required"
+			break
+		}
+
+		method := getStringField(event.Config, "method")
+		if method == "" {
+			method = "POST"
+		}
+
+		// 获取请求体：优先 config.body，其次 in_input 端口
+		body := getStringField(event.Config, "body")
+		if body == "" {
+			if inputVal := ctx.getPortValue(event.ID, "in_input"); inputVal != "" {
+				body, _ = inputVal.(string)
+			}
+		}
+		body = ctx.replaceVariables(body)
+
+		// 构造认证 header
+		authType := getStringField(event.Config, "auth_type")
+		var authHeaders string
+		switch authType {
+		case "header":
+			cred := getStringField(event.Config, "auth_credential")
+			parts := strings.SplitN(cred, ":", 2)
+			if len(parts) == 2 {
+				h, _ := json.Marshal(map[string]string{parts[0]: parts[1]})
+				authHeaders = string(h)
+			}
+		case "basic":
+			cred := getStringField(event.Config, "auth_credential")
+			parts := strings.SplitN(cred, ":", 2)
+			if len(parts) == 2 {
+				h, _ := json.Marshal(map[string]string{"Authorization": "Basic " + b64encode(parts[0]+":"+parts[1])})
+				authHeaders = string(h)
+			}
+		}
+
+		n8nConfig := make(map[string]any)
+		for k, v := range event.Config {
+			n8nConfig[k] = v
+		}
+		if authHeaders != "" {
+			n8nConfig["headers"] = authHeaders
+		}
+
+		respBody, statusCode := ctx.executeHTTPRequest(engineCtx, method, webhookURL, body, n8nConfig)
+
+		if statusCode == 0 {
+			ctx.PortValues[event.ID+":out_error"] = respBody
+			ctx.PortValues[event.ID+":out_output"] = ""
+		} else if statusCode >= 400 {
+			ctx.PortValues[event.ID+":out_error"] = fmt.Sprintf("HTTP %d: %s", statusCode, respBody)
+			ctx.PortValues[event.ID+":out_output"] = ""
+		} else {
+			ctx.PortValues[event.ID+":out_output"] = respBody
+			ctx.Session.EventOutputs[event.ID] = respBody
 		}
 
 	case "wait":
@@ -697,4 +872,111 @@ func (ctx *ExecutionContext) executeHTTPRequest(engineCtx context.Context, metho
 	}
 
 	return string(respBody), resp.StatusCode
+}
+
+// ─── Dify / n8n 辅助函数 ─────────────────────────────────────
+
+// extractJSONPath 按 dot 分割的路径从嵌套 map 中取值
+// 例如 extractJSONPath(data, "data.outputs.text") → data["data"]["outputs"]["text"]
+func extractJSONPath(data map[string]any, path string) any {
+	keys := strings.Split(path, ".")
+	var current any = data
+	for _, key := range keys {
+		m, ok := current.(map[string]any)
+		if !ok {
+			return nil
+		}
+		current = m[key]
+	}
+	return current
+}
+
+// resolveInputsMapping 解析 JSON 格式的输入变量映射，替换其中的变量引用
+// 输入: {"query": "$triggerID:out_input"} → 输出: {"query": "实际值"}
+func (ctx *ExecutionContext) resolveInputsMapping(rawMapping string) map[string]any {
+	result := make(map[string]any)
+	if rawMapping == "" {
+		return result
+	}
+	var mapping map[string]any
+	if err := json.Unmarshal([]byte(rawMapping), &mapping); err != nil {
+		logger.InfofWithCaller("[FlowEngine] Failed to parse inputs_mapping JSON: %v", err)
+		return result
+	}
+	for k, v := range mapping {
+		if strVal, ok := v.(string); ok {
+			result[k] = ctx.replaceVariables(strVal)
+		} else {
+			result[k] = v
+		}
+	}
+	return result
+}
+
+// extractDifyOutput 从 Dify API 响应中提取有意义的输出
+// outputPath 为空时，智能提取 data.outputs（单字段直接取值，多字段返回 JSON）
+func (ctx *ExecutionContext) extractDifyOutput(data map[string]any, outputPath string) (string, error) {
+	if outputPath != "" {
+		val := extractJSONPath(data, outputPath)
+		if val == nil {
+			return "", fmt.Errorf("output_path '%s' returned nil", outputPath)
+		}
+		return anyToString(val), nil
+	}
+
+	// 默认行为：检查工作流状态
+	if status, _ := extractJSONPath(data, "data.status").(string); status == "failed" {
+		errMsg, _ := extractJSONPath(data, "data.error").(string)
+		return "", fmt.Errorf("Dify workflow failed: %s", errMsg)
+	}
+
+	// 提取 data.outputs
+	outputsRaw := extractJSONPath(data, "data.outputs")
+	if outputsRaw == nil {
+		return "", fmt.Errorf("data.outputs is nil")
+	}
+
+	outputs, ok := outputsRaw.(map[string]any)
+	if !ok {
+		return anyToString(outputsRaw), nil
+	}
+
+	// 单字段：直接返回值
+	if len(outputs) == 1 {
+		for _, v := range outputs {
+			return anyToString(v), nil
+		}
+	}
+
+	// 多字段：序列化为 JSON
+	b, _ := json.Marshal(outputs)
+	return string(b), nil
+}
+
+// b64encode 返回 base64 编码字符串
+func b64encode(s string) string {
+	return base64.StdEncoding.EncodeToString([]byte(s))
+}
+
+// anyToString 将任意类型转为字符串
+func anyToString(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	case float64:
+		if val == float64(int64(val)) {
+			return strconv.FormatInt(int64(val), 10)
+		}
+		return strconv.FormatFloat(val, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(val)
+	case map[string]any, []any:
+		b, _ := json.Marshal(val)
+		return string(b)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }

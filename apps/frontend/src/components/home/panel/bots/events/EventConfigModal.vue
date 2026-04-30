@@ -301,6 +301,167 @@
             </p>
           </template>
 
+          <!-- dify 配置 -->
+          <template v-if="form.type === 'dify'">
+            <div class="form-group">
+              <label class="form-label">应用类型</label>
+              <select v-model="form.config.app_type" class="form-input">
+                <option value="workflow">Workflow（单次执行）</option>
+                <option value="chatflow">Chatflow（多轮对话）</option>
+              </select>
+              <p class="form-hint">
+                Workflow 适合翻译、摘要等单次处理；Chatflow 支持多轮上下文记忆。
+              </p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">API 地址</label>
+              <input
+                v-model="form.config.api_base"
+                type="text"
+                class="form-input"
+                placeholder="https://api.dify.ai/v1"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">API Key</label>
+              <input
+                v-model="form.config.api_key"
+                type="password"
+                class="form-input"
+                placeholder="app-..."
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">输入变量映射（JSON）</label>
+              <div class="form-input-with-action">
+                <textarea
+                  ref="difyInputsTextarea"
+                  v-model="form.config.inputs_mapping"
+                  class="form-textarea form-textarea--code"
+                  rows="2"
+                  placeholder='{"query": "$triggerID:out_input"}'
+                />
+                <button
+                  class="var-insert-btn"
+                  title="插入变量"
+                  @click="(e) => openVarPicker(e, $refs.difyInputsTextarea as HTMLTextAreaElement)"
+                >{'{ }'}</button>
+              </div>
+              <p class="form-hint">
+                键为 Dify 工作流变量名，值支持变量引用。点击 <strong>{'{}'}</strong> 从上游选择变量。
+              </p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">输出路径</label>
+              <input
+                v-model="form.config.output_path"
+                type="text"
+                class="form-input"
+                placeholder="data.outputs.text"
+              />
+              <p class="form-hint">
+                从响应 JSON 中提取字段的路径。留空则自动提取 data.outputs（单字段时直接取值）。
+              </p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">响应模式</label>
+              <select v-model="form.config.response_mode" class="form-input">
+                <option value="blocking">Blocking（等待结果）</option>
+                <option value="streaming">Streaming（仅取最终结果）</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">超时 (ms)</label>
+              <input
+                v-model.number="form.config.timeout_ms"
+                type="number"
+                min="1000"
+                max="120000"
+                step="1000"
+                class="form-input"
+              />
+            </div>
+            <p class="form-hint">
+              输出到「输出」端口，错误信息输出到「错误」端口。
+            </p>
+          </template>
+
+          <!-- n8n 配置 -->
+          <template v-if="form.type === 'n8n'">
+            <div class="form-group">
+              <label class="form-label">Webhook URL（生产环境）</label>
+              <input
+                v-model="form.config.webhook_url"
+                type="text"
+                class="form-input"
+                placeholder="https://your-n8n.com/webhook/abc123"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">HTTP 方法</label>
+              <select v-model="form.config.method" class="form-input">
+                <option value="POST">POST</option>
+                <option value="GET">GET</option>
+              </select>
+            </div>
+            <div v-if="form.config.method === 'POST'" class="form-group">
+              <label class="form-label">请求体</label>
+              <div class="form-input-with-action">
+                <textarea
+                  ref="n8nBodyTextarea"
+                  v-model="form.config.body"
+                  class="form-textarea form-textarea--code"
+                  rows="3"
+                  placeholder='{"input": "$triggerID:out_input"}'
+                />
+                <button
+                  class="var-insert-btn"
+                  title="插入变量"
+                  @click="(e) => openVarPicker(e, $refs.n8nBodyTextarea as HTMLTextAreaElement)"
+                >{'{ }'}</button>
+              </div>
+              <p class="form-hint">
+                留空时自动使用「输入」端口的值作为请求体。
+              </p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">认证方式</label>
+              <select v-model="form.config.auth_type" class="form-input">
+                <option value="none">无</option>
+                <option value="header">Header Auth</option>
+                <option value="basic">Basic Auth</option>
+              </select>
+            </div>
+            <div v-if="form.config.auth_type !== 'none'" class="form-group">
+              <label class="form-label">
+                {{ form.config.auth_type === 'basic' ? '用户名:密码' : 'Header 名称:值' }}
+              </label>
+              <input
+                v-model="form.config.auth_credential"
+                type="text"
+                class="form-input"
+                :placeholder="form.config.auth_type === 'basic' ? 'user:password' : 'X-API-Key:your-key'"
+              />
+              <p class="form-hint">
+                {{ form.config.auth_type === 'basic' ? '格式: 用户名:密码' : '格式: Header名称:值' }}
+              </p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">超时 (ms)</label>
+              <input
+                v-model.number="form.config.timeout_ms"
+                type="number"
+                min="1000"
+                max="60000"
+                step="1000"
+                class="form-input"
+              />
+            </div>
+            <p class="form-hint">
+              输出到「输出」端口，错误信息输出到「错误」端口。
+            </p>
+          </template>
+
           <!-- LLM 配置 -->
           <template v-if="form.type === 'llm'">
             <!-- 从 AI 面板导入配置 -->
@@ -701,14 +862,14 @@ const controlTypes = (['trigger', 'end', 'wait', 'if', 'loop', 'switch', 'merge'
 );
 
 const processTypes = (
-  ['llm', 'builtin', 'python', 'template', 'tool', 'reply'] as EventType[]
+  ['llm', 'builtin', 'python', 'template', 'tool', 'dify', 'n8n', 'reply'] as EventType[]
 ).map(
   (value) => ({ value, ...NODE_TYPE_META[value] })
 );
 
 // 是否为支持自定义端口的节点类型
 const supportsCustomPorts = computed(() =>
-  ['llm', 'builtin', 'python', 'template', 'if', 'wait', 'reply', 'history'].includes(form.type)
+  ['llm', 'builtin', 'python', 'template', 'if', 'wait', 'reply', 'history', 'dify', 'n8n'].includes(form.type)
 );
 
 const builtinTypes = [
@@ -754,6 +915,25 @@ function getDefaultConfig(type: EventType): Record<string, any> {
       return { input_count: 2 };
     case 'tool':
       return { method: 'GET', url: '', headers: '{}', body: '', timeout_ms: 10000 };
+    case 'dify':
+      return {
+        app_type: 'workflow',
+        api_base: '',
+        api_key: '',
+        inputs_mapping: '',
+        output_path: '',
+        response_mode: 'blocking',
+        timeout_ms: 30000,
+      };
+    case 'n8n':
+      return {
+        webhook_url: '',
+        method: 'POST',
+        body: '',
+        auth_type: 'none',
+        auth_credential: '',
+        timeout_ms: 30000,
+      };
     case 'trigger':
     case 'end':
     default:

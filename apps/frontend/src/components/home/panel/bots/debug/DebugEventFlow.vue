@@ -35,6 +35,8 @@ import LoopNode from '../events/LoopNode.vue';
 import SwitchNode from '../events/SwitchNode.vue';
 import MergeNode from '../events/MergeNode.vue';
 import ToolNode from '../events/ToolNode.vue';
+import DifyNode from '../events/DifyNode.vue';
+import N8nNode from '../events/N8nNode.vue';
 import LlmNode from '../events/LlmNode.vue';
 import BuiltinNode from '../events/BuiltinNode.vue';
 import PythonNode from '../events/PythonNode.vue';
@@ -62,6 +64,8 @@ const customNodeTypes: Record<string, any> = {
   switch: markRaw(SwitchNode),
   merge: markRaw(MergeNode),
   tool: markRaw(ToolNode),
+  dify: markRaw(DifyNode),
+  n8n: markRaw(N8nNode),
   llm: markRaw(LlmNode),
   builtin: markRaw(BuiltinNode),
   python: markRaw(PythonNode),
