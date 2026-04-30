@@ -329,6 +329,9 @@ func (s *ConversationService) UpdateConversation(ctx context.Context, conversati
 	if req.Name != "" {
 		conversation.Name = req.Name
 	}
+	if req.AvatarURL != "" {
+		conversation.AvatarURL = req.AvatarURL
+	}
 
 	err = s.conversationRepo.Update(ctx, conversation)
 	if err != nil {

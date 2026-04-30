@@ -1,5 +1,5 @@
 <template>
-  <CustomScrollbar class="flex-1 min-h-0">
+  <div class="flex-1 min-h-0 overflow-y-auto">
     <!-- 统一的会话列表（按时间排序） -->
     <div class="px-2 pt-2 pb-0.5">
       <BaseListItem
@@ -13,7 +13,15 @@
             v-if="conversation.conversation_type === 'group'"
             class="w-11 h-11 rounded-[var(--radius-md)] overflow-hidden"
           >
+            <img
+              v-if="conversation.avatar_url"
+              :src="conversation.avatar_url"
+              alt="avatar"
+              class="w-full h-full object-cover"
+              referrerpolicy="no-referrer"
+            />
             <div
+              v-else
               class="w-full h-full flex items-center justify-center font-bold text-white text-lg"
               style="background: var(--theme-gradient)"
             >
@@ -106,7 +114,7 @@
     >
       <p>暂无会话</p>
     </div>
-  </CustomScrollbar>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -121,7 +129,6 @@ import {
 import { formatConversationTime } from '../../utils/formatTime';
 import { BsX } from 'vue-icons-plus/bs';
 import type { Conversation, Message } from '../../models/types';
-import CustomScrollbar from '../common/CustomScrollbar.vue';
 import BaseListItem from '../common/BaseListItem.vue';
 
 interface Props {

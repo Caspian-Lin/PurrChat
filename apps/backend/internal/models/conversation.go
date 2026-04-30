@@ -19,6 +19,7 @@ type Conversation struct {
 	ID               uuid.UUID         `json:"id" db:"id"`
 	ConversationType ConversationType  `json:"conversation_type" db:"conversation_type"`
 	Name             string            `json:"name,omitempty" db:"name"`             // 会话名称（群聊时使用）
+	AvatarURL        string            `json:"avatar_url,omitempty" db:"avatar_url"` // 群聊头像
 	CreatedBy        *uuid.UUID        `json:"created_by,omitempty" db:"created_by"` // 创建者ID
 	CreatedAt        time.Time         `json:"created_at" db:"created_at"`
 	UpdatedAt        time.Time         `json:"updated_at" db:"updated_at"`

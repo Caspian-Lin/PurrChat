@@ -143,6 +143,7 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			conversation_type VARCHAR(20) NOT NULL DEFAULT 'direct',
 			name VARCHAR(100),
+			avatar_url TEXT,
 			created_by UUID REFERENCES users(id) ON DELETE SET NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

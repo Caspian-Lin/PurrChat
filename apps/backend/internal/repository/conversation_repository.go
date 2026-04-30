@@ -40,15 +40,16 @@ func (r *conversationRepository) Create(ctx context.Context, conversation *model
 	err := pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
 		// 插入会话
 		query := `
-            INSERT INTO conversations (id, conversation_type, name, created_by, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id, created_at, updated_at
-        `
+	            INSERT INTO conversations (id, conversation_type, name, avatar_url, created_by, created_at, updated_at)
+	            VALUES ($1, $2, $3, $4, $5, $6, $7)
+	            RETURNING id, created_at, updated_at
+	        `
 
 		err := tx.QueryRow(ctx, query,
 			conversation.ID,
 			conversation.ConversationType,
 			conversation.Name,
+			conversation.AvatarURL,
 			conversation.CreatedBy,
 			conversation.CreatedAt,
 			conversation.UpdatedAt,
@@ -80,7 +81,7 @@ func (r *conversationRepository) Create(ctx context.Context, conversation *model
 // FindByID 根据ID查找会话
 func (r *conversationRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Conversation, error) {
 	query := `
-        SELECT id, conversation_type, name, created_by, created_at, updated_at
+        SELECT id, conversation_type, name, avatar_url, created_by, created_at, updated_at
         FROM conversations
         WHERE id = $1
     `
@@ -90,6 +91,7 @@ func (r *conversationRepository) FindByID(ctx context.Context, id uuid.UUID) (*m
 		&conversation.ID,
 		&conversation.ConversationType,
 		&conversation.Name,
+		&conversation.AvatarURL,
 		&conversation.CreatedBy,
 		&conversation.CreatedAt,
 		&conversation.UpdatedAt,
@@ -105,7 +107,7 @@ func (r *conversationRepository) FindByID(ctx context.Context, id uuid.UUID) (*m
 // FindByUsers 根据两个用户ID查找会话（通过enrollment表）
 func (r *conversationRepository) FindByUsers(ctx context.Context, user1ID, user2ID uuid.UUID) (*models.Conversation, error) {
 	query := `
-        SELECT DISTINCT c.id, c.conversation_type, c.name, c.created_by, c.created_at, c.updated_at
+        SELECT DISTINCT c.id, c.conversation_type, c.name, c.avatar_url, c.created_by, c.created_at, c.updated_at
         FROM conversations c
         INNER JOIN enrollments e1 ON c.id = e1.conversation_id AND e1.user_id = $1
         INNER JOIN enrollments e2 ON c.id = e2.conversation_id AND e2.user_id = $2
@@ -118,6 +120,7 @@ func (r *conversationRepository) FindByUsers(ctx context.Context, user1ID, user2
 		&conversation.ID,
 		&conversation.ConversationType,
 		&conversation.Name,
+		&conversation.AvatarURL,
 		&conversation.CreatedBy,
 		&conversation.CreatedAt,
 		&conversation.UpdatedAt,
@@ -133,7 +136,7 @@ func (r *conversationRepository) FindByUsers(ctx context.Context, user1ID, user2
 // FindByUserID 根据用户ID查找所有会话
 func (r *conversationRepository) FindByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Conversation, error) {
 	query := `
-        SELECT DISTINCT c.id, c.conversation_type, c.name, c.created_by, c.created_at, c.updated_at
+        SELECT DISTINCT c.id, c.conversation_type, c.name, c.avatar_url, c.created_by, c.created_at, c.updated_at
         FROM conversations c
         INNER JOIN enrollments e ON c.id = e.conversation_id
         WHERE e.user_id = $1
@@ -153,6 +156,7 @@ func (r *conversationRepository) FindByUserID(ctx context.Context, userID uuid.U
 			&conversation.ID,
 			&conversation.ConversationType,
 			&conversation.Name,
+			&conversation.AvatarURL,
 			&conversation.CreatedBy,
 			&conversation.CreatedAt,
 			&conversation.UpdatedAt,
@@ -170,13 +174,14 @@ func (r *conversationRepository) FindByUserID(ctx context.Context, userID uuid.U
 func (r *conversationRepository) Update(ctx context.Context, conversation *models.Conversation) error {
 	query := `
         UPDATE conversations
-        SET conversation_type = $1, name = $2, updated_at = $3
-        WHERE id = $4
+        SET conversation_type = $1, name = $2, avatar_url = $3, updated_at = $4
+        WHERE id = $5
     `
 
 	_, err := database.GetPool().Exec(ctx, query,
 		conversation.ConversationType,
 		conversation.Name,
+		conversation.AvatarURL,
 		time.Now().UTC(),
 		conversation.ID,
 	)
