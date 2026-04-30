@@ -53,20 +53,35 @@ func (s *FriendService) GetFriends(ctx context.Context, userID string) ([]*model
 		return nil, err
 	}
 
-	// 为每个好友关系加载用户信息
+	// 按 friend ID 去重（Bot 创建时会建立双向好友关系，
+	// FindByUserID 的 OR 查询会导致同一好友返回两条记录）
+	seen := make(map[uuid.UUID]bool)
+	var deduped []*models.Friendship
 	for _, fs := range friendships {
-		// 确定好友ID
 		var friendID uuid.UUID
 		if fs.UserID == id {
 			friendID = fs.FriendID
 		} else if fs.FriendID == id {
 			friendID = fs.UserID
 		} else {
-			logger.ErrorfWithCaller("Friendship does not belong to user %s, skipping", id)
-			continue // 跳过不属于当前用户的好友关系
+			continue
+		}
+		if !seen[friendID] {
+			seen[friendID] = true
+			deduped = append(deduped, fs)
+		}
+	}
+	friendships = deduped
+
+	// 为每个好友关系加载用户信息
+	for _, fs := range friendships {
+		var friendID uuid.UUID
+		if fs.UserID == id {
+			friendID = fs.FriendID
+		} else {
+			friendID = fs.UserID
 		}
 
-		// 加载好友信息
 		friend, err := s.userRepo.FindByID(ctx, friendID)
 		if err == nil {
 			sanitizeUser(friend)
