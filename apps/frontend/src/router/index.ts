@@ -67,6 +67,11 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/privacy',
+    name: 'PrivacyPolicy',
+    component: () => import('../views/PrivacyPolicyView.vue'),
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('../views/NotFoundView.vue'),
