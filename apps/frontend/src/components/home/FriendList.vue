@@ -1,5 +1,5 @@
 <template>
-  <CustomScrollbar class="flex-1 min-h-0">
+  <div class="flex-1 min-h-0 overflow-y-auto">
     <div class="px-2 pt-2 pb-0.5">
       <BaseListItem
         v-for="friendship in friends"
@@ -53,13 +53,12 @@
     >
       <p>暂无好友</p>
     </div>
-  </CustomScrollbar>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { formatFriendshipStatus, getFriendshipStatusColor } from '../../utils/userHelpers';
 import type { Friendship } from '../../models/types';
-import CustomScrollbar from '../common/CustomScrollbar.vue';
 import BaseListItem from '../common/BaseListItem.vue';
 
 interface Props {

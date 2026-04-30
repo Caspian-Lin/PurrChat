@@ -5,7 +5,7 @@
       <div class="px-4 py-2 text-xs font-medium uppercase tracking-wider text-text-tertiary">
         AI 模型配置
       </div>
-      <CustomScrollbar class="max-h-48">
+      <div class="max-h-48 overflow-y-auto">
         <div class="px-2 pt-2 pb-0.5">
           <BaseListItem
             v-for="config in configs"
@@ -54,7 +54,7 @@
         <div v-if="configs.length === 0" class="px-4 py-6 text-center text-text-tertiary text-sm">
           暂无配置，请先添加
         </div>
-      </CustomScrollbar>
+      </div>
     </div>
 
     <!-- 会话列表区域 -->
@@ -64,7 +64,7 @@
       >
         <span>对话历史</span>
       </div>
-      <CustomScrollbar class="h-[calc(100%-28px)]">
+      <div class="h-[calc(100%-28px)] overflow-y-auto">
         <div class="px-2 pt-2 pb-0.5">
           <BaseListItem
             v-for="conv in conversations"
@@ -109,14 +109,13 @@
         >
           暂无对话
         </div>
-      </CustomScrollbar>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { BsRobot, BsPencil, BsTrash, BsX, BsChatLeft } from 'vue-icons-plus/bs';
-import CustomScrollbar from '../common/CustomScrollbar.vue';
 import BaseListItem from '../common/BaseListItem.vue';
 import type { AiConfig, AiConversation } from '../../models/types';
 import { formatTime } from '../../utils/formatTime';

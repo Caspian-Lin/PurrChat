@@ -194,7 +194,7 @@
         </div>
 
         <!-- 好友列表 -->
-        <div class="flex-1 min-h-0">
+        <div class="flex-1 min-h-0 flex flex-col">
           <!-- 标签切换 -->
           <div class="flex gap-2 p-3 bg-bg-secondary border-b border-border-subtle">
             <button
@@ -230,7 +230,7 @@
           />
 
           <!-- 群聊列表 -->
-          <CustomScrollbar v-else class="flex-1 min-h-0">
+          <div v-else class="flex-1 min-h-0 overflow-y-auto">
             <div class="px-2 pt-1 pb-0.5">
               <BaseListItem
                 v-for="conversation in filteredGroups"
@@ -267,14 +267,14 @@
             >
               <p>暂无群聊</p>
             </div>
-          </CustomScrollbar>
+          </div>
         </div>
       </div>
     </template>
 
     <!-- 好友信息窗口 -->
     <!-- 好友申请历史 -->
-    <CustomScrollbar v-if="showFriendRequestHistory" class="flex-1">
+    <div v-if="showFriendRequestHistory" class="flex-1 overflow-y-auto">
       <div class="flex flex-col p-6 h-full">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-2xl font-bold text-text-primary">好友申请记录</h2>
@@ -358,7 +358,7 @@
           </BaseListItem>
         </div>
       </div>
-    </CustomScrollbar>
+    </div>
 
     <FriendInfoModal
       v-else-if="selectedFriend"
@@ -421,7 +421,6 @@ import FriendList from '../FriendList.vue';
 import FriendInfoModal from '../FriendInfoModal.vue';
 import UserProfileModal from '../UserProfileModal.vue';
 import BasePanel from './BasePanel.vue';
-import CustomScrollbar from '../../common/CustomScrollbar.vue';
 import BaseListItem from '../../common/BaseListItem.vue';
 import type { User, Friendship, Conversation } from '../../../models/types';
 import { BsX, BsCpu } from 'vue-icons-plus/bs';

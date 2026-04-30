@@ -1,5 +1,5 @@
 <template>
-  <div v-if="conversation" class="flex flex-col h-full bg-bg-tertiary">
+  <div v-if="conversation" class="flex flex-col flex-1 min-h-0 bg-bg-tertiary">
     <!-- 聊天头部 -->
     <div
       class="flex items-center justify-between px-4 py-3 gap-2 bg-bg-secondary border-b border-border-color flex-shrink-0"
@@ -47,9 +47,9 @@
     <!-- 可调整大小的容器：包含消息列表和输入区 -->
     <div class="flex flex-col flex-1 overflow-hidden">
       <!-- 消息列表 -->
-      <CustomScrollbar
+      <div
         ref="messagesContainer"
-        class="flex-1 bg-bg-quaternary border-b border-border-color min-h-0"
+        class="flex-1 overflow-y-auto bg-bg-quaternary border-b border-border-color min-h-0"
       >
         <div class="p-4 space-y-4">
           <template v-for="(message, index) in messages" :key="message.id">
@@ -242,7 +242,7 @@
             <p class="text-sm">选择一个会话开始聊天</p>
           </div>
         </div>
-      </CustomScrollbar>
+      </div>
 
       <!-- 分割器 -->
       <ResizableSplitter
@@ -379,7 +379,6 @@ import {
   BsCpu,
 } from 'vue-icons-plus/bs';
 import ResizableSplitter from '../common/Splitter.vue';
-import CustomScrollbar from '../common/CustomScrollbar.vue';
 import EmojiPicker from '../common/EmojiPicker.vue';
 import ImagePreviewModal from '../common/ImagePreviewModal.vue';
 import { useFileUpload } from '../../composables/useFileUpload';
@@ -413,7 +412,7 @@ const emit = defineEmits<{
 
 const newMessage = ref('');
 const inputAreaHeight = ref(300);
-const messagesContainer = ref<InstanceType<typeof CustomScrollbar> | null>(null);
+const messagesContainer = ref<HTMLElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const isDragOver = ref(false);
 
@@ -622,7 +621,7 @@ function handlePreviewDownload() {
 const scrollToBottom = async () => {
   await nextTick();
   if (messagesContainer.value) {
-    messagesContainer.value.scrollToBottom();
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
   }
 };
 
@@ -664,7 +663,7 @@ const handleSplitterResize = async (height: number) => {
   inputAreaHeight.value = height;
   await nextTick();
   if (messagesContainer.value) {
-    messagesContainer.value.updateScrollbar();
+    // Native scrollbar updates automatically
   }
 };
 

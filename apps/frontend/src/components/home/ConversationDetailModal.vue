@@ -151,7 +151,7 @@
             添加成员
           </button>
         </div>
-        <CustomScrollbar class="max-h-64 rounded-lg" style="background: var(--surface-color)">
+        <div class="max-h-64 rounded-lg overflow-y-auto" style="background: var(--surface-color)">
           <div class="px-2 pt-2 pb-0.5">
             <BaseListItem
               v-for="member in members"
@@ -247,7 +247,7 @@
               </template>
             </BaseListItem>
           </div>
-        </CustomScrollbar>
+        </div>
       </div>
 
       <!-- 发送消息按钮 -->
@@ -319,7 +319,6 @@ import { BsCamera, BsPencil, BsCheck, BsX, BsCpu } from 'vue-icons-plus/bs';
 import BaseModal from '../common/BaseModal.vue';
 import BaseListItem from '../common/BaseListItem.vue';
 import AddMemberModal from './AddMemberModal.vue';
-import CustomScrollbar from '../common/CustomScrollbar.vue';
 import { api } from '../../models/api';
 import { getUserAvatar, getUserUsername, getOtherUser } from '../../utils/userHelpers';
 import { useNotification } from '../../composables/useNotification';

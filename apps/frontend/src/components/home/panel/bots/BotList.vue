@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col h-full">
-    <!-- 列表 -->
-    <CustomScrollbar v-if="bots.length > 0" class="flex-1 min-h-0">
+    <!-- Bot 列表 -->
+    <div v-if="bots.length > 0" class="flex-1 min-h-0 overflow-y-auto">
       <div class="px-2 pt-2 pb-0.5">
         <BaseListItem
           v-for="bot in bots"
@@ -30,7 +30,7 @@
             <span class="text-sm font-medium text-text-primary truncate">{{ bot.name }}</span>
             <span
               v-if="bot.status === 'disabled'"
-              class="text-[10px] px-1.5 py-0.5 rounded-full bg-bg-quaternary text-text-quaternary flex-shrink-0"
+              class="text-[10px] px-1.5 py-0.5 rounded-full bg-bg-quaternary text-text-tertiary flex-shrink-0"
             >
               已禁用
             </span>
@@ -104,23 +104,12 @@
           </template>
         </BaseListItem>
       </div>
-    </CustomScrollbar>
-
-    <!-- 加载更多按钮 -->
-    <div v-if="isSearch && hasMore" class="px-3 py-2 border-t border-border-subtle flex-shrink-0">
-      <button
-        class="w-full py-1.5 text-xs text-text-tertiary hover:text-text-secondary transition-colors"
-        :disabled="loading"
-        @click="$emit('load-more')"
-      >
-        {{ loading ? '加载中...' : '加载更多' }}
-      </button>
     </div>
 
-    <!-- 加载状态 -->
+    <!-- 加载状态（初始加载，尚无数据） -->
     <div v-else-if="loading" class="flex-1 flex items-center justify-center">
       <div
-        class="w-6 h-6 border-2 border-text-quaternary border-t-[var(--theme-primary)] rounded-full animate-spin"
+        class="w-6 h-6 border-2 border-text-tertiary border-t-[var(--theme-primary)] rounded-full animate-spin"
       />
     </div>
 
@@ -130,11 +119,22 @@
         class="w-20 h-20 rounded-full flex items-center justify-center mb-6"
         style="background: var(--surface-color)"
       >
-        <BsCpu :size="36" style="color: var(--text-quaternary-color, #a8a29e)" />
+        <BsCpu :size="36" style="color: var(--text-tertiary-color)" />
       </div>
       <p class="text-sm">
         {{ isSearch ? '没有找到匹配的 Bot' : '还没有创建 Bot' }}
       </p>
+    </div>
+
+    <!-- 加载更多按钮（独立于列表/空状态/加载状态） -->
+    <div v-if="isSearch && hasMore" class="px-3 py-2 border-t border-border-subtle flex-shrink-0">
+      <button
+        class="w-full py-1.5 text-xs text-text-tertiary hover:text-text-secondary transition-colors"
+        :disabled="loading"
+        @click="$emit('load-more')"
+      >
+        {{ loading ? '加载中...' : '加载更多' }}
+      </button>
     </div>
   </div>
 </template>
@@ -142,7 +142,6 @@
 <script setup lang="ts">
 import { BsCpu, BsChatDots, BsTrash } from 'vue-icons-plus/bs';
 import BaseListItem from '../../../common/BaseListItem.vue';
-import CustomScrollbar from '../../../common/CustomScrollbar.vue';
 import type { Bot, PublicBotDetail } from '../../../../models/types';
 
 interface Props {

@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-full bg-bg-tertiary">
+  <div class="flex flex-col flex-1 min-h-0 bg-bg-tertiary">
     <!-- 聊天头部 -->
     <div
       class="flex items-center justify-between px-4 py-3 gap-2 bg-bg-secondary border-b border-border-color flex-shrink-0"
@@ -23,9 +23,9 @@
     <!-- 可调整大小的容器 -->
     <div class="flex flex-col flex-1 overflow-hidden">
       <!-- 消息列表 -->
-      <CustomScrollbar
+      <div
         ref="messagesContainer"
-        class="flex-1 bg-bg-quaternary border-b border-border-color min-h-0"
+        class="flex-1 overflow-y-auto bg-bg-quaternary border-b border-border-color min-h-0"
       >
         <div class="p-4 space-y-2">
           <template v-for="(message, index) in messages" :key="message.id">
@@ -333,7 +333,7 @@
             <p class="text-sm">开始和 AI 对话吧</p>
           </div>
         </div>
-      </CustomScrollbar>
+      </div>
 
       <!-- 分割器 -->
       <ResizableSplitter
@@ -435,7 +435,6 @@ import {
   BsLightbulb,
 } from 'vue-icons-plus/bs';
 import ResizableSplitter from '../common/Splitter.vue';
-import CustomScrollbar from '../common/CustomScrollbar.vue';
 import { formatTimeWithSeconds, computeTimeDividers } from '../../utils/formatTime';
 import { renderMarkdown } from '../../utils/markdown';
 import { useAiStore } from '../../stores/ai';
@@ -466,7 +465,7 @@ const store = useAiStore();
 
 const newMessage = ref('');
 const inputAreaHeight = ref(200);
-const messagesContainer = ref<InstanceType<typeof CustomScrollbar> | null>(null);
+const messagesContainer = ref<HTMLElement | null>(null);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 
 // ===== 时间分割线 =====
@@ -664,7 +663,7 @@ const setReasoningEffort = (level: string) => {
 const scrollToBottom = async () => {
   await nextTick();
   if (messagesContainer.value) {
-    messagesContainer.value.scrollToBottom();
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
   }
 };
 
@@ -702,7 +701,7 @@ const handleSplitterResize = async (height: number) => {
   inputAreaHeight.value = height;
   await nextTick();
   if (messagesContainer.value) {
-    messagesContainer.value.updateScrollbar();
+    // Native scrollbar updates automatically
   }
 };
 
