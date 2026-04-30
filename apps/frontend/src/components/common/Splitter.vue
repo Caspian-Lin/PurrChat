@@ -1,7 +1,11 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <div :class="splitterClasses" @mousedown="handleMouseDown" @touchstart="handleTouchStart">
-    <div class="splitter-handle"></div>
+  <div
+    ref="el"
+    :class="splitterClasses"
+    @pointerdown="onPointerDown"
+  >
+    <div class="splitter-indicator" />
   </div>
 </template>
 
@@ -9,19 +13,11 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 interface Props {
-  // 方向：'horizontal'（水平分割）或 'vertical'（垂直分割）
   direction?: 'horizontal' | 'vertical';
-  // 初始位置（像素，相对于容器）
   initialPosition?: number;
-  // 最小位置（像素）
   minPosition?: number;
-  // 最大位置（像素）
   maxPosition?: number;
-  // 分割器宽度/高度
-  splitterSize?: number;
-  // 是否禁用调整
   disabled?: boolean;
-  // 存储键（用于保存位置到localStorage）
   storageKey?: string;
 }
 
@@ -30,7 +26,6 @@ const props = withDefaults(defineProps<Props>(), {
   initialPosition: 300,
   minPosition: 100,
   maxPosition: 800,
-  splitterSize: 1,
   disabled: false,
   storageKey: '',
 });
@@ -41,216 +36,173 @@ const emit = defineEmits<{
   resizeEnd: [];
 }>();
 
-// 引用
-// const splitterRef = ref<HTMLElement | null>(null);
+const el = ref<HTMLElement | null>(null);
+const isActive = ref(false);
 
-// 状态
-const currentPosition = ref(props.initialPosition);
-const isResizing = ref(false);
-const startPos = ref(0);
-const startPosition = ref(0);
-
-// 计算属性
 const splitterClasses = computed(() => [
   'splitter',
   `splitter--${props.direction}`,
-  {
-    'splitter--active': isResizing.value,
-    'splitter--disabled': props.disabled,
-  },
+  { 'splitter--active': isActive.value, 'splitter--disabled': props.disabled },
 ]);
 
-// 处理鼠标按下
-const handleMouseDown = (e: MouseEvent) => {
-  if (props.disabled) return;
-  e.preventDefault();
-  startResize(e.clientX, e.clientY);
-};
+// 拖拽状态（不用 ref，避免不必要的响应式开销）
+let startPos = 0;
+let startPosition = 0;
 
-// 处理触摸开始
-const handleTouchStart = (e: TouchEvent) => {
-  if (props.disabled) return;
-  e.preventDefault();
-  const touch = e.touches[0];
-  if (touch) {
-    startResize(touch.clientX, touch.clientY);
+function getSavedPosition(): number {
+  if (props.storageKey) {
+    const saved = localStorage.getItem(props.storageKey);
+    if (saved) {
+      const pos = parseInt(saved, 10);
+      if (!isNaN(pos) && pos >= props.minPosition && pos <= props.maxPosition) {
+        return pos;
+      }
+    }
   }
-};
+  return props.initialPosition;
+}
 
-// 开始调整大小
-const startResize = (clientX: number, clientY: number) => {
-  isResizing.value = true;
-  startPos.value = props.direction === 'horizontal' ? clientX : clientY;
-  startPosition.value = currentPosition.value;
+function onPointerDown(e: PointerEvent) {
+  if (props.disabled) return;
+  e.preventDefault();
 
-  emit('resizeStart');
+  const target = el.value;
+  if (!target) return;
 
-  // 添加事件监听器
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
-  document.addEventListener('touchmove', handleTouchMove, { passive: false });
-  document.addEventListener('touchend', handleTouchEnd);
+  target.setPointerCapture(e.pointerId);
+  isActive.value = true;
 
-  // 防止文本选择
+  startPos = props.direction === 'horizontal' ? e.clientX : e.clientY;
+  startPosition = getSavedPosition();
+
   document.body.style.userSelect = 'none';
   document.body.style.cursor = props.direction === 'horizontal' ? 'col-resize' : 'row-resize';
-};
 
-// 处理鼠标移动
-const handleMouseMove = (e: MouseEvent) => {
-  if (!isResizing.value) return;
-  e.preventDefault();
-  updatePosition(e.clientX, e.clientY);
-};
+  emit('resizeStart');
+}
 
-// 处理触摸移动
-const handleTouchMove = (e: TouchEvent) => {
-  if (!isResizing.value) return;
-  e.preventDefault();
-  const touch = e.touches[0];
-  if (touch) {
-    updatePosition(touch.clientX, touch.clientY);
+function onPointerMove(e: PointerEvent) {
+  if (!isActive.value) return;
+
+  const currentPos = props.direction === 'horizontal' ? e.clientX : e.clientY;
+  const delta = currentPos - startPos;
+
+  // 垂直方向时，拖动方向与高度变化相反（往上拖 → 输入区变大）
+  const newPosition =
+    props.direction === 'vertical'
+      ? startPosition - delta
+      : startPosition + delta;
+
+  const clamped = Math.max(props.minPosition, Math.min(props.maxPosition, newPosition));
+  emit('resize', clamped);
+
+  if (props.storageKey) {
+    localStorage.setItem(props.storageKey, clamped.toString());
   }
-};
+}
 
-// 更新位置
-const updatePosition = (clientX: number, clientY: number) => {
-  const currentPos = props.direction === 'horizontal' ? clientX : clientY;
-  const delta = currentPos - startPos.value;
+function onPointerUp(e: PointerEvent) {
+  if (!isActive.value) return;
 
-  let newPosition = startPosition.value + delta;
-
-  // 垂直方向时，拖动方向与高度变化相反
-  if (props.direction === 'vertical') {
-    newPosition = startPosition.value - delta;
+  const target = el.value;
+  if (target) {
+    try {
+      target.releasePointerCapture(e.pointerId);
+    } catch {
+      // pointer 可能已自动释放
+    }
   }
 
-  // 限制最小和最大位置
-  newPosition = Math.max(props.minPosition, Math.min(props.maxPosition, newPosition));
-
-  currentPosition.value = newPosition;
-  emit('resize', newPosition);
-};
-
-// 处理鼠标释放
-const handleMouseUp = () => {
-  endResize();
-};
-
-// 处理触摸结束
-const handleTouchEnd = () => {
-  endResize();
-};
-
-// 结束调整大小
-const endResize = () => {
-  if (!isResizing.value) return;
-
-  isResizing.value = false;
-
-  // 移除事件监听器
-  document.removeEventListener('mousemove', handleMouseMove);
-  document.removeEventListener('mouseup', handleMouseUp);
-  document.removeEventListener('touchmove', handleTouchMove);
-  document.removeEventListener('touchend', handleTouchEnd);
-
-  // 恢复文本选择
+  isActive.value = false;
   document.body.style.userSelect = '';
   document.body.style.cursor = '';
 
   emit('resizeEnd');
+}
 
-  // 保存位置到localStorage
-  if (props.storageKey) {
-    localStorage.setItem(props.storageKey, currentPosition.value.toString());
-  }
-};
-
-// 生命周期
 onMounted(() => {
-  // 从localStorage恢复位置
-  if (props.storageKey) {
-    const savedPosition = localStorage.getItem(props.storageKey);
-    if (savedPosition) {
-      const position = parseInt(savedPosition, 10);
-      if (!isNaN(position) && position >= props.minPosition && position <= props.maxPosition) {
-        currentPosition.value = position;
-        emit('resize', currentPosition.value);
-      }
-    }
+  const target = el.value;
+  if (!target) return;
+
+  target.addEventListener('pointermove', onPointerMove);
+  target.addEventListener('pointerup', onPointerUp);
+  target.addEventListener('pointercancel', onPointerUp);
+
+  // 恢复保存的位置并通知父组件
+  const saved = getSavedPosition();
+  if (saved !== props.initialPosition) {
+    emit('resize', saved);
   }
 });
 
 onUnmounted(() => {
-  // 清理事件监听器
-  document.removeEventListener('mousemove', handleMouseMove);
-  document.removeEventListener('mouseup', handleMouseUp);
-  document.removeEventListener('touchmove', handleTouchMove);
-  document.removeEventListener('touchend', handleTouchEnd);
+  const target = el.value;
+  if (!target) return;
+
+  target.removeEventListener('pointermove', onPointerMove);
+  target.removeEventListener('pointerup', onPointerUp);
+  target.removeEventListener('pointercancel', onPointerUp);
 });
 </script>
 
 <style scoped>
 .splitter {
   position: relative;
-  background-color: transparent;
-  transition: background-color 0.2s cubic-bezier(0.25, 1, 0.5, 1);
-  cursor: pointer;
   z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
+  background-color: transparent;
 }
 
+/* —— 水平分割（左右拖拽） —— */
 .splitter--horizontal {
   width: 1px;
   height: 100%;
   cursor: col-resize;
-  background-color: var(--border-subtle-color, #e5e7eb);
 }
 
+/* —— 垂直分割（上下拖拽） —— */
 .splitter--vertical {
   width: 100%;
   height: 1px;
   cursor: row-resize;
-  background-color: var(--border-subtle-color, #e5e7eb);
 }
 
-.splitter:hover,
-.splitter--active {
+/* 可视化指示线 */
+.splitter-indicator {
+  background-color: var(--border-subtle-color, #e5e7eb);
+  border-radius: 9999px;
+  transition: background-color 0.2s cubic-bezier(0.25, 1, 0.5, 1),
+    transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.splitter--horizontal .splitter-indicator {
+  width: 1px;
+  height: 24px;
+}
+
+.splitter--vertical .splitter-indicator {
+  width: 24px;
+  height: 1px;
+}
+
+/* 悬停 / 拖拽中 */
+.splitter:hover .splitter-indicator,
+.splitter--active .splitter-indicator {
   background-color: var(--theme-primary);
 }
 
-.splitter-handle {
-  position: absolute;
-  background-color: var(--border-color, #e5e7eb);
-  transition: background-color 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+.splitter--vertical.splitter--active .splitter-indicator {
+  transform: scaleY(2);
 }
 
-.splitter--horizontal .splitter-handle {
-  width: 1px;
-  height: 20px;
-  border-radius: 1px;
-}
-
-.splitter--vertical .splitter-handle {
-  width: 20px;
-  height: 1px;
-  border-radius: 1px;
-}
-
-.splitter:hover .splitter-handle,
-.splitter--active .splitter-handle {
-  background-color: white;
+.splitter--horizontal.splitter--active .splitter-indicator {
+  transform: scaleX(2);
 }
 
 .splitter--disabled {
   pointer-events: none;
   opacity: 0.5;
-}
-
-/* 防止文本选择 */
-.splitter--active * {
-  user-select: none !important;
 }
 </style>
