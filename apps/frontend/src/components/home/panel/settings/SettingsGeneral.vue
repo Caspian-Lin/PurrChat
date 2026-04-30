@@ -160,7 +160,6 @@ const fontSizes = [
 ];
 
 // ===== 本地存储统计 =====
-const storageUsage = ref<number>(0);
 const clearingCache = ref(false);
 
 function formatBytes(bytes: number): string {
@@ -170,8 +169,19 @@ function formatBytes(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 }
 
+// 遍历 localStorage 计算总用量（UTF-16 每字符 2 字节）
+function calcTotalLocalStorageBytes(): number {
+  let total = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)!;
+    const val = localStorage.getItem(key);
+    if (val) total += (key.length + val.length) * 2;
+  }
+  return total;
+}
+
 const storageBreakdown = computed(() => {
-  const breakdown: { label: string; size: string }[] = [];
+  const breakdown: { label: string; size: string; bytes: number }[] = [];
   const userId = getCurrentUserId();
 
   if (userId) {
@@ -197,40 +207,32 @@ const storageBreakdown = computed(() => {
       `ai_act_conv_${userId}`,
     ]);
 
-    if (msgSize > 0) breakdown.push({ label: '聊天记录缓存', size: formatBytes(msgSize) });
-    if (convSize > 0) breakdown.push({ label: '会话状态', size: formatBytes(convSize) });
-    if (aiSize > 0) breakdown.push({ label: 'AI 对话数据', size: formatBytes(aiSize) });
+    if (msgSize > 0) breakdown.push({ label: '聊天记录缓存', size: formatBytes(msgSize), bytes: msgSize });
+    if (convSize > 0) breakdown.push({ label: '会话状态', size: formatBytes(convSize), bytes: convSize });
+    if (aiSize > 0) breakdown.push({ label: 'AI 对话数据', size: formatBytes(aiSize), bytes: aiSize });
   }
 
   // 设置数据
   const settingsData = localStorage.getItem('purr-chat-settings');
   const settingsSize = settingsData ? settingsData.length * 2 : 0;
-  if (settingsSize > 0) breakdown.push({ label: '应用设置', size: formatBytes(settingsSize) });
+  if (settingsSize > 0)
+    breakdown.push({ label: '应用设置', size: formatBytes(settingsSize), bytes: settingsSize });
 
   // 账号信息（Cookie token 不在 localStorage 中）
   const userData = localStorage.getItem('user');
   const authSize = userData ? userData.length * 2 : 0;
-  if (authSize > 0) breakdown.push({ label: '账号信息', size: formatBytes(authSize) });
+  if (authSize > 0) breakdown.push({ label: '账号信息', size: formatBytes(authSize), bytes: authSize });
 
   return breakdown;
 });
 
-const storageText = computed(() => formatBytes(storageUsage.value));
+// 总计 = 所有分类之和，直接从 localStorage 计算，不依赖 navigator.storage.estimate()
+const storageText = computed(() => {
+  const total = storageBreakdown.value.reduce((sum, item) => sum + item.bytes, 0);
+  return formatBytes(total);
+});
 
-async function refreshStorageEstimate() {
-  if ('storage' in navigator && 'estimate' in navigator.storage) {
-    try {
-      const estimate = await navigator.storage.estimate();
-      storageUsage.value = estimate.usage || 0;
-    } catch {
-      // 不支持，忽略
-    }
-  }
-}
-
-onMounted(refreshStorageEstimate);
-
-async function handleClearCache() {
+function handleClearCache() {
   const userId = getCurrentUserId();
   if (!userId) {
     showError('未找到用户信息');
@@ -243,8 +245,6 @@ async function handleClearCache() {
     // 重新初始化缓存服务
     messageCacheService.init(userId);
     conversationStateCacheService.init(userId);
-    // 刷新存储统计
-    await refreshStorageEstimate();
     success('缓存已清除');
   } catch {
     showError('清除缓存失败');
