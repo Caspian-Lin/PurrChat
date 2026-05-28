@@ -171,7 +171,8 @@ async function handleRunAll() {
       step_mode: false,
       session_id: sessionId.value || undefined,
       sender_name: senderName.value,
-      workflow_config: (props.mechanism.reply?.workflow ?? props.mechanism.reply?.special_mode) as any,
+      workflow_config: (props.mechanism.reply?.workflow ??
+        props.mechanism.reply?.special_mode) as any,
     });
 
     if (result.success && result.data) {
@@ -202,7 +203,8 @@ async function handleStepMode() {
       step_mode: true,
       session_id: sessionId.value || undefined,
       sender_name: senderName.value,
-      workflow_config: (props.mechanism.reply?.workflow ?? props.mechanism.reply?.special_mode) as any,
+      workflow_config: (props.mechanism.reply?.workflow ??
+        props.mechanism.reply?.special_mode) as any,
     });
 
     if (result.success && result.data) {

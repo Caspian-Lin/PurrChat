@@ -320,7 +320,10 @@ const hasProbabilityMechanism = computed(() => {
 
 // 计算属性：找到工作流机制（调试面板用）
 const workflowMechanism = computed<Mechanism | null>(() => {
-  return form.mechanisms.find((m) => m.reply.type === 'workflow' || m.reply.type === 'special_mode') || null;
+  return (
+    form.mechanisms.find((m) => m.reply.type === 'workflow' || m.reply.type === 'special_mode') ||
+    null
+  );
 });
 
 function resetForm() {

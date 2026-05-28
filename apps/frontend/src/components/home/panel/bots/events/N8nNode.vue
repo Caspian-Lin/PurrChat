@@ -54,8 +54,8 @@ const HANDLE_COLORS: Record<string, string> = {
   font-size: 10px;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-weight: 600;
-  color: #FF6D5A;
-  background: color-mix(in srgb, #FF6D5A 10%, transparent);
+  color: #ff6d5a;
+  background: color-mix(in srgb, #ff6d5a 10%, transparent);
   padding: 1px 5px;
   border-radius: var(--radius-xs, 4px);
 }

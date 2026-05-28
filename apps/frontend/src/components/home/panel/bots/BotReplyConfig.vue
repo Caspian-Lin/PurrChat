@@ -199,7 +199,10 @@
     </div>
 
     <!-- 工作流（Agent）回复 -->
-    <div v-if="localConfig.type === 'workflow' || localConfig.type === 'special_mode'" class="space-y-3">
+    <div
+      v-if="localConfig.type === 'workflow' || localConfig.type === 'special_mode'"
+      class="space-y-3"
+    >
       <!-- 事件链预览 -->
       <div
         v-if="(localConfig.workflow ?? localConfig.special_mode)?.events?.length"
@@ -207,10 +210,12 @@
       >
         <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-text-secondary font-medium">
-            事件链（{{ (localConfig.workflow ?? localConfig.special_mode)?.events?.length }} 个事件）
+            事件链（{{ (localConfig.workflow ?? localConfig.special_mode)?.events?.length }}
+            个事件）
           </span>
           <span class="text-xs text-text-quaternary">
-            {{ (localConfig.workflow ?? localConfig.special_mode)?.end_conditions?.length || 0 }} 个结束条件
+            {{ (localConfig.workflow ?? localConfig.special_mode)?.end_conditions?.length || 0 }}
+            个结束条件
           </span>
         </div>
         <div class="flex flex-wrap gap-1.5">
@@ -256,12 +261,7 @@
 import { reactive, watch } from 'vue';
 import { BsPlus, BsX, BsBoxArrowUpRight } from 'vue-icons-plus/bs';
 import { useAiStore } from '../../../../stores/ai';
-import type {
-  ReplySpec,
-  WorkflowSpec,
-  TriggerSpec,
-  WorkflowEvent,
-} from '../../../../models/types';
+import type { ReplySpec, WorkflowSpec, TriggerSpec, WorkflowEvent } from '../../../../models/types';
 import { getDefaultPorts } from '../../../../utils/portTypes';
 
 interface Props {
@@ -372,9 +372,7 @@ function buildLocalConfig(config: ReplySpec): ReplySpec {
       : config?.special_mode
         ? deepCloneWorkflow(config.special_mode)
         : { ...defaultWorkflow },
-    special_mode: config?.special_mode
-      ? deepCloneWorkflow(config.special_mode)
-      : undefined,
+    special_mode: config?.special_mode ? deepCloneWorkflow(config.special_mode) : undefined,
   };
 }
 
@@ -395,7 +393,11 @@ watch(
 );
 
 function emitUpdate() {
-  emit('update', { ...localConfig, workflow: deepCloneWorkflow(localConfig.workflow), special_mode: deepCloneWorkflow(localConfig.special_mode) });
+  emit('update', {
+    ...localConfig,
+    workflow: deepCloneWorkflow(localConfig.workflow),
+    special_mode: deepCloneWorkflow(localConfig.special_mode),
+  });
 }
 
 function deepCloneWorkflow(spec?: WorkflowSpec): WorkflowSpec | undefined {

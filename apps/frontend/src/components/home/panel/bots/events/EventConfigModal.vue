@@ -86,13 +86,17 @@
                   :class="{ 'logic-toggle__btn--active': ifLogic === 'AND' }"
                   type="button"
                   @click="ifLogic = 'AND'"
-                >AND（全部满足）</button>
+                >
+                  AND（全部满足）
+                </button>
                 <button
                   class="logic-toggle__btn"
                   :class="{ 'logic-toggle__btn--active': ifLogic === 'OR' }"
                   type="button"
                   @click="ifLogic = 'OR'"
-                >OR（任一满足）</button>
+                >
+                  OR（任一满足）
+                </button>
               </div>
             </div>
             <div class="form-group">
@@ -102,7 +106,11 @@
                   <span class="if-condition-row__index">{{ idx + 1 }}</span>
                   <div class="if-condition-row__input-wrap">
                     <input
-                      :ref="(el: any) => { if (el) ifCondRefs[`${idx}-left`] = el }"
+                      :ref="
+                        (el: any) => {
+                          if (el) ifCondRefs[`${idx}-left`] = el;
+                        }
+                      "
                       v-model="cond.left"
                       type="text"
                       class="form-input if-condition-row__input"
@@ -113,7 +121,9 @@
                       type="button"
                       title="插入变量"
                       @click="(e: MouseEvent) => openVarPicker(e, ifCondRefs[`${idx}-left`])"
-                    >{'{ }'}</button>
+                    >
+                      {'{ }'}
+                    </button>
                   </div>
                   <select v-model="cond.operator" class="form-input if-condition-row__operator">
                     <option value="==">==</option>
@@ -126,7 +136,11 @@
                   </select>
                   <div class="if-condition-row__input-wrap">
                     <input
-                      :ref="(el: any) => { if (el) ifCondRefs[`${idx}-right`] = el }"
+                      :ref="
+                        (el: any) => {
+                          if (el) ifCondRefs[`${idx}-right`] = el;
+                        }
+                      "
                       v-model="cond.right"
                       type="text"
                       class="form-input if-condition-row__input"
@@ -137,21 +151,30 @@
                       type="button"
                       title="插入变量"
                       @click="(e: MouseEvent) => openVarPicker(e, ifCondRefs[`${idx}-right`])"
-                    >{'{ }'}</button>
+                    >
+                      {'{ }'}
+                    </button>
                   </div>
                   <button
                     v-if="ifConditions.length > 1"
                     class="port-remove-btn"
                     type="button"
                     @click="ifConditions.splice(idx, 1)"
-                  >&times;</button>
+                  >
+                    &times;
+                  </button>
                 </div>
               </div>
-              <button class="add-port-btn" type="button" @click="ifConditions.push({ left: '', operator: '==', right: '' })">
+              <button
+                class="add-port-btn"
+                type="button"
+                @click="ifConditions.push({ left: '', operator: '==', right: '' })"
+              >
                 + 添加条件
               </button>
               <p class="form-hint">
-                条件值支持变量引用格式 <code>{'{节点名.端口名}'}</code>，点击输入框右侧的 <code>{'{ }'}</code> 按钮选择。
+                条件值支持变量引用格式 <code>{'{节点名.端口名}'}</code>，点击输入框右侧的
+                <code>{'{ }'}</code> 按钮选择。
               </p>
             </div>
           </template>
@@ -190,9 +213,7 @@
 
           <!-- switch 配置 -->
           <template v-if="form.type === 'switch'">
-            <p class="form-hint">
-              根据匹配值路由到不同分支。将上游数据连接到「匹配值」输入端口。
-            </p>
+            <p class="form-hint">根据匹配值路由到不同分支。将上游数据连接到「匹配值」输入端口。</p>
             <div class="form-group">
               <label class="form-label">分支列表</label>
               <div class="switch-cases">
@@ -213,10 +234,15 @@
                     v-if="switchCases.length > 2"
                     class="port-remove-btn"
                     @click="switchCases.splice(idx, 1)"
-                  >×</button>
+                  >
+                    ×
+                  </button>
                 </div>
               </div>
-              <button class="add-port-btn" @click="switchCases.push({ value: '', label: `分支 ${switchCases.length + 1}` })">
+              <button
+                class="add-port-btn"
+                @click="switchCases.push({ value: '', label: `分支 ${switchCases.length + 1}` })"
+              >
                 + 添加分支
               </button>
             </div>
@@ -224,9 +250,7 @@
 
           <!-- merge 配置 -->
           <template v-if="form.type === 'merge'">
-            <p class="form-hint">
-              汇聚多条分支到同一个后续节点。调整输入数量后需重新连接。
-            </p>
+            <p class="form-hint">汇聚多条分支到同一个后续节点。调整输入数量后需重新连接。</p>
             <div class="form-group">
               <label class="form-label">输入数量</label>
               <input
@@ -282,7 +306,9 @@
                   class="var-insert-btn"
                   title="插入变量"
                   @click="(e) => openVarPicker(e, $refs.toolBodyTextarea as HTMLTextAreaElement)"
-                >{'{ }'}</button>
+                >
+                  {'{ }'}
+                </button>
               </div>
             </div>
             <div class="form-group">
@@ -296,9 +322,7 @@
                 class="form-input"
               />
             </div>
-            <p class="form-hint">
-              响应内容输出到「响应」端口，HTTP 状态码输出到「状态码」端口。
-            </p>
+            <p class="form-hint">响应内容输出到「响应」端口，HTTP 状态码输出到「状态码」端口。</p>
           </template>
 
           <!-- dify 配置 -->
@@ -345,10 +369,13 @@
                   class="var-insert-btn"
                   title="插入变量"
                   @click="(e) => openVarPicker(e, $refs.difyInputsTextarea as HTMLTextAreaElement)"
-                >{'{ }'}</button>
+                >
+                  {'{ }'}
+                </button>
               </div>
               <p class="form-hint">
-                键为 Dify 工作流变量名，值支持变量引用。点击 <strong>{'{}'}</strong> 从上游选择变量。
+                键为 Dify 工作流变量名，值支持变量引用。点击
+                <strong>{'{}'}</strong> 从上游选择变量。
               </p>
             </div>
             <div class="form-group">
@@ -381,9 +408,7 @@
                 class="form-input"
               />
             </div>
-            <p class="form-hint">
-              输出到「输出」端口，错误信息输出到「错误」端口。
-            </p>
+            <p class="form-hint">输出到「输出」端口，错误信息输出到「错误」端口。</p>
           </template>
 
           <!-- n8n 配置 -->
@@ -418,11 +443,11 @@
                   class="var-insert-btn"
                   title="插入变量"
                   @click="(e) => openVarPicker(e, $refs.n8nBodyTextarea as HTMLTextAreaElement)"
-                >{'{ }'}</button>
+                >
+                  {'{ }'}
+                </button>
               </div>
-              <p class="form-hint">
-                留空时自动使用「输入」端口的值作为请求体。
-              </p>
+              <p class="form-hint">留空时自动使用「输入」端口的值作为请求体。</p>
             </div>
             <div class="form-group">
               <label class="form-label">认证方式</label>
@@ -440,10 +465,14 @@
                 v-model="form.config.auth_credential"
                 type="text"
                 class="form-input"
-                :placeholder="form.config.auth_type === 'basic' ? 'user:password' : 'X-API-Key:your-key'"
+                :placeholder="
+                  form.config.auth_type === 'basic' ? 'user:password' : 'X-API-Key:your-key'
+                "
               />
               <p class="form-hint">
-                {{ form.config.auth_type === 'basic' ? '格式: 用户名:密码' : '格式: Header名称:值' }}
+                {{
+                  form.config.auth_type === 'basic' ? '格式: 用户名:密码' : '格式: Header名称:值'
+                }}
               </p>
             </div>
             <div class="form-group">
@@ -457,9 +486,7 @@
                 class="form-input"
               />
             </div>
-            <p class="form-hint">
-              输出到「输出」端口，错误信息输出到「错误」端口。
-            </p>
+            <p class="form-hint">输出到「输出」端口，错误信息输出到「错误」端口。</p>
           </template>
 
           <!-- LLM 配置 -->
@@ -593,8 +620,12 @@
                   <button
                     class="var-insert-btn"
                     title="插入变量"
-                    @click="(e) => openVarPicker(e, $refs.builtinTemplateTextarea as HTMLTextAreaElement)"
-                  >{'{ }'}</button>
+                    @click="
+                      (e) => openVarPicker(e, $refs.builtinTemplateTextarea as HTMLTextAreaElement)
+                    "
+                  >
+                    {'{ }'}
+                  </button>
                 </div>
                 <p class="form-hint">
                   可用变量：{'{input}'} 当前消息 · {'{username}'} 发送者 · {'{time}'} 时间 ·
@@ -645,12 +676,14 @@
                   class="var-insert-btn"
                   title="插入变量"
                   @click="(e) => openVarPicker(e, $refs.templateTextarea as HTMLTextAreaElement)"
-                >{'{ }'}</button>
+                >
+                  {'{ }'}
+                </button>
               </div>
               <p class="form-hint">
                 可用变量：{'{input}'} 当前消息 · {'{username}'} 发送者 · {'{time}'} 时间 ·
-                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）。
-                点击 <strong>{'{}'}</strong> 按钮从上游节点选择变量。
+                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）。 点击
+                <strong>{'{}'}</strong> 按钮从上游节点选择变量。
               </p>
             </div>
           </template>
@@ -671,12 +704,14 @@
                   class="var-insert-btn"
                   title="插入变量"
                   @click="(e) => openVarPicker(e, $refs.replyTextarea as HTMLTextAreaElement)"
-                >{'{ }'}</button>
+                >
+                  {'{ }'}
+                </button>
               </div>
               <p class="form-hint">
                 可用变量：{'{input}'} 当前消息 · {'{username}'} 发送者 · {'{time}'} 时间 ·
-                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）。
-                点击 <strong>{'{}'}</strong> 按钮从上游节点选择变量。
+                {'{args}'} 除首个词外的参数 · {'{args:N}'} 第 N 个词（0 起）。 点击
+                <strong>{'{}'}</strong> 按钮从上游节点选择变量。
               </p>
             </div>
           </template>
@@ -793,13 +828,16 @@ const ifCondRefs = reactive<Record<string, HTMLInputElement>>({});
 const ifConditions = computed({
   get: () => {
     const raw = form.config.conditions;
-    if (Array.isArray(raw) && raw.length > 0) return raw as { left: string; operator: string; right: string }[];
+    if (Array.isArray(raw) && raw.length > 0)
+      return raw as { left: string; operator: string; right: string }[];
     // 旧格式迁移：从 operator/left_default/right_default 转换
-    return [{
-      left: (form.config.left_default as string) || '',
-      operator: (form.config.operator as string) || '==',
-      right: (form.config.right_default as string) || '',
-    }];
+    return [
+      {
+        left: (form.config.left_default as string) || '',
+        operator: (form.config.operator as string) || '==',
+        right: (form.config.right_default as string) || '',
+      },
+    ];
   },
   set: (val) => {
     form.config.conditions = val;
@@ -812,7 +850,9 @@ const ifConditions = computed({
 
 const ifLogic = computed({
   get: () => (form.config.logic as string) || 'AND',
-  set: (val) => { form.config.logic = val; },
+  set: (val) => {
+    form.config.logic = val;
+  },
 });
 
 // 变量选择器状态
@@ -822,7 +862,10 @@ const varPickerTarget = ref<HTMLTextAreaElement | HTMLInputElement | null>(null)
 
 function openVarPicker(event: MouseEvent, targetEl: HTMLTextAreaElement | HTMLInputElement) {
   varPickerTarget.value = targetEl;
-  varPickerAnchor.value = { x: (event.target as HTMLElement).getBoundingClientRect().left, y: (event.target as HTMLElement).getBoundingClientRect().bottom };
+  varPickerAnchor.value = {
+    x: (event.target as HTMLElement).getBoundingClientRect().left,
+    y: (event.target as HTMLElement).getBoundingClientRect().bottom,
+  };
   showVarPicker.value = true;
 }
 
@@ -853,23 +896,34 @@ const customPorts = reactive<{ name: string; dataType: string; direction: 'input
 // Switch 分支列表
 const switchCases = computed({
   get: () => (form.config.cases as { value: string; label: string }[]) || [],
-  set: (val) => { form.config.cases = val; },
+  set: (val) => {
+    form.config.cases = val;
+  },
 });
 
 // 类型分组
-const controlTypes = (['trigger', 'end', 'wait', 'if', 'loop', 'switch', 'merge'] as EventType[]).map(
-  (value) => ({ value, ...NODE_TYPE_META[value] })
-);
+const controlTypes = (
+  ['trigger', 'end', 'wait', 'if', 'loop', 'switch', 'merge'] as EventType[]
+).map((value) => ({ value, ...NODE_TYPE_META[value] }));
 
 const processTypes = (
   ['llm', 'builtin', 'python', 'template', 'tool', 'dify', 'n8n', 'reply'] as EventType[]
-).map(
-  (value) => ({ value, ...NODE_TYPE_META[value] })
-);
+).map((value) => ({ value, ...NODE_TYPE_META[value] }));
 
 // 是否为支持自定义端口的节点类型
 const supportsCustomPorts = computed(() =>
-  ['llm', 'builtin', 'python', 'template', 'if', 'wait', 'reply', 'history', 'dify', 'n8n'].includes(form.type)
+  [
+    'llm',
+    'builtin',
+    'python',
+    'template',
+    'if',
+    'wait',
+    'reply',
+    'history',
+    'dify',
+    'n8n',
+  ].includes(form.type)
 );
 
 const builtinTypes = [
@@ -910,7 +964,12 @@ function getDefaultConfig(type: EventType): Record<string, any> {
     case 'loop':
       return { condition: '', max_iterations: 10 };
     case 'switch':
-      return { cases: [{ value: '', label: '分支 1' }, { value: '', label: '分支 2' }] };
+      return {
+        cases: [
+          { value: '', label: '分支 1' },
+          { value: '', label: '分支 2' },
+        ],
+      };
     case 'merge':
       return { input_count: 2 };
     case 'tool':

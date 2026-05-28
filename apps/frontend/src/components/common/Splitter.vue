@@ -1,10 +1,6 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <div
-    ref="el"
-    :class="splitterClasses"
-    @pointerdown="onPointerDown"
-  >
+  <div ref="el" :class="splitterClasses" @pointerdown="onPointerDown">
     <div class="splitter-indicator" />
   </div>
 </template>
@@ -89,9 +85,7 @@ function onPointerMove(e: PointerEvent) {
 
   // 垂直方向时，拖动方向与高度变化相反（往上拖 → 输入区变大）
   const newPosition =
-    props.direction === 'vertical'
-      ? startPosition - delta
-      : startPosition + delta;
+    props.direction === 'vertical' ? startPosition - delta : startPosition + delta;
 
   const clamped = Math.max(props.minPosition, Math.min(props.maxPosition, newPosition));
   emit('resize', clamped);
@@ -173,7 +167,8 @@ onUnmounted(() => {
 .splitter-indicator {
   background-color: var(--border-subtle-color, #e5e7eb);
   border-radius: 9999px;
-  transition: background-color 0.2s cubic-bezier(0.25, 1, 0.5, 1),
+  transition:
+    background-color 0.2s cubic-bezier(0.25, 1, 0.5, 1),
     transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
 }
 

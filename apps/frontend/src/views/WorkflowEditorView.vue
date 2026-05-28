@@ -86,11 +86,19 @@
             添加事件
           </button>
           <button class="toolbar-btn" @click="handleAutoLayout">自动布局</button>
-          <button class="toolbar-btn toolbar-btn--subtle" title="导入 YAML 流程" @click="handleYamlImport">
+          <button
+            class="toolbar-btn toolbar-btn--subtle"
+            title="导入 YAML 流程"
+            @click="handleYamlImport"
+          >
             <BsUpload :size="13" />
             YAML
           </button>
-          <button class="toolbar-btn toolbar-btn--subtle" title="导出 YAML 流程" @click="handleYamlExport">
+          <button
+            class="toolbar-btn toolbar-btn--subtle"
+            title="导出 YAML 流程"
+            @click="handleYamlExport"
+          >
             <BsDownload :size="13" />
             YAML
           </button>

@@ -481,11 +481,7 @@ class WebSocketEventManager {
     this.workflowCallbacks.forEach((callback) => callback('started', data));
   }
 
-  private handleWorkflowEnded(data: {
-    bot_id: string;
-    bot_name: string;
-    conversation_id: string;
-  }) {
+  private handleWorkflowEnded(data: { bot_id: string; bot_name: string; conversation_id: string }) {
     console.log('[WebSocketEventManager] Bot 工作流结束:', data);
     this.workflowCallbacks.forEach((callback) => callback('ended', data));
   }

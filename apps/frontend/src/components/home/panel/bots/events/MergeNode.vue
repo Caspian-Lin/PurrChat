@@ -6,9 +6,7 @@
     :outputs="OUTPUTS"
   >
     <template #body>
-      <div class="merge-node__info">
-        {{ inputCount }} 路汇聚
-      </div>
+      <div class="merge-node__info">{{ inputCount }} 路汇聚</div>
     </template>
   </BaseNode>
 </template>

@@ -9,9 +9,7 @@
   >
     <template #body>
       <div class="loop-node__config">
-        <span class="loop-node__detail">
-          {{ node.data.config?.max_iterations || 10 }} 次
-        </span>
+        <span class="loop-node__detail"> {{ node.data.config?.max_iterations || 10 }} 次 </span>
         <span v-if="node.data.config?.condition" class="loop-node__condition">
           {{ node.data.config.condition }}
         </span>

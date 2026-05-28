@@ -78,12 +78,27 @@
       </div>
 
       <!-- 隐私协议 + ICP 备案 -->
-      <div class="mt-8 pt-5 text-center space-y-1.5" style="border-top: 1px solid var(--border-subtle-color)">
+      <div
+        class="mt-8 pt-5 text-center space-y-1.5"
+        style="border-top: 1px solid var(--border-subtle-color)"
+      >
         <p class="text-xs" style="color: var(--text-tertiary-color)">
-          <router-link to="/privacy" class="hover:underline" style="color: var(--text-tertiary-color)">隐私政策</router-link>
+          <router-link
+            to="/privacy"
+            class="hover:underline"
+            style="color: var(--text-tertiary-color)"
+            >隐私政策</router-link
+          >
         </p>
         <p class="text-xs" style="color: var(--text-tertiary-color)">
-          <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" class="hover:underline" style="color: var(--text-tertiary-color)">京ICP备XXXXXXXX号</a>
+          <a
+            href="https://beian.miit.gov.cn/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="hover:underline"
+            style="color: var(--text-tertiary-color)"
+            >京ICP备XXXXXXXX号</a
+          >
         </p>
       </div>
     </div>

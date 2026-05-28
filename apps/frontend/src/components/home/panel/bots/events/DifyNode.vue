@@ -8,7 +8,10 @@
   >
     <template #body>
       <div class="dify-node__info">
-        <span class="dify-node__badge" :class="`dify-node__badge--${node.data.config?.app_type || 'workflow'}`">
+        <span
+          class="dify-node__badge"
+          :class="`dify-node__badge--${node.data.config?.app_type || 'workflow'}`"
+        >
           {{ node.data.config?.app_type === 'chatflow' ? 'Chat' : 'WF' }}
         </span>
         <span v-if="node.data.config?.api_base" class="dify-node__url">
@@ -62,13 +65,13 @@ const HANDLE_COLORS: Record<string, string> = {
 }
 
 .dify-node__badge--workflow {
-  color: #2354E6;
-  background: color-mix(in srgb, #2354E6 12%, transparent);
+  color: #2354e6;
+  background: color-mix(in srgb, #2354e6 12%, transparent);
 }
 
 .dify-node__badge--chatflow {
-  color: #0FC6C2;
-  background: color-mix(in srgb, #0FC6C2 12%, transparent);
+  color: #0fc6c2;
+  background: color-mix(in srgb, #0fc6c2 12%, transparent);
 }
 
 .dify-node__url {

@@ -4,12 +4,7 @@
       <div class="var-picker" :style="anchorStyle">
         <!-- 搜索 -->
         <div class="var-picker__search">
-          <input
-            v-model="search"
-            class="var-picker__input"
-            placeholder="搜索变量..."
-            autofocus
-          />
+          <input v-model="search" class="var-picker__input" placeholder="搜索变量..." autofocus />
         </div>
 
         <!-- 变量列表 -->

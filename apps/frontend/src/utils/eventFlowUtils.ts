@@ -115,10 +115,7 @@ export function connectionsToFlowEdges(
 }
 
 /** 将 FlowConnection[] 转换为 VueFlow Edge[] */
-export function eventsToFlowEdges(
-  events: WorkflowEvent[],
-  connections?: FlowConnection[]
-): Edge[] {
+export function eventsToFlowEdges(events: WorkflowEvent[], connections?: FlowConnection[]): Edge[] {
   if (connections && connections.length > 0) {
     return connectionsToFlowEdges(connections, events);
   }

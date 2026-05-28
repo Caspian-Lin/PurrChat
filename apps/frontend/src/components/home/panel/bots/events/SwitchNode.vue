@@ -7,9 +7,7 @@
     :handle-colors="HANDLE_COLORS"
   >
     <template #body>
-      <div class="switch-node__info">
-        {{ cases.length }} 个分支
-      </div>
+      <div class="switch-node__info">{{ cases.length }} 个分支</div>
     </template>
   </BaseNode>
 </template>

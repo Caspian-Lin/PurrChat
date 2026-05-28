@@ -1,12 +1,7 @@
 <template>
   <Teleport to="body">
     <Transition name="context-menu">
-      <div
-        v-if="visible"
-        ref="menuRef"
-        class="context-menu"
-        :style="menuStyle"
-      >
+      <div v-if="visible" ref="menuRef" class="context-menu" :style="menuStyle">
         <button
           v-for="action in actions"
           :key="action.key"

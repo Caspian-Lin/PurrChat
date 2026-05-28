@@ -37,9 +37,7 @@
     <!-- 工作流状态条 -->
     <div v-if="activeWorkflow" class="workflow-banner">
       <BsCpu :size="14" class="workflow-banner__icon" />
-      <span class="workflow-banner__text">
-        {{ activeWorkflow.bot_name }} · Agent 模式运行中
-      </span>
+      <span class="workflow-banner__text"> {{ activeWorkflow.bot_name }} · Agent 模式运行中 </span>
       <span class="workflow-banner__dot" />
       <button class="workflow-banner__stop" @click="handleDeactivateWorkflow">结束</button>
     </div>
@@ -533,10 +531,7 @@ websocketEventManager.onWorkflowChange((event, data) => {
 async function handleDeactivateWorkflow() {
   if (!activeWorkflow.value) return;
   try {
-    await api.deactivateWorkflow(
-      activeWorkflow.value.bot_id,
-      activeWorkflow.value.conversation_id
-    );
+    await api.deactivateWorkflow(activeWorkflow.value.bot_id, activeWorkflow.value.conversation_id);
     activeWorkflow.value = null;
   } catch {
     // 静默处理

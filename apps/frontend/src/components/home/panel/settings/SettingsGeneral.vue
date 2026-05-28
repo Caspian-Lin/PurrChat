@@ -207,9 +207,12 @@ const storageBreakdown = computed(() => {
       `ai_act_conv_${userId}`,
     ]);
 
-    if (msgSize > 0) breakdown.push({ label: '聊天记录缓存', size: formatBytes(msgSize), bytes: msgSize });
-    if (convSize > 0) breakdown.push({ label: '会话状态', size: formatBytes(convSize), bytes: convSize });
-    if (aiSize > 0) breakdown.push({ label: 'AI 对话数据', size: formatBytes(aiSize), bytes: aiSize });
+    if (msgSize > 0)
+      breakdown.push({ label: '聊天记录缓存', size: formatBytes(msgSize), bytes: msgSize });
+    if (convSize > 0)
+      breakdown.push({ label: '会话状态', size: formatBytes(convSize), bytes: convSize });
+    if (aiSize > 0)
+      breakdown.push({ label: 'AI 对话数据', size: formatBytes(aiSize), bytes: aiSize });
   }
 
   // 设置数据
@@ -221,7 +224,8 @@ const storageBreakdown = computed(() => {
   // 账号信息（Cookie token 不在 localStorage 中）
   const userData = localStorage.getItem('user');
   const authSize = userData ? userData.length * 2 : 0;
-  if (authSize > 0) breakdown.push({ label: '账号信息', size: formatBytes(authSize), bytes: authSize });
+  if (authSize > 0)
+    breakdown.push({ label: '账号信息', size: formatBytes(authSize), bytes: authSize });
 
   return breakdown;
 });

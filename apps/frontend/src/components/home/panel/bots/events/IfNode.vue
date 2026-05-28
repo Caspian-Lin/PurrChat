@@ -31,9 +31,7 @@ import type { PortDef } from './BaseNode.vue';
 
 const { node } = useNode();
 
-const INPUTS: PortDef[] = [
-  { id: 'in_exec', name: '执行', dataType: 'trigger' },
-];
+const INPUTS: PortDef[] = [{ id: 'in_exec', name: '执行', dataType: 'trigger' }];
 
 const OUTPUTS: PortDef[] = [
   { id: 'out_true', name: '真', dataType: 'trigger' },
@@ -52,7 +50,8 @@ const LABEL_CLASSES: Record<string, string> = {
 
 const conditions = computed(() => {
   const raw = node.data.config?.conditions;
-  if (Array.isArray(raw) && raw.length > 0) return raw as { left: string; operator: string; right: string }[];
+  if (Array.isArray(raw) && raw.length > 0)
+    return raw as { left: string; operator: string; right: string }[];
   return [];
 });
 
