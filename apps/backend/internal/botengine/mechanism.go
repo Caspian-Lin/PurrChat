@@ -62,18 +62,18 @@ type TriggerSpec struct {
 
 // ReplySpec 回复规格
 type ReplySpec struct {
-	Type        string            `json:"type"` // "predefined" | "llm" | "workflow"
-	Predefined  *PredefinedConfig `json:"predefined,omitempty"`
-	LLM         *LLMConfig        `json:"llm,omitempty"`
-	Workflow    *WorkflowSpec     `json:"workflow,omitempty"`
-	SpecialModeCompat *WorkflowSpec `json:"special_mode,omitempty"` // 向后兼容：接受旧数据
+	Type              string            `json:"type"` // "predefined" | "llm" | "workflow"
+	Predefined        *PredefinedConfig `json:"predefined,omitempty"`
+	LLM               *LLMConfig        `json:"llm,omitempty"`
+	Workflow          *WorkflowSpec     `json:"workflow,omitempty"`
+	SpecialModeCompat *WorkflowSpec     `json:"special_mode,omitempty"` // 向后兼容：接受旧数据
 }
 
 // WorkflowSpec 工作流规格（嵌套在机制中）
 type WorkflowSpec struct {
-	Events        []WorkflowEvent `json:"events"`
-	Connections   []FlowConnection   `json:"connections,omitempty"` // 端口化连线（新流程引擎）
-	EndConditions []EndCondition     `json:"end_conditions"`
+	Events        []WorkflowEvent  `json:"events"`
+	Connections   []FlowConnection `json:"connections,omitempty"` // 端口化连线（新流程引擎）
+	EndConditions []EndCondition   `json:"end_conditions"`
 }
 
 // ===== 解析函数 =====
@@ -415,9 +415,9 @@ func CompileSimpleMechanism(mech *Mechanism) *WorkflowSpec {
 
 	events := []WorkflowEvent{
 		{
-			ID:   triggerID,
-			Type: "trigger",
-			Name: "触发",
+			ID:     triggerID,
+			Type:   "trigger",
+			Name:   "触发",
 			Config: map[string]any{},
 			Ports: []EventPort{
 				{ID: "out_output", Name: "输出", DataType: "string", Direction: "output"},
@@ -444,9 +444,9 @@ func CompileSimpleMechanism(mech *Mechanism) *WorkflowSpec {
 			}
 		}
 		replyEvent = WorkflowEvent{
-			ID:   replyID,
-			Type: "reply",
-			Name: "回复",
+			ID:     replyID,
+			Type:   "reply",
+			Name:   "回复",
 			Config: map[string]any{"template": template},
 			Ports: []EventPort{
 				{ID: "in_content", Name: "内容", DataType: "string", Direction: "input"},
@@ -480,9 +480,9 @@ func CompileSimpleMechanism(mech *Mechanism) *WorkflowSpec {
 			},
 		})
 		replyEvent = WorkflowEvent{
-			ID:   replyID,
-			Type: "reply",
-			Name: "回复",
+			ID:     replyID,
+			Type:   "reply",
+			Name:   "回复",
 			Config: map[string]any{"template": "{" + llmID + ".out_output}"},
 			Ports: []EventPort{
 				{ID: "in_content", Name: "内容", DataType: "string", Direction: "input"},

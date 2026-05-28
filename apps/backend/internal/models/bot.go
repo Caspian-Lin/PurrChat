@@ -106,14 +106,14 @@ const (
 
 // BotDeployment Bot 部署模型
 type BotDeployment struct {
-	ID                   uuid.UUID           `json:"id"`
-	BotID                uuid.UUID           `json:"bot_id"`
-	ConversationID       uuid.UUID           `json:"conversation_id"`
-	DeployedBy           uuid.UUID           `json:"deployed_by"`
-	Status               BotDeploymentStatus `json:"status"`
+	ID                uuid.UUID           `json:"id"`
+	BotID             uuid.UUID           `json:"bot_id"`
+	ConversationID    uuid.UUID           `json:"conversation_id"`
+	DeployedBy        uuid.UUID           `json:"deployed_by"`
+	Status            BotDeploymentStatus `json:"status"`
 	WorkflowActive    bool                `json:"workflow_active"`
 	WorkflowStartedAt *time.Time          `json:"workflow_started_at,omitempty"`
-	DeployedAt           time.Time           `json:"deployed_at"`
+	DeployedAt        time.Time           `json:"deployed_at"`
 	// 关联数据（查询时填充）
 	Bot          *Bot          `json:"bot,omitempty"`
 	Conversation *Conversation `json:"conversation,omitempty"`

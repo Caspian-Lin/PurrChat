@@ -4,10 +4,10 @@ import "encoding/json"
 
 // DebugBotRequest 调试执行请求
 type DebugBotRequest struct {
-	Message           string          `json:"message" binding:"required"`
-	StepMode          bool            `json:"step_mode"`
-	SessionID         string          `json:"session_id"`
-	SenderName        string          `json:"sender_name"`
+	Message        string          `json:"message" binding:"required"`
+	StepMode       bool            `json:"step_mode"`
+	SessionID      string          `json:"session_id"`
+	SenderName     string          `json:"sender_name"`
 	WorkflowConfig json.RawMessage `json:"workflow_config,omitempty"` // 覆盖未保存的配置
 }
 
