@@ -62,15 +62,16 @@ type TriggerSpec struct {
 
 // ReplySpec 回复规格
 type ReplySpec struct {
-	Type        string            `json:"type"` // "predefined" | "llm" | "special_mode"
+	Type        string            `json:"type"` // "predefined" | "llm" | "workflow"
 	Predefined  *PredefinedConfig `json:"predefined,omitempty"`
 	LLM         *LLMConfig        `json:"llm,omitempty"`
-	SpecialMode *SpecialModeSpec  `json:"special_mode,omitempty"`
+	Workflow    *WorkflowSpec     `json:"workflow,omitempty"`
+	SpecialModeCompat *WorkflowSpec `json:"special_mode,omitempty"` // 向后兼容：接受旧数据
 }
 
-// SpecialModeSpec 特殊模式规格（嵌套在机制中）
-type SpecialModeSpec struct {
-	Events        []SpecialModeEvent `json:"events"`
+// WorkflowSpec 工作流规格（嵌套在机制中）
+type WorkflowSpec struct {
+	Events        []WorkflowEvent `json:"events"`
 	Connections   []FlowConnection   `json:"connections,omitempty"` // 端口化连线（新流程引擎）
 	EndConditions []EndCondition     `json:"end_conditions"`
 }
@@ -86,6 +87,18 @@ func ParseMechanismConfig(raw json.RawMessage) (*MechanismConfig, error) {
 	var config MechanismConfig
 	if err := json.Unmarshal(raw, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse mechanism config: %w", err)
+	}
+
+	// 归一化：将旧的 special_mode 类型和字段迁移为 workflow
+	for i := range config.Mechanisms {
+		m := &config.Mechanisms[i]
+		if m.Reply.Type == "special_mode" {
+			m.Reply.Type = "workflow"
+		}
+		if m.Reply.SpecialModeCompat != nil && m.Reply.Workflow == nil {
+			m.Reply.Workflow = m.Reply.SpecialModeCompat
+			m.Reply.SpecialModeCompat = nil
+		}
 	}
 
 	return &config, nil
@@ -185,12 +198,12 @@ func validateReplySpec(rs *ReplySpec) error {
 		if rs.LLM == nil {
 			return fmt.Errorf("llm config is required when type is 'llm'")
 		}
-	case "special_mode":
-		if rs.SpecialMode == nil {
-			return fmt.Errorf("special_mode config is required when type is 'special_mode'")
+	case "workflow":
+		if rs.Workflow == nil {
+			return fmt.Errorf("workflow config is required when type is 'workflow'")
 		}
-		if len(rs.SpecialMode.EndConditions) == 0 {
-			return fmt.Errorf("special_mode must have at least one end condition")
+		if len(rs.Workflow.EndConditions) == 0 {
+			return fmt.Errorf("workflow must have at least one end condition")
 		}
 	default:
 		return fmt.Errorf("invalid reply type: %q", rs.Type)
@@ -344,10 +357,10 @@ func generateLLMReply(config *LLMConfig, input string, messages []ContextMessage
 
 // ===== 辅助函数 =====
 
-// FindSpecialModeMechanism 在机制列表中查找特殊模式类型的机制
-func FindSpecialModeMechanism(mechanisms []Mechanism) *Mechanism {
+// FindWorkflowMechanism 在机制列表中查找工作流类型的机制
+func FindWorkflowMechanism(mechanisms []Mechanism) *Mechanism {
 	for i := range mechanisms {
-		if mechanisms[i].Reply.Type == "special_mode" && mechanisms[i].Enabled {
+		if mechanisms[i].Reply.Type == "workflow" && mechanisms[i].Enabled {
 			return &mechanisms[i]
 		}
 	}
@@ -384,11 +397,128 @@ func GetMechanismSummary(mechanism Mechanism) (triggerSummary string, replySumma
 		}
 	case "llm":
 		replySummary = "LLM 回复"
-	case "special_mode":
-		if mechanism.Reply.SpecialMode != nil {
-			replySummary = fmt.Sprintf("特殊模式 (%d事件)", len(mechanism.Reply.SpecialMode.Events))
+	case "workflow":
+		if mechanism.Reply.Workflow != nil {
+			replySummary = fmt.Sprintf("工作流 (%d事件)", len(mechanism.Reply.Workflow.Events))
 		}
 	}
 
 	return triggerSummary, replySummary
+}
+
+// CompileSimpleMechanism 将 predefined/llm 机制编译为 WorkflowSpec
+// 使简单机制在底层也走 workflow 执行路径
+func CompileSimpleMechanism(mech *Mechanism) *WorkflowSpec {
+	triggerID := "compiled_trigger"
+	replyID := "compiled_reply"
+	endID := "compiled_end"
+
+	events := []WorkflowEvent{
+		{
+			ID:   triggerID,
+			Type: "trigger",
+			Name: "触发",
+			Config: map[string]any{},
+			Ports: []EventPort{
+				{ID: "out_output", Name: "输出", DataType: "string", Direction: "output"},
+				{ID: "out_exec", Name: "执行", DataType: "trigger", Direction: "output"},
+			},
+		},
+	}
+
+	var replyEvent WorkflowEvent
+
+	switch mech.Reply.Type {
+	case "predefined":
+		template := ""
+		if mech.Reply.Predefined != nil {
+			switch mech.Reply.Predefined.Mode {
+			case "fixed":
+				if len(mech.Reply.Predefined.Replies) > 0 {
+					template = mech.Reply.Predefined.Replies[0]
+				}
+			case "template":
+				template = mech.Reply.Predefined.Template
+			default:
+				template = "{input}"
+			}
+		}
+		replyEvent = WorkflowEvent{
+			ID:   replyID,
+			Type: "reply",
+			Name: "回复",
+			Config: map[string]any{"template": template},
+			Ports: []EventPort{
+				{ID: "in_content", Name: "内容", DataType: "string", Direction: "input"},
+			},
+		}
+
+	case "llm":
+		llmID := "compiled_llm"
+		llmConfig := mech.Reply.LLM
+		if llmConfig == nil {
+			return nil
+		}
+		events = append(events, WorkflowEvent{
+			ID:   llmID,
+			Type: "llm",
+			Name: "LLM",
+			Config: map[string]any{
+				"api_url":        llmConfig.APIURL,
+				"api_key":        llmConfig.APIKey,
+				"model":          llmConfig.Model,
+				"system_prompt":  llmConfig.SystemPrompt,
+				"temperature":    llmConfig.Temperature,
+				"max_tokens":     float64(llmConfig.MaxTokens),
+				"context_window": float64(llmConfig.ContextWindow),
+				"context_scope":  "last:20",
+			},
+			Ports: []EventPort{
+				{ID: "in_prompt", Name: "提示词", DataType: "string", Direction: "input"},
+				{ID: "out_output", Name: "输出", DataType: "string", Direction: "output"},
+				{ID: "out_exec", Name: "执行", DataType: "trigger", Direction: "output"},
+			},
+		})
+		replyEvent = WorkflowEvent{
+			ID:   replyID,
+			Type: "reply",
+			Name: "回复",
+			Config: map[string]any{"template": "{" + llmID + ".out_output}"},
+			Ports: []EventPort{
+				{ID: "in_content", Name: "内容", DataType: "string", Direction: "input"},
+			},
+		}
+
+	default:
+		return nil
+	}
+
+	events = append(events, replyEvent)
+	events = append(events, WorkflowEvent{
+		ID:     endID,
+		Type:   "end",
+		Name:   "结束",
+		Config: map[string]any{},
+	})
+
+	// 构建连线
+	var connections []FlowConnection
+	if mech.Reply.Type == "llm" {
+		llmID := "compiled_llm"
+		connections = []FlowConnection{
+			{ID: "c1", SourceNodeID: triggerID, SourcePortID: "out_exec", TargetNodeID: llmID, TargetPortID: "in_prompt"},
+			{ID: "c2", SourceNodeID: llmID, SourcePortID: "out_exec", TargetNodeID: replyID, TargetPortID: "in_content"},
+			{ID: "c3", SourceNodeID: replyID, SourcePortID: "out_exec", TargetNodeID: endID, TargetPortID: "in_exec"},
+		}
+	} else {
+		connections = []FlowConnection{
+			{ID: "c1", SourceNodeID: triggerID, SourcePortID: "out_exec", TargetNodeID: replyID, TargetPortID: "in_content"},
+			{ID: "c2", SourceNodeID: replyID, SourcePortID: "out_exec", TargetNodeID: endID, TargetPortID: "in_exec"},
+		}
+	}
+
+	return &WorkflowSpec{
+		Events:      events,
+		Connections: connections,
+	}
 }

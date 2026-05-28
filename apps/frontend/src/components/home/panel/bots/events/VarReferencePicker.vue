@@ -66,7 +66,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { PORT_COLORS, type PortDataType } from '../../../../../utils/portTypes';
-import type { SpecialModeEvent, FlowConnection } from '../../../../../models/types';
+import type { WorkflowEvent, FlowConnection } from '../../../../../models/types';
 
 interface VariableItem {
   ref: string; // 人类可读的引用格式，如 {触发.用户消息}
@@ -81,7 +81,7 @@ interface Props {
   /** 当前节点 ID（排除自身） */
   currentNodeId: string;
   /** 所有事件节点 */
-  events: SpecialModeEvent[];
+  events: WorkflowEvent[];
   /** 所有连线 */
   connections: FlowConnection[];
   /** 锚点位置 */
@@ -202,7 +202,7 @@ const upstreamGroups = computed(() => {
 
 /** 从当前节点出发，反向遍历 connections 找到所有上游节点 */
 function buildUpstreamMap(
-  events: SpecialModeEvent[],
+  events: WorkflowEvent[],
   connections: FlowConnection[],
   currentNodeId: string
 ): Map<string, Set<string>> {

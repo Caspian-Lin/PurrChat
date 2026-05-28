@@ -1,8 +1,32 @@
 // 用户数据类型定义
 
-// 端口类型系统（从 portTypes.ts 重导出，供其他模块统一从 types.ts 导入）
-import type { PortDataType, EventType, EventPort, FlowConnection } from '../utils/portTypes';
-export type { PortDataType, EventType, EventPort, FlowConnection };
+// 端口类型系统（从 @purrchat/workflow-types 重导出，供其他模块统一从 types.ts 导入）
+export type { PortDataType, EventType, EventPort, FlowConnection } from '@purrchat/workflow-types';
+
+// 从 @purrchat/workflow-types 重导出工作流相关类型
+export type {
+  MechanismConfig,
+  Mechanism,
+  TriggerSpec,
+  TriggerRule,
+  ReplySpec,
+  PredefinedConfig,
+  LLMConfig,
+  WorkflowSpec,
+  WorkflowEvent,
+  WorkflowEndCondition,
+  LLMEventConfig,
+  BuiltinEventConfig,
+  PythonEventConfig,
+  ReplyEventConfig,
+  WorkflowSession,
+  EventTrace,
+  DebugContextMessage,
+  DebugTraceResult,
+  DebugBotRequest,
+  DebugStepRequest,
+  DebugResetRequest,
+} from '@purrchat/workflow-types';
 
 export interface User {
   id: string;
@@ -109,7 +133,7 @@ export interface Message {
 
 // 系统消息内容（JSON 格式存储在 Message.content 中）
 export interface SystemMessageContent {
-  type: 'special_mode_start' | 'special_mode_end' | 'bot_deployed' | 'bot_undeployed';
+  type: 'special_mode_start' | 'special_mode_end' | 'workflow_start' | 'workflow_end' | 'bot_deployed' | 'bot_undeployed' | 'poke';
   bot_id?: string;
   bot_name?: string;
   user_id?: string;
@@ -377,8 +401,8 @@ export interface BotDeployment {
   conversation_id: string;
   deployed_by: string;
   status: 'active' | 'paused';
-  special_mode_active: boolean;
-  special_mode_started_at?: string;
+  workflow_active: boolean;
+  workflow_started_at?: string;
   deployed_at: string;
   bot?: Bot;
   conversation?: Conversation;
@@ -434,177 +458,4 @@ export interface DeployBotRequest {
 export interface UpdateDeploymentStatusRequest {
   conversation_id: string;
   status: 'active' | 'paused';
-}
-
-// 触发规则
-export interface TriggerRule {
-  type: 'keyword' | 'regex' | 'command' | 'equals';
-  pattern: string;
-  case_sensitive?: boolean;
-}
-
-// 预定义回复配置
-export interface PredefinedConfig {
-  mode: 'fixed' | 'random' | 'template';
-  replies?: string[];
-  template?: string;
-}
-
-// LLM 回复配置
-export interface LLMConfig {
-  api_url: string;
-  api_key: string;
-  model: string;
-  system_prompt: string;
-  temperature?: number;
-  max_tokens?: number;
-  context_window?: number;
-}
-
-// ===== 机制列表类型定义 =====
-
-// 机制配置（Bot 的新统一配置格式）
-export interface MechanismConfig {
-  mechanisms: Mechanism[];
-}
-
-// 单个机制 = 触发规则 + 回复设置
-export interface Mechanism {
-  id: string;
-  name: string;
-  enabled: boolean;
-  trigger: TriggerSpec;
-  reply: ReplySpec;
-}
-
-// 触发规格
-export interface TriggerSpec {
-  type: 'rule' | 'probability';
-  rules?: TriggerRule[];
-  probability?: number;
-}
-
-// 回复规格
-export interface ReplySpec {
-  type: 'predefined' | 'llm' | 'special_mode';
-  predefined?: PredefinedConfig;
-  llm?: LLMConfig;
-  special_mode?: SpecialModeSpec;
-}
-
-// 特殊模式规格（嵌套在机制中）
-export interface SpecialModeSpec {
-  events: SpecialModeEvent[];
-  connections?: FlowConnection[];
-  end_conditions: SpecialModeEndCondition[];
-}
-
-// 特殊模式事件
-export interface SpecialModeEvent {
-  id: string;
-  type: EventType;
-  name: string;
-  config: Record<string, any>;
-  ports?: EventPort[];
-  position?: { x: number; y: number };
-}
-
-// LLM 事件配置
-export interface LLMEventConfig {
-  api_url: string;
-  api_key: string;
-  model: string;
-  system_prompt: string;
-  temperature?: number;
-  max_tokens?: number;
-  context_window?: number;
-  context_scope?: 'session' | string;
-}
-
-// 内置事件配置
-export interface BuiltinEventConfig {
-  builtin_type: 'random_number' | 'haiku' | 'echo' | 'count' | 'template';
-  min?: number;
-  max?: number;
-  integer?: boolean;
-  topic?: string;
-  prefix?: string;
-  suffix?: string;
-  counter_key?: string;
-  template?: string;
-}
-
-// Python 事件配置
-export interface PythonEventConfig {
-  code: string;
-  timeout_ms?: number;
-  input_schema?: Record<string, string>;
-  output_schema?: Record<string, string>;
-}
-
-// 回复事件配置
-export interface ReplyEventConfig {
-  template: string;
-}
-
-// 特殊模式结束条件
-export interface SpecialModeEndCondition {
-  type: 'message_match' | 'max_rounds' | 'timeout';
-  pattern?: string;
-  value?: number;
-}
-
-// 特殊模式运行时会话（调试用）
-export interface SpecialModeSession {
-  conversation_id: string;
-  bot_id: string;
-  bot_name: string;
-  round: number;
-  started_at: string;
-  event_outputs: Record<string, string>;
-}
-
-// ─── 调试相关类型 ───
-
-export interface EventTrace {
-  event_id: string;
-  event_type: 'llm' | 'builtin' | 'python' | 'reply';
-  event_name: string;
-  status: 'pending' | 'running' | 'success' | 'error';
-  input: string;
-  output: string;
-  error?: string;
-  duration_ms: number;
-  context_messages?: DebugContextMessage[];
-}
-
-export interface DebugContextMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
-
-export interface DebugTraceResult {
-  session_id: string;
-  reply: string;
-  context_messages: DebugContextMessage[];
-  event_traces: EventTrace[];
-  waiting_for_step: boolean;
-  next_event_id?: string;
-  round: number;
-}
-
-export interface DebugBotRequest {
-  message: string;
-  step_mode?: boolean;
-  session_id?: string;
-  sender_name?: string;
-  special_mode_config?: SpecialModeSpec;
-}
-
-export interface DebugStepRequest {
-  session_id: string;
-}
-
-export interface DebugResetRequest {
-  session_id: string;
 }

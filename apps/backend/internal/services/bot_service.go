@@ -497,8 +497,8 @@ func (s *BotService) UpdateDeploymentStatus(ctx context.Context, botID, userID s
 	return s.botDeployRepo.Update(ctx, deployment)
 }
 
-// ActivateSpecialMode 激活特殊模式
-func (s *BotService) ActivateSpecialMode(ctx context.Context, botID, userID string, conversationID uuid.UUID) error {
+// ActivateWorkflow 激活工作流
+func (s *BotService) ActivateWorkflow(ctx context.Context, botID, userID string, conversationID uuid.UUID) error {
 	userUUID, _ := uuid.Parse(userID)
 
 	// 验证部署存在
@@ -515,12 +515,12 @@ func (s *BotService) ActivateSpecialMode(ctx context.Context, botID, userID stri
 		}
 	}
 
-	// 检查该会话是否已有其他 Bot 的特殊模式活跃
+	// 检查该会话是否已有其他 Bot 的工作流活跃
 	deployments, err := s.botDeployRepo.FindByConversationID(ctx, conversationID)
 	if err == nil {
 		for _, d := range deployments {
-			if d.SpecialModeActive && d.BotID.String() != botID {
-				return errors.New("another bot's special mode is already active in this conversation")
+			if d.WorkflowActive && d.BotID.String() != botID {
+				return errors.New("another bot's workflow is already active in this conversation")
 			}
 		}
 	}
@@ -528,8 +528,8 @@ func (s *BotService) ActivateSpecialMode(ctx context.Context, botID, userID stri
 	return nil // 实际激活由 BotEngine 处理
 }
 
-// DeactivateSpecialMode 停用特殊模式
-func (s *BotService) DeactivateSpecialMode(ctx context.Context, botID, userID string, conversationID uuid.UUID) error {
+// DeactivateWorkflow 停用工作流
+func (s *BotService) DeactivateWorkflow(ctx context.Context, botID, userID string, conversationID uuid.UUID) error {
 	userUUID, _ := uuid.Parse(userID)
 
 	// 验证部署存在

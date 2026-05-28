@@ -26,7 +26,7 @@
  */
 
 import yaml from 'js-yaml';
-import type { SpecialModeEvent, FlowConnection, EventPort } from '../models/types';
+import type { WorkflowEvent, FlowConnection } from '../models/types';
 import { getDefaultPorts } from './portTypes';
 
 // ──────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ interface YamlFlow {
 /**
  * 将 events + connections 转换为人类可读的 YAML 字符串
  */
-export function flowToYaml(events: SpecialModeEvent[], connections: FlowConnection[] = []): string {
+export function flowToYaml(events: WorkflowEvent[], connections: FlowConnection[] = []): string {
   // 构建 id → name 映射
   const nameMap = buildNameMap(events);
 
@@ -88,7 +88,7 @@ export function flowToYaml(events: SpecialModeEvent[], connections: FlowConnecti
 
   const header = [
     '# PurrChat Agent Flow — YAML IR v1',
-    '# 此文件描述了 Bot 特殊模式的事件链和连接关系',
+    '# 此文件描述了 Bot 工作流的事件链和连接关系',
     '# 可由 Claude Code 或用户手动编辑，导入后自动转换为可视化节点图',
     '#',
     '# connections 格式: [源节点, 源端口, 目标节点, 目标端口]',
@@ -103,7 +103,7 @@ export function flowToYaml(events: SpecialModeEvent[], connections: FlowConnecti
 // ──────────────────────────────────────────────────────────
 
 export interface YamlImportResult {
-  events: SpecialModeEvent[];
+  events: WorkflowEvent[];
   connections: FlowConnection[];
   errors: string[];
 }
@@ -122,7 +122,7 @@ export function yamlToFlow(yamlStr: string): YamlImportResult {
 
   // 第一遍：建立 name → id 映射
   const nameToId = new Map<string, string>();
-  const events: SpecialModeEvent[] = [];
+  const events: WorkflowEvent[] = [];
 
   for (const yamlNode of parsed.nodes) {
     if (!yamlNode.name || !yamlNode.type) {
@@ -195,7 +195,7 @@ function generateNodeId(type: string): string {
 }
 
 /** 构建 id → name 映射 */
-function buildNameMap(events: SpecialModeEvent[]): Map<string, string> {
+function buildNameMap(events: WorkflowEvent[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const evt of events) {
     map.set(evt.id, evt.name);

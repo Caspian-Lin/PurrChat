@@ -1,5 +1,5 @@
 import dagre from '@dagrejs/dagre';
-import type { SpecialModeEvent, FlowConnection } from '../models/types';
+import type { WorkflowEvent, FlowConnection } from '../models/types';
 import type { Node, Edge } from '@vue-flow/core';
 import { NODE_TYPE_META } from './portTypes';
 import { buildDefaultPorts } from './eventPorts';
@@ -13,7 +13,7 @@ export const typeIcons: Record<string, string> = {
   reply: '💬',
 };
 
-export function getEventSummary(evt: SpecialModeEvent): string {
+export function getEventSummary(evt: WorkflowEvent): string {
   switch (evt.type) {
     case 'llm':
       return evt.config.model || 'LLM 调用';
@@ -50,7 +50,7 @@ export function getEventSummary(evt: SpecialModeEvent): string {
  * 所有节点（包括 loop）都以普通节点形式渲染在扁平画布上。
  */
 export function eventsToFlowNodes(
-  events: SpecialModeEvent[],
+  events: WorkflowEvent[],
   positions?: Record<string, { x: number; y: number }>,
   _connections?: FlowConnection[]
 ): Node[] {
@@ -81,7 +81,7 @@ export function eventsToFlowNodes(
 /** 将 FlowConnection[] 转换为 VueFlow Edge[]（端口化连线） */
 export function connectionsToFlowEdges(
   connections: FlowConnection[],
-  events?: SpecialModeEvent[]
+  events?: WorkflowEvent[]
 ): Edge[] {
   // 构建 portId → dataType 映射
   const portTypeMap = new Map<string, string>();
@@ -116,7 +116,7 @@ export function connectionsToFlowEdges(
 
 /** 将 FlowConnection[] 转换为 VueFlow Edge[] */
 export function eventsToFlowEdges(
-  events: SpecialModeEvent[],
+  events: WorkflowEvent[],
   connections?: FlowConnection[]
 ): Edge[] {
   if (connections && connections.length > 0) {
@@ -136,7 +136,7 @@ export function eventsToFlowEdges(
  * dagre 本身能处理图中的环（回边），布局不会出错。
  */
 export function autoLayoutEvents(
-  events: SpecialModeEvent[],
+  events: WorkflowEvent[],
   direction: 'TB' | 'LR' = 'TB',
   connections?: FlowConnection[]
 ): Node[] {
@@ -191,7 +191,7 @@ export interface ValidationIssue {
  * 其它环路视为错误。
  */
 export function validateEventChain(
-  events: SpecialModeEvent[],
+  events: WorkflowEvent[],
   connections?: FlowConnection[]
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];

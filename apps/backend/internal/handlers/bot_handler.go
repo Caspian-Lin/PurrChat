@@ -502,24 +502,24 @@ func (h *BotHandler) CreateBotConversation(c *gin.Context) {
 	})
 }
 
-// ActivateSpecialMode 激活特殊模式
-// @Summary 激活 Bot 特殊模式
+// ActivateWorkflow 激活工作流
+// @Summary 激活 Bot 工作流
 // @Tags Bot
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Bot ID"
-// @Param request body models.ActivateSpecialModeRequest true "激活信息"
+// @Param request body models.ActivateWorkflowRequest true "激活信息"
 // @Success 200 {object} models.MessageResponse
-// @Router /api/bots/{id}/special-mode/activate [post]
-func (h *BotHandler) ActivateSpecialMode(c *gin.Context) {
+// @Router /api/bots/{id}/workflow/activate [post]
+func (h *BotHandler) ActivateWorkflow(c *gin.Context) {
 	botID := c.Param("id")
 	if botID == "" {
 		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
 		return
 	}
 
-	var req models.ActivateSpecialModeRequest
+	var req models.ActivateWorkflowRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
 		return
@@ -531,43 +531,43 @@ func (h *BotHandler) ActivateSpecialMode(c *gin.Context) {
 	}
 
 	// 验证权限
-	err := h.botService.ActivateSpecialMode(c.Request.Context(), botID, userIDStr, req.ConversationID)
+	err := h.botService.ActivateWorkflow(c.Request.Context(), botID, userIDStr, req.ConversationID)
 	if err != nil {
-		logger.ErrorfWithCaller("Failed to activate special mode: %v", err)
+		logger.ErrorfWithCaller("Failed to activate workflow: %v", err)
 		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
 		return
 	}
 
-	// 调用引擎激活特殊模式
+	// 调用引擎激活工作流
 	botUUID, _ := uuid.Parse(botID)
-	err = h.botEngine.ActivateSpecialMode(c.Request.Context(), botUUID, req.ConversationID)
+	err = h.botEngine.ActivateWorkflow(c.Request.Context(), botUUID, req.ConversationID)
 	if err != nil {
-		logger.ErrorfWithCaller("Failed to activate special mode (engine): %v", err)
+		logger.ErrorfWithCaller("Failed to activate workflow (engine): %v", err)
 		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Special mode activated"})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Workflow activated"})
 }
 
-// DeactivateSpecialMode 停用特殊模式
-// @Summary 停用 Bot 特殊模式
+// DeactivateWorkflow 停用工作流
+// @Summary 停用 Bot 工作流
 // @Tags Bot
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Bot ID"
-// @Param request body models.ActivateSpecialModeRequest true "停用信息"
+// @Param request body models.ActivateWorkflowRequest true "停用信息"
 // @Success 200 {object} models.MessageResponse
-// @Router /api/bots/{id}/special-mode/deactivate [post]
-func (h *BotHandler) DeactivateSpecialMode(c *gin.Context) {
+// @Router /api/bots/{id}/workflow/deactivate [post]
+func (h *BotHandler) DeactivateWorkflow(c *gin.Context) {
 	botID := c.Param("id")
 	if botID == "" {
 		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
 		return
 	}
 
-	var req models.ActivateSpecialModeRequest
+	var req models.ActivateWorkflowRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
 		return
@@ -578,23 +578,23 @@ func (h *BotHandler) DeactivateSpecialMode(c *gin.Context) {
 		return
 	}
 
-	err := h.botService.DeactivateSpecialMode(c.Request.Context(), botID, userIDStr, req.ConversationID)
+	err := h.botService.DeactivateWorkflow(c.Request.Context(), botID, userIDStr, req.ConversationID)
 	if err != nil {
-		logger.ErrorfWithCaller("Failed to deactivate special mode: %v", err)
+		logger.ErrorfWithCaller("Failed to deactivate workflow: %v", err)
 		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
 		return
 	}
 
-	// 调用引擎停用特殊模式
+	// 调用引擎停用工作流
 	botUUID, _ := uuid.Parse(botID)
-	err = h.botEngine.DeactivateSpecialMode(c.Request.Context(), botUUID, req.ConversationID)
+	err = h.botEngine.DeactivateWorkflow(c.Request.Context(), botUUID, req.ConversationID)
 	if err != nil {
-		logger.ErrorfWithCaller("Failed to deactivate special mode (engine): %v", err)
+		logger.ErrorfWithCaller("Failed to deactivate workflow (engine): %v", err)
 		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Special mode deactivated"})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Workflow deactivated"})
 }
 
 // GetDeployableConversations 获取可部署 Bot 的群聊列表

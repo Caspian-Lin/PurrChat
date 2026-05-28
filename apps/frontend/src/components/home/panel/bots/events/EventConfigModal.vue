@@ -754,13 +754,13 @@ import { BsX } from 'vue-icons-plus/bs';
 import { useAiStore } from '../../../../../stores/ai';
 import { useAuthStore } from '../../../../../stores/auth';
 import { getDefaultPorts, NODE_TYPE_META, type EventType } from '../../../../../utils/portTypes';
-import type { EventPort, SpecialModeEvent, FlowConnection } from '../../../../../models/types';
+import type { EventPort, WorkflowEvent, FlowConnection } from '../../../../../models/types';
 import VarReferencePicker from './VarReferencePicker.vue';
 
 interface Props {
   visible: boolean;
-  editingEvent?: SpecialModeEvent | null;
-  existingEvents?: SpecialModeEvent[];
+  editingEvent?: WorkflowEvent | null;
+  existingEvents?: WorkflowEvent[];
   connections?: FlowConnection[];
 }
 
@@ -772,7 +772,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   close: [];
-  confirm: [event: SpecialModeEvent];
+  confirm: [event: WorkflowEvent];
   delete: [eventId: string];
 }>();
 
@@ -989,7 +989,7 @@ function removeCustomPort(idx: number) {
 
 // 从已有事件的 ports 中提取自定义端口
 function extractCustomPorts(
-  event: SpecialModeEvent
+  event: WorkflowEvent
 ): { name: string; dataType: string; direction: 'input' | 'output' }[] {
   if (!event.ports) return [];
   const defaultPorts = getDefaultPorts(event.type);
@@ -1050,7 +1050,7 @@ function handleConfirm() {
       direction: p.direction,
     }));
 
-  const event: SpecialModeEvent = {
+  const event: WorkflowEvent = {
     id: form.id,
     type: form.type,
     name: form.name,

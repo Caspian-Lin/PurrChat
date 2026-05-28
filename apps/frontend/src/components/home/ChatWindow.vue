@@ -34,14 +34,14 @@
       </div>
     </div>
 
-    <!-- 特殊模式状态条 -->
-    <div v-if="activeSpecialMode" class="special-mode-banner">
-      <BsCpu :size="14" class="special-mode-banner__icon" />
-      <span class="special-mode-banner__text">
-        {{ activeSpecialMode.bot_name }} · Agent 模式运行中
+    <!-- 工作流状态条 -->
+    <div v-if="activeWorkflow" class="workflow-banner">
+      <BsCpu :size="14" class="workflow-banner__icon" />
+      <span class="workflow-banner__text">
+        {{ activeWorkflow.bot_name }} · Agent 模式运行中
       </span>
-      <span class="special-mode-banner__dot" />
-      <button class="special-mode-banner__stop" @click="handleDeactivateSpecialMode">结束</button>
+      <span class="workflow-banner__dot" />
+      <button class="workflow-banner__stop" @click="handleDeactivateWorkflow">结束</button>
     </div>
 
     <!-- 可调整大小的容器：包含消息列表和输入区 -->
@@ -61,9 +61,18 @@
             </div>
 
             <!-- 系统消息（居中，无头像） -->
-            <div v-else-if="message.msg_type === 'system'" class="flex justify-center py-1.5">
+            <div
+              v-else-if="message.msg_type === 'system'"
+              class="flex justify-center py-1.5"
+              :class="{ 'poke-message': isPokeMessage(message) }"
+            >
               <span
-                class="px-3 py-1 text-xs text-text-tertiary rounded-full bg-bg-quaternary whitespace-nowrap"
+                class="px-3 py-1 text-xs rounded-full whitespace-nowrap"
+                :class="
+                  isPokeMessage(message)
+                    ? 'text-[var(--theme-primary)] bg-[color-mix(in_srgb,var(--theme-primary)_8%,transparent)]'
+                    : 'text-text-tertiary bg-bg-quaternary'
+                "
               >
                 {{ getSystemMessageText(message) }}
               </span>
@@ -72,6 +81,9 @@
             <!-- 消息行 -->
             <div
               :class="['flex gap-3', { 'flex-row-reverse': message.sender_id === currentUserId }]"
+              @touchstart.passive="onMessageTouchStart($event, message)"
+              @touchend="onMessageTouchEnd($event)"
+              @touchmove="onMessageTouchMove($event)"
             >
               <!-- 头像 -->
               <div class="size-10 rounded-xl overflow-hidden flex-shrink-0">
@@ -143,6 +155,7 @@
                   @mouseenter="onBubbleMouseEnter(message.id)"
                   @mouseleave="onBubbleMouseLeave"
                   @dblclick="onBubbleDoubleClick(message.id)"
+                  @contextmenu.prevent="onBubbleContextMenu($event, message)"
                 >
                   <!-- 文件消息：图片 -->
                   <template v-if="isFileMessage(message) && getFileContent(message)?.thumbnail_url">
@@ -362,6 +375,14 @@
     :file-name="previewFileName"
     @download="handlePreviewDownload"
   />
+
+  <!-- 上下文菜单 -->
+  <MessageContextMenu
+    :visible="contextMenu.visible"
+    :position="contextMenu.position"
+    :actions="contextMenu.message ? getContextMenuActions(contextMenu.message) : []"
+    @close="contextMenu.visible = false"
+  />
 </template>
 
 <script setup lang="ts">
@@ -381,8 +402,12 @@ import {
 import ResizableSplitter from '../common/Splitter.vue';
 import EmojiPicker from '../common/EmojiPicker.vue';
 import ImagePreviewModal from '../common/ImagePreviewModal.vue';
+import MessageContextMenu from '../chat/MessageContextMenu.vue';
+import type { ContextMenuAction } from '../chat/MessageContextMenu.vue';
 import { useFileUpload } from '../../composables/useFileUpload';
 import { useNotification } from '../../composables/useNotification';
+import { useLongPress } from '../../composables/useLongPress';
+import { usePlatform } from '../../composables/usePlatform';
 import { api } from '../../models/api';
 import { websocketEventManager } from '../../services/websocketEventManager';
 import type {
@@ -416,29 +441,103 @@ const messagesContainer = ref<HTMLElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const isDragOver = ref(false);
 
-// 特殊模式状态
-const activeSpecialMode = ref<{ bot_id: string; bot_name: string; conversation_id: string } | null>(
+// ===== 上下文菜单（拍一拍） =====
+const { isMobile } = usePlatform();
+const contextMenu = ref<{
+  visible: boolean;
+  position: { x: number; y: number };
+  message: Message | null;
+}>({ visible: false, position: { x: 0, y: 0 }, message: null });
+
+const { handlers: longPressHandlers } = useLongPress((pos) => {
+  // 长按触发时，通过当前触摸位置找到对应的消息
+  // 这里简化处理：使用最后记录的消息
+  if (contextMenu.value.message) {
+    showContextMenu(pos.x, pos.y, contextMenu.value.message);
+  }
+});
+
+// 记录当前触摸的消息（用于长按）
+let touchTargetMessage: Message | null = null;
+
+function onBubbleContextMenu(event: MouseEvent, message: Message) {
+  event.preventDefault();
+  showContextMenu(event.clientX, event.clientY, message);
+}
+
+function onMessageTouchStart(event: TouchEvent, message: Message) {
+  touchTargetMessage = message;
+  contextMenu.value.message = message;
+  longPressHandlers.onTouchstart(event);
+}
+
+function onMessageTouchEnd(event: TouchEvent) {
+  longPressHandlers.onTouchend(event);
+  touchTargetMessage = null;
+}
+
+function onMessageTouchMove(event: TouchEvent) {
+  longPressHandlers.onTouchmove(event);
+}
+
+function showContextMenu(x: number, y: number, message: Message) {
+  contextMenu.value = {
+    visible: true,
+    position: { x, y },
+    message,
+  };
+}
+
+function getContextMenuActions(message: Message): ContextMenuAction[] {
+  const actions: ContextMenuAction[] = [];
+
+  // 所有消息（包括自己）都显示拍一拍
+  actions.push({
+    key: 'poke',
+    label: '拍一拍',
+    handler: () => handlePoke(message),
+  });
+
+  return actions;
+}
+
+async function handlePoke(message: Message) {
+  if (!props.conversation?.id || !message.sender_id) return;
+
+  contextMenu.value.visible = false;
+
+  try {
+    await api.pokeMessage(props.conversation.id, message.sender_id);
+    // 系统消息会通过 WebSocket 自动到达
+  } catch (error) {
+    console.error('[ChatWindow] Failed to poke:', error);
+    useNotification().error('拍一拍发送失败');
+  }
+}
+
+// 工作流状态
+const activeWorkflow = ref<{ bot_id: string; bot_name: string; conversation_id: string } | null>(
   null
 );
 
-websocketEventManager.onSpecialModeChange((event, data) => {
+websocketEventManager.onWorkflowChange((event, data) => {
   if (event === 'started') {
-    activeSpecialMode.value = data;
+    activeWorkflow.value = data;
   } else {
-    if (activeSpecialMode.value?.bot_id === data?.bot_id) {
-      activeSpecialMode.value = null;
+    if (activeWorkflow.value?.bot_id === data?.bot_id) {
+      activeWorkflow.value = null;
     }
   }
 });
 
-async function handleDeactivateSpecialMode() {
-  if (!activeSpecialMode.value) return;
+async function handleDeactivateWorkflow() {
+  if (!activeWorkflow.value) return;
   try {
-    await api.deactivateSpecialMode(
-      activeSpecialMode.value.bot_id,
-      activeSpecialMode.value.conversation_id
+    await api.deactivateWorkflow(
+      activeWorkflow.value.bot_id,
+      activeWorkflow.value.conversation_id
     );
-    activeSpecialMode.value = null;
+    activeWorkflow.value = null;
   } catch {
     // 静默处理
   }
@@ -496,18 +595,44 @@ const sendDisabled = computed(() => {
 });
 
 // ===== 系统消息辅助函数 =====
+function isPokeMessage(message: Message): boolean {
+  try {
+    const sys = JSON.parse(message.content) as SystemMessageContent;
+    return sys.type === 'poke';
+  } catch {
+    return false;
+  }
+}
+
 function getSystemMessageText(message: Message): string {
   try {
     const sys = JSON.parse(message.content) as SystemMessageContent;
     switch (sys.type) {
+      case 'workflow_start':
       case 'special_mode_start':
         return `${sys.bot_name || 'Bot'} 进入了 Agent 模式`;
+      case 'workflow_end':
       case 'special_mode_end':
         return `${sys.bot_name || 'Bot'} 退出了 Agent 模式`;
       case 'bot_deployed':
         return `${sys.bot_name || 'Bot'} 已加入对话`;
       case 'bot_undeployed':
         return `${sys.bot_name || 'Bot'} 已离开对话`;
+      case 'poke': {
+        const pokerName = message.sender?.username || '某人';
+        const isSelfPoker = message.sender_id === props.currentUserId;
+        const isSelfTarget = sys.user_id === props.currentUserId;
+
+        if (isSelfPoker && isSelfTarget) {
+          return '你 拍了拍 自己';
+        } else if (isSelfPoker) {
+          return `你 拍了拍 ${sys.user_name}`;
+        } else if (isSelfTarget) {
+          return `${pokerName} 拍了拍 你`;
+        } else {
+          return `${pokerName} 拍了拍 ${sys.user_name}`;
+        }
+      }
       default:
         return message.content;
     }
@@ -698,7 +823,7 @@ defineExpose({
 </script>
 
 <style scoped>
-.special-mode-banner {
+.workflow-banner {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -709,16 +834,16 @@ defineExpose({
   font-size: 12px;
 }
 
-.special-mode-banner__icon {
+.workflow-banner__icon {
   color: var(--theme-primary, #5a8f4e);
 }
 
-.special-mode-banner__text {
+.workflow-banner__text {
   color: var(--text-secondary, #666);
   flex: 1;
 }
 
-.special-mode-banner__dot {
+.workflow-banner__dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -736,7 +861,7 @@ defineExpose({
   }
 }
 
-.special-mode-banner__stop {
+.workflow-banner__stop {
   padding: 2px 10px;
   font-size: 11px;
   border-radius: var(--radius-xs, 4px);
@@ -746,7 +871,7 @@ defineExpose({
   cursor: pointer;
   transition: all 0.15s;
 }
-.special-mode-banner__stop:hover {
+.workflow-banner__stop:hover {
   background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 10%, transparent);
 }
 
@@ -761,5 +886,21 @@ textarea::-webkit-scrollbar {
 .tooltip-enter-from,
 .tooltip-leave-to {
   opacity: 0;
+}
+
+/* 拍一拍消息动画 */
+.poke-message {
+  animation: poke-appear 0.3s ease-out;
+}
+
+@keyframes poke-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

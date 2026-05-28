@@ -17,16 +17,16 @@ import (
 
 // ExecutionContext 端口化流程引擎的执行上下文
 type ExecutionContext struct {
-	Events       []SpecialModeEvent
+	Events       []WorkflowEvent
 	Connections  []FlowConnection
 	PortValues   map[string]any    // "nodeID:portID" -> value
 	Variables    map[string]string
-	Session      *SpecialModeSession
+	Session      *WorkflowSession
 	nameResolver map[string]string // "nodeName.portName" -> "nodeID:portID"
 }
 
 // NewExecutionContext 创建执行上下文
-func NewExecutionContext(events []SpecialModeEvent, connections []FlowConnection, session *SpecialModeSession) *ExecutionContext {
+func NewExecutionContext(events []WorkflowEvent, connections []FlowConnection, session *WorkflowSession) *ExecutionContext {
 	ctx := &ExecutionContext{
 		Events:      events,
 		Connections: connections,
@@ -54,7 +54,7 @@ func (ctx *ExecutionContext) buildNameResolver() {
 // ExecuteFlow 从 trigger 节点开始执行事件链
 func (ctx *ExecutionContext) ExecuteFlow(engineCtx context.Context, engine *BotEngine, input string) (string, error) {
 	// 1. 找到 trigger 节点
-	var triggerEvent *SpecialModeEvent
+	var triggerEvent *WorkflowEvent
 	for i := range ctx.Events {
 		if ctx.Events[i].Type == "trigger" {
 			triggerEvent = &ctx.Events[i]
@@ -507,7 +507,7 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 // 不执行事件，仅按控制流遍历收集节点 ID 列表
 func (ctx *ExecutionContext) collectNodeOrder() []string {
 	// 找到 trigger 节点
-	var triggerEvent *SpecialModeEvent
+	var triggerEvent *WorkflowEvent
 	for i := range ctx.Events {
 		if ctx.Events[i].Type == "trigger" {
 			triggerEvent = &ctx.Events[i]
@@ -567,7 +567,7 @@ func (ctx *ExecutionContext) findOutputConnection(nodeID string, portID string) 
 }
 
 // findEvent 按 ID 查找事件
-func (ctx *ExecutionContext) findEvent(id string) *SpecialModeEvent {
+func (ctx *ExecutionContext) findEvent(id string) *WorkflowEvent {
 	for i := range ctx.Events {
 		if ctx.Events[i].ID == id {
 			return &ctx.Events[i]
@@ -779,7 +779,7 @@ func (ctx *ExecutionContext) buildHistoryPrompt(n int) string {
 }
 
 // FindTriggerNode 在事件列表中查找 trigger 类型的事件
-func FindTriggerNode(events []SpecialModeEvent) *SpecialModeEvent {
+func FindTriggerNode(events []WorkflowEvent) *WorkflowEvent {
 	for i := range events {
 		if events[i].Type == "trigger" {
 			return &events[i]
@@ -789,14 +789,14 @@ func FindTriggerNode(events []SpecialModeEvent) *SpecialModeEvent {
 }
 
 // ValidatePortedFlow 验证端口化流程配置的合法性
-func ValidatePortedFlow(events []SpecialModeEvent, connections []FlowConnection) error {
+func ValidatePortedFlow(events []WorkflowEvent, connections []FlowConnection) error {
 	trigger := FindTriggerNode(events)
 	if trigger == nil {
 		return fmt.Errorf("ported flow requires a trigger node")
 	}
 
 	// 验证所有连接引用的节点和端口是否存在
-	eventMap := make(map[string]*SpecialModeEvent, len(events))
+	eventMap := make(map[string]*WorkflowEvent, len(events))
 	portMap := make(map[string]map[string]EventPort) // nodeID -> portID -> port
 	for i := range events {
 		eventMap[events[i].ID] = &events[i]

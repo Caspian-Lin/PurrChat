@@ -98,7 +98,7 @@
           :config="localMechanism.reply"
           :trigger="localMechanism.trigger"
           @update="handleReplyUpdate"
-          @open-special-mode-editor="emit('openSpecialModeEditor', localMechanism.id)"
+          @open-workflow-editor="emit('openWorkflowEditor', localMechanism.id)"
         />
       </div>
     </div>
@@ -128,7 +128,7 @@ const emit = defineEmits<{
   delete: [];
   moveUp: [];
   moveDown: [];
-  openSpecialModeEditor: [mechanismId: string];
+  openWorkflowEditor: [mechanismId: string];
 }>();
 
 const expanded = ref(false);
@@ -182,7 +182,8 @@ const replyLabel = computed(() => {
   const labels: Record<string, string> = {
     predefined: '预定义',
     llm: 'LLM',
-    special_mode: '特殊模式',
+    workflow: '工作流',
+    special_mode: '工作流（旧）',
   };
   return labels[r.type] || r.type;
 });
@@ -220,6 +221,16 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
       ? { ...reply.predefined, replies: [...(reply.predefined.replies || [])] }
       : undefined,
     llm: reply.llm ? { ...reply.llm } : undefined,
+    workflow: (() => {
+      const wf = reply.workflow ?? reply.special_mode;
+      return wf
+        ? {
+            events: wf.events.map((e) => ({ ...e, config: { ...e.config } })),
+            connections: wf.connections?.map((c) => ({ ...c })) || [],
+            end_conditions: wf.end_conditions.map((c) => ({ ...c })),
+          }
+        : undefined;
+    })(),
     special_mode: reply.special_mode
       ? {
           events: reply.special_mode.events.map((e) => ({ ...e, config: { ...e.config } })),

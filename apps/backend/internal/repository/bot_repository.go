@@ -303,14 +303,14 @@ func (r *botDeploymentRepository) Create(ctx context.Context, d *models.BotDeplo
 	d.DeployedAt = time.Now().UTC()
 
 	query := `
-        INSERT INTO bot_deployments (id, bot_id, conversation_id, deployed_by, status, special_mode_active, special_mode_started_at, deployed_at)
+        INSERT INTO bot_deployments (id, bot_id, conversation_id, deployed_by, status, workflow_active, workflow_started_at, deployed_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (bot_id, conversation_id) DO NOTHING
     `
 
 	_, err := database.GetPool().Exec(ctx, query,
 		d.ID, d.BotID, d.ConversationID, d.DeployedBy,
-		d.Status, d.SpecialModeActive, d.SpecialModeStartedAt, d.DeployedAt,
+		d.Status, d.WorkflowActive, d.WorkflowStartedAt, d.DeployedAt,
 	)
 
 	return err
@@ -318,14 +318,14 @@ func (r *botDeploymentRepository) Create(ctx context.Context, d *models.BotDeplo
 
 func (r *botDeploymentRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.BotDeployment, error) {
 	query := `
-        SELECT id, bot_id, conversation_id, deployed_by, status, special_mode_active, special_mode_started_at, deployed_at
+        SELECT id, bot_id, conversation_id, deployed_by, status, workflow_active, workflow_started_at, deployed_at
         FROM bot_deployments WHERE id = $1
     `
 
 	d := &models.BotDeployment{}
 	err := database.GetPool().QueryRow(ctx, query, id).Scan(
 		&d.ID, &d.BotID, &d.ConversationID, &d.DeployedBy,
-		&d.Status, &d.SpecialModeActive, &d.SpecialModeStartedAt, &d.DeployedAt,
+		&d.Status, &d.WorkflowActive, &d.WorkflowStartedAt, &d.DeployedAt,
 	)
 
 	if err != nil {
@@ -337,7 +337,7 @@ func (r *botDeploymentRepository) FindByID(ctx context.Context, id uuid.UUID) (*
 
 func (r *botDeploymentRepository) FindByBotID(ctx context.Context, botID uuid.UUID) ([]*models.BotDeployment, error) {
 	query := `
-        SELECT id, bot_id, conversation_id, deployed_by, status, special_mode_active, special_mode_started_at, deployed_at
+        SELECT id, bot_id, conversation_id, deployed_by, status, workflow_active, workflow_started_at, deployed_at
         FROM bot_deployments WHERE bot_id = $1
         ORDER BY deployed_at DESC
     `
@@ -353,7 +353,7 @@ func (r *botDeploymentRepository) FindByBotID(ctx context.Context, botID uuid.UU
 
 func (r *botDeploymentRepository) FindByConversationID(ctx context.Context, conversationID uuid.UUID) ([]*models.BotDeployment, error) {
 	query := `
-        SELECT id, bot_id, conversation_id, deployed_by, status, special_mode_active, special_mode_started_at, deployed_at
+        SELECT id, bot_id, conversation_id, deployed_by, status, workflow_active, workflow_started_at, deployed_at
         FROM bot_deployments WHERE conversation_id = $1
         ORDER BY deployed_at DESC
     `
@@ -369,14 +369,14 @@ func (r *botDeploymentRepository) FindByConversationID(ctx context.Context, conv
 
 func (r *botDeploymentRepository) FindByBotAndConversation(ctx context.Context, botID, conversationID uuid.UUID) (*models.BotDeployment, error) {
 	query := `
-        SELECT id, bot_id, conversation_id, deployed_by, status, special_mode_active, special_mode_started_at, deployed_at
+        SELECT id, bot_id, conversation_id, deployed_by, status, workflow_active, workflow_started_at, deployed_at
         FROM bot_deployments WHERE bot_id = $1 AND conversation_id = $2
     `
 
 	d := &models.BotDeployment{}
 	err := database.GetPool().QueryRow(ctx, query, botID, conversationID).Scan(
 		&d.ID, &d.BotID, &d.ConversationID, &d.DeployedBy,
-		&d.Status, &d.SpecialModeActive, &d.SpecialModeStartedAt, &d.DeployedAt,
+		&d.Status, &d.WorkflowActive, &d.WorkflowStartedAt, &d.DeployedAt,
 	)
 
 	if err != nil {
@@ -388,7 +388,7 @@ func (r *botDeploymentRepository) FindByBotAndConversation(ctx context.Context, 
 
 func (r *botDeploymentRepository) FindByUser(ctx context.Context, userID uuid.UUID) ([]*models.BotDeployment, error) {
 	query := `
-        SELECT bd.id, bd.bot_id, bd.conversation_id, bd.deployed_by, bd.status, bd.special_mode_active, bd.special_mode_started_at, bd.deployed_at
+        SELECT bd.id, bd.bot_id, bd.conversation_id, bd.deployed_by, bd.status, bd.workflow_active, bd.workflow_started_at, bd.deployed_at
         FROM bot_deployments bd
         WHERE bd.deployed_by = $1 OR bd.bot_id IN (SELECT id FROM bots WHERE owner_id = $1)
         ORDER BY bd.deployed_at DESC
@@ -405,7 +405,7 @@ func (r *botDeploymentRepository) FindByUser(ctx context.Context, userID uuid.UU
 
 func (r *botDeploymentRepository) FindActiveByConversation(ctx context.Context, conversationID uuid.UUID) ([]*models.BotDeployment, error) {
 	query := `
-        SELECT id, bot_id, conversation_id, deployed_by, status, special_mode_active, special_mode_started_at, deployed_at
+        SELECT id, bot_id, conversation_id, deployed_by, status, workflow_active, workflow_started_at, deployed_at
         FROM bot_deployments
         WHERE conversation_id = $1 AND status = 'active'
         ORDER BY deployed_at ASC
@@ -422,11 +422,11 @@ func (r *botDeploymentRepository) FindActiveByConversation(ctx context.Context, 
 
 func (r *botDeploymentRepository) Update(ctx context.Context, d *models.BotDeployment) error {
 	query := `
-        UPDATE bot_deployments SET status = $1, special_mode_active = $2, special_mode_started_at = $3
+        UPDATE bot_deployments SET status = $1, workflow_active = $2, workflow_started_at = $3
         WHERE id = $4
     `
 
-	_, err := database.GetPool().Exec(ctx, query, d.Status, d.SpecialModeActive, d.SpecialModeStartedAt, d.ID)
+	_, err := database.GetPool().Exec(ctx, query, d.Status, d.WorkflowActive, d.WorkflowStartedAt, d.ID)
 	return err
 }
 
@@ -467,7 +467,7 @@ func scanBotDeploymentsFromRows(rows pgx.Rows) ([]*models.BotDeployment, error) 
 		d := &models.BotDeployment{}
 		err := rows.Scan(
 			&d.ID, &d.BotID, &d.ConversationID, &d.DeployedBy,
-			&d.Status, &d.SpecialModeActive, &d.SpecialModeStartedAt, &d.DeployedAt,
+			&d.Status, &d.WorkflowActive, &d.WorkflowStartedAt, &d.DeployedAt,
 		)
 		if err != nil {
 			return nil, err

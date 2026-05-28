@@ -17,7 +17,7 @@
           <span class="text-text-tertiary mx-1.5">/</span>
           {{ mechanismName }}
         </h2>
-        <p class="text-xs text-text-tertiary truncate">特殊模式事件链编辑器</p>
+        <p class="text-xs text-text-tertiary truncate">工作流事件链编辑器</p>
       </div>
       <!-- 自动保存提示 -->
       <span v-if="saveState === 'saving'" class="text-xs text-text-tertiary">保存中...</span>
@@ -273,9 +273,9 @@ import { api } from '../models/api';
 import type {
   Bot,
   Mechanism,
-  SpecialModeEvent as FullEvent,
+  WorkflowEvent as FullEvent,
   FlowConnection,
-  SpecialModeEndCondition,
+  WorkflowEndCondition,
 } from '../models/types';
 import type { Node, Edge } from '@vue-flow/core';
 import {
@@ -349,16 +349,16 @@ const botName = computed(() => bot.value?.name || 'Bot');
 const mechanismName = computed(() => localMechanism.value?.name || '机制');
 
 const events = computed<FullEvent[]>(() => {
-  const raw = localMechanism.value?.reply?.special_mode?.events || [];
+  const raw = localMechanism.value?.reply?.workflow?.events || [];
   return ensurePorts(raw);
 });
 
-const endConditions = computed<SpecialModeEndCondition[]>(() => {
-  return localMechanism.value?.reply?.special_mode?.end_conditions || [];
+const endConditions = computed<WorkflowEndCondition[]>(() => {
+  return localMechanism.value?.reply?.workflow?.end_conditions || [];
 });
 
 const connections = computed<FlowConnection[]>(() => {
-  return localMechanism.value?.reply?.special_mode?.connections || [];
+  return localMechanism.value?.reply?.workflow?.connections || [];
 });
 
 const validationIssues = computed<ValidationIssue[]>(() => {
@@ -456,7 +456,7 @@ async function loadData() {
     localMechanism.value = deepCloneMechanism(found);
 
     // 防御性检查：确保事件链有 trigger 节点
-    const sm = localMechanism.value.reply?.special_mode;
+    const sm = localMechanism.value.reply?.workflow;
     if (sm && sm.events.length === 0) {
       sm.events = [
         {
@@ -490,16 +490,16 @@ function deepCloneMechanism(m: Mechanism): Mechanism {
         ? { ...m.reply.predefined, replies: [...(m.reply.predefined.replies || [])] }
         : undefined,
       llm: m.reply.llm ? { ...m.reply.llm } : undefined,
-      special_mode: m.reply.special_mode
+      workflow: m.reply.workflow
         ? {
-            events: m.reply.special_mode.events.map((e) => ({
+            events: m.reply.workflow.events.map((e) => ({
               ...e,
               config: e.config ? { ...e.config } : {},
               ports: e.ports ? e.ports.map((p) => ({ ...p })) : undefined,
               position: e.position ? { ...e.position } : undefined,
             })),
-            end_conditions: m.reply.special_mode.end_conditions.map((c) => ({ ...c })),
-            connections: m.reply.special_mode.connections?.map((c) => ({ ...c })) || [],
+            end_conditions: m.reply.workflow.end_conditions.map((c) => ({ ...c })),
+            connections: m.reply.workflow.connections?.map((c) => ({ ...c })) || [],
           }
         : undefined,
     },
@@ -558,7 +558,7 @@ function closeModal() {
 }
 
 function handleEventConfirm(event: FullEvent) {
-  if (!localMechanism.value?.reply?.special_mode) return;
+  if (!localMechanism.value?.reply?.workflow) return;
 
   // 确保事件有 ports
   if (!event.ports || event.ports.length === 0) {
@@ -574,12 +574,12 @@ function handleEventConfirm(event: FullEvent) {
     currentEvents.push(event);
   }
 
-  localMechanism.value.reply.special_mode.events = currentEvents;
+  localMechanism.value.reply.workflow.events = currentEvents;
   closeModal();
 }
 
 function handleEventDelete(eventId: string) {
-  if (!localMechanism.value?.reply?.special_mode) return;
+  if (!localMechanism.value?.reply?.workflow) return;
 
   const updatedEvents = events.value.filter((e) => e.id !== eventId);
 
@@ -588,14 +588,14 @@ function handleEventDelete(eventId: string) {
     (c) => c.sourceNodeId !== eventId && c.targetNodeId !== eventId
   );
 
-  localMechanism.value.reply.special_mode.events = updatedEvents;
-  localMechanism.value.reply.special_mode.connections = updatedConnections;
+  localMechanism.value.reply.workflow.events = updatedEvents;
+  localMechanism.value.reply.workflow.connections = updatedConnections;
   closeModal();
 }
 
-function handleEndConditionsUpdate(conditions: SpecialModeEndCondition[]) {
-  if (!localMechanism.value?.reply?.special_mode) return;
-  localMechanism.value.reply.special_mode.end_conditions = conditions;
+function handleEndConditionsUpdate(conditions: WorkflowEndCondition[]) {
+  if (!localMechanism.value?.reply?.workflow) return;
+  localMechanism.value.reply.workflow.end_conditions = conditions;
 }
 
 // 监听 flowNodes 变化并缓存位置（写入普通对象，不触发 computed 重算）
@@ -622,7 +622,7 @@ function onConnect(connection: {
     return;
   }
 
-  if (!localMechanism.value?.reply?.special_mode) return;
+  if (!localMechanism.value?.reply?.workflow) return;
 
   const sourceEvent = events.value.find((e) => e.id === connection.source);
   const targetEvent = events.value.find((e) => e.id === connection.target);
@@ -660,7 +660,7 @@ function onConnect(connection: {
     targetPortId: connection.targetHandle || '',
   };
 
-  localMechanism.value.reply.special_mode.connections = [...connections.value, newConnection];
+  localMechanism.value.reply.workflow.connections = [...connections.value, newConnection];
 }
 
 // 连线变更：检测删除并同步 connections
@@ -668,14 +668,14 @@ function onEdgesChange(changes: any[]) {
   const removeChanges = changes.filter((c) => c.type === 'remove');
   if (removeChanges.length === 0) return;
 
-  if (!localMechanism.value?.reply?.special_mode) return;
+  if (!localMechanism.value?.reply?.workflow) return;
 
   const currentConnections = [...connections.value];
   const removeIds = new Set(removeChanges.map((c) => c.id));
   const updated = currentConnections.filter((c) => !removeIds.has(c.id));
 
   if (updated.length !== currentConnections.length) {
-    localMechanism.value.reply.special_mode.connections = updated;
+    localMechanism.value.reply.workflow.connections = updated;
   }
 }
 
@@ -752,10 +752,12 @@ function handleYamlImport() {
         if (result.errors.length > 0) {
           console.warn('[YAML Import]', result.errors);
         }
-        if (result.events.length > 0) {
-          events.value = result.events;
-          connections.value = result.connections;
-          saveFlow();
+        if (result.events.length > 0 && localMechanism.value) {
+          if (!localMechanism.value.reply) localMechanism.value.reply = {} as any;
+          if (!localMechanism.value.reply.workflow) localMechanism.value.reply.workflow = {} as any;
+          localMechanism.value.reply.workflow.events = result.events;
+          localMechanism.value.reply.workflow.connections = result.connections;
+          handleSave();
         }
       } catch (err) {
         console.error('[YAML Import] 解析失败:', err);

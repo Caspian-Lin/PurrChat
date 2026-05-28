@@ -255,6 +255,16 @@ export const api = {
     return apiClient.post('/api/messages', data).then((res) => res.data);
   },
 
+  // 拍一拍
+  pokeMessage: (conversationId: string, targetUserId: string): Promise<ApiResponse<Message>> => {
+    return apiClient
+      .post('/api/messages/poke', {
+        conversation_id: conversationId,
+        target_user_id: targetUserId,
+      })
+      .then((res) => res.data);
+  },
+
   // 获取好友列表
   getFriends: (): Promise<ApiResponse<Friendship[]>> => {
     return apiClient.get('/api/friends').then((res) => res.data);
@@ -399,17 +409,17 @@ export const api = {
     return apiClient.post(`/api/bots/${botId}/conversation`).then((res) => res.data);
   },
 
-  // 激活 Bot 特殊模式
-  activateSpecialMode: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
+  // 激活 Bot 工作流
+  activateWorkflow: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
     return apiClient
-      .post(`/api/bots/${botId}/special-mode/activate`, { conversation_id: conversationId })
+      .post(`/api/bots/${botId}/workflow/activate`, { conversation_id: conversationId })
       .then((res) => res.data);
   },
 
-  // 停用 Bot 特殊模式
-  deactivateSpecialMode: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
+  // 停用 Bot 工作流
+  deactivateWorkflow: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
     return apiClient
-      .post(`/api/bots/${botId}/special-mode/deactivate`, { conversation_id: conversationId })
+      .post(`/api/bots/${botId}/workflow/deactivate`, { conversation_id: conversationId })
       .then((res) => res.data);
   },
 

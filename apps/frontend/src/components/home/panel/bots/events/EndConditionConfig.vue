@@ -37,16 +37,16 @@
 
 <script setup lang="ts">
 import { BsX, BsPlus } from 'vue-icons-plus/bs';
-import type { SpecialModeEndCondition } from '../../../../../models/types';
+import type { WorkflowEndCondition } from '../../../../../models/types';
 
 interface Props {
-  conditions: SpecialModeEndCondition[];
+  conditions: WorkflowEndCondition[];
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  update: [conditions: SpecialModeEndCondition[]];
+  update: [conditions: WorkflowEndCondition[]];
 }>();
 
 function addCondition() {

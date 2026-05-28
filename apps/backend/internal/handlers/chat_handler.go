@@ -339,6 +339,74 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 	})
 }
 
+// PokeRequest 拍一拍请求
+type PokeRequest struct {
+	ConversationID string `json:"conversation_id" binding:"required,uuid"`
+	TargetUserID   string `json:"target_user_id" binding:"required,uuid"`
+}
+
+// PokeMessage 拍一拍
+// @Summary 拍一拍
+// @Tags 聊天
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body PokeRequest true "拍一拍请求"
+// @Success 200 {object} models.APIResponse
+// @Router /api/messages/poke [post]
+func (h *ChatHandler) PokeMessage(c *gin.Context) {
+	var req PokeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.ErrorfWithCaller("Invalid poke request: %v", err)
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Message: "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	userIDStr, ok := getUserID(c)
+	if !ok {
+		return
+	}
+
+	conversationUUID, err := uuid.Parse(req.ConversationID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Message: "Invalid conversation_id",
+		})
+		return
+	}
+
+	targetUserUUID, err := uuid.Parse(req.TargetUserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Message: "Invalid target_user_id",
+		})
+		return
+	}
+
+	message, err := h.messageService.SendPokeMessage(c.Request.Context(), userIDStr, conversationUUID, targetUserUUID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to send poke from user %s to user %s: %v", userIDStr, req.TargetUserID, err)
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	logger.InfofWithCaller("Poke sent successfully: ID=%s, SenderID=%s, TargetUserID=%s", message.ID, userIDStr, req.TargetUserID)
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "Poke sent successfully",
+		Data:    message,
+	})
+}
+
 // CreateConversation 创建会话
 // @Summary 创建会话
 // @Tags 聊天

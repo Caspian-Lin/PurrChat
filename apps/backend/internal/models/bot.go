@@ -67,8 +67,8 @@ type UpdateDeploymentStatusRequest struct {
 	Status         string    `json:"status" binding:"required,oneof=active paused"`
 }
 
-// ActivateSpecialModeRequest 激活/停用特殊模式请求
-type ActivateSpecialModeRequest struct {
+// ActivateWorkflowRequest 激活/停用工作流请求
+type ActivateWorkflowRequest struct {
 	ConversationID uuid.UUID `json:"conversation_id" binding:"required,uuid"`
 }
 
@@ -111,8 +111,8 @@ type BotDeployment struct {
 	ConversationID       uuid.UUID           `json:"conversation_id"`
 	DeployedBy           uuid.UUID           `json:"deployed_by"`
 	Status               BotDeploymentStatus `json:"status"`
-	SpecialModeActive    bool                `json:"special_mode_active"`
-	SpecialModeStartedAt *time.Time          `json:"special_mode_started_at,omitempty"`
+	WorkflowActive    bool                `json:"workflow_active"`
+	WorkflowStartedAt *time.Time          `json:"workflow_started_at,omitempty"`
 	DeployedAt           time.Time           `json:"deployed_at"`
 	// 关联数据（查询时填充）
 	Bot          *Bot          `json:"bot,omitempty"`

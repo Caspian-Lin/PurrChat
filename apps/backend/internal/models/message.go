@@ -19,7 +19,7 @@ const (
 // SystemMessageContent 系统消息内容
 // content 字段存储此 JSON 结构，用于前端渲染可读文本
 type SystemMessageContent struct {
-	Type     string `json:"type"` // special_mode_start, special_mode_end, bot_deployed, bot_undeployed
+	Type     string `json:"type"` // workflow_start, workflow_end, bot_deployed, bot_undeployed
 	BotID    string `json:"bot_id,omitempty"`
 	BotName  string `json:"bot_name,omitempty"`
 	UserID   string `json:"user_id,omitempty"`

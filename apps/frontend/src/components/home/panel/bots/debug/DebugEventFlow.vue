@@ -44,11 +44,11 @@ import TemplateNode from '../events/TemplateNode.vue';
 import ReplyNode from '../events/ReplyNode.vue';
 import HistoryNode from '../events/HistoryNode.vue';
 import { eventsToFlowNodes, eventsToFlowEdges } from '../../../../../utils/eventFlowUtils';
-import type { SpecialModeEvent, EventTrace, FlowConnection } from '../../../../../models/types';
+import type { WorkflowEvent, EventTrace, FlowConnection } from '../../../../../models/types';
 import type { Node, Edge } from '@vue-flow/core';
 
 interface Props {
-  events: SpecialModeEvent[];
+  events: WorkflowEvent[];
   eventTraces: EventTrace[];
   connections?: FlowConnection[];
 }

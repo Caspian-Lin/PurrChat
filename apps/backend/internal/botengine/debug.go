@@ -17,7 +17,7 @@ type DebugSession struct {
 	ID            string
 	BotID         uuid.UUID
 	BotName       string
-	Config        *SpecialModeSpec
+	Config        *WorkflowSpec
 	Round         int
 	ContextBuffer []ContextMessage
 	EventOutputs  map[string]string
@@ -29,9 +29,9 @@ type DebugSession struct {
 	StepVisited map[string]bool
 }
 
-// toSpecialModeSession 将 DebugSession 转换为 SpecialModeSession 以复用执行逻辑
-func (ds *DebugSession) toSpecialModeSession() *SpecialModeSession {
-	return &SpecialModeSession{
+// toWorkflowSession 将 DebugSession 转换为 WorkflowSession 以复用执行逻辑
+func (ds *DebugSession) toWorkflowSession() *WorkflowSession {
+	return &WorkflowSession{
 		BotID:         ds.BotID,
 		BotName:       ds.BotName,
 		Config:        ds.Config,
@@ -43,35 +43,35 @@ func (ds *DebugSession) toSpecialModeSession() *SpecialModeSession {
 
 // toFlowContext 将 DebugSession 转换为 ExecutionContext
 func (ds *DebugSession) toFlowContext() *ExecutionContext {
-	return NewExecutionContext(ds.Config.Events, ds.Config.Connections, ds.toSpecialModeSession())
+	return NewExecutionContext(ds.Config.Events, ds.Config.Connections, ds.toWorkflowSession())
 }
 
 // DebugExecute 执行调试（全量或逐步首事件）
 func (e *BotEngine) DebugExecute(ctx context.Context, botID uuid.UUID, req *models.DebugBotRequest) (*models.DebugTraceResult, error) {
-	var specialSpec *SpecialModeSpec
+	var workflowSpec *WorkflowSpec
 
-	// 确定使用哪个配置：优先使用传入的 special_mode_config（向后兼容）
-	if len(req.SpecialModeConfig) > 0 {
-		if err := json.Unmarshal(req.SpecialModeConfig, &specialSpec); err != nil {
-			return nil, fmt.Errorf("invalid special_mode_config override: %w", err)
+	// 确定使用哪个配置：优先使用传入的 workflow_config（向后兼容）
+	if len(req.WorkflowConfig) > 0 {
+		if err := json.Unmarshal(req.WorkflowConfig, &workflowSpec); err != nil {
+			return nil, fmt.Errorf("invalid workflow_config override: %w", err)
 		}
 	}
 
-	// 如果没有传入配置，从 bot 的 mechanism_config 中查找 special_mode 机制
-	if specialSpec == nil || len(specialSpec.Events) == 0 {
+	// 如果没有传入配置，从 bot 的 mechanism_config 中查找 workflow 机制
+	if workflowSpec == nil || len(workflowSpec.Events) == 0 {
 		bot, err := e.botRepo.FindByID(ctx, botID)
 		if err == nil {
 			mechConfig, parseErr := ParseMechanismConfig(bot.MechanismConfig)
 			if parseErr == nil {
-				specialMech := FindSpecialModeMechanism(mechConfig.Mechanisms)
-				if specialMech != nil && specialMech.Reply.SpecialMode != nil {
-					specialSpec = specialMech.Reply.SpecialMode
+				workflowMech := FindWorkflowMechanism(mechConfig.Mechanisms)
+				if workflowMech != nil && workflowMech.Reply.Workflow != nil {
+					workflowSpec = workflowMech.Reply.Workflow
 				}
 			}
 		}
 	}
 
-	if specialSpec == nil || len(specialSpec.Events) == 0 {
+	if workflowSpec == nil || len(workflowSpec.Events) == 0 {
 		return nil, fmt.Errorf("no special mode events defined")
 	}
 
@@ -88,8 +88,8 @@ func (e *BotEngine) DebugExecute(ctx context.Context, botID uuid.UUID, req *mode
 		if val, ok := e.debugSessions.Load(req.SessionID); ok {
 			session = val.(*DebugSession)
 			// 如果提供了新配置覆盖，更新会话配置
-			if len(req.SpecialModeConfig) > 0 {
-				session.Config = specialSpec
+			if len(req.WorkflowConfig) > 0 {
+				session.Config = workflowSpec
 				session.StepQueue = nil // 清空步骤队列
 			}
 		}
@@ -101,7 +101,7 @@ func (e *BotEngine) DebugExecute(ctx context.Context, botID uuid.UUID, req *mode
 			ID:            sessionID,
 			BotID:         botID,
 			BotName:       botName,
-			Config:        specialSpec,
+			Config:        workflowSpec,
 			Round:         0,
 			ContextBuffer: []ContextMessage{},
 			EventOutputs:  map[string]string{},
@@ -135,26 +135,26 @@ func (e *BotEngine) DebugExecute(ctx context.Context, botID uuid.UUID, req *mode
 		return nil, fmt.Errorf("no events to execute")
 	}
 
-	smSession := session.toSpecialModeSession()
+	workflowSession := session.toWorkflowSession()
 
 	if req.StepMode {
 		// 逐步模式：仅执行第一个未访问的事件
-		return e.debugStepFirst(ctx, session, smSession, nodeOrder)
+		return e.debugStepFirst(ctx, session, workflowSession, nodeOrder)
 	}
 
 	// 全量执行
-	return e.debugRunAll(ctx, session, smSession, nodeOrder)
+	return e.debugRunAll(ctx, session, workflowSession, nodeOrder)
 }
 
 // debugRunAll 全量执行所有事件（按 flow 拓扑顺序）
-func (e *BotEngine) debugRunAll(ctx context.Context, session *DebugSession, smSession *SpecialModeSession, nodeOrder []string) (*models.DebugTraceResult, error) {
+func (e *BotEngine) debugRunAll(ctx context.Context, session *DebugSession, workflowSession *WorkflowSession, nodeOrder []string) (*models.DebugTraceResult, error) {
 	var traces []models.EventTrace
 	var finalOutput string
 
 	// 将最近用户消息写入 trigger 节点的输出端口
 	if len(session.ContextBuffer) > 0 {
 		userMsg := session.ContextBuffer[len(session.ContextBuffer)-1].Content
-		smSession.EventOutputs["__user_input__"] = userMsg
+		workflowSession.EventOutputs["__user_input__"] = userMsg
 	}
 
 	for _, nodeID := range nodeOrder {
@@ -174,16 +174,16 @@ func (e *BotEngine) debugRunAll(ctx context.Context, session *DebugSession, smSe
 		input := ""
 		if event.Type == "llm" || event.Type == "builtin" || event.Type == "python" || event.Type == "reply" {
 			// 从 session.EventOutputs 获取前一个节点的输出作为输入
-			input = smSession.EventOutputs["__last_output__"]
+			input = workflowSession.EventOutputs["__last_output__"]
 		}
 
 		if event.Type == "llm" || event.Type == "builtin" || event.Type == "python" || event.Type == "reply" {
-			trace := e.executeEventWithTrace(ctx, smSession, event, input)
+			trace := e.executeEventWithTrace(ctx, workflowSession, event, input)
 			traces = append(traces, trace)
 
 			session.EventOutputs[event.ID] = trace.Output
-			smSession.EventOutputs[event.ID] = trace.Output
-			smSession.EventOutputs["__last_output__"] = trace.Output
+			workflowSession.EventOutputs[event.ID] = trace.Output
+			workflowSession.EventOutputs["__last_output__"] = trace.Output
 
 			if event.Type == "reply" {
 				finalOutput = trace.Output
@@ -210,7 +210,7 @@ func (e *BotEngine) debugRunAll(ctx context.Context, session *DebugSession, smSe
 }
 
 // debugStepFirst 逐步模式：执行第一个事件
-func (e *BotEngine) debugStepFirst(ctx context.Context, session *DebugSession, smSession *SpecialModeSession, nodeOrder []string) (*models.DebugTraceResult, error) {
+func (e *BotEngine) debugStepFirst(ctx context.Context, session *DebugSession, workflowSession *WorkflowSession, nodeOrder []string) (*models.DebugTraceResult, error) {
 	// 构建步骤队列（跳过 trigger/end 节点）
 	session.StepQueue = nil
 	for _, nodeID := range nodeOrder {
@@ -233,15 +233,15 @@ func (e *BotEngine) debugStepFirst(ctx context.Context, session *DebugSession, s
 	// 将最近用户消息写入
 	if len(session.ContextBuffer) > 0 {
 		userMsg := session.ContextBuffer[len(session.ContextBuffer)-1].Content
-		smSession.EventOutputs["__user_input__"] = userMsg
-		smSession.EventOutputs["__last_output__"] = userMsg
+		workflowSession.EventOutputs["__user_input__"] = userMsg
+		workflowSession.EventOutputs["__last_output__"] = userMsg
 	}
 
-	return e.debugExecuteNext(ctx, session, smSession)
+	return e.debugExecuteNext(ctx, session, workflowSession)
 }
 
 // debugExecuteNext 执行逐步模式中的下一个事件
-func (e *BotEngine) debugExecuteNext(ctx context.Context, session *DebugSession, smSession *SpecialModeSession) (*models.DebugTraceResult, error) {
+func (e *BotEngine) debugExecuteNext(ctx context.Context, session *DebugSession, workflowSession *WorkflowSession) (*models.DebugTraceResult, error) {
 	if len(session.StepQueue) == 0 {
 		return nil, fmt.Errorf("no more events to execute")
 	}
@@ -256,13 +256,13 @@ func (e *BotEngine) debugExecuteNext(ctx context.Context, session *DebugSession,
 		return nil, fmt.Errorf("event %s not found", nextID)
 	}
 
-	input := smSession.EventOutputs["__last_output__"]
-	trace := e.executeEventWithTrace(ctx, smSession, event, input)
+	input := workflowSession.EventOutputs["__last_output__"]
+	trace := e.executeEventWithTrace(ctx, workflowSession, event, input)
 
 	// 更新会话状态
 	session.EventOutputs[event.ID] = trace.Output
-	smSession.EventOutputs[event.ID] = trace.Output
-	smSession.EventOutputs["__last_output__"] = trace.Output
+	workflowSession.EventOutputs[event.ID] = trace.Output
+	workflowSession.EventOutputs["__last_output__"] = trace.Output
 
 	// 构建已执行的 traces（包括之前已执行的）
 	allTraces := session.buildAllTraces()
@@ -309,8 +309,8 @@ func (e *BotEngine) DebugStep(ctx context.Context, botID uuid.UUID, sessionID st
 		return nil, fmt.Errorf("no more events to execute")
 	}
 
-	smSession := session.toSpecialModeSession()
-	return e.debugExecuteNext(ctx, session, smSession)
+	workflowSession := session.toWorkflowSession()
+	return e.debugExecuteNext(ctx, session, workflowSession)
 }
 
 // DebugReset 清除调试会话
@@ -319,7 +319,7 @@ func (e *BotEngine) DebugReset(sessionID string) {
 }
 
 // executeEventWithTrace 带轨迹记录的事件执行
-func (e *BotEngine) executeEventWithTrace(ctx context.Context, session *SpecialModeSession, event *SpecialModeEvent, input string) models.EventTrace {
+func (e *BotEngine) executeEventWithTrace(ctx context.Context, session *WorkflowSession, event *WorkflowEvent, input string) models.EventTrace {
 	start := time.Now()
 
 	output, err := e.executeEvent(ctx, session, event, input)
@@ -391,7 +391,7 @@ func (e *BotEngine) startDebugSessionCleanup() {
 }
 
 // findEventInList 在事件列表中查找指定 ID 的事件
-func findEventInList(events []SpecialModeEvent, id string) *SpecialModeEvent {
+func findEventInList(events []WorkflowEvent, id string) *WorkflowEvent {
 	for i := range events {
 		if events[i].ID == id {
 			return &events[i]

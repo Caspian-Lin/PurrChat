@@ -70,7 +70,7 @@ export type ConversationUpdateCallback = (_conversation: Conversation) => void;
 export type MessageUpdateCallback = (_conversationId: string, _message: Message) => void;
 export type FriendRequestCallback = (_request: Friendship) => void;
 export type OnlineStatusCallback = (_userId: string, _online: boolean) => void;
-export type SpecialModeChangeCallback = (
+export type WorkflowChangeCallback = (
   _event: 'started' | 'ended',
   _data: { bot_id: string; bot_name: string; conversation_id: string }
 ) => void;
@@ -85,7 +85,7 @@ class WebSocketEventManager {
   private messageUpdateCallbacks: Set<MessageUpdateCallback> = new Set();
   private friendRequestCallbacks: Set<FriendRequestCallback> = new Set();
   private onlineStatusCallbacks: Set<OnlineStatusCallback> = new Set();
-  private specialModeCallbacks: Set<SpecialModeChangeCallback> = new Set();
+  private workflowCallbacks: Set<WorkflowChangeCallback> = new Set();
 
   // 当前选中的会话ID
   private currentConversationId: string | null = null;
@@ -125,9 +125,11 @@ class WebSocketEventManager {
     // 用户在线状态事件
     websocketService.on('user_online_status', this.handleUserOnlineStatus.bind(this));
 
-    // Bot 特殊模式事件
-    websocketService.on('bot_special_mode_started', this.handleSpecialModeStarted.bind(this));
-    websocketService.on('bot_special_mode_ended', this.handleSpecialModeEnded.bind(this));
+    // Bot 工作流事件（新旧事件名并存，向后兼容）
+    websocketService.on('bot_special_mode_started', this.handleWorkflowStarted.bind(this));
+    websocketService.on('bot_special_mode_ended', this.handleWorkflowEnded.bind(this));
+    websocketService.on('bot_workflow_started', this.handleWorkflowStarted.bind(this));
+    websocketService.on('bot_workflow_ended', this.handleWorkflowEnded.bind(this));
   }
 
   /**
@@ -470,29 +472,29 @@ class WebSocketEventManager {
     });
   }
 
-  private handleSpecialModeStarted(data: {
+  private handleWorkflowStarted(data: {
     bot_id: string;
     bot_name: string;
     conversation_id: string;
   }) {
-    console.log('[WebSocketEventManager] Bot 特殊模式启动:', data);
-    this.specialModeCallbacks.forEach((callback) => callback('started', data));
+    console.log('[WebSocketEventManager] Bot 工作流启动:', data);
+    this.workflowCallbacks.forEach((callback) => callback('started', data));
   }
 
-  private handleSpecialModeEnded(data: {
+  private handleWorkflowEnded(data: {
     bot_id: string;
     bot_name: string;
     conversation_id: string;
   }) {
-    console.log('[WebSocketEventManager] Bot 特殊模式结束:', data);
-    this.specialModeCallbacks.forEach((callback) => callback('ended', data));
+    console.log('[WebSocketEventManager] Bot 工作流结束:', data);
+    this.workflowCallbacks.forEach((callback) => callback('ended', data));
   }
 
   /**
-   * 注册特殊模式变更回调
+   * 注册工作流变更回调
    */
-  onSpecialModeChange(callback: SpecialModeChangeCallback) {
-    this.specialModeCallbacks.add(callback);
+  onWorkflowChange(callback: WorkflowChangeCallback) {
+    this.workflowCallbacks.add(callback);
   }
 
   /**

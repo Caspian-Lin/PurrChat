@@ -320,7 +320,8 @@ func main() {
 		messages.GET("", chatHandler.GetMessages)
 		messages.GET("/export", chatHandler.ExportMessages)
 		messages.GET("/incremental", chatHandler.GetMessagesIncremental)
-		messages.POST("", sensitiveRateLimit, chatHandler.SendMessage) // 发送消息使用更严格的限流
+		messages.POST("", sensitiveRateLimit, chatHandler.SendMessage)      // 发送消息使用更严格的限流
+		messages.POST("/poke", sensitiveRateLimit, chatHandler.PokeMessage) // 拍一拍使用更严格的限流
 	}
 
 	// 好友路由（敏感操作使用严格限流）
@@ -354,8 +355,8 @@ func main() {
 		bots.DELETE("/:id/deploy", botHandler.UndeployBot)
 		bots.PUT("/:id/deploy/status", botHandler.UpdateDeploymentStatus)
 		bots.POST("/:id/conversation", botHandler.CreateBotConversation)
-		bots.POST("/:id/special-mode/activate", botHandler.ActivateSpecialMode)
-		bots.POST("/:id/special-mode/deactivate", botHandler.DeactivateSpecialMode)
+		bots.POST("/:id/workflow/activate", botHandler.ActivateWorkflow)
+		bots.POST("/:id/workflow/deactivate", botHandler.DeactivateWorkflow)
 		bots.GET("/:id/deployable-conversations", botHandler.GetDeployableConversations)
 		bots.POST("/:id/debug", botHandler.DebugBot)
 		bots.POST("/:id/debug/step", botHandler.DebugStep)

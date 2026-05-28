@@ -61,9 +61,9 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/bots/:botId/mechanisms/:mechanismId/special-mode',
-    name: 'SpecialModeEditor',
-    component: () => import('../views/SpecialModeEditorView.vue'),
+    path: '/bots/:botId/mechanisms/:mechanismId/workflow',
+    name: 'WorkflowEditor',
+    component: () => import('../views/WorkflowEditorView.vue'),
     meta: { requiresAuth: true },
   },
   {

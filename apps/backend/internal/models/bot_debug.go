@@ -8,7 +8,7 @@ type DebugBotRequest struct {
 	StepMode          bool            `json:"step_mode"`
 	SessionID         string          `json:"session_id"`
 	SenderName        string          `json:"sender_name"`
-	SpecialModeConfig json.RawMessage `json:"special_mode_config,omitempty"` // 覆盖未保存的配置
+	WorkflowConfig json.RawMessage `json:"workflow_config,omitempty"` // 覆盖未保存的配置
 }
 
 // DebugStepRequest 逐步执行请求

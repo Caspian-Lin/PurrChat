@@ -52,6 +52,8 @@ export function useWebSocket() {
 | `conversation_member_added`   | `ConversationMemberAddedEventData`   | 通知会话列表更新                                   |
 | `conversation_member_removed` | `ConversationMemberRemovedEventData` | 清理消息，通知会话列表更新                         |
 | `user_online_status`          | `UserOnlineStatusEventData`          | 更新在线状态缓存，触发在线状态回调                 |
+| `bot_workflow_started`        | `BotWorkflowEventData`               | 触发工作流状态回调，显示工作流运行中横幅           |
+| `bot_workflow_ended`          | `BotWorkflowEventData`               | 触发工作流状态回调，隐藏工作流运行中横幅           |
 
 **回调机制**：
 
@@ -67,6 +69,12 @@ export type FriendRequestCallback = (request: Friendship) => void;
 
 // 在线状态回调
 export type OnlineStatusCallback = (userId: string, online: boolean) => void;
+
+// 工作流状态变更回调
+export type WorkflowChangeCallback = (
+  event: 'started' | 'ended',
+  data: { bot_id: string; bot_name: string; conversation_id: string }
+) => void;
 ```
 
 **使用示例**：
@@ -80,6 +88,7 @@ const {
   onMessageUpdate,
   onFriendRequest,
   onOnlineStatus,
+  onWorkflowChange,
 } = useWebSocketEventManager();
 
 // 设置当前会话
@@ -95,6 +104,15 @@ onMessageUpdate((conversationId, message) => {
   // 收到新消息时自动滚动到底部
   if (conversationId === currentConversationId) {
     scrollToBottom();
+  }
+});
+
+onWorkflowChange((event, data) => {
+  // 工作流状态变更时更新 UI
+  if (event === 'started') {
+    activeWorkflow.value = data;
+  } else {
+    activeWorkflow.value = null;
   }
 });
 
@@ -423,6 +441,30 @@ const isOnline = getUserOnlineStatus(userId);
     "user_id": "user_id",
     "online": true,
     "last_seen": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+#### 8. Bot 工作流状态事件
+
+```json
+{
+  "type": "bot_workflow_started",
+  "data": {
+    "bot_id": "bot_id",
+    "bot_name": "bot_name",
+    "conversation_id": "conversation_id"
+  }
+}
+```
+
+```json
+{
+  "type": "bot_workflow_ended",
+  "data": {
+    "bot_id": "bot_id",
+    "bot_name": "bot_name",
+    "conversation_id": "conversation_id"
   }
 }
 ```

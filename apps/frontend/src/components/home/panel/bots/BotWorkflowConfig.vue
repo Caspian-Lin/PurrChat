@@ -1,5 +1,5 @@
 <template>
-  <div class="special-mode-config">
+  <div class="workflow-config">
     <!-- 无事件时的空状态 -->
     <div v-if="!events || events.length === 0" class="empty-state">
       <p class="empty-state__text">尚未配置事件链</p>
@@ -105,9 +105,9 @@ import {
   autoLayoutEvents,
 } from '../../../../utils/eventFlowUtils';
 import type {
-  SpecialModeEvent as FullEvent,
+  WorkflowEvent as FullEvent,
   FlowConnection,
-  SpecialModeEndCondition,
+  WorkflowEndCondition,
 } from '../../../../models/types';
 import type { Node, Edge } from '@vue-flow/core';
 import { canConnect, getPortById, getDefaultPorts } from '../../../../utils/portTypes';
@@ -116,7 +116,7 @@ import { flowToYaml, yamlToFlow } from '../../../../utils/yamlIR';
 
 interface Props {
   events?: FullEvent[];
-  endConditions?: SpecialModeEndCondition[];
+  endConditions?: WorkflowEndCondition[];
   connections?: FlowConnection[];
 }
 
@@ -128,7 +128,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   updateEvents: [events: FullEvent[]];
-  updateEndConditions: [conditions: SpecialModeEndCondition[]];
+  updateEndConditions: [conditions: WorkflowEndCondition[]];
   updateConnections: [connections: FlowConnection[]];
 }>();
 
@@ -185,7 +185,7 @@ const ensuredEvents = computed(() => {
   return events;
 });
 
-// 将 SpecialModeEvent 转换为 vue-flow Node
+// 将 WorkflowEvent 转换为 vue-flow Node
 const flowNodes = computed<Node[]>(() => {
   // 读取 positionTrigger 以建立依赖（仅自动布局时递增）
   positionTrigger.value;
@@ -241,7 +241,7 @@ function handleEventDelete(eventId: string) {
   closeModal();
 }
 
-function handleEndConditionsUpdate(conditions: SpecialModeEndCondition[]) {
+function handleEndConditionsUpdate(conditions: WorkflowEndCondition[]) {
   emit('updateEndConditions', conditions);
 }
 
@@ -393,7 +393,7 @@ watch(
 </script>
 
 <style scoped>
-.special-mode-config {
+.workflow-config {
   display: flex;
   flex-direction: column;
   gap: 12px;

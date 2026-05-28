@@ -198,24 +198,24 @@
       </p>
     </div>
 
-    <!-- 特殊模式（Agent）回复 -->
-    <div v-if="localConfig.type === 'special_mode'" class="space-y-3">
+    <!-- 工作流（Agent）回复 -->
+    <div v-if="localConfig.type === 'workflow' || localConfig.type === 'special_mode'" class="space-y-3">
       <!-- 事件链预览 -->
       <div
-        v-if="localConfig.special_mode?.events?.length"
+        v-if="(localConfig.workflow ?? localConfig.special_mode)?.events?.length"
         class="rounded-[var(--radius-sm,8px)] border border-border-subtle bg-bg-quaternary p-3"
       >
         <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-text-secondary font-medium">
-            事件链（{{ localConfig.special_mode.events.length }} 个事件）
+            事件链（{{ (localConfig.workflow ?? localConfig.special_mode)?.events?.length }} 个事件）
           </span>
           <span class="text-xs text-text-quaternary">
-            {{ localConfig.special_mode.end_conditions?.length || 0 }} 个结束条件
+            {{ (localConfig.workflow ?? localConfig.special_mode)?.end_conditions?.length || 0 }} 个结束条件
           </span>
         </div>
         <div class="flex flex-wrap gap-1.5">
           <span
-            v-for="event in localConfig.special_mode.events"
+            v-for="event in (localConfig.workflow ?? localConfig.special_mode)?.events"
             :key="event.id"
             class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-[var(--radius-xs,4px)] bg-bg-tertiary text-text-secondary"
           >
@@ -239,7 +239,7 @@
       <!-- 打开全页面编辑按钮 -->
       <button
         class="flex items-center gap-2 w-full justify-center px-3 py-2.5 text-xs text-text-secondary rounded-[var(--radius-sm,8px)] border border-border-subtle bg-bg-quaternary hover:border-[var(--theme-primary)] hover:text-[var(--theme-primary)] transition-colors"
-        @click="emit('openSpecialModeEditor')"
+        @click="emit('openWorkflowEditor')"
       >
         <BsBoxArrowUpRight :size="14" />
         在新标签页中编辑事件链
@@ -258,9 +258,9 @@ import { BsPlus, BsX, BsBoxArrowUpRight } from 'vue-icons-plus/bs';
 import { useAiStore } from '../../../../stores/ai';
 import type {
   ReplySpec,
-  SpecialModeSpec,
+  WorkflowSpec,
   TriggerSpec,
-  SpecialModeEvent,
+  WorkflowEvent,
 } from '../../../../models/types';
 import { getDefaultPorts } from '../../../../utils/portTypes';
 
@@ -273,7 +273,7 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   update: [config: ReplySpec];
-  openSpecialModeEditor: [];
+  openWorkflowEditor: [];
 }>();
 
 const aiStore = useAiStore();
@@ -294,7 +294,8 @@ function importFromAiPanel(configId: string) {
 const types = [
   { value: 'predefined' as const, label: '预定义' },
   { value: 'llm' as const, label: 'LLM' },
-  { value: 'special_mode' as const, label: '特殊模式' },
+  { value: 'workflow' as const, label: '工作流' },
+  { value: 'special_mode' as const, label: '特殊模式（旧）' },
 ];
 
 const predefinedModes = [
@@ -319,7 +320,7 @@ const defaultLLM = {
   context_window: 20,
 };
 
-const defaultSpecialMode: SpecialModeSpec = {
+const defaultWorkflow: WorkflowSpec = {
   events: [],
   connections: [],
   end_conditions: [],
@@ -334,7 +335,7 @@ function generateTriggerName(trigger?: TriggerSpec): string {
   return `规则触发（${trigger.rules.length} 条）`;
 }
 
-function createDefaultTriggerEvent(trigger?: TriggerSpec): SpecialModeEvent {
+function createDefaultTriggerEvent(trigger?: TriggerSpec): WorkflowEvent {
   return {
     id: 'evt_trigger_default',
     type: 'trigger',
@@ -347,10 +348,10 @@ function createDefaultTriggerEvent(trigger?: TriggerSpec): SpecialModeEvent {
 function handleTypeSwitch(type: ReplySpec['type']) {
   localConfig.type = type;
   if (
-    type === 'special_mode' &&
-    (!localConfig.special_mode || localConfig.special_mode.events.length === 0)
+    (type === 'workflow' || type === 'special_mode') &&
+    (!localConfig.workflow || localConfig.workflow.events.length === 0)
   ) {
-    localConfig.special_mode = {
+    localConfig.workflow = {
       events: [createDefaultTriggerEvent(props.trigger)],
       connections: [],
       end_conditions: [],
@@ -366,9 +367,14 @@ function buildLocalConfig(config: ReplySpec): ReplySpec {
       ? { ...config.predefined, replies: [...(config.predefined.replies || [])] }
       : { ...defaultPredefined },
     llm: config?.llm ? { ...config.llm } : { ...defaultLLM },
+    workflow: config?.workflow
+      ? deepCloneWorkflow(config.workflow)
+      : config?.special_mode
+        ? deepCloneWorkflow(config.special_mode)
+        : { ...defaultWorkflow },
     special_mode: config?.special_mode
-      ? deepCloneSpecialMode(config.special_mode)
-      : { ...defaultSpecialMode },
+      ? deepCloneWorkflow(config.special_mode)
+      : undefined,
   };
 }
 
@@ -382,16 +388,17 @@ watch(
     localConfig.type = rebuilt.type;
     localConfig.predefined = rebuilt.predefined;
     localConfig.llm = rebuilt.llm;
+    localConfig.workflow = rebuilt.workflow;
     localConfig.special_mode = rebuilt.special_mode;
   },
   { deep: true }
 );
 
 function emitUpdate() {
-  emit('update', { ...localConfig, special_mode: deepCloneSpecialMode(localConfig.special_mode) });
+  emit('update', { ...localConfig, workflow: deepCloneWorkflow(localConfig.workflow), special_mode: deepCloneWorkflow(localConfig.special_mode) });
 }
 
-function deepCloneSpecialMode(spec?: SpecialModeSpec): SpecialModeSpec | undefined {
+function deepCloneWorkflow(spec?: WorkflowSpec): WorkflowSpec | undefined {
   if (!spec) return undefined;
   return {
     events: spec.events.map((e) => ({ ...e, config: { ...e.config } })),

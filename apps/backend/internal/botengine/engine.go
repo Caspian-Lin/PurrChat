@@ -21,8 +21,8 @@ type BotEngine struct {
 	messageRepo    repository.ConversationMessageRepository
 	enrollmentRepo repository.EnrollmentRepository
 
-	// 特殊模式会话：记录活跃的特殊模式运行时状态
-	specialModeSessions sync.Map // map[string]*SpecialModeSession — "conversationID:botID" -> session
+	// 工作流会话：记录活跃的工作流运行时状态
+	workflowSessions sync.Map // map[string]*SpecialModeSession — "conversationID:botID" -> session
 
 	// 调试会话：记录调试运行时状态
 	debugSessions sync.Map // map[string]*DebugSession — sessionID -> session
@@ -175,27 +175,42 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 			logger.InfofWithCaller("[BotEngine] Bot %s: mechanism[%d] trigger matched", bot.Name, i)
 
 			// 触发匹配成功
-			if mech.Reply.Type == "special_mode" {
-				e.activateMechanismSpecialMode(ctx, msg, bot, mech.Reply.SpecialMode)
-				break
+			switch mech.Reply.Type {
+			case "workflow":
+				e.activateMechanismWorkflow(ctx, msg, bot, mech.Reply.Workflow)
+
+			case "predefined", "llm":
+				// 编译为简单工作流执行（统一执行路径）
+				compiled := CompileSimpleMechanism(mech)
+				if compiled != nil {
+					contextMsgs := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
+					reply, err := e.ExecuteSimpleFlow(ctx, compiled, msg, bot, contextMsgs)
+					if err != nil {
+						logger.ErrorfWithCaller("[BotEngine] Simple flow execution failed for bot %s: %v", bot.ID, err)
+						reply = "..."
+					}
+					e.sendBotReply(ctx, bot, msg.ConversationID, reply)
+				} else {
+					// 编译失败，回退到原始路径
+					contextMessages := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
+					contextVars := map[string]string{"time": time.Now().Format("15:04")}
+					reply, err := mech.Reply.GenerateReply(msg.Content, contextVars, contextMessages, msg.SenderName)
+					if err != nil {
+						reply = "..."
+					}
+					e.sendBotReply(ctx, bot, msg.ConversationID, reply)
+				}
+
+			default:
+				// 未知类型，使用原始回复路径
+				contextMessages := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
+				contextVars := map[string]string{"time": time.Now().Format("15:04")}
+				reply, err := mech.Reply.GenerateReply(msg.Content, contextVars, contextMessages, msg.SenderName)
+				if err != nil {
+					reply = "..."
+				}
+				e.sendBotReply(ctx, bot, msg.ConversationID, reply)
 			}
-
-			// 收集上下文消息
-			contextMessages := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
-
-			// 生成回复
-			contextVars := map[string]string{
-				"time": time.Now().Format("15:04"),
-			}
-
-			reply, err := mech.Reply.GenerateReply(msg.Content, contextVars, contextMessages, msg.SenderName)
-			if err != nil {
-				logger.ErrorfWithCaller("[BotEngine] Failed to generate reply for bot %s: %v", bot.ID, err)
-				reply = "..."
-			}
-
-			// 发送 Bot 回复
-			e.sendBotReply(ctx, bot, msg.ConversationID, reply)
 			break // 首个匹配机制响应后，跳过后续机制
 		}
 	}

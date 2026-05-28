@@ -108,7 +108,7 @@ import { ref, computed } from 'vue';
 import { api } from '../../../../models/api';
 import type {
   Mechanism,
-  SpecialModeEvent,
+  WorkflowEvent,
   EventTrace,
   DebugContextMessage,
   DebugTraceResult,
@@ -139,8 +139,8 @@ const eventTraces = ref<EventTrace[]>([]);
 const contextMessages = ref<DebugContextMessage[]>([]);
 const messages = ref<{ role: 'user' | 'assistant'; sender: string; content: string }[]>([]);
 
-const events = computed<SpecialModeEvent[]>(() => {
-  return props.mechanism.reply?.special_mode?.events || [];
+const events = computed<WorkflowEvent[]>(() => {
+  return (props.mechanism.reply?.workflow ?? props.mechanism.reply?.special_mode)?.events || [];
 });
 
 const tabs = computed(() => [
@@ -171,7 +171,7 @@ async function handleRunAll() {
       step_mode: false,
       session_id: sessionId.value || undefined,
       sender_name: senderName.value,
-      special_mode_config: props.mechanism.reply?.special_mode as any,
+      workflow_config: (props.mechanism.reply?.workflow ?? props.mechanism.reply?.special_mode) as any,
     });
 
     if (result.success && result.data) {
@@ -202,7 +202,7 @@ async function handleStepMode() {
       step_mode: true,
       session_id: sessionId.value || undefined,
       sender_name: senderName.value,
-      special_mode_config: props.mechanism.reply?.special_mode as any,
+      workflow_config: (props.mechanism.reply?.workflow ?? props.mechanism.reply?.special_mode) as any,
     });
 
     if (result.success && result.data) {

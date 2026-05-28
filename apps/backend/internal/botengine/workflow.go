@@ -38,8 +38,8 @@ type Position struct {
 	Y float64 `json:"y"`
 }
 
-// SpecialModeEvent 事件链中的单个事件
-type SpecialModeEvent struct {
+// WorkflowEvent 事件链中的单个事件
+type WorkflowEvent struct {
 	ID       string         `json:"id"`
 	Type     string         `json:"type"` // "llm" | "builtin" | "python" | "reply" | "trigger" | "if" | "loop" | "wait" | "end"
 	Name     string         `json:"name"`
@@ -48,19 +48,19 @@ type SpecialModeEvent struct {
 	Position *Position      `json:"position,omitempty"` // 画布位置
 }
 
-// EndCondition 特殊模式结束条件
+// EndCondition 工作流结束条件
 type EndCondition struct {
 	Type    string `json:"type"` // "message_match" | "max_rounds" | "timeout"
 	Pattern string `json:"pattern,omitempty"`
 	Value   int    `json:"value,omitempty"`
 }
 
-// SpecialModeSession 特殊模式运行时会话
-type SpecialModeSession struct {
+// WorkflowSession 工作流运行时会话
+type WorkflowSession struct {
 	ConversationID uuid.UUID
 	BotID          uuid.UUID
 	BotName        string
-	Config         *SpecialModeSpec
+	Config         *WorkflowSpec
 	Round          int
 	StartedAt      time.Time
 	ContextBuffer  []ContextMessage  // 会话级上下文
@@ -68,46 +68,46 @@ type SpecialModeSession struct {
 	Variables      map[string]string // 用户变量
 }
 
-// GetSessionKey 获取特殊模式会话的存储键
+// GetSessionKey 获取工作流会话的存储键
 func GetSessionKey(conversationID, botID uuid.UUID) string {
 	return conversationID.String() + ":" + botID.String()
 }
 
-// ActivateSpecialMode 激活特殊模式（API 手动激活，从 mechanism_config 查找）
-func (e *BotEngine) ActivateSpecialMode(ctx context.Context, botID, conversationID uuid.UUID) error {
+// ActivateWorkflow 激活工作流（API 手动激活，从 mechanism_config 查找）
+func (e *BotEngine) ActivateWorkflow(ctx context.Context, botID, conversationID uuid.UUID) error {
 	bot, err := e.botRepo.FindByID(ctx, botID)
 	if err != nil {
 		return fmt.Errorf("bot not found: %w", err)
 	}
 
-	// 从 mechanism_config 中查找 special_mode 类型的机制
+	// 从 mechanism_config 中查找 workflow 类型的机制
 	mechConfig, err := ParseMechanismConfig(bot.MechanismConfig)
 	if err != nil {
 		return fmt.Errorf("invalid mechanism config: %w", err)
 	}
 
-	specialMech := FindSpecialModeMechanism(mechConfig.Mechanisms)
-	if specialMech == nil || specialMech.Reply.SpecialMode == nil {
-		return fmt.Errorf("no special mode mechanism found in bot config")
+	workflowMech := FindWorkflowMechanism(mechConfig.Mechanisms)
+	if workflowMech == nil || workflowMech.Reply.Workflow == nil {
+		return fmt.Errorf("no workflow mechanism found in bot config")
 	}
 
-	return e.activateSpecialModeWithSpec(ctx, bot, conversationID, specialMech.Reply.SpecialMode)
+	return e.activateWorkflowWithSpec(ctx, bot, conversationID, workflowMech.Reply.Workflow)
 }
 
-// activateSpecialModeWithSpec 使用给定的 SpecialModeSpec 激活特殊模式
-func (e *BotEngine) activateSpecialModeWithSpec(ctx context.Context, bot *models.Bot, conversationID uuid.UUID, spec *SpecialModeSpec) error {
-	// 检查是否已有活跃的特殊模式
+// activateWorkflowWithSpec 使用给定的 WorkflowSpec 激活工作流
+func (e *BotEngine) activateWorkflowWithSpec(ctx context.Context, bot *models.Bot, conversationID uuid.UUID, spec *WorkflowSpec) error {
+	// 检查是否已有活跃的工作流
 	sessionKey := GetSessionKey(conversationID, bot.ID)
-	if _, exists := e.specialModeSessions.Load(sessionKey); exists {
-		return fmt.Errorf("special mode already active for this bot in this conversation")
+	if _, exists := e.workflowSessions.Load(sessionKey); exists {
+		return fmt.Errorf("workflow already active for this bot in this conversation")
 	}
 
 	if spec == nil || len(spec.Events) == 0 {
-		return fmt.Errorf("no events defined in special mode config")
+		return fmt.Errorf("no events defined in workflow config")
 	}
 
 	// 创建会话
-	session := &SpecialModeSession{
+	session := &WorkflowSession{
 		ConversationID: conversationID,
 		BotID:          bot.ID,
 		BotName:        bot.Name,
@@ -119,95 +119,95 @@ func (e *BotEngine) activateSpecialModeWithSpec(ctx context.Context, bot *models
 		Variables:      map[string]string{},
 	}
 
-	e.specialModeSessions.Store(sessionKey, session)
+	e.workflowSessions.Store(sessionKey, session)
 
 	// 更新数据库中的部署状态
 	deployment, err := e.deployRepo.FindByBotAndConversation(ctx, bot.ID, conversationID)
 	if err == nil {
 		now := time.Now().UTC()
-		deployment.SpecialModeActive = true
-		deployment.SpecialModeStartedAt = &now
+		deployment.WorkflowActive = true
+		deployment.WorkflowStartedAt = &now
 		if updateErr := e.deployRepo.Update(ctx, deployment); updateErr != nil {
-			logger.ErrorfWithCaller("[BotEngine] Failed to update deployment special mode status: %v", updateErr)
+			logger.ErrorfWithCaller("[BotEngine] Failed to update deployment workflow status: %v", updateErr)
 		}
 	}
 
 	// WebSocket 广播
-	e.broadcastSpecialModeEvent(ctx, conversationID, "bot_special_mode_started", bot.ID.String(), bot.Name)
+	e.broadcastWorkflowEvent(ctx, conversationID, "bot_workflow_started", bot.ID.String(), bot.Name)
 
 	// 插入系统消息
 	e.sendSystemMessage(ctx, conversationID, &models.SystemMessageContent{
-		Type:    "special_mode_start",
+		Type:    "workflow_start",
 		BotID:   bot.ID.String(),
 		BotName: bot.Name,
 	})
 
-	logger.InfofWithCaller("[BotEngine] Special mode activated: bot=%s, conversation=%s", bot.Name, conversationID)
+	logger.InfofWithCaller("[BotEngine] Workflow activated: bot=%s, conversation=%s", bot.Name, conversationID)
 	return nil
 }
 
-// activateMechanismSpecialMode 从机制触发自动激活特殊模式
-func (e *BotEngine) activateMechanismSpecialMode(ctx context.Context, msg *BotMessage, bot *models.Bot, spec *SpecialModeSpec) {
+// activateMechanismWorkflow 从机制触发自动激活工作流
+func (e *BotEngine) activateMechanismWorkflow(ctx context.Context, msg *BotMessage, bot *models.Bot, spec *WorkflowSpec) {
 	sessionKey := GetSessionKey(msg.ConversationID, bot.ID)
-	if _, exists := e.specialModeSessions.Load(sessionKey); exists {
+	if _, exists := e.workflowSessions.Load(sessionKey); exists {
 		return // 已激活，不重复
 	}
 
-	if err := e.activateSpecialModeWithSpec(ctx, bot, msg.ConversationID, spec); err != nil {
-		logger.ErrorfWithCaller("[BotEngine] Failed to auto-activate special mode for bot %s: %v", bot.ID, err)
+	if err := e.activateWorkflowWithSpec(ctx, bot, msg.ConversationID, spec); err != nil {
+		logger.ErrorfWithCaller("[BotEngine] Failed to auto-activate workflow for bot %s: %v", bot.ID, err)
 	}
 }
 
-// DeactivateSpecialMode 停用特殊模式
-func (e *BotEngine) DeactivateSpecialMode(ctx context.Context, botID, conversationID uuid.UUID) error {
+// DeactivateWorkflow 停用工作流
+func (e *BotEngine) DeactivateWorkflow(ctx context.Context, botID, conversationID uuid.UUID) error {
 	sessionKey := GetSessionKey(conversationID, botID)
 
-	session, exists := e.specialModeSessions.Load(sessionKey)
+	session, exists := e.workflowSessions.Load(sessionKey)
 	if !exists {
-		return fmt.Errorf("special mode not active")
+		return fmt.Errorf("workflow not active")
 	}
 
-	s := session.(*SpecialModeSession)
+	s := session.(*WorkflowSession)
 	botName := s.BotName
 
-	e.specialModeSessions.Delete(sessionKey)
+	e.workflowSessions.Delete(sessionKey)
 
 	// 更新数据库
 	deployment, err := e.deployRepo.FindByBotAndConversation(ctx, botID, conversationID)
 	if err == nil {
-		deployment.SpecialModeActive = false
-		deployment.SpecialModeStartedAt = nil
+		deployment.WorkflowActive = false
+		deployment.WorkflowStartedAt = nil
 		if updateErr := e.deployRepo.Update(ctx, deployment); updateErr != nil {
-			logger.ErrorfWithCaller("[BotEngine] Failed to update deployment special mode status: %v", updateErr)
+			logger.ErrorfWithCaller("[BotEngine] Failed to update deployment workflow status: %v", updateErr)
 		}
 	}
 
 	// WebSocket 广播
-	e.broadcastSpecialModeEvent(ctx, conversationID, "bot_special_mode_ended", botID.String(), botName)
+	e.broadcastWorkflowEvent(ctx, conversationID, "bot_workflow_ended", botID.String(), botName)
 
 	// 插入系统消息
 	e.sendSystemMessage(ctx, conversationID, &models.SystemMessageContent{
-		Type:    "special_mode_end",
+		Type:    "workflow_end",
 		BotID:   botID.String(),
 		BotName: botName,
 	})
 
-	logger.InfofWithCaller("[BotEngine] Special mode deactivated: bot=%s, conversation=%s", botName, conversationID)
+	logger.InfofWithCaller("[BotEngine] Workflow deactivated: bot=%s, conversation=%s", botName, conversationID)
 	return nil
 }
 
-// IsSpecialModeActive 检查特殊模式是否活跃
-func (e *BotEngine) IsSpecialModeActive(conversationID, botID uuid.UUID) bool {
+// IsWorkflowActive 检查工作流是否活跃
+func (e *BotEngine) IsWorkflowActive(conversationID, botID uuid.UUID) bool {
 	sessionKey := GetSessionKey(conversationID, botID)
-	_, exists := e.specialModeSessions.Load(sessionKey)
+	_, exists := e.workflowSessions.Load(sessionKey)
 	return exists
 }
 
-// HandleSpecialMode 处理特殊模式下的消息
-func (e *BotEngine) HandleSpecialMode(ctx context.Context, msg *BotMessage, bot *models.Bot, deployment *models.BotDeployment, spec *SpecialModeSpec) {
+// HandleWorkflow 处理工作流下的消息
+func (e *BotEngine) HandleWorkflow(ctx context.Context, msg *BotMessage, bot *models.Bot, deployment *models.BotDeployment, spec *WorkflowSpec) {
 	sessionKey := GetSessionKey(msg.ConversationID, bot.ID)
 
-	sessionVal, exists := e.specialModeSessions.Load(sessionKey)
+	sessionVal, exists := e.workflowSessions.Load(sessionKey)
 	if !exists {
 		// 数据库标记活跃但内存中不存在（服务器重启），恢复会话
 		if spec == nil {
@@ -216,13 +216,13 @@ func (e *BotEngine) HandleSpecialMode(ctx context.Context, msg *BotMessage, bot 
 			if err != nil {
 				return
 			}
-			specialMech := FindSpecialModeMechanism(mechConfig.Mechanisms)
-			if specialMech == nil || specialMech.Reply.SpecialMode == nil {
+			workflowMech := FindWorkflowMechanism(mechConfig.Mechanisms)
+			if workflowMech == nil || workflowMech.Reply.Workflow == nil {
 				return
 			}
-			spec = specialMech.Reply.SpecialMode
+			spec = workflowMech.Reply.Workflow
 		}
-		newSession := &SpecialModeSession{
+		newSession := &WorkflowSession{
 			ConversationID: msg.ConversationID,
 			BotID:          bot.ID,
 			BotName:        bot.Name,
@@ -233,11 +233,11 @@ func (e *BotEngine) HandleSpecialMode(ctx context.Context, msg *BotMessage, bot 
 			EventOutputs:   map[string]string{},
 			Variables:      map[string]string{},
 		}
-		e.specialModeSessions.Store(sessionKey, newSession)
+		e.workflowSessions.Store(sessionKey, newSession)
 		sessionVal = newSession
 	}
 
-	session := sessionVal.(*SpecialModeSession)
+	session := sessionVal.(*WorkflowSession)
 
 	// 增加轮次
 	session.Round++
@@ -258,7 +258,7 @@ func (e *BotEngine) HandleSpecialMode(ctx context.Context, msg *BotMessage, bot 
 	// 检查结束条件
 	if e.checkEndConditions(session, msg.Content) {
 		logger.InfofWithCaller("[BotEngine] End condition met: bot=%s, conversation=%s, round=%d", bot.Name, msg.ConversationID, session.Round)
-		_ = e.DeactivateSpecialMode(ctx, bot.ID, msg.ConversationID)
+		_ = e.DeactivateWorkflow(ctx, bot.ID, msg.ConversationID)
 		return
 	}
 
@@ -285,7 +285,7 @@ func (e *BotEngine) HandleSpecialMode(ctx context.Context, msg *BotMessage, bot 
 }
 
 // executeEvent 执行单个事件
-func (e *BotEngine) executeEvent(ctx context.Context, session *SpecialModeSession, event *SpecialModeEvent, input string) (string, error) {
+func (e *BotEngine) executeEvent(ctx context.Context, session *WorkflowSession, event *WorkflowEvent, input string) (string, error) {
 	switch event.Type {
 	case "llm":
 		return e.executeLLMEvent(ctx, session, event, input)
@@ -301,7 +301,7 @@ func (e *BotEngine) executeEvent(ctx context.Context, session *SpecialModeSessio
 }
 
 // executeLLMEvent 执行 LLM 事件
-func (e *BotEngine) executeLLMEvent(ctx context.Context, session *SpecialModeSession, event *SpecialModeEvent, input string) (string, error) {
+func (e *BotEngine) executeLLMEvent(ctx context.Context, session *WorkflowSession, event *WorkflowEvent, input string) (string, error) {
 	config := event.Config
 
 	// 构建 LLM 配置
@@ -329,7 +329,7 @@ func (e *BotEngine) executeLLMEvent(ctx context.Context, session *SpecialModeSes
 }
 
 // executeReplyEvent 执行回复事件
-func (e *BotEngine) executeReplyEvent(_ context.Context, session *SpecialModeSession, event *SpecialModeEvent, input string) (string, error) {
+func (e *BotEngine) executeReplyEvent(_ context.Context, session *WorkflowSession, event *WorkflowEvent, input string) (string, error) {
 	template := getStringField(event.Config, "template")
 	if template == "" {
 		return input, nil
@@ -368,17 +368,17 @@ func (e *BotEngine) executeReplyEvent(_ context.Context, session *SpecialModeSes
 }
 
 // executeBuiltinEvent 执行内置事件
-func (e *BotEngine) executeBuiltinEvent(_ context.Context, session *SpecialModeSession, event *SpecialModeEvent, input string) (string, error) {
+func (e *BotEngine) executeBuiltinEvent(_ context.Context, session *WorkflowSession, event *WorkflowEvent, input string) (string, error) {
 	return executeBuiltinHandler(event.Config, input, session.Variables)
 }
 
 // executePythonEvent 执行 Python 事件
-func (e *BotEngine) executePythonEvent(ctx context.Context, _ *SpecialModeSession, event *SpecialModeEvent, input string) (string, error) {
+func (e *BotEngine) executePythonEvent(ctx context.Context, _ *WorkflowSession, event *WorkflowEvent, input string) (string, error) {
 	return sandbox.ExecutePythonEvent(ctx, event.Config, input)
 }
 
 // collectEventContext 根据 context_scope 收集事件所需的上下文
-func (e *BotEngine) collectEventContext(_ context.Context, session *SpecialModeSession, event *SpecialModeEvent) []ContextMessage {
+func (e *BotEngine) collectEventContext(_ context.Context, session *WorkflowSession, event *WorkflowEvent) []ContextMessage {
 	scope := getStringField(event.Config, "context_scope")
 	if scope == "" || scope == "session" {
 		// 默认：整个会话上下文
@@ -405,8 +405,8 @@ func (e *BotEngine) collectEventContext(_ context.Context, session *SpecialModeS
 	return session.ContextBuffer
 }
 
-// checkEndConditions 检查特殊模式是否应该结束
-func (e *BotEngine) checkEndConditions(session *SpecialModeSession, content string) bool {
+// checkEndConditions 检查工作流是否应该结束
+func (e *BotEngine) checkEndConditions(session *WorkflowSession, content string) bool {
 	for _, cond := range session.Config.EndConditions {
 		switch cond.Type {
 		case "message_match":
@@ -427,8 +427,8 @@ func (e *BotEngine) checkEndConditions(session *SpecialModeSession, content stri
 	return false
 }
 
-// broadcastSpecialModeEvent 广播特殊模式状态变更事件
-func (e *BotEngine) broadcastSpecialModeEvent(ctx context.Context, conversationID uuid.UUID, eventType, botID, botName string) {
+// broadcastWorkflowEvent 广播工作流状态变更事件
+func (e *BotEngine) broadcastWorkflowEvent(ctx context.Context, conversationID uuid.UUID, eventType, botID, botName string) {
 	if websocket.GlobalHub == nil {
 		return
 	}
@@ -447,14 +447,38 @@ func (e *BotEngine) broadcastSpecialModeEvent(ctx context.Context, conversationI
 	}
 }
 
-// GetActiveSpecialModeSession 获取活跃的特殊模式会话（供调试面板使用）
-func (e *BotEngine) GetActiveSpecialModeSession(conversationID, botID uuid.UUID) *SpecialModeSession {
+// ExecuteSimpleFlow 无状态执行编译后的简单工作流（不需要持久化 WorkflowSession）
+// 用于 predefined/llm 机制的底层统一执行
+func (e *BotEngine) ExecuteSimpleFlow(ctx context.Context, spec *WorkflowSpec, msg *BotMessage, bot *models.Bot, contextMessages []ContextMessage) (string, error) {
+	// 创建临时的无状态 session
+	tempSession := &WorkflowSession{
+		BotID:         bot.ID,
+		BotName:       bot.Name,
+		Config:        spec,
+		ContextBuffer: contextMessages,
+		EventOutputs:  map[string]string{},
+		Variables: map[string]string{
+			"username": msg.SenderName,
+			"time":     msg.CreatedAt.Format("15:04"),
+		},
+	}
+
+	// 预设 trigger 节点的输出端口值（绕过当前 flow engine 不注入 trigger 端口值的问题）
+	tempSession.EventOutputs["compiled_trigger"] = msg.Content
+	tempSession.EventOutputs["compiled_trigger:out_output"] = msg.Content
+
+	flowCtx := NewExecutionContext(spec.Events, spec.Connections, tempSession)
+	return flowCtx.ExecuteFlow(ctx, e, msg.Content)
+}
+
+// GetActiveWorkflowSession 获取活跃的工作流会话（供调试面板使用）
+func (e *BotEngine) GetActiveWorkflowSession(conversationID, botID uuid.UUID) *WorkflowSession {
 	sessionKey := GetSessionKey(conversationID, botID)
-	val, exists := e.specialModeSessions.Load(sessionKey)
+	val, exists := e.workflowSessions.Load(sessionKey)
 	if !exists {
 		return nil
 	}
-	return val.(*SpecialModeSession)
+	return val.(*WorkflowSession)
 }
 
 // getStringField 从 map[string]any 中安全获取字符串字段

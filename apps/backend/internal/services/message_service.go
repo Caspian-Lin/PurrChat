@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -193,6 +194,86 @@ func (s *MessageService) SendMessage(ctx context.Context, senderID string, req *
 			CreatedAt:      message.CreatedAt,
 		})
 	}
+
+	return message, nil
+}
+
+// SendPokeMessage 发送拍一拍消息
+func (s *MessageService) SendPokeMessage(ctx context.Context, senderID string, conversationID uuid.UUID, targetUserID uuid.UUID) (*models.Message, error) {
+	logger.InfofWithCaller("Sending poke from user %s to user %s in conversation %s", senderID, targetUserID, conversationID)
+
+	senderUUID, err := uuid.Parse(senderID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to parse sender ID %s: %v", senderID, err)
+		return nil, err
+	}
+
+	// 检查发送者是否是会话的参与者
+	_, err = s.enrollmentRepo.FindByConversationAndUser(ctx, conversationID, senderUUID)
+	if err != nil {
+		logger.ErrorfWithCaller("User %s is not a participant in conversation %s", senderID, conversationID)
+		return nil, errors.New("not a participant in this conversation")
+	}
+
+	// 查找被拍者信息
+	targetUser, err := s.userRepo.FindByID(ctx, targetUserID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to find target user %s: %v", targetUserID, err)
+		return nil, errors.New("target user not found")
+	}
+
+	// 构建系统消息内容
+	sysContent := models.SystemMessageContent{
+		Type:     "poke",
+		UserID:   targetUserID.String(),
+		UserName: targetUser.Username,
+	}
+	contentBytes, err := json.Marshal(sysContent)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to marshal system message content: %v", err)
+		return nil, err
+	}
+
+	// 创建消息
+	message := &models.Message{
+		ID:             uuid.New(),
+		ConversationID: conversationID,
+		SenderID:       senderUUID,
+		Content:        string(contentBytes),
+		MsgType:        models.MsgTypeSystem,
+		CreatedAt:      time.Now().UTC(),
+	}
+
+	// 插入数据库
+	err = s.conversationMessageRepo.InsertMessage(ctx, conversationID, message)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to insert poke message: %v", err)
+		return nil, err
+	}
+
+	// 加载发送者信息（拍人者）
+	sender, err := s.userRepo.FindByID(ctx, senderUUID)
+	if err == nil {
+		sanitizeUser(sender)
+		message.Sender = sender
+	}
+
+	// 通过WebSocket推送消息给会话的其他成员
+	if websocket.GlobalHub != nil {
+		members, err := s.enrollmentRepo.FindByConversationID(ctx, conversationID)
+		if err == nil {
+			memberIDs := make([]uuid.UUID, 0, len(members))
+			for _, member := range members {
+				memberIDs = append(memberIDs, member.UserID)
+			}
+			websocket.GlobalHub.SendToConversation(conversationID, senderUUID, *message, memberIDs)
+			logger.InfofWithCaller("Poke message broadcasted via WebSocket to %d members", len(memberIDs))
+		} else {
+			logger.ErrorfWithCaller("Failed to get conversation members for WebSocket broadcast: %v", err)
+		}
+	}
+
+	logger.InfofWithCaller("Poke message sent successfully: ID=%s, ConversationID=%s, SenderID=%s, TargetUserID=%s", message.ID, message.ConversationID, message.SenderID, targetUserID)
 
 	return message, nil
 }

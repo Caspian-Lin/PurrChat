@@ -150,7 +150,7 @@
               @delete="removeMechanism(index)"
               @move-up="moveMechanism(index, -1)"
               @move-down="moveMechanism(index, 1)"
-              @open-special-mode-editor="openSpecialModeEditor"
+              @open-workflow-editor="openWorkflowEditor"
             />
           </div>
 
@@ -175,13 +175,13 @@
           </div>
         </section>
 
-        <!-- 调试面板（仅当有特殊模式机制时显示） -->
-        <section v-if="specialModeMechanism">
+        <!-- 调试面板（仅当有工作流机制时显示） -->
+        <section v-if="workflowMechanism">
           <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
             <BsBug :size="16" class="text-text-tertiary" />
-            调试 — {{ specialModeMechanism.name }}
+            调试 — {{ workflowMechanism.name }}
           </h3>
-          <BotDebugPanel :bot-id="bot.id" :mechanism="specialModeMechanism" :bot-name="form.name" />
+          <BotDebugPanel :bot-id="bot.id" :mechanism="workflowMechanism" :bot-name="form.name" />
         </section>
 
         <!-- 保存按钮 -->
@@ -286,6 +286,15 @@ function deepCloneMechanism(m: Mechanism): Mechanism {
         ? { ...m.reply.predefined, replies: [...(m.reply.predefined.replies || [])] }
         : undefined,
       llm: m.reply.llm ? { ...m.reply.llm } : undefined,
+      workflow: (() => {
+        const wf = m.reply.workflow ?? m.reply.special_mode;
+        return wf
+          ? {
+              events: wf.events.map((e) => ({ ...e, config: { ...e.config } })),
+              end_conditions: wf.end_conditions.map((c) => ({ ...c })),
+            }
+          : undefined;
+      })(),
       special_mode: m.reply.special_mode
         ? {
             events: m.reply.special_mode.events.map((e) => ({ ...e, config: { ...e.config } })),
@@ -309,9 +318,9 @@ const hasProbabilityMechanism = computed(() => {
   return form.mechanisms.some((m) => m.trigger.type === 'probability');
 });
 
-// 计算属性：找到特殊模式机制（调试面板用）
-const specialModeMechanism = computed<Mechanism | null>(() => {
-  return form.mechanisms.find((m) => m.reply.type === 'special_mode') || null;
+// 计算属性：找到工作流机制（调试面板用）
+const workflowMechanism = computed<Mechanism | null>(() => {
+  return form.mechanisms.find((m) => m.reply.type === 'workflow' || m.reply.type === 'special_mode') || null;
 });
 
 function resetForm() {
@@ -359,7 +368,7 @@ function moveMechanism(index: number, direction: -1 | 1) {
   form.mechanisms.splice(newIndex, 0, temp);
 }
 
-async function openSpecialModeEditor(mechanismId: string) {
+async function openWorkflowEditor(mechanismId: string) {
   // 先保存当前机制配置到数据库，确保新标签页能找到该机制
   const mechanismConfig: MechanismConfig = {
     mechanisms: form.mechanisms.map((m) => deepCloneMechanism(m)),
@@ -377,7 +386,7 @@ async function openSpecialModeEditor(mechanismId: string) {
     return;
   }
 
-  const url = `${window.location.origin}/bots/${props.bot.id}/mechanisms/${mechanismId}/special-mode`;
+  const url = `${window.location.origin}/bots/${props.bot.id}/mechanisms/${mechanismId}/workflow`;
   window.open(url, '_blank');
 }
 
@@ -429,6 +438,7 @@ function handleImport() {
             ...props.bot,
             trigger_config: data.trigger_config,
             reply_config: data.reply_config,
+            workflow_config: data.workflow_config ?? data.special_mode_config,
             special_mode_config: data.special_mode_config,
           } as Bot);
         }

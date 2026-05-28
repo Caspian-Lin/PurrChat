@@ -64,7 +64,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { api } from '../../../../../models/api';
-import type { Mechanism, DebugTraceResult, SpecialModeEvent } from '../../../../../models/types';
+import type { Mechanism, DebugTraceResult, WorkflowEvent } from '../../../../../models/types';
 import DebugEventFlow from './DebugEventFlow.vue';
 import DebugOutputViewer from './DebugOutputViewer.vue';
 import DebugContextViewer from './DebugContextViewer.vue';
@@ -82,8 +82,8 @@ const sessionId = ref<string | null>(null);
 const traceResult = ref<DebugTraceResult | null>(null);
 const loading = ref(false);
 
-const events = computed<SpecialModeEvent[]>(
-  () => props.mechanism?.reply?.special_mode?.events || []
+const events = computed<WorkflowEvent[]>(
+  () => (props.mechanism?.reply?.workflow ?? props.mechanism?.reply?.special_mode)?.events || []
 );
 
 async function handleRun() {
@@ -96,7 +96,7 @@ async function handleRun() {
       step_mode: false,
       session_id: sessionId.value || undefined,
       sender_name: props.botName || '调试者',
-      special_mode_config: props.mechanism.reply?.special_mode,
+      workflow_config: props.mechanism.reply?.workflow ?? props.mechanism.reply?.special_mode,
     });
 
     if (result.success && result.data) {
