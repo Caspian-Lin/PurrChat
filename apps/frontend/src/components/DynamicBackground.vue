@@ -38,8 +38,12 @@ const PARTICLE_DENSITY = 18000;
 const MAX_PARTICLES = 72;
 const GRID_STEP = 56;
 const TRAIL_TTL = 900;
-const TRAIL_MAX_GLYPHS = 90;
+const TRAIL_MAX_GLYPHS = 150;
+const TRAIL_MASK_WIDTH = 168;
+const TRAIL_MASK_HEIGHT = 128;
+const TRAIL_MASK_RADIUS = 34;
 const TRAIL_SYMBOLS = ['{', '}', '<', '>', '/', '*', '+', '=', '_', '#', '::', '[]'];
+const TRAIL_KAOMOJI = ['^_^', '>_<', 'o_o', 'owo', 'uwu', '(^^)', '(._.)'];
 
 let ctx: CanvasRenderingContext2D | null = null;
 let textureCanvas: HTMLCanvasElement | null = null;
@@ -70,6 +74,30 @@ const mixRgb = (a: RGB, b: RGB, t: number): RGB => [
 ];
 
 const rgba = ([r, g, b]: RGB, alpha: number) => `rgba(${r}, ${g}, ${b}, ${alpha})`;
+
+const fillRoundedRect = (
+  target: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+) => {
+  const r = Math.min(radius, width / 2, height / 2);
+
+  target.beginPath();
+  target.moveTo(x + r, y);
+  target.lineTo(x + width - r, y);
+  target.quadraticCurveTo(x + width, y, x + width, y + r);
+  target.lineTo(x + width, y + height - r);
+  target.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  target.lineTo(x + r, y + height);
+  target.quadraticCurveTo(x, y + height, x, y + height - r);
+  target.lineTo(x, y + r);
+  target.quadraticCurveTo(x, y, x + r, y);
+  target.closePath();
+  target.fill();
+};
 
 const palette = computed(() => {
   const isDark = themeStore.mode === 'dark';
@@ -243,10 +271,10 @@ const drawTrailGlyphs = (target: CanvasRenderingContext2D, timestamp: number) =>
     const life = 1 - age / TRAIL_TTL;
     const pulse = 0.88 + Math.sin(timestamp * 0.006 + glyph.seed) * 0.12;
     const alpha = Math.pow(life, 1.8) * pulse;
-    const radius = 13 + life * 6;
+    const size = 28 + life * 8;
 
     target.fillStyle = rgba(p.primary, (p.isDark ? 0.08 : 0.07) * alpha);
-    target.fillRect(glyph.x - radius, glyph.y - radius, radius * 2, radius * 2);
+    fillRoundedRect(target, glyph.x - size / 2, glyph.y - size / 2, size, size, 8);
 
     target.fillStyle = rgba(color, (p.isDark ? 0.86 : 0.72) * alpha);
     target.fillText(glyph.symbol, glyph.x, glyph.y);
@@ -321,23 +349,61 @@ const handleMotionChange = (event: MediaQueryListEvent) => {
   queueRender();
 };
 
-const addTrailGlyph = (x: number, y: number) => {
-  const col = Math.round(x / GRID_STEP);
-  const row = Math.round(y / GRID_STEP);
-  const key = `${col}:${row}`;
-  const symbol = TRAIL_SYMBOLS[Math.floor(Math.random() * TRAIL_SYMBOLS.length)]!;
+const pointInRoundedMask = (dx: number, dy: number) => {
+  const halfW = TRAIL_MASK_WIDTH / 2;
+  const halfH = TRAIL_MASK_HEIGHT / 2;
+  const innerX = halfW - TRAIL_MASK_RADIUS;
+  const innerY = halfH - TRAIL_MASK_RADIUS;
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
 
-  trailGlyphs.set(key, {
-    x: col * GRID_STEP,
-    y: row * GRID_STEP,
-    symbol,
-    bornAt: performance.now(),
-    seed: Math.random() * Math.PI * 2,
-  });
+  if (absX > halfW || absY > halfH) return false;
+  if (absX <= innerX || absY <= innerY) return true;
+
+  return (absX - innerX) ** 2 + (absY - innerY) ** 2 <= TRAIL_MASK_RADIUS ** 2;
+};
+
+const pickTrailSymbol = () => {
+  if (Math.random() < 0.16) {
+    return TRAIL_KAOMOJI[Math.floor(Math.random() * TRAIL_KAOMOJI.length)]!;
+  }
+
+  return TRAIL_SYMBOLS[Math.floor(Math.random() * TRAIL_SYMBOLS.length)]!;
+};
+
+const addTrailGlyph = (x: number, y: number) => {
+  const centerCol = Math.round(x / GRID_STEP);
+  const centerRow = Math.round(y / GRID_STEP);
+  const colRadius = Math.ceil(TRAIL_MASK_WIDTH / GRID_STEP / 2);
+  const rowRadius = Math.ceil(TRAIL_MASK_HEIGHT / GRID_STEP / 2);
+  const bornAt = performance.now();
+
+  for (let row = centerRow - rowRadius; row <= centerRow + rowRadius; row++) {
+    for (let col = centerCol - colRadius; col <= centerCol + colRadius; col++) {
+      const glyphX = col * GRID_STEP;
+      const glyphY = row * GRID_STEP;
+      if (!pointInRoundedMask(glyphX - x, glyphY - y)) continue;
+
+      const key = `${col}:${row}`;
+      const existing = trailGlyphs.get(key);
+
+      trailGlyphs.set(key, {
+        x: glyphX,
+        y: glyphY,
+        symbol: existing?.symbol ?? pickTrailSymbol(),
+        bornAt,
+        seed: existing?.seed ?? Math.random() * Math.PI * 2,
+      });
+    }
+  }
 
   if (trailGlyphs.size > TRAIL_MAX_GLYPHS) {
-    const oldestKey = trailGlyphs.keys().next().value;
-    if (oldestKey) trailGlyphs.delete(oldestKey);
+    const overflow = trailGlyphs.size - TRAIL_MAX_GLYPHS;
+    const keys = trailGlyphs.keys();
+    for (let i = 0; i < overflow; i++) {
+      const oldestKey = keys.next().value;
+      if (oldestKey) trailGlyphs.delete(oldestKey);
+    }
   }
 
   if (prefersReducedMotion || !animationId) {
