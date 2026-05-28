@@ -3,7 +3,8 @@
 // 端口类型系统（从 @purrchat/workflow-types 重导出，供其他模块统一从 types.ts 导入）
 export type { PortDataType, EventType, EventPort, FlowConnection } from '@purrchat/workflow-types';
 
-// 从 @purrchat/workflow-types 重导出工作流相关类型
+// 从 @purrchat/workflow-types 导入并重导出工作流相关类型
+import type { MechanismConfig } from '@purrchat/workflow-types';
 export type {
   MechanismConfig,
   Mechanism,
@@ -133,7 +134,14 @@ export interface Message {
 
 // 系统消息内容（JSON 格式存储在 Message.content 中）
 export interface SystemMessageContent {
-  type: 'special_mode_start' | 'special_mode_end' | 'workflow_start' | 'workflow_end' | 'bot_deployed' | 'bot_undeployed' | 'poke';
+  type:
+    | 'special_mode_start'
+    | 'special_mode_end'
+    | 'workflow_start'
+    | 'workflow_end'
+    | 'bot_deployed'
+    | 'bot_undeployed'
+    | 'poke';
   bot_id?: string;
   bot_name?: string;
   user_id?: string;

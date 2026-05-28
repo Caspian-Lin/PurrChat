@@ -24,6 +24,7 @@
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
+    "@purrchat/workflow-types": "workspace:*",
     "@dagrejs/dagre": "^3.0.0",
     "@iconify/vue": "^5.0.0",
     "@tailwindcss/postcss": "^4.1.18",
