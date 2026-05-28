@@ -41,7 +41,7 @@ import type {
   DebugResetRequest,
   DebugTraceResult,
 } from './types';
-import { getApiBaseUrl, getStorageApiBaseUrl, logger } from '../config/app';
+import { getApiBaseUrl, getStorageApiBaseUrl, getBotEngineUrl, logger } from '../config/app';
 
 // 创建 axios 实例
 const apiClient: AxiosInstance = axios.create({
@@ -435,6 +435,46 @@ export const api = {
 
   debugReset: (botId: string, data: DebugResetRequest): Promise<ApiResponse<void>> => {
     return apiClient.post(`/api/bots/${botId}/debug/reset`, data).then((res) => res.data);
+  },
+};
+
+// ─── Bot 微服务 API（XState 引擎） ───
+
+const botEngineUrl = getBotEngineUrl();
+
+export const botEngineApi = {
+  // 是否配置了 Bot 微服务
+  isAvailable: (): boolean => !!botEngineUrl,
+
+  // 执行消息处理
+  execute: async (data: {
+    conversation_id: string;
+    bot_id: string;
+    bot_name: string;
+    sender_id: string;
+    sender_name: string;
+    content: string;
+    msg_type: string;
+    mechanism_config: any;
+    context_messages?: Array<{ role: string; content: string }>;
+  }): Promise<{ reply: string; session_active: boolean; session_id?: string }> => {
+    const resp = await fetch(`${botEngineUrl}/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(`Bot engine error: ${resp.status}`);
+    return resp.json();
+  },
+
+  // 健康检查
+  healthCheck: async (): Promise<boolean> => {
+    try {
+      const resp = await fetch(`${botEngineUrl}/health`);
+      return resp.ok;
+    } catch {
+      return false;
+    }
   },
 };
 

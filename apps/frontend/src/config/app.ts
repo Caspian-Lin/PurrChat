@@ -71,6 +71,11 @@ export const getStorageApiBaseUrl = (): string => {
   return getApiBaseUrl();
 };
 
+// 获取 Bot 微服务 URL（可选，用于 XState 引擎调试）
+export const getBotEngineUrl = (): string => {
+  return getEnvVar('VITE_BOT_ENGINE_URL', '');
+};
+
 // 获取 WebSocket URL（不再传递 token，通过 Cookie/子协议认证）
 export const getWebSocketUrl = (userId: string): string => {
   const baseUrl = appConfig.apiBaseUrl;

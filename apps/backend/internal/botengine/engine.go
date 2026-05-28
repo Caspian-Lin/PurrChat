@@ -182,7 +182,24 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 
 			logger.InfofWithCaller("[BotEngine] Bot %s: mechanism[%d] trigger matched", bot.Name, i)
 
-			// 触发匹配成功
+			// 优先使用 TS 微服务（如果配置了 BOT_ENGINE_URL）
+			if e.tsClient != nil {
+				contextMsgs := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
+				reply, sessionActive, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, bot.MechanismConfig, contextMsgs)
+				if tsErr == nil {
+					if sessionActive {
+						// 工作流会话由 TS 服务管理
+						e.sendBotReply(ctx, bot, msg.ConversationID, reply)
+					} else {
+						e.sendBotReply(ctx, bot, msg.ConversationID, reply)
+					}
+					break // 首个匹配机制响应后，跳过后续机制
+				}
+				// TS 服务调用失败，回退到 Go 引擎
+				logger.InfofWithCaller("[BotEngine] TS service failed for bot %s, falling back to Go engine: %v", bot.Name, tsErr)
+			}
+
+			// 触发匹配成功（Go 引擎路径）
 			switch mech.Reply.Type {
 			case "workflow":
 				e.activateMechanismWorkflow(ctx, msg, bot, mech.Reply.Workflow)

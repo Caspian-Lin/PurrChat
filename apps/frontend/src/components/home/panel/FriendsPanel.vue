@@ -1,5 +1,315 @@
 <template>
+  <!-- ========== 移动端布局 ========== -->
+  <div v-if="isMobile" class="mobile-friends-panel">
+    <!-- 好友列表（全屏） -->
+    <div v-if="mobileView === 'list'" class="mobile-list-view">
+      <!-- 搜索栏 -->
+      <div class="mobile-search-bar">
+        <div class="mobile-search-input">
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜索好友或用户..."
+            class="mobile-search-field"
+            @input="handleSearch"
+            @focus="showSearchResults = true"
+          />
+          <button v-if="searchQuery" class="mobile-search-clear" @click="clearSearch">
+            <BsX :size="18" />
+          </button>
+        </div>
+      </div>
+
+      <!-- 搜索结果（全屏宽度） -->
+      <div
+        v-if="showSearchResults && (filteredFriends.length > 0 || searchedUsers.length > 0 || filteredGroups.length > 0)"
+        class="mobile-search-results"
+      >
+        <!-- 好友结果 -->
+        <div v-if="filteredFriends.length > 0" class="mobile-search-section">
+          <div class="mobile-search-section-title">好友</div>
+          <BaseListItem
+            v-for="friendship in filteredFriends"
+            :key="'friend-' + friendship.id"
+            @click="handleSelectFriend(friendship)"
+          >
+            <template #avatar>
+              <div class="w-9 h-9 rounded-[var(--radius-md)] overflow-hidden flex-shrink-0">
+                <img
+                  v-if="friendship.friend?.avatar_url"
+                  :src="friendship.friend.avatar_url"
+                  alt="avatar"
+                  class="w-full h-full object-cover"
+                />
+                <div
+                  v-else
+                  class="w-full h-full flex items-center justify-center font-bold text-white text-sm"
+                  style="background: var(--theme-gradient)"
+                >
+                  {{ friendship.friend?.username?.charAt(0) || '?' }}
+                </div>
+              </div>
+            </template>
+            <div class="font-semibold truncate text-text-primary text-sm">
+              {{ friendship.friend?.username }}
+            </div>
+            <div class="text-xs text-text-secondary">UID: {{ friendship.friend?.uid }}</div>
+          </BaseListItem>
+        </div>
+
+        <!-- 群聊结果 -->
+        <div v-if="filteredGroups.length > 0" class="mobile-search-section">
+          <div class="mobile-search-section-title">群聊</div>
+          <BaseListItem
+            v-for="conversation in filteredGroups"
+            :key="'group-' + conversation.id"
+            @click="handleSelectGroup(conversation)"
+          >
+            <template #avatar>
+              <div class="w-9 h-9 rounded-[var(--radius-md)] overflow-hidden flex-shrink-0" style="background: var(--theme-gradient)">
+                <div class="w-full h-full flex items-center justify-center font-bold text-white text-sm">
+                  {{ conversation.name?.charAt(0) || 'G' }}
+                </div>
+              </div>
+            </template>
+            <div class="font-semibold truncate text-text-primary text-sm">
+              {{ conversation.name }}
+            </div>
+            <div class="text-xs text-text-secondary">群聊</div>
+          </BaseListItem>
+        </div>
+
+        <!-- 用户结果 -->
+        <div v-if="searchedUsers.length > 0" class="mobile-search-section">
+          <div class="mobile-search-section-title">用户</div>
+          <BaseListItem
+            v-for="user in searchedUsers"
+            :key="'user-' + user.id"
+            @click="handleSelectUser(user)"
+          >
+            <template #avatar>
+              <div class="w-9 h-9 rounded-[var(--radius-md)] overflow-hidden flex-shrink-0">
+                <img
+                  v-if="user.avatar_url"
+                  :src="user.avatar_url"
+                  alt="avatar"
+                  class="w-full h-full object-cover"
+                />
+                <div
+                  v-else
+                  class="w-full h-full flex items-center justify-center font-bold text-white text-sm"
+                  style="background: var(--theme-gradient)"
+                >
+                  {{ user.username?.charAt(0) || '?' }}
+                </div>
+              </div>
+            </template>
+            <div class="flex items-center gap-2">
+              <span class="font-semibold truncate text-text-primary text-sm">{{ user.username }}</span>
+              <span
+                v-if="user.is_bot"
+                class="text-xs px-1.5 py-0.5 rounded-[var(--radius-xs)] flex items-center gap-0.5"
+                style="background: var(--theme-primary); color: white"
+              >
+                <BsCpu :size="10" />
+                Bot
+              </span>
+              <span v-else class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded-[var(--radius-xs)]">陌生人</span>
+            </div>
+            <div class="text-xs text-text-secondary">UID: {{ user.uid }}</div>
+          </BaseListItem>
+        </div>
+      </div>
+
+      <!-- 好友申请入口 -->
+      <div class="mobile-request-entry" @click="mobileView = 'request-history'">
+        <div class="mobile-request-icon">
+          <span class="text-lg">🔔</span>
+          <div
+            v-if="pendingRequests.length > 0"
+            class="mobile-request-badge"
+          >
+            {{ pendingRequests.length }}
+          </div>
+        </div>
+        <div class="mobile-request-info">
+          <div class="font-semibold text-text-primary">好友申请</div>
+          <div class="text-sm text-text-secondary">{{ pendingRequests.length }} 条待处理</div>
+        </div>
+        <BsChevronRight :size="18" class="text-text-tertiary" />
+      </div>
+
+      <!-- 标签切换 -->
+      <div class="mobile-tabs">
+        <button
+          :class="['mobile-tab', { active: activeTab === 'friends' }]"
+          @click="activeTab = 'friends'"
+        >
+          好友
+        </button>
+        <button
+          :class="['mobile-tab', { active: activeTab === 'groups' }]"
+          @click="activeTab = 'groups'"
+        >
+          群聊
+        </button>
+      </div>
+
+      <!-- 好友/群聊列表 -->
+      <div class="mobile-list-scroll">
+        <FriendList
+          v-if="activeTab === 'friends'"
+          :friends="friends"
+          @select="handleSelectFriend"
+          @show-user="handleShowUserProfile"
+        />
+        <div v-else class="flex-1 min-h-0 overflow-y-auto">
+          <div class="px-2 pt-1 pb-0.5">
+            <BaseListItem
+              v-for="conversation in filteredGroups"
+              :key="conversation.id"
+              @click="handleSelectGroup(conversation)"
+            >
+              <template #avatar>
+                <div class="w-11 h-11 rounded-[var(--radius-md)] overflow-hidden" style="background: var(--theme-gradient)">
+                  <div class="w-full h-full flex items-center justify-center font-bold text-white text-lg">
+                    {{ conversation.name?.charAt(0) || 'G' }}
+                  </div>
+                </div>
+              </template>
+              <div class="flex items-center gap-2">
+                <span class="font-semibold text-[15px] truncate text-text-primary">
+                  {{ conversation.name }}
+                </span>
+                <span class="text-xs px-1 rounded-[var(--radius-xs)] bg-bg-secondary">群聊</span>
+              </div>
+              <div class="text-sm text-text-secondary truncate">
+                {{ conversation.last_message?.content || '暂无消息' }}
+              </div>
+            </BaseListItem>
+          </div>
+          <div
+            v-if="filteredGroups.length === 0"
+            class="flex flex-col items-center justify-center h-full text-center p-8 text-text-tertiary"
+          >
+            <p>暂无群聊</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 好友申请历史（全屏，从右侧滑入） -->
+    <div v-else-if="mobileView === 'request-history'" class="mobile-detail-view">
+      <div class="mobile-detail-header">
+        <button class="mobile-back-btn" @click="mobileView = 'list'">
+          <BsChevronLeft :size="22" />
+        </button>
+        <span class="mobile-detail-title">好友申请记录</span>
+        <div style="width: 44px" />
+      </div>
+      <div class="mobile-detail-content">
+        <div v-if="allFriendRequests.length === 0" class="flex-1 flex items-center justify-center text-text-tertiary">
+          <p>暂无好友申请记录</p>
+        </div>
+        <div v-else class="px-2 pt-2 space-y-1">
+          <BaseListItem v-for="request in allFriendRequests" :key="request.id">
+            <template #avatar>
+              <div
+                class="w-11 h-11 rounded-[var(--radius-md)] overflow-hidden cursor-pointer"
+                @click="handleShowUserProfile(request.user!)"
+              >
+                <img
+                  v-if="request.user?.avatar_url"
+                  :src="request.user.avatar_url"
+                  alt="avatar"
+                  class="w-full h-full object-cover"
+                />
+                <div
+                  v-else
+                  class="w-full h-full flex items-center justify-center font-bold text-white"
+                  style="background: var(--theme-gradient)"
+                >
+                  {{ request.user?.username?.charAt(0) || '?' }}
+                </div>
+              </div>
+            </template>
+            <div class="flex items-center justify-between">
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-text-primary text-sm">
+                  {{ request.user?.username }}
+                </div>
+                <div class="text-xs text-text-secondary">
+                  {{ getFriendRequestText(request) }}
+                </div>
+                <div class="text-xs text-text-tertiary">
+                  {{ formatTime(request.created_at) }}
+                </div>
+              </div>
+              <div
+                v-if="request.status === 'pending' && isRequestRecipient(request)"
+                class="flex gap-1.5 ml-2"
+              >
+                <button
+                  class="px-3 py-1 bg-green-500 text-white rounded-[var(--radius-sm)] text-xs font-medium"
+                  @click="handleAcceptRequest(request)"
+                >
+                  接受
+                </button>
+                <button
+                  class="px-3 py-1 bg-red-500 text-white rounded-[var(--radius-sm)] text-xs font-medium"
+                  @click="handleRejectRequest(request)"
+                >
+                  忽略
+                </button>
+              </div>
+              <div
+                v-else
+                :class="['px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-medium', getFriendRequestStatusClass(request.status)]"
+              >
+                {{ getFriendRequestStatusText(request.status) }}
+              </div>
+            </div>
+          </BaseListItem>
+        </div>
+      </div>
+    </div>
+
+    <!-- 好友详情（全屏，从右侧滑入） -->
+    <div v-else-if="mobileView === 'friend-detail' && selectedFriend" class="mobile-detail-view">
+      <div class="mobile-detail-header">
+        <button class="mobile-back-btn" @click="mobileView = 'list'; selectedFriend = null">
+          <BsChevronLeft :size="22" />
+        </button>
+        <span class="mobile-detail-title">好友信息</span>
+        <div style="width: 44px" />
+      </div>
+      <div class="mobile-detail-content">
+        <FriendInfoModal
+          :friendship="selectedFriend"
+          @close="mobileView = 'list'; selectedFriend = null"
+          @start-chat="handleStartChatWithFriend"
+        />
+      </div>
+    </div>
+
+    <!-- 个人资料弹窗 -->
+    <UserProfileModal
+      v-model:show="showProfileModal"
+      :user="displayUser"
+      :is-current-user="!selectedUser || selectedUser.id === auth.currentUser?.id"
+      :friendship="getUserFriendship"
+      :loading="isSendingRequest"
+      :current-user-id="auth.currentUser?.id"
+      @send-friend-request="handleSendFriendRequest"
+      @accept-request="handleAcceptRequestFromModal"
+      @reject-request="handleRejectRequestFromModal"
+      @start-chat="handleStartChatFromModal"
+    />
+  </div>
+
+  <!-- ========== 桌面端布局（原始） ========== -->
   <BasePanel
+    v-else
     panel-id="friends"
     :initial-sidebar-width="320"
     :min-sidebar-width="250"
@@ -415,6 +725,7 @@ import { useFriends } from '../../../composables/useFriends';
 import { useConversations } from '../../../composables/useConversations';
 import { useWebSocketEventManager } from '../../../services/websocketEventManager';
 import { useConversationStateCache } from '../../../services/conversationStateCache';
+import { usePlatform } from '../../../composables/usePlatform';
 import { api } from '../../../models/api';
 import { useRouter } from 'vue-router';
 import FriendList from '../FriendList.vue';
@@ -423,7 +734,10 @@ import UserProfileModal from '../UserProfileModal.vue';
 import BasePanel from './BasePanel.vue';
 import BaseListItem from '../../common/BaseListItem.vue';
 import type { User, Friendship, Conversation } from '../../../models/types';
-import { BsX, BsCpu } from 'vue-icons-plus/bs';
+import { BsX, BsCpu, BsChevronRight, BsChevronLeft } from 'vue-icons-plus/bs';
+
+// Platform
+const { isMobile } = usePlatform();
 
 // Auth
 const auth = useAuthController();
@@ -453,6 +767,10 @@ const searchedUsers = ref<User[]>([]);
 const allFriendRequests = ref<Friendship[]>([]);
 const isSendingRequest = ref(false);
 const activeTab = ref<'friends' | 'groups'>('friends'); // 标签切换状态
+
+// 移动端视图状态
+type MobileView = 'list' | 'request-history' | 'friend-detail';
+const mobileView = ref<MobileView>('list');
 
 // Computed
 const displayUser = computed(() => {
@@ -550,6 +868,11 @@ const handleSelectFriend = (friendship: Friendship) => {
   showFriendRequestHistory.value = false; // 关闭好友申请记录页面
   showSearchResults.value = false;
   searchQuery.value = '';
+
+  // 移动端：切换到详情视图
+  if (isMobile.value) {
+    mobileView.value = 'friend-detail';
+  }
 };
 
 const handleSelectUser = (user: User) => {
@@ -825,5 +1148,233 @@ onUnmounted(() => {
 /* 点击外部关闭搜索结果 */
 :deep(.fixed) {
   z-index: 50;
+}
+
+/* ========== 移动端样式 ========== */
+.mobile-friends-panel {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--background-color);
+}
+
+.mobile-list-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.mobile-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.mobile-search-input {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: var(--bg-quaternary, rgba(0, 0, 0, 0.04));
+  border-radius: var(--radius-sm, 8px);
+  height: 40px;
+  padding: 0 12px;
+}
+
+.mobile-search-field {
+  width: 100%;
+  background: transparent;
+  color: var(--text-color);
+  font-size: 15px;
+  outline: none;
+}
+
+.mobile-search-field::placeholder {
+  color: var(--text-tertiary-color);
+}
+
+.mobile-search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: none;
+  border: none;
+  color: var(--text-tertiary-color);
+  cursor: pointer;
+}
+
+.mobile-search-results {
+  position: absolute;
+  top: 64px;
+  left: 0;
+  right: 0;
+  background: var(--background-color);
+  border-bottom: 1px solid var(--border-subtle);
+  z-index: 50;
+  max-height: 60vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+
+.mobile-search-section {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.mobile-search-section-title {
+  padding: 8px 16px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mobile-request-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease;
+}
+
+.mobile-request-entry:active {
+  background: var(--hover-background);
+}
+
+.mobile-request-icon {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--theme-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-request-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background: var(--theme-primary);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-request-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.mobile-tab {
+  flex: 1;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary-color);
+  background: var(--bg-quaternary, rgba(0, 0, 0, 0.04));
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s ease;
+}
+
+.mobile-tab.active {
+  background: var(--theme-primary);
+  color: white;
+}
+
+.mobile-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 详情视图 */
+.mobile-detail-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  animation: slideInRight 0.2s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.mobile-detail-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 4px;
+  height: 52px;
+  min-height: 52px;
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.mobile-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: none;
+  color: var(--text-primary-color);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 8px);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-back-btn:active {
+  background: var(--hover-bg, rgba(0, 0, 0, 0.06));
+}
+
+.mobile-detail-title {
+  flex: 1;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.mobile-detail-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 </style>

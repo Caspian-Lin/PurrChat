@@ -10,8 +10,8 @@
     </template>
 
     <!-- 右侧设置内容 — 连续滚动长栏 -->
-    <div ref="scrollContent" class="flex-1 overflow-y-auto">
-      <div class="max-w-3xl mx-auto px-12 py-6 space-y-10">
+    <div ref="scrollContent" class="settings-content flex-1 overflow-y-auto">
+      <div class="settings-inner max-w-3xl mx-auto px-4 md:px-12 py-6 space-y-10">
         <!-- 账号设置 -->
         <SettingsAccount :user="authStore.currentUser" />
 
@@ -188,6 +188,14 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .settings-inner {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
 /* 设置小节通用样式 */
 :deep(.settings-section) {
   scroll-margin-top: 24px;

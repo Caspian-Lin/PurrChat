@@ -1,5 +1,23 @@
 <template>
-  <div class="flex flex-col h-screen bg-bg-primary">
+  <!-- 移动端：显示桌面端提示 -->
+  <div v-if="isMobile" class="mobile-workflow-notice">
+    <div class="mobile-notice-content">
+      <div class="mobile-notice-icon">
+        <BsPcDisplay :size="48" />
+      </div>
+      <h2 class="mobile-notice-title">请在桌面端使用</h2>
+      <p class="mobile-notice-desc">
+        工作流编辑器需要鼠标拖拽和精确连线操作，建议在桌面浏览器中使用。
+      </p>
+      <button class="mobile-notice-btn" @click="goBack">
+        <BsArrowLeft :size="16" />
+        返回
+      </button>
+    </div>
+  </div>
+
+  <!-- 桌面端：正常编辑器 -->
+  <div v-else class="flex flex-col h-screen bg-bg-primary">
     <!-- 顶部工具栏 -->
     <div
       class="flex items-center gap-3 px-5 py-3 bg-bg-secondary border-b border-border-subtle flex-shrink-0"
@@ -276,8 +294,12 @@ import { useRoute, useRouter } from 'vue-router';
 import { VueFlow, ConnectionMode } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
-import { BsArrowLeft, BsPlus, BsUpload, BsDownload } from 'vue-icons-plus/bs';
+import { BsArrowLeft, BsPlus, BsUpload, BsDownload, BsPcDisplay } from 'vue-icons-plus/bs';
+import { usePlatform } from '../composables/usePlatform';
 import { api } from '../models/api';
+
+// Platform
+const { isMobile } = usePlatform();
 import type {
   Bot,
   Mechanism,
@@ -778,6 +800,72 @@ function handleYamlImport() {
 </script>
 
 <style scoped>
+/* ── Mobile notice ──────────────────────────────────────── */
+
+.mobile-workflow-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  background: var(--background-color);
+  padding: 24px;
+}
+
+.mobile-notice-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 320px;
+}
+
+.mobile-notice-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-xl, 20px);
+  background: var(--surface-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary-color);
+  margin-bottom: 24px;
+}
+
+.mobile-notice-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 8px;
+}
+
+.mobile-notice-desc {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary-color);
+  margin-bottom: 32px;
+}
+
+.mobile-notice-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--radius-md, 12px);
+  background: var(--theme-primary);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s ease;
+}
+
+.mobile-notice-btn:active {
+  opacity: 0.8;
+}
+
 /* ── Connection toast ──────────────────────────────────── */
 
 .connection-toast {

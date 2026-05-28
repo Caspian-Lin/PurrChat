@@ -255,8 +255,9 @@
         </div>
       </div>
 
-      <!-- 分割器 -->
+      <!-- 分割器（桌面端） -->
       <ResizableSplitter
+        v-if="!isMobile"
         direction="vertical"
         :initial-position="inputAreaHeight"
         :min-position="200"
@@ -267,11 +268,11 @@
       <!-- 消息输入区 -->
       <div
         class="flex flex-col bg-bg-primary border-t border-border-subtle flex-shrink-0"
-        :class="{ 'border-dashed border-2 border-[var(--theme-primary)]': isDragOver }"
-        :style="{ height: `${inputAreaHeight}px` }"
-        @dragover.prevent="isDragOver = true"
-        @dragleave.prevent="isDragOver = false"
-        @drop.prevent="handleDrop"
+        :class="{ 'border-dashed border-2 border-[var(--theme-primary)]': !isMobile && isDragOver }"
+        :style="{ height: isMobile ? '180px' : `${inputAreaHeight}px` }"
+        @dragover.prevent="!isMobile && (isDragOver = true)"
+        @dragleave.prevent="!isMobile && (isDragOver = false)"
+        @drop.prevent="!isMobile && handleDrop($event)"
       >
         <!-- 文件预览卡片（上传完成后显示） -->
         <div v-if="fileData || fileUploading" class="px-4 pt-2">
@@ -316,50 +317,53 @@
         </div>
 
         <!-- 文本选项 -->
-        <div class="flex items-center gap-3 px-4 py-3">
+        <div class="flex items-center gap-2 px-3 py-2">
           <EmojiPicker v-model="newMessage" @select="handleEmojiSelect" />
           <button
-            class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+            class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary rounded-[var(--radius-sm)]"
             title="文件"
             @click="handleFileSelect"
           >
-            <BsPaperclip class="text-2xl" />
+            <BsPaperclip class="text-xl" />
           </button>
-          <button
-            class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-            title="截图"
-          >
-            <BsCamera class="text-2xl" />
-          </button>
-          <div class="h-[18px] w-px bg-border-color" />
-          <button
-            class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
-            title="视频通话"
-          >
-            <BsCameraVideo class="text-2xl" />
-          </button>
+          <!-- 桌面端专属按钮 -->
+          <template v-if="!isMobile">
+            <button
+              class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary rounded-[var(--radius-sm)]"
+              title="截图"
+            >
+              <BsCamera class="text-xl" />
+            </button>
+            <div class="h-[18px] w-px bg-border-color" />
+            <button
+              class="relative p-2 flex items-center justify-center bg-bg-quaternary hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary rounded-[var(--radius-sm)]"
+              title="视频通话"
+            >
+              <BsCameraVideo class="text-xl" />
+            </button>
+          </template>
           <!-- 隐藏的文件输入 -->
           <input ref="fileInputRef" type="file" class="hidden" @change="handleFileChange" />
         </div>
 
         <!-- 文本输入区 -->
-        <div class="flex-1 px-4 min-h-0">
+        <div class="flex-1 px-3 min-h-0">
           <textarea
             v-model="newMessage"
-            placeholder="输入消息... (Enter 发送)"
+            :placeholder="isMobile ? '输入消息...' : '输入消息... (Enter 发送)'"
             class="w-full h-full bg-transparent text-base text-text-primary resize-none outline-none placeholder:text-text-tertiary"
             @keydown="handleKeyDown"
           />
         </div>
 
         <!-- 发送按钮 -->
-        <div class="flex justify-end pb-4 pr-4">
+        <div class="flex justify-end" :class="isMobile ? 'pb-2 pr-3' : 'pb-4 pr-4'">
           <button
-            class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-base disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-80 transition-opacity flex items-center justify-center text-white font-semibold text-base disabled:opacity-50 disabled:cursor-not-allowed rounded-[var(--radius-sm)]"
             :disabled="sendDisabled"
             @click="handleSend"
           >
-            Send
+            发送
           </button>
         </div>
       </div>
