@@ -30,20 +30,71 @@ interface TrailGlyph {
   y: number;
   symbol: string;
   bornAt: number;
+  rolledAt: number;
   seed: number;
+}
+
+interface TrailMemory {
+  symbol: string;
+  rolledAt: number;
+  seed: number;
+}
+
+interface ClickRipple {
+  x: number;
+  y: number;
+  bornAt: number;
+  maxRadius: number;
+  activated: Set<string>;
 }
 
 const BASE_DPR = 1.5;
 const PARTICLE_DENSITY = 18000;
 const MAX_PARTICLES = 72;
 const GRID_STEP = 56;
-const TRAIL_TTL = 900;
-const TRAIL_MAX_GLYPHS = 150;
+const TRAIL_TTL = 1450;
+const TRAIL_MAX_GLYPHS = 420;
 const TRAIL_MASK_WIDTH = 168;
 const TRAIL_MASK_HEIGHT = 128;
 const TRAIL_MASK_RADIUS = 34;
+const TRAIL_ROLL_DURATION = 180;
+const TRAIL_REROLL_COOLDOWN = 10000;
+const RIPPLE_SPEED = 320;
+const RIPPLE_BAND = 34;
 const TRAIL_SYMBOLS = ['{', '}', '<', '>', '/', '*', '+', '=', '_', '#', '::', '[]'];
-const TRAIL_KAOMOJI = ['^_^', '>_<', 'o_o', 'owo', 'uwu', '(^^)', '(._.)'];
+const TRAIL_ROLL_SYMBOLS = [
+  '+',
+  '-',
+  '*',
+  '/',
+  '=',
+  '<',
+  '>',
+  '{',
+  '}',
+  '[',
+  ']',
+  'x',
+  'X',
+  '#',
+  '_',
+];
+const TRAIL_KAOMOJI = [
+  '^_^',
+  '>_<',
+  'o_o',
+  'owo',
+  'uwu',
+  '(^^)',
+  '(._.)',
+  '(=^.^=)',
+  '(*^-^)',
+  '( •_•)',
+  '( ´ ▽ ` )',
+  '(￣▽￣)',
+  '(｀・ω・´)',
+  '( ᵔ ᵕ ᵔ )',
+];
 
 let ctx: CanvasRenderingContext2D | null = null;
 let textureCanvas: HTMLCanvasElement | null = null;
@@ -56,6 +107,8 @@ let canvasHeight = 0;
 let dpr = 1;
 let particles: Particle[] = [];
 let trailGlyphs = new Map<string, TrailGlyph>();
+let trailMemory = new Map<string, TrailMemory>();
+let clickRipples: ClickRipple[] = [];
 let lastTimestamp = 0;
 let textureDirty = true;
 
@@ -270,14 +323,18 @@ const drawTrailGlyphs = (target: CanvasRenderingContext2D, timestamp: number) =>
 
     const life = 1 - age / TRAIL_TTL;
     const pulse = 0.88 + Math.sin(timestamp * 0.006 + glyph.seed) * 0.12;
-    const alpha = Math.pow(life, 1.8) * pulse;
+    const alpha = Math.pow(life, 1.18) * pulse;
     const size = 28 + life * 8;
+    const rollAge = timestamp - glyph.rolledAt;
+    const isRolling = rollAge >= 0 && rollAge < TRAIL_ROLL_DURATION;
+    const rollIndex = Math.floor(rollAge / 30 + glyph.seed * 7) % TRAIL_ROLL_SYMBOLS.length;
+    const displaySymbol = isRolling ? TRAIL_ROLL_SYMBOLS[rollIndex]! : glyph.symbol;
 
     target.fillStyle = rgba(p.primary, (p.isDark ? 0.08 : 0.07) * alpha);
     fillRoundedRect(target, glyph.x - size / 2, glyph.y - size / 2, size, size, 8);
 
     target.fillStyle = rgba(color, (p.isDark ? 0.86 : 0.72) * alpha);
-    target.fillText(glyph.symbol, glyph.x, glyph.y);
+    target.fillText(displaySymbol, glyph.x, glyph.y);
   }
 
   target.restore();
@@ -294,6 +351,7 @@ const render = (timestamp: number) => {
   lastTimestamp = timestamp;
 
   if (textureDirty) renderTexture();
+  updateClickRipples(timestamp);
 
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
   if (textureCanvas) {
@@ -371,6 +429,40 @@ const pickTrailSymbol = () => {
   return TRAIL_SYMBOLS[Math.floor(Math.random() * TRAIL_SYMBOLS.length)]!;
 };
 
+const trimTrailGlyphs = () => {
+  if (trailGlyphs.size <= TRAIL_MAX_GLYPHS) return;
+
+  const overflow = trailGlyphs.size - TRAIL_MAX_GLYPHS;
+  const keys = trailGlyphs.keys();
+  for (let i = 0; i < overflow; i++) {
+    const oldestKey = keys.next().value;
+    if (oldestKey) trailGlyphs.delete(oldestKey);
+  }
+};
+
+const activateGridGlyph = (col: number, row: number, now: number, forceReroll = false) => {
+  const key = `${col}:${row}`;
+  const glyphX = col * GRID_STEP;
+  const glyphY = row * GRID_STEP;
+  const existing = trailGlyphs.get(key);
+  const memory = trailMemory.get(key);
+  const shouldReroll = forceReroll || !memory || now - memory.rolledAt >= TRAIL_REROLL_COOLDOWN;
+  const symbol = shouldReroll ? pickTrailSymbol() : memory.symbol;
+  const rolledAt = shouldReroll ? now : memory.rolledAt;
+  const seed = shouldReroll ? Math.random() * Math.PI * 2 : memory.seed;
+
+  trailMemory.set(key, { symbol, rolledAt, seed });
+
+  trailGlyphs.set(key, {
+    x: glyphX,
+    y: glyphY,
+    symbol: shouldReroll ? symbol : (existing?.symbol ?? symbol),
+    bornAt: now,
+    rolledAt: shouldReroll ? rolledAt : (existing?.rolledAt ?? rolledAt),
+    seed: shouldReroll ? seed : (existing?.seed ?? seed),
+  });
+};
+
 const addTrailGlyph = (x: number, y: number) => {
   const centerCol = Math.round(x / GRID_STEP);
   const centerRow = Math.round(y / GRID_STEP);
@@ -384,31 +476,53 @@ const addTrailGlyph = (x: number, y: number) => {
       const glyphY = row * GRID_STEP;
       if (!pointInRoundedMask(glyphX - x, glyphY - y)) continue;
 
-      const key = `${col}:${row}`;
-      const existing = trailGlyphs.get(key);
-
-      trailGlyphs.set(key, {
-        x: glyphX,
-        y: glyphY,
-        symbol: existing?.symbol ?? pickTrailSymbol(),
-        bornAt,
-        seed: existing?.seed ?? Math.random() * Math.PI * 2,
-      });
+      activateGridGlyph(col, row, bornAt);
     }
   }
 
-  if (trailGlyphs.size > TRAIL_MAX_GLYPHS) {
-    const overflow = trailGlyphs.size - TRAIL_MAX_GLYPHS;
-    const keys = trailGlyphs.keys();
-    for (let i = 0; i < overflow; i++) {
-      const oldestKey = keys.next().value;
-      if (oldestKey) trailGlyphs.delete(oldestKey);
-    }
-  }
+  trimTrailGlyphs();
 
   if (prefersReducedMotion || !animationId) {
     queueRender();
   }
+};
+
+const updateClickRipples = (timestamp: number) => {
+  if (clickRipples.length === 0) return;
+
+  const activeRipples: ClickRipple[] = [];
+  const maxCol = Math.ceil(canvasWidth / GRID_STEP);
+  const maxRow = Math.ceil(canvasHeight / GRID_STEP);
+
+  for (const ripple of clickRipples) {
+    const radius = (timestamp - ripple.bornAt) * 0.001 * RIPPLE_SPEED;
+    if (radius > ripple.maxRadius + RIPPLE_BAND) continue;
+
+    const minCol = Math.max(0, Math.floor((ripple.x - radius - RIPPLE_BAND) / GRID_STEP));
+    const maxRingCol = Math.min(maxCol, Math.ceil((ripple.x + radius + RIPPLE_BAND) / GRID_STEP));
+    const minRow = Math.max(0, Math.floor((ripple.y - radius - RIPPLE_BAND) / GRID_STEP));
+    const maxRingRow = Math.min(maxRow, Math.ceil((ripple.y + radius + RIPPLE_BAND) / GRID_STEP));
+
+    for (let row = minRow; row <= maxRingRow; row++) {
+      for (let col = minCol; col <= maxRingCol; col++) {
+        const key = `${col}:${row}`;
+        if (ripple.activated.has(key)) continue;
+
+        const glyphX = col * GRID_STEP;
+        const glyphY = row * GRID_STEP;
+        const distance = Math.hypot(glyphX - ripple.x, glyphY - ripple.y);
+        if (Math.abs(distance - radius) > RIPPLE_BAND) continue;
+
+        ripple.activated.add(key);
+        activateGridGlyph(col, row, timestamp, true);
+      }
+    }
+
+    activeRipples.push(ripple);
+  }
+
+  clickRipples = activeRipples;
+  trimTrailGlyphs();
 };
 
 const handlePointerMove = (event: PointerEvent) => {
@@ -420,6 +534,28 @@ const handlePointerMove = (event: PointerEvent) => {
 
   if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
   addTrailGlyph(x, y);
+};
+
+const handlePointerDown = (event: PointerEvent) => {
+  if (!container.value) return;
+
+  const rect = container.value.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+
+  if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
+
+  clickRipples.push({
+    x,
+    y,
+    bornAt: performance.now(),
+    maxRadius: Math.hypot(Math.max(x, rect.width - x), Math.max(y, rect.height - y)),
+    activated: new Set(),
+  });
+
+  if (prefersReducedMotion || !animationId) {
+    queueRender();
+  }
 };
 
 watch(palette, () => {
@@ -434,6 +570,7 @@ onMounted(() => {
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas);
   document.addEventListener('pointermove', handlePointerMove, { passive: true });
+  document.addEventListener('pointerdown', handlePointerDown, { passive: true });
   mediaQuery.addEventListener('change', handleMotionChange);
 });
 
@@ -441,6 +578,7 @@ onUnmounted(() => {
   if (animationId) cancelAnimationFrame(animationId);
   window.removeEventListener('resize', resizeCanvas);
   document.removeEventListener('pointermove', handlePointerMove);
+  document.removeEventListener('pointerdown', handlePointerDown);
   mediaQuery?.removeEventListener('change', handleMotionChange);
 });
 </script>
