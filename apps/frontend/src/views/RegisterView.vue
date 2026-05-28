@@ -5,8 +5,7 @@
       <ThemeSwitcher />
     </div>
     <div
-      class="relative z-10 p-8 rounded-[var(--radius-xl)] w-full max-w-md elevated-lg"
-      style="background: var(--background-color)"
+      class="auth-panel relative z-10 p-8 rounded-[var(--radius-xl)] w-full max-w-md elevated-lg"
     >
       <h1
         class="text-3xl font-bold font-display text-center mb-2"
@@ -218,4 +217,16 @@ const handleSubmit = async () => {
 };
 </script>
 
-<style scoped></style>
+<style scoped>
+.auth-panel {
+  background: color-mix(in srgb, var(--background-color) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle-color) 76%, transparent);
+  backdrop-filter: blur(14px) saturate(1.08);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+}
+
+:global([data-theme='dark']) .auth-panel {
+  background: color-mix(in srgb, var(--surface-color) 74%, transparent);
+  border-color: color-mix(in srgb, var(--border-color) 72%, transparent);
+}
+</style>
