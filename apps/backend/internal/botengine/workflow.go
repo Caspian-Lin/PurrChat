@@ -262,6 +262,11 @@ func (e *BotEngine) HandleWorkflow(ctx context.Context, msg *BotMessage, bot *mo
 		return
 	}
 
+	// 注入消息元数据到会话变量（供 trigger 节点端口使用）
+	session.Variables["username"] = msg.SenderName
+	session.Variables["time"] = msg.CreatedAt.Format("15:04")
+	session.Variables["sender_id"] = msg.SenderID.String()
+
 	// 使用端口化流程引擎执行事件链
 	flowCtx := NewExecutionContext(spec.Events, spec.Connections, session)
 	reply, err := flowCtx.ExecuteFlow(ctx, e, msg.Content)

@@ -26,6 +26,9 @@ type BotEngine struct {
 
 	// 调试会话：记录调试运行时状态
 	debugSessions sync.Map // map[string]*DebugSession — sessionID -> session
+
+	// TS 微服务客户端（可选，用于调用 XState 版 Bot 引擎）
+	tsClient *BotEngineClient
 }
 
 // NewBotEngine 创建 Bot 引擎
@@ -34,12 +37,17 @@ func NewBotEngine(
 	botRepo repository.BotRepository,
 	messageRepo repository.ConversationMessageRepository,
 	enrollmentRepo repository.EnrollmentRepository,
+	tsServiceURL string,
 ) *BotEngine {
 	e := &BotEngine{
 		deployRepo:     deployRepo,
 		botRepo:        botRepo,
 		messageRepo:    messageRepo,
 		enrollmentRepo: enrollmentRepo,
+	}
+	if tsServiceURL != "" {
+		e.tsClient = NewBotEngineClient(tsServiceURL)
+		logger.InfofWithCaller("[BotEngine] TS service client initialized: %s", tsServiceURL)
 	}
 	e.startDebugSessionCleanup()
 	return e

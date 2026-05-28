@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
-	"regexp"
 	"time"
 
 	"purr-chat-server/pkg/logger"
@@ -19,7 +19,7 @@ import (
 type ExecutionContext struct {
 	Events       []WorkflowEvent
 	Connections  []FlowConnection
-	PortValues   map[string]any    // "nodeID:portID" -> value
+	PortValues   map[string]any // "nodeID:portID" -> value
 	Variables    map[string]string
 	Session      *WorkflowSession
 	nameResolver map[string]string // "nodeName.portName" -> "nodeID:portID"
@@ -65,13 +65,25 @@ func (ctx *ExecutionContext) ExecuteFlow(engineCtx context.Context, engine *BotE
 		return "", fmt.Errorf("no trigger event found in flow")
 	}
 
-	// 2. 找到 trigger 的 exec 输出连接
-	outConn := ctx.findOutputConnection(triggerEvent.ID, "trigger")
+	// 2. 注入 trigger 节点的端口值（Bug fix: trigger 不注入上下文值）
+	ctx.PortValues[triggerEvent.ID+":out_input"] = input
+	ctx.PortValues[triggerEvent.ID+":out_username"] = ctx.Variables["username"]
+	ctx.PortValues[triggerEvent.ID+":out_time"] = ctx.Variables["time"]
+	ctx.PortValues[triggerEvent.ID+":out_args"] = ""
+	ctx.PortValues[triggerEvent.ID+":out_exec"] = "true"
+	// 兼容旧端口名
+	ctx.PortValues[triggerEvent.ID+":trigger"] = "true"
+
+	// 3. 找到 trigger 的 exec 输出连接（优先 out_exec，fallback trigger）
+	outConn := ctx.findOutputConnection(triggerEvent.ID, "out_exec")
+	if outConn == nil {
+		outConn = ctx.findOutputConnection(triggerEvent.ID, "trigger")
+	}
 	if outConn == nil {
 		return "", nil // trigger 没有连接任何节点
 	}
 
-	// 3. 沿控制流执行
+	// 4. 沿控制流执行
 	var finalReply string
 	err := ctx.followControlFlow(engineCtx, engine, outConn.TargetNodeID, &finalReply)
 	return finalReply, err
@@ -93,10 +105,23 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 		*finalReply = contentStr
 		return nil
 
-	case "llm", "builtin", "python", "template":
+	case "llm", "builtin", "python":
 		// 处理节点：读取输入端口，执行，写入输出端口
 		prompt := ctx.getPortValue(event.ID, "in_prompt")
 		inputStr, _ := prompt.(string)
+
+		output, err := engine.executeEvent(engineCtx, ctx.Session, event, inputStr)
+		if err != nil {
+			logger.ErrorfWithCaller("[FlowEngine] Event %s failed: %v", event.ID, err)
+			output = ""
+		}
+		ctx.PortValues[event.ID+":out_output"] = output
+		ctx.Session.EventOutputs[event.ID] = output
+
+	case "template":
+		// Template 节点：读取 in_input 端口
+		inputVal := ctx.getPortValue(event.ID, "in_input")
+		inputStr, _ := inputVal.(string)
 
 		output, err := engine.executeEvent(engineCtx, ctx.Session, event, inputStr)
 		if err != nil {
@@ -260,7 +285,30 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 		return nil
 
 	case "merge":
-		// Merge 节点：passthrough，直接沿 out_exec 继续执行
+		// Merge 节点：追踪已满足的输入端口，所有 in_exec_N 到位后才继续
+		// 统计需要多少个输入端口
+		inputCount := 2 // 默认 2 个输入
+		if v, ok := event.Config["input_count"].(float64); ok && v > 0 {
+			inputCount = int(v)
+		}
+
+		// 从 Session 变量中读取已满足的输入
+		fulfilledKey := "merge_fulfilled_" + event.ID
+		fulfilled := 0
+		if v, ok := ctx.Session.Variables[fulfilledKey]; ok {
+			fmt.Sscanf(v, "%d", &fulfilled)
+		}
+		fulfilled++
+
+		if fulfilled < inputCount {
+			// 还有分支未到达，暂存进度并返回
+			ctx.Session.Variables[fulfilledKey] = fmt.Sprintf("%d", fulfilled)
+			return nil
+		}
+
+		// 所有输入已满足，重置计数器，继续执行
+		ctx.Session.Variables[fulfilledKey] = "0"
+		ctx.PortValues[event.ID+":out_exec"] = "true"
 
 	case "tool":
 		// Tool 节点：HTTP 请求
@@ -463,6 +511,7 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 			userMsg := ctx.Session.ContextBuffer[len(ctx.Session.ContextBuffer)-1].Content
 			ctx.PortValues[event.ID+":out_user_input"] = userMsg
 		}
+		ctx.PortValues[event.ID+":out_exec"] = "true"
 
 	case "history":
 		// 历史消息节点：获取前 N 条消息并格式化为 prompt 字符串
@@ -495,8 +544,11 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 		ctx.Session.EventOutputs[event.ID] = output
 	}
 
-	// 对于处理节点，执行后继续沿 trigger 类型输出连接
-	outConn := ctx.findOutputConnection(event.ID, "trigger")
+	// 对于处理节点，执行后继续沿 exec 类型输出连接（优先 out_exec，fallback trigger）
+	outConn := ctx.findOutputConnection(event.ID, "out_exec")
+	if outConn == nil {
+		outConn = ctx.findOutputConnection(event.ID, "trigger")
+	}
 	if outConn != nil {
 		return ctx.followControlFlow(engineCtx, engine, outConn.TargetNodeID, finalReply)
 	}
@@ -545,7 +597,7 @@ func (ctx *ExecutionContext) collectNodeOrderDFS(nodeID string, order *[]string,
 	case "loop":
 		portIDs = []string{"out_body", "out_done"}
 	default:
-		portIDs = []string{"trigger"}
+		portIDs = []string{"out_exec", "trigger"}
 	}
 
 	for _, portID := range portIDs {

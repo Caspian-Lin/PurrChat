@@ -218,7 +218,7 @@ func main() {
 	botRepo := repository.NewBotRepository()
 	botDeployRepo := repository.NewBotDeploymentRepository()
 	authService := services.NewAuthService(userRepo, botRepo, cfg.JWT.Secret)
-	botEngine := botengine.NewBotEngine(botDeployRepo, botRepo, conversationMessageRepo, enrollmentRepo)
+	botEngine := botengine.NewBotEngine(botDeployRepo, botRepo, conversationMessageRepo, enrollmentRepo, os.Getenv("BOT_ENGINE_URL"))
 	conversationService := services.NewConversationService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, friendshipRepo)
 	conversationService.SetBotRepo(botRepo)
 	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, botRepo, botEngine)
