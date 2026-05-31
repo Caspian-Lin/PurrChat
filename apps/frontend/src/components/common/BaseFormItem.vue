@@ -1,5 +1,5 @@
 <template>
-  <div class="mb-6">
+  <div>
     <label
       v-if="label"
       class="block text-sm font-medium mb-2"

@@ -19,12 +19,11 @@
           >
             <div
               v-if="$slots.header || title"
-              class="flex items-center justify-between px-6 py-4 border-b flex-shrink-0"
-              style="border-color: var(--border-color)"
+              class="flex items-center justify-between px-5 pt-5 pb-2 flex-shrink-0"
             >
               <h2
                 v-if="title"
-                class="text-xl font-bold font-display"
+                class="text-lg font-semibold font-display"
                 style="color: var(--text-color)"
               >
                 {{ title }}
@@ -34,13 +33,12 @@
                 <BsX class="text-2xl" />
               </button>
             </div>
-            <div class="modal-body px-6 py-5">
+            <div class="modal-body px-5 py-4">
               <slot></slot>
             </div>
             <div
               v-if="$slots.footer"
-              class="flex items-center justify-end gap-2 px-6 py-4 border-t flex-shrink-0"
-              style="border-color: var(--border-color)"
+              class="flex items-center justify-end gap-2 px-5 pt-2 pb-5 flex-shrink-0"
             >
               <slot name="footer"></slot>
             </div>

@@ -4,17 +4,17 @@
       <ThemeSwitcher />
     </div>
     <div
-      class="auth-panel p-8 rounded-[var(--radius-xl)] w-full max-w-md relative z-10 elevated-lg"
+      class="auth-panel login-auth-panel p-6 rounded-[var(--radius-lg)] w-full max-w-[400px] relative z-10 elevated-lg"
     >
       <h1
-        class="text-3xl font-bold font-display text-center mb-2"
+        class="text-2xl font-bold font-display text-center mb-1"
         style="color: var(--theme-primary)"
       >
         PurrChat
       </h1>
-      <p class="text-center mb-8" style="color: var(--text-secondary-color)">欢迎回来</p>
+      <p class="text-center mb-6 text-sm" style="color: var(--text-secondary-color)">欢迎回来</p>
 
-      <form @submit.prevent="handleSubmit" class="space-y-6">
+      <form @submit.prevent="handleSubmit" class="space-y-4">
         <BaseFormItem label="邮箱">
           <BaseInput v-model="email" type="email" placeholder="请输入邮箱" required />
         </BaseFormItem>
@@ -29,7 +29,7 @@
 
         <button
           type="submit"
-          class="w-full h-12 font-medium"
+          class="w-full h-11 font-medium"
           style="background: var(--theme-primary); color: #fff"
           :disabled="auth.loading.value"
         >
@@ -37,7 +37,7 @@
         </button>
       </form>
 
-      <div class="text-center mt-6 text-sm" style="color: var(--text-secondary-color)">
+      <div class="text-center mt-5 text-sm" style="color: var(--text-secondary-color)">
         还没有账号？
         <router-link
           to="/register"
@@ -49,25 +49,22 @@
       </div>
 
       <!-- 隐私协议 + ICP 备案 -->
-      <div
-        class="mt-8 pt-5 text-center space-y-1.5"
-        style="border-top: 1px solid var(--border-subtle-color)"
-      >
-        <p class="text-xs" style="color: var(--text-tertiary-color)">
+      <div class="legal-links mt-5 text-center space-y-1">
+        <p class="text-xs" style="color: var(--auth-legal-color, var(--text-tertiary-color))">
           <router-link
             to="/privacy"
             class="hover:underline"
-            style="color: var(--text-tertiary-color)"
+            style="color: var(--auth-legal-color, var(--text-tertiary-color))"
             >隐私政策</router-link
           >
         </p>
-        <p class="text-xs" style="color: var(--text-tertiary-color)">
+        <p class="text-xs" style="color: var(--auth-legal-color, var(--text-tertiary-color))">
           <a
             href="https://beian.miit.gov.cn/"
             target="_blank"
             rel="noopener noreferrer"
             class="hover:underline"
-            style="color: var(--text-tertiary-color)"
+            style="color: var(--auth-legal-color, var(--text-tertiary-color))"
             >京ICP备XXXXXXXX号</a
           >
         </p>
@@ -112,14 +109,52 @@ const handleSubmit = async () => {
 
 <style scoped>
 .auth-panel {
-  background: color-mix(in srgb, var(--background-color) 82%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border-subtle-color) 76%, transparent);
+  background: var(--auth-panel-background, rgba(247, 245, 242, 0.27));
+  border: 1px solid var(--auth-panel-border, rgba(214, 211, 206, 0.72));
   backdrop-filter: blur(14px) saturate(1.08);
   -webkit-backdrop-filter: blur(14px) saturate(1.08);
 }
 
 :global([data-theme='dark']) .auth-panel {
-  background: color-mix(in srgb, var(--surface-color) 74%, transparent);
-  border-color: color-mix(in srgb, var(--border-color) 72%, transparent);
+  --auth-panel-background: rgba(8, 8, 12, 0.5);
+  --auth-panel-border: rgba(255, 255, 255, 0.16);
+}
+
+:global([data-theme='dark']) .login-auth-panel {
+  --strong-background-color: rgba(0, 0, 0, 0.48);
+  --text-color: #ffffff;
+  --text-secondary-color: rgba(255, 255, 255, 0.82);
+  --text-tertiary-color: rgba(255, 255, 255, 0.52);
+  --auth-legal-color: rgba(255, 255, 255, 0.78);
+  --border-color: rgba(255, 255, 255, 0.18);
+  --border-subtle-color: rgba(255, 255, 255, 0.12);
+}
+
+:global([data-theme='dark']) .login-auth-panel h1 {
+  color: #ffffff !important;
+}
+
+:global([data-theme='dark']) .login-auth-panel :deep(input) {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+:global([data-theme='dark']) .login-auth-panel :deep(input::placeholder) {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+:global([data-theme='dark']) .login-auth-panel :deep(input:focus) {
+  border-color: rgba(255, 255, 255, 0.46);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+
+:global([data-theme='dark']) .login-auth-panel a {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+:global([data-theme='dark']) .login-auth-panel .legal-links,
+:global([data-theme='dark']) .login-auth-panel .legal-links a {
+  color: rgba(255, 255, 255, 0.76) !important;
 }
 </style>
