@@ -30,12 +30,9 @@ export const useChat = () => {
     try {
       const response = await api.getMessages(conversationId);
       if (response.success && response.data) {
-        // 后端返回的消息是按created_at DESC排序的（从新到旧）
-        // 需要反转顺序，让最新的消息在最下面
         const reversedMessages = [...response.data].reverse();
-
-        // 更新message store（唯一数据源）
-        messageStore.setMessages(conversationId, reversedMessages);
+        // 合并而非替换，防止覆盖切换后已发送的消息
+        messageStore.mergeMessages(conversationId, reversedMessages);
         scrollToBottom();
 
         // 缓存消息

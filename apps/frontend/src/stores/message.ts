@@ -43,17 +43,36 @@ export const useMessageStore = defineStore('message', () => {
     return total;
   });
 
-  // 设置消息
+  // 设置消息（完全替换，用于 WebSocket 替换临时消息等场景）
   function setMessages(conversationId: string, newMessages: Message[]) {
-    console.log(
-      `[MessageStore] Setting ${newMessages.length} messages for conversation ${conversationId}`
-    );
-    // 先拿旧消息列表（用于与缓存做 diff）
     const oldMessages = messages.value.get(conversationId) || [];
     const oldIds = new Set(oldMessages.map((m) => m.id));
     const decoded = newMessages.map(decodeMessageContent);
     messages.value.set(conversationId, decoded);
-    // 将新增或替换的消息同步到缓存
+    const toCache = decoded.filter((m) => !oldIds.has(m.id));
+    if (toCache.length > 0) {
+      messageCache.addMessages(conversationId, toCache);
+    }
+  }
+
+  // 合并服务器消息与本地消息（用于 loadMessages，防止覆盖已发送的消息）
+  function mergeMessages(conversationId: string, serverMessages: Message[]) {
+    const oldMessages = messages.value.get(conversationId) || [];
+    const decoded = serverMessages.map(decodeMessageContent);
+    const serverIds = new Set(decoded.map((m) => m.id));
+    // 如果服务器消息有 client_message_id，本地临时消息的 id 就是 client_message_id
+    const serverClientIds = new Set(
+      decoded.filter((m) => m.client_message_id).map((m) => m.client_message_id)
+    );
+    // 保留本地独有的消息（服务器快照中没有的）
+    const localOnly = oldMessages.filter((m) => {
+      if (serverIds.has(m.id)) return false;
+      if (serverClientIds.has(m.id)) return false;
+      return true;
+    });
+    messages.value.set(conversationId, [...decoded, ...localOnly]);
+    // 缓存服务器新消息
+    const oldIds = new Set(oldMessages.map((m) => m.id));
     const toCache = decoded.filter((m) => !oldIds.has(m.id));
     if (toCache.length > 0) {
       messageCache.addMessages(conversationId, toCache);
@@ -235,6 +254,7 @@ export const useMessageStore = defineStore('message', () => {
     totalMessageCount,
     // 方法
     setMessages,
+    mergeMessages,
     addMessage,
     addMessages,
     clearMessages,
