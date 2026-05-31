@@ -1,7 +1,7 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div ref="el" :class="splitterClasses" @pointerdown="onPointerDown">
-    <div class="splitter-indicator" />
+    <div class="splitter-handle" />
   </div>
 </template>
 
@@ -146,7 +146,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: transparent;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
 }
 
 /* —— 水平分割（左右拖拽） —— */
@@ -154,6 +155,7 @@ onUnmounted(() => {
   width: 1px;
   height: 100%;
   cursor: col-resize;
+  background-color: var(--border-subtle-color, #e5e7eb);
 }
 
 /* —— 垂直分割（上下拖拽） —— */
@@ -161,39 +163,37 @@ onUnmounted(() => {
   width: 100%;
   height: 1px;
   cursor: row-resize;
-}
-
-/* 可视化指示线 */
-.splitter-indicator {
   background-color: var(--border-subtle-color, #e5e7eb);
-  border-radius: 9999px;
-  transition:
-    background-color 0.2s cubic-bezier(0.25, 1, 0.5, 1),
-    transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-.splitter--horizontal .splitter-indicator {
+/* 悬停 / 拖拽中：整条线变主题色 */
+.splitter:hover,
+.splitter--active {
+  background-color: var(--theme-primary, #5a8f4e);
+}
+
+/* 中心手柄 */
+.splitter-handle {
+  position: absolute;
+  background-color: var(--border-color, #e5e7eb);
+  transition: background-color 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.splitter--horizontal .splitter-handle {
   width: 1px;
-  height: 24px;
+  height: 20px;
+  border-radius: 1px;
 }
 
-.splitter--vertical .splitter-indicator {
-  width: 24px;
+.splitter--vertical .splitter-handle {
+  width: 20px;
   height: 1px;
+  border-radius: 1px;
 }
 
-/* 悬停 / 拖拽中 */
-.splitter:hover .splitter-indicator,
-.splitter--active .splitter-indicator {
-  background-color: var(--theme-primary);
-}
-
-.splitter--vertical.splitter--active .splitter-indicator {
-  transform: scaleY(2);
-}
-
-.splitter--horizontal.splitter--active .splitter-indicator {
-  transform: scaleX(2);
+.splitter:hover .splitter-handle,
+.splitter--active .splitter-handle {
+  background-color: white;
 }
 
 .splitter--disabled {
