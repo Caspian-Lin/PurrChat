@@ -291,6 +291,7 @@ function deepCloneMechanism(m: Mechanism): Mechanism {
         return wf
           ? {
               events: wf.events.map((e) => ({ ...e, config: { ...e.config } })),
+              connections: wf.connections?.map((c) => ({ ...c })) || [],
               end_conditions: wf.end_conditions.map((c) => ({ ...c })),
             }
           : undefined;

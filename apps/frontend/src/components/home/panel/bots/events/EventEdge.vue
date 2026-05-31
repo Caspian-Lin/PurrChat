@@ -23,8 +23,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { BaseEdge, getBezierPath, useVueFlow } from '@vue-flow/core';
+import { ref, computed, inject } from 'vue';
+import { BaseEdge, getBezierPath } from '@vue-flow/core';
 import { PORT_COLORS } from '../../../../../utils/portTypes';
 
 const props = defineProps<{
@@ -48,7 +48,7 @@ const props = defineProps<{
 }>();
 
 const hovered = ref(false);
-const { removeEdges } = useVueFlow();
+const removeConnection = inject<(id: string) => void>('removeWorkflowConnection');
 
 const path = computed(() =>
   getBezierPath({
@@ -74,6 +74,6 @@ const edgeStyle = computed(() => {
 });
 
 function handleDelete() {
-  removeEdges([props.id]);
+  removeConnection?.(props.id);
 }
 </script>

@@ -289,7 +289,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick, markRaw, reactive } from 'vue';
+import { ref, computed, watch, onMounted, nextTick, markRaw, reactive, provide } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { VueFlow, ConnectionMode } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
@@ -371,6 +371,16 @@ function showConnectionToast(message: string, type: 'error' | 'warn' = 'error') 
 }
 const editingEvent = ref<FullEvent | null>(null);
 
+// 供子组件（EventEdge）直接删除连线，避免走 VueFlow 的 edges-change 回调
+function removeConnection(connectionId: string) {
+  if (!localMechanism.value?.reply?.workflow) return;
+  const updated = connections.value.filter((c) => c.id !== connectionId);
+  if (updated.length !== connections.value.length) {
+    localMechanism.value.reply.workflow.connections = updated;
+  }
+}
+provide('removeWorkflowConnection', removeConnection);
+
 // 数据
 const bot = ref<Bot | null>(null);
 const localMechanism = ref<Mechanism | null>(null);
@@ -435,7 +445,6 @@ const flowNodes = computed<Node[]>(() => {
 });
 
 const flowEdges = computed<Edge[]>(() => {
-  // 优先使用 connections
   const conns = connections.value;
   return eventsToFlowEdges(events.value, conns);
 });
@@ -572,7 +581,7 @@ async function handleSave() {
 }
 
 function goBack() {
-  router.back();
+  router.push('/bots');
 }
 
 function onNodeClick({ node }: { node: Node }) {
@@ -693,20 +702,9 @@ function onConnect(connection: {
   localMechanism.value.reply.workflow.connections = [...connections.value, newConnection];
 }
 
-// 连线变更：检测删除并同步 connections
-function onEdgesChange(changes: any[]) {
-  const removeChanges = changes.filter((c) => c.type === 'remove');
-  if (removeChanges.length === 0) return;
-
-  if (!localMechanism.value?.reply?.workflow) return;
-
-  const currentConnections = [...connections.value];
-  const removeIds = new Set(removeChanges.map((c) => c.id));
-  const updated = currentConnections.filter((c) => !removeIds.has(c.id));
-
-  if (updated.length !== currentConnections.length) {
-    localMechanism.value.reply.workflow.connections = updated;
-  }
+// 连线变更：仅做日志，不再处理 remove（删除由 removeConnection 通过 provide/inject 驱动）
+function onEdgesChange(_changes: any[]) {
+  // no-op: 边删除通过 removeConnection() 直接操作 localMechanism 状态
 }
 
 // 节点变更：捕获位置变化并缓存（写入普通对象即可，VueFlow 内部已管理位置）
