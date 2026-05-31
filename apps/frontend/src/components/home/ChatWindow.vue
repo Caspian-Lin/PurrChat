@@ -357,6 +357,7 @@
             :placeholder="isMobile ? '输入消息...' : '输入消息... (Enter 发送)'"
             class="w-full h-full bg-transparent text-base text-text-primary resize-none outline-none placeholder:text-text-tertiary"
             @keydown="handleKeyDown"
+            @paste="onPaste"
           />
         </div>
 
@@ -404,6 +405,7 @@ import {
   BsDownload,
   BsX,
   BsCpu,
+  BsClipboard,
 } from 'vue-icons-plus/bs';
 import ResizableSplitter from '../common/Splitter.vue';
 import EmojiPicker from '../common/EmojiPicker.vue';
@@ -505,6 +507,15 @@ function showContextMenu(
 function getContextMenuActions(message: Message): ContextMenuAction[] {
   const actions: ContextMenuAction[] = [];
 
+  if (contextMenu.value.source === 'bubble' && message.msg_type === 'text') {
+    actions.push({
+      key: 'copy',
+      label: '复制',
+      icon: BsClipboard,
+      handler: () => copyMessageContent(message),
+    });
+  }
+
   if (contextMenu.value.source === 'avatar' && message.sender_id !== props.currentUserId) {
     actions.push({
       key: 'poke',
@@ -514,6 +525,22 @@ function getContextMenuActions(message: Message): ContextMenuAction[] {
   }
 
   return actions;
+}
+
+async function copyMessageContent(message: Message) {
+  try {
+    await navigator.clipboard.writeText(message.content);
+    useNotification().success('已复制');
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = message.content;
+    textarea.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    useNotification().success('已复制');
+  }
 }
 
 async function handlePoke(message: Message) {
@@ -646,6 +673,19 @@ function formatFileSize(bytes: number): string {
 }
 
 // ===== 文件选择和拖拽 =====
+function onPaste(event: ClipboardEvent) {
+  const items = event.clipboardData?.items;
+  if (!items) return;
+
+  for (const item of items) {
+    if (item.kind === 'file') {
+      event.preventDefault();
+      const file = item.getAsFile();
+      if (file) processAndUpload(file);
+      return;
+    }
+  }
+}
 function handleFileSelect() {
   fileInputRef.value?.click();
 }

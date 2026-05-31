@@ -84,7 +84,12 @@
         </div>
         <div class="flex justify-between items-center">
           <div class="text-base truncate text-text-tertiary">
-            {{ formatLastMessageContent(conversation.last_message) }}
+            {{
+              formatLastMessageContent(
+                conversation.last_message,
+                conversation.conversation_type === 'group'
+              )
+            }}
           </div>
           <div class="flex items-center gap-2">
             <!-- 未读消息提示气泡 -->
@@ -149,8 +154,8 @@ const getConversationName = (conversation: Conversation): string => {
 };
 
 // 格式化最后一条消息内容（文件消息显示文件名，系统消息显示可读文本）
-const formatLastMessageContent = (message: Message | undefined): string => {
-  return formatLastMessagePreview(message, props.currentUserId);
+const formatLastMessageContent = (message: Message | undefined, isGroup: boolean): string => {
+  return formatLastMessagePreview(message, props.currentUserId, isGroup);
 };
 
 // 按最后消息时间排序所有会话

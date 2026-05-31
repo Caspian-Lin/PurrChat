@@ -42,7 +42,8 @@ function tryParseFileContent(content: string): FileMessageContent | null {
 
 export function formatLastMessagePreview(
   message: Message | undefined,
-  currentUserId?: string
+  currentUserId?: string,
+  isGroup?: boolean
 ): string {
   if (!message) return '暂无消息';
   if (message.msg_type === 'image') return '[图片]';
@@ -54,5 +55,11 @@ export function formatLastMessagePreview(
   if (message.msg_type === 'system') {
     return formatSystemMessageText(message, currentUserId);
   }
-  return message.content || '暂无消息';
+
+  const content = message.content || '暂无消息';
+  const senderName =
+    isGroup && message.sender_id !== currentUserId
+      ? message.sender?.username || message.bot_name
+      : undefined;
+  return senderName ? `${senderName}: ${content}` : content;
 }
