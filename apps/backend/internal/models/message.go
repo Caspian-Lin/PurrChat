@@ -36,6 +36,7 @@ type Message struct {
 	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
 	BotID          *uuid.UUID `json:"bot_id,omitempty" db:"bot_id"`
 	BotName        *string    `json:"bot_name,omitempty" db:"bot_name"`
+	ClientMessageID *string   `json:"client_message_id,omitempty" db:"client_message_id"`
 	Sender         *User      `json:"sender,omitempty" db:"-"` // 发送者信息
 }
 

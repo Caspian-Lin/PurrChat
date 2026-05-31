@@ -19,6 +19,8 @@ type ConversationMessageRepository interface {
 	DropMessageTable(ctx context.Context, conversationID uuid.UUID) error
 	// InsertMessage 向会话消息表插入消息
 	InsertMessage(ctx context.Context, conversationID uuid.UUID, message *models.Message) error
+	// FindByClientMessageID 通过客户端消息ID查找消息（幂等性检查）
+	FindByClientMessageID(ctx context.Context, conversationID uuid.UUID, clientMessageID string) (*models.Message, error)
 	// FindMessages 从会话消息表获取消息
 	FindMessages(ctx context.Context, conversationID uuid.UUID, limit, offset int) ([]*models.Message, error)
 	// FindAllMessages 从会话消息表获取所有消息
@@ -84,7 +86,7 @@ func (r *conversationMessageRepository) InsertMessage(ctx context.Context, conve
 	message.CreatedAt = time.Now().UTC()
 
 	query := `
-        SELECT insert_conversation_message($1, $2, $3, $4, $5, $6)
+        SELECT insert_conversation_message($1, $2, $3, $4, $5, $6, $7::VARCHAR(255))
     `
 
 	err := database.GetPool().QueryRow(ctx, query,
@@ -94,6 +96,7 @@ func (r *conversationMessageRepository) InsertMessage(ctx context.Context, conve
 		message.MsgType,
 		message.BotID,
 		message.BotName,
+		message.ClientMessageID,
 	).Scan(&message.ID)
 
 	if err != nil {
@@ -265,4 +268,25 @@ func (r *conversationMessageRepository) FindByConversationIDSince(ctx context.Co
 
 	logger.InfofWithCaller("Found %d new messages for conversation %s", len(messages), conversationID)
 	return messages, nil
+}
+
+// FindByClientMessageID 通过客户端消息ID查找消息（幂等性检查）
+func (r *conversationMessageRepository) FindByClientMessageID(ctx context.Context, conversationID uuid.UUID, clientMessageID string) (*models.Message, error) {
+	query := `SELECT * FROM get_conversation_message_by_client_id($1, $2)`
+
+	message := &models.Message{}
+	err := database.GetPool().QueryRow(ctx, query, conversationID, clientMessageID).Scan(
+		&message.ID,
+		&message.SenderID,
+		&message.Content,
+		&message.MsgType,
+		&message.CreatedAt,
+		&message.BotID,
+		&message.BotName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	message.ConversationID = conversationID
+	return message, nil
 }

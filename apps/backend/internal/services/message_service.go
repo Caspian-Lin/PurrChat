@@ -141,6 +141,20 @@ func (s *MessageService) SendMessage(ctx context.Context, senderID string, req *
 		content = utils.EscapeHTML(content)
 	}
 
+	// 幂等性检查：如果 client_message_id 已存在，直接返回已有消息
+	if req.ClientMessageID != "" {
+		existing, err := s.conversationMessageRepo.FindByClientMessageID(ctx, req.ConversationID, req.ClientMessageID)
+		if err == nil && existing != nil {
+			logger.InfofWithCaller("Idempotent hit: client_message_id=%s, existing_message_id=%s", req.ClientMessageID, existing.ID)
+			sender, _ := s.userRepo.FindByID(ctx, senderUUID)
+			if sender != nil {
+				sanitizeUser(sender)
+				existing.Sender = sender
+			}
+			return existing, nil
+		}
+	}
+
 	message := &models.Message{
 		ID:             uuid.New(),
 		ConversationID: req.ConversationID,
@@ -148,6 +162,9 @@ func (s *MessageService) SendMessage(ctx context.Context, senderID string, req *
 		Content:        content,
 		MsgType:        models.MsgType(req.MsgType),
 		CreatedAt:      time.Now().UTC(),
+	}
+	if req.ClientMessageID != "" {
+		message.ClientMessageID = &req.ClientMessageID
 	}
 
 	err = s.conversationMessageRepo.InsertMessage(ctx, req.ConversationID, message)

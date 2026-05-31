@@ -31,9 +31,10 @@ type Conversation struct {
 
 // SendMessageRequest 发送消息请求
 type SendMessageRequest struct {
-	ConversationID uuid.UUID `json:"conversation_id" binding:"required,uuid"`
-	Content        string    `json:"content" binding:"required,max=10000"`
-	MsgType        string    `json:"msg_type" binding:"required,oneof=text image file system"`
+	ConversationID  uuid.UUID `json:"conversation_id" binding:"required,uuid"`
+	Content         string    `json:"content" binding:"required,max=10000"`
+	MsgType         string    `json:"msg_type" binding:"required,oneof=text image file system"`
+	ClientMessageID string    `json:"client_message_id" binding:"omitempty,max=255"`
 }
 
 // GetMessagesRequest 获取消息请求
