@@ -1,6 +1,7 @@
 <template>
   <div class="dynamic-background" ref="container">
-    <canvas ref="canvas" class="background-canvas"></canvas>
+    <canvas ref="backgroundCanvas" class="background-canvas"></canvas>
+    <canvas ref="effectsCanvas" class="effects-canvas"></canvas>
   </div>
 </template>
 
@@ -10,7 +11,8 @@ import { themeColors } from '../config/theme';
 import { useThemeStore } from '../stores/theme';
 
 const themeStore = useThemeStore();
-const canvas = ref<HTMLCanvasElement | null>(null);
+const backgroundCanvas = ref<HTMLCanvasElement | null>(null);
+const effectsCanvas = ref<HTMLCanvasElement | null>(null);
 const container = ref<HTMLDivElement | null>(null);
 
 type RGB = [number, number, number];
@@ -48,7 +50,9 @@ interface ClickRipple {
   activated: Set<string>;
 }
 
-const BASE_DPR = 1.5;
+const BASE_DPR = 0.75;
+const EFFECTS_DPR = 1.5;
+const FRAME_INTERVAL = 1000 / 24;
 const PARTICLE_DENSITY = 18000;
 const MAX_PARTICLES = 72;
 const GRID_STEP = 56;
@@ -61,6 +65,7 @@ const TRAIL_ROLL_DURATION = 180;
 const TRAIL_REROLL_COOLDOWN = 10000;
 const RIPPLE_SPEED = 320;
 const RIPPLE_BAND = 34;
+const MAX_ACTIVE_RIPPLES = 2;
 const TRAIL_SYMBOLS = ['{', '}', '<', '>', '/', '*', '+', '=', '_', '#', '::', '[]'];
 const TRAIL_ROLL_SYMBOLS = [
   '+',
@@ -96,7 +101,8 @@ const TRAIL_KAOMOJI = [
   '( ᵔ ᵕ ᵔ )',
 ];
 
-let ctx: CanvasRenderingContext2D | null = null;
+let bgCtx: CanvasRenderingContext2D | null = null;
+let effectsCtx: CanvasRenderingContext2D | null = null;
 let textureCanvas: HTMLCanvasElement | null = null;
 let textureCtx: CanvasRenderingContext2D | null = null;
 let animationId: number | null = null;
@@ -104,12 +110,14 @@ let mediaQuery: MediaQueryList | null = null;
 let prefersReducedMotion = false;
 let canvasWidth = 0;
 let canvasHeight = 0;
-let dpr = 1;
+let bgDpr = 1;
+let effectsDpr = 1;
 let particles: Particle[] = [];
 let trailGlyphs = new Map<string, TrailGlyph>();
 let trailMemory = new Map<string, TrailMemory>();
 let clickRipples: ClickRipple[] = [];
 let lastTimestamp = 0;
+let lastRenderTimestamp = 0;
 let textureDirty = true;
 
 const hexToRgb = (hex: string): RGB => [
@@ -247,35 +255,35 @@ const renderTexture = () => {
 
 const drawAura = (target: CanvasRenderingContext2D, timestamp: number) => {
   const p = palette.value;
-  const t = timestamp * 0.00022;
+  const t = timestamp * 0.00018;
   const maxSide = Math.max(canvasWidth, canvasHeight);
-  const slowX = Math.sin(t) * canvasWidth * 0.16;
-  const slowY = Math.cos(t * 0.82) * canvasHeight * 0.11;
+  const slowX = Math.sin(t) * canvasWidth * 0.14;
+  const slowY = Math.cos(t * 0.86) * canvasHeight * 0.1;
 
   const primary = target.createRadialGradient(
-    canvasWidth * 0.22 + slowX,
-    canvasHeight * 0.2 + slowY,
+    canvasWidth * 0.2 + slowX,
+    canvasHeight * 0.18 + slowY,
     0,
-    canvasWidth * 0.22 + slowX,
-    canvasHeight * 0.2 + slowY,
+    canvasWidth * 0.2 + slowX,
+    canvasHeight * 0.18 + slowY,
     maxSide * 0.68
   );
-  primary.addColorStop(0, rgba(p.auraA, p.isDark ? 0.46 : 0.48));
-  primary.addColorStop(0.48, rgba(p.auraA, p.isDark ? 0.18 : 0.2));
+  primary.addColorStop(0, rgba(p.auraA, p.isDark ? 0.4 : 0.44));
+  primary.addColorStop(0.5, rgba(p.auraA, p.isDark ? 0.14 : 0.16));
   primary.addColorStop(1, rgba(p.auraA, 0));
   target.fillStyle = primary;
   target.fillRect(0, 0, canvasWidth, canvasHeight);
 
   const secondary = target.createRadialGradient(
-    canvasWidth * 0.86 - slowX * 0.55,
+    canvasWidth * 0.88 - slowX * 0.48,
     canvasHeight * 0.76 - slowY,
     0,
-    canvasWidth * 0.86 - slowX * 0.55,
+    canvasWidth * 0.88 - slowX * 0.48,
     canvasHeight * 0.76 - slowY,
     maxSide * 0.56
   );
-  secondary.addColorStop(0, rgba(p.auraB, p.isDark ? 0.32 : 0.28));
-  secondary.addColorStop(0.58, rgba(p.auraB, p.isDark ? 0.12 : 0.11));
+  secondary.addColorStop(0, rgba(p.auraB, p.isDark ? 0.28 : 0.26));
+  secondary.addColorStop(0.58, rgba(p.auraB, p.isDark ? 0.1 : 0.1));
   secondary.addColorStop(1, rgba(p.auraB, 0));
   target.fillStyle = secondary;
   target.fillRect(0, 0, canvasWidth, canvasHeight);
@@ -286,13 +294,11 @@ const drawParticles = (target: CanvasRenderingContext2D, dt: number, timestamp: 
   const color = p.isDark ? mixRgb(p.primary, p.ink, 0.4) : mixRgb(p.primary, p.base, 0.2);
 
   for (const particle of particles) {
-    if (!prefersReducedMotion) {
-      particle.y -= particle.speed * (dt / 1000);
-      particle.x += Math.sin(timestamp * 0.00062 + particle.phase) * particle.drift * (dt / 1000);
-      if (particle.y < -12) {
-        particle.y = canvasHeight + 12;
-        particle.x = Math.random() * canvasWidth;
-      }
+    particle.y -= particle.speed * (dt / 1000);
+    particle.x += Math.sin(timestamp * 0.00062 + particle.phase) * particle.drift * (dt / 1000);
+    if (particle.y < -12) {
+      particle.y = canvasHeight + 12;
+      particle.x = Math.random() * canvasWidth;
     }
 
     const pulse = 0.72 + Math.sin(timestamp * 0.001 + particle.phase) * 0.28;
@@ -345,21 +351,31 @@ const drawTrailGlyphs = (target: CanvasRenderingContext2D, timestamp: number) =>
 };
 
 const render = (timestamp: number) => {
-  if (!ctx) return;
+  if (!bgCtx || !effectsCtx) return;
 
-  const dt = lastTimestamp ? Math.min(timestamp - lastTimestamp, 48) : 16;
+  if (!textureDirty && timestamp - lastRenderTimestamp < FRAME_INTERVAL) {
+    animationId = requestAnimationFrame(render);
+    return;
+  }
+
+  const dt = lastTimestamp
+    ? Math.min(timestamp - lastTimestamp, FRAME_INTERVAL * 2)
+    : FRAME_INTERVAL;
   lastTimestamp = timestamp;
+  lastRenderTimestamp = timestamp;
 
   if (textureDirty) renderTexture();
   updateClickRipples(timestamp);
 
-  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+  bgCtx.clearRect(0, 0, canvasWidth, canvasHeight);
   if (textureCanvas) {
-    ctx.drawImage(textureCanvas, 0, 0, canvasWidth, canvasHeight);
+    bgCtx.drawImage(textureCanvas, 0, 0, canvasWidth, canvasHeight);
   }
-  drawAura(ctx, timestamp);
-  drawTrailGlyphs(ctx, timestamp);
-  drawParticles(ctx, dt, timestamp);
+  drawAura(bgCtx, timestamp);
+  drawParticles(bgCtx, dt, timestamp);
+
+  effectsCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+  drawTrailGlyphs(effectsCtx, timestamp);
 
   if (prefersReducedMotion) {
     animationId = null;
@@ -372,30 +388,40 @@ const render = (timestamp: number) => {
 const queueRender = () => {
   if (animationId) cancelAnimationFrame(animationId);
   lastTimestamp = 0;
+  lastRenderTimestamp = 0;
   animationId = requestAnimationFrame(render);
 };
 
 const resizeCanvas = () => {
-  if (!canvas.value || !container.value) return;
+  if (!backgroundCanvas.value || !effectsCanvas.value || !container.value) return;
 
   const rect = container.value.getBoundingClientRect();
-  dpr = Math.min(window.devicePixelRatio || 1, BASE_DPR);
+  bgDpr = Math.min(window.devicePixelRatio || 1, BASE_DPR);
+  effectsDpr = Math.min(window.devicePixelRatio || 1, EFFECTS_DPR);
   canvasWidth = Math.max(1, rect.width);
   canvasHeight = Math.max(1, rect.height);
 
-  canvas.value.width = Math.round(canvasWidth * dpr);
-  canvas.value.height = Math.round(canvasHeight * dpr);
-  canvas.value.style.width = `${canvasWidth}px`;
-  canvas.value.style.height = `${canvasHeight}px`;
+  backgroundCanvas.value.width = Math.round(canvasWidth * bgDpr);
+  backgroundCanvas.value.height = Math.round(canvasHeight * bgDpr);
+  backgroundCanvas.value.style.width = `${canvasWidth}px`;
+  backgroundCanvas.value.style.height = `${canvasHeight}px`;
 
-  ctx = canvas.value.getContext('2d');
-  if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  effectsCanvas.value.width = Math.round(canvasWidth * effectsDpr);
+  effectsCanvas.value.height = Math.round(canvasHeight * effectsDpr);
+  effectsCanvas.value.style.width = `${canvasWidth}px`;
+  effectsCanvas.value.style.height = `${canvasHeight}px`;
+
+  bgCtx = backgroundCanvas.value.getContext('2d');
+  if (bgCtx) bgCtx.setTransform(bgDpr, 0, 0, bgDpr, 0, 0);
+
+  effectsCtx = effectsCanvas.value.getContext('2d');
+  if (effectsCtx) effectsCtx.setTransform(effectsDpr, 0, 0, effectsDpr, 0, 0);
 
   textureCanvas = document.createElement('canvas');
-  textureCanvas.width = canvas.value.width;
-  textureCanvas.height = canvas.value.height;
+  textureCanvas.width = backgroundCanvas.value.width;
+  textureCanvas.height = backgroundCanvas.value.height;
   textureCtx = textureCanvas.getContext('2d');
-  if (textureCtx) textureCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (textureCtx) textureCtx.setTransform(bgDpr, 0, 0, bgDpr, 0, 0);
 
   textureDirty = true;
   resetParticles();
@@ -552,6 +578,9 @@ const handlePointerDown = (event: PointerEvent) => {
     maxRadius: Math.hypot(Math.max(x, rect.width - x), Math.max(y, rect.height - y)),
     activated: new Set(),
   });
+  if (clickRipples.length > MAX_ACTIVE_RIPPLES) {
+    clickRipples = clickRipples.slice(-MAX_ACTIVE_RIPPLES);
+  }
 
   if (prefersReducedMotion || !animationId) {
     queueRender();
@@ -592,10 +621,15 @@ onUnmounted(() => {
   background: var(--background-color);
 }
 
-.background-canvas {
+.background-canvas,
+.effects-canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+}
+
+.effects-canvas {
+  pointer-events: none;
 }
 </style>
