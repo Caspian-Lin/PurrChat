@@ -196,7 +196,7 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 
 		if e.tsClient != nil && e.tsClient.IsAvailable() {
 			// TS 路径：收集上下文，直接调 TS（TS 负责触发评估 + 执行）
-			contextMsgs := e.collectContextForMechanism(ctx, msg.ConversationID, nil)
+			contextMsgs := e.collectContextMessages(ctx, msg.ConversationID)
 			start := time.Now()
 			execResp, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, bot.MechanismConfig, contextMsgs)
 			duration := time.Since(start)
@@ -350,6 +350,28 @@ func (e *BotEngine) collectContextForMechanism(ctx context.Context, conversation
 		contextMessages[i], contextMessages[j] = contextMessages[j], contextMessages[i]
 	}
 
+	return contextMessages
+}
+
+// collectContextMessages 收集会话的上下文消息（TS 路径使用，不需要 mechanism 参数）
+func (e *BotEngine) collectContextMessages(ctx context.Context, conversationID uuid.UUID) []ContextMessage {
+	messages, err := e.messageRepo.FindMessages(ctx, conversationID, 20, 0)
+	if err != nil {
+		return nil
+	}
+	var contextMessages []ContextMessage
+	for _, msg := range messages {
+		if msg.MsgType == models.MsgTypeText {
+			contextMessages = append(contextMessages, ContextMessage{
+				Role:    "user",
+				Content: msg.Content,
+			})
+		}
+	}
+	// FindMessages 是 DESC，需要反转为正序
+	for i, j := 0, len(contextMessages)-1; i < j; i, j = i+1, j-1 {
+		contextMessages[i], contextMessages[j] = contextMessages[j], contextMessages[i]
+	}
 	return contextMessages
 }
 

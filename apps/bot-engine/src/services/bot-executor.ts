@@ -169,6 +169,9 @@ export class BotExecutor {
   }
 
   private evaluateRules(rules: TriggerRule[], content: string): boolean {
+    if (rules.length === 0) {
+      return true; // 无规则时默认触发（与 Go engine 一致）
+    }
     for (const rule of rules) {
       if (this.evaluateRule(rule, content)) return true;
     }

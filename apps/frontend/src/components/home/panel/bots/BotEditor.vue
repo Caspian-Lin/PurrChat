@@ -150,7 +150,7 @@
               @delete="removeMechanism(index)"
               @move-up="moveMechanism(index, -1)"
               @move-down="moveMechanism(index, 1)"
-              @open-special-mode-editor="openSpecialModeEditor"
+              @open-workflow-editor="openWorkflowEditor"
             />
           </div>
 
@@ -403,9 +403,8 @@ function moveMechanism(index: number, direction: -1 | 1) {
   form.mechanisms.splice(newIndex, 0, temp);
 }
 
-function openSpecialModeEditor(mechanismId: string) {
-  // 阶段 5 实现完整的路由跳转
-  const url = `${window.location.origin}/bots/${props.bot.id}/mechanisms/${mechanismId}/special-mode`;
+function openWorkflowEditor(mechanismId: string) {
+  const url = `${window.location.origin}/bots/${props.bot.id}/mechanisms/${mechanismId}/workflow`;
   window.open(url, '_blank');
 }
 
