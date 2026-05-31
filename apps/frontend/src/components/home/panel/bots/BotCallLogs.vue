@@ -46,8 +46,7 @@
 
         <!-- 回复内容 -->
         <div class="call-log-item__reply">
-          <span class="call-log-item__bot-label">Bot</span
-          >: {{ truncate(log.reply_content, 80) }}
+          <span class="call-log-item__bot-label">Bot</span>: {{ truncate(log.reply_content, 80) }}
         </div>
 
         <!-- 错误信息 -->

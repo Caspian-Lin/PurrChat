@@ -207,7 +207,9 @@ export const useChat = () => {
       console.error('[useChat] Failed to send message:', error);
       notify.error('发送消息失败');
       const currentMessages = messageStore.getMessages(conversationId);
-      const tempMessage = currentMessages.find((m) => m.sendStatus === 'sending' && m.sender_id === authStore.currentUser?.id);
+      const tempMessage = currentMessages.find(
+        (m) => m.sendStatus === 'sending' && m.sender_id === authStore.currentUser?.id
+      );
       if (tempMessage) {
         messageStore.updateMessageStatus(conversationId, tempMessage.id, 'failed');
       }
@@ -215,9 +217,14 @@ export const useChat = () => {
     }
   };
 
-  const retryMessage = async (conversationId: string, failedMessageId: string): Promise<boolean> => {
+  const retryMessage = async (
+    conversationId: string,
+    failedMessageId: string
+  ): Promise<boolean> => {
     const currentMessages = messageStore.getMessages(conversationId);
-    const failedMessage = currentMessages.find((m) => m.id === failedMessageId && m.sendStatus === 'failed');
+    const failedMessage = currentMessages.find(
+      (m) => m.id === failedMessageId && m.sendStatus === 'failed'
+    );
     if (!failedMessage) return false;
 
     messageStore.updateMessageStatus(conversationId, failedMessageId, 'sending');
