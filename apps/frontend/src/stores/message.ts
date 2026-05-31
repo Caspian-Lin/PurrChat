@@ -48,7 +48,16 @@ export const useMessageStore = defineStore('message', () => {
     console.log(
       `[MessageStore] Setting ${newMessages.length} messages for conversation ${conversationId}`
     );
-    messages.value.set(conversationId, newMessages.map(decodeMessageContent));
+    // 先拿旧消息列表（用于与缓存做 diff）
+    const oldMessages = messages.value.get(conversationId) || [];
+    const oldIds = new Set(oldMessages.map((m) => m.id));
+    const decoded = newMessages.map(decodeMessageContent);
+    messages.value.set(conversationId, decoded);
+    // 将新增或替换的消息同步到缓存
+    const toCache = decoded.filter((m) => !oldIds.has(m.id));
+    if (toCache.length > 0) {
+      messageCache.addMessages(conversationId, toCache);
+    }
   }
 
   // 添加消息

@@ -49,6 +49,7 @@ const apiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
 // 记录配置信息
@@ -435,6 +436,7 @@ const storageApiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
 // 存储服务请求拦截器 - 添加 token

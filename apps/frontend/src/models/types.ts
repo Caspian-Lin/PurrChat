@@ -134,6 +134,7 @@ export interface SendMessageRequest {
   conversation_id: string;
   content: string;
   msg_type: 'text' | 'image' | 'file' | 'system';
+  client_message_id?: string;
 }
 
 // 创建会话请求

@@ -6,6 +6,16 @@ import { useMessageStore } from '../stores/message';
 import { useAuthStore } from '../stores/auth';
 import type { Message, SendMessageRequest, FileMessageContent } from '../models/types';
 
+// 反转义后端 HTML 转义的消息内容
+function decodeMessageContent(msg: Message): Message {
+  if (msg.msg_type === 'text' && msg.content) {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = msg.content;
+    return { ...msg, content: textarea.value };
+  }
+  return msg;
+}
+
 export const useChat = () => {
   const notify = useNotification();
   const messageCache = useMessageCache();
@@ -133,30 +143,20 @@ export const useChat = () => {
    * @returns 是否发送成功
    */
   const sendMessage = async (conversationId: string, content: string): Promise<boolean> => {
-    console.log(
-      '[useChat] sendMessage called with conversationId:',
-      conversationId,
-      'content:',
-      content
-    );
-    if (!content.trim()) {
-      console.log('[useChat] Content is empty, returning false');
-      return false;
-    }
+    if (!content.trim()) return false;
 
     try {
       const authStore = useAuthStore();
       const currentUser = authStore.currentUser;
 
-      // 创建临时消息ID（用于匹配WebSocket返回的消息）
-      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      // client_message_id 同时作为本地临时 ID 和后端幂等令牌
+      const clientMessageId = crypto.randomUUID();
 
-      // 先添加一条带"发送中"状态的消息到store，携带完整的发送者信息
       const tempMessage: Message = {
-        id: tempId,
+        id: clientMessageId,
         conversation_id: conversationId,
         sender_id: currentUser?.id || '',
-        content: content,
+        content,
         msg_type: 'text',
         created_at: new Date().toISOString(),
         sendStatus: 'sending',
@@ -173,46 +173,80 @@ export const useChat = () => {
           : undefined,
       };
 
-      console.log('[useChat] Adding temporary message with sending status:', tempMessage);
       messageStore.addMessage(conversationId, tempMessage);
       scrollToBottom();
 
-      // 发送API请求
       const requestData: SendMessageRequest = {
         conversation_id: conversationId,
         content,
         msg_type: 'text',
+        client_message_id: clientMessageId,
       };
-      console.log('[useChat] Sending message with data:', JSON.stringify(requestData, null, 2));
       const response = await api.sendMessage(requestData);
 
-      console.log('[useChat] sendMessage response:', response);
       if (response.success && response.data) {
-        // 不在此处标记为已发送，等待 WebSocket 事件携带完整消息替换临时消息
-        // WebSocket 匹配逻辑依赖 sendStatus === 'sending' 来查找临时消息
-
-        // 缓存发送的消息
-        console.log('[useChat] Caching message');
+        const currentMessages = messageStore.getMessages(conversationId);
+        const tempIndex = currentMessages.findIndex((m) => m.id === clientMessageId);
+        if (tempIndex !== -1) {
+          const confirmed = decodeMessageContent(response.data);
+          confirmed.sendStatus = 'sent';
+          const updated = [...currentMessages];
+          updated[tempIndex] = confirmed;
+          messageStore.setMessages(conversationId, updated);
+        }
         try {
           await messageCache.addMessage(conversationId, response.data);
-          console.log(`[useChat] Message sent and cached for conversation ${conversationId}`);
         } catch (error) {
           console.error('[useChat] Error caching message:', error);
         }
         return true;
       }
-      console.log('[useChat] sendMessage response not successful or no data');
-      messageStore.updateMessageStatus(conversationId, tempId, 'failed');
+      messageStore.updateMessageStatus(conversationId, clientMessageId, 'failed');
       return false;
     } catch (error) {
       console.error('[useChat] Failed to send message:', error);
       notify.error('发送消息失败');
-      // 更新临时消息的状态为"发送失败"
       const currentMessages = messageStore.getMessages(conversationId);
-      const tempMessage = currentMessages.find((m) => m.id.startsWith('temp-'));
+      const tempMessage = currentMessages.find((m) => m.sendStatus === 'sending' && m.sender_id === authStore.currentUser?.id);
       if (tempMessage) {
         messageStore.updateMessageStatus(conversationId, tempMessage.id, 'failed');
       }
+      return false;
+    }
+  };
+
+  const retryMessage = async (conversationId: string, failedMessageId: string): Promise<boolean> => {
+    const currentMessages = messageStore.getMessages(conversationId);
+    const failedMessage = currentMessages.find((m) => m.id === failedMessageId && m.sendStatus === 'failed');
+    if (!failedMessage) return false;
+
+    messageStore.updateMessageStatus(conversationId, failedMessageId, 'sending');
+
+    const requestData: SendMessageRequest = {
+      conversation_id: conversationId,
+      content: failedMessage.content,
+      msg_type: failedMessage.msg_type,
+      client_message_id: failedMessageId,
+    };
+
+    try {
+      const response = await api.sendMessage(requestData);
+      if (response.success && response.data) {
+        const msgs = messageStore.getMessages(conversationId);
+        const idx = msgs.findIndex((m) => m.id === failedMessageId);
+        if (idx !== -1) {
+          const confirmed = decodeMessageContent(response.data);
+          confirmed.sendStatus = 'sent';
+          const updated = [...msgs];
+          updated[idx] = confirmed;
+          messageStore.setMessages(conversationId, updated);
+        }
+        return true;
+      }
+      messageStore.updateMessageStatus(conversationId, failedMessageId, 'failed');
+      return false;
+    } catch {
+      messageStore.updateMessageStatus(conversationId, failedMessageId, 'failed');
       return false;
     }
   };
@@ -358,6 +392,7 @@ export const useChat = () => {
     loadMessagesIncremental,
     checkAndLoadIncremental,
     sendMessage,
+    retryMessage,
     sendFileMessage,
     exportMessages,
     addMessage,

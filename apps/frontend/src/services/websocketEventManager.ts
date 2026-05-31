@@ -13,6 +13,7 @@ export interface NewMessageEventData {
   created_at: string;
   bot_id?: string;
   bot_name?: string;
+  client_message_id?: string;
   sender?: {
     id: string;
     username: string;
@@ -242,17 +243,26 @@ class WebSocketEventManager {
 
     console.log('[WebSocketEventManager] 准备添加消息到messageStore:', message);
 
-    // 检查是否有对应的临时消息（发送中的消息）
-    // 通过发送者ID + 发送状态 + 时间窗口匹配（不比较 content，因为后端返回的内容经过 HTML 转义）
+    // 优先通过 client_message_id 精确匹配临时消息
     const currentMessages = messageStore.getMessages(data.conversation_id);
-    const tempMessageIndex = currentMessages.findIndex(
-      (m) =>
-        m.id.startsWith('temp-') &&
-        m.sender_id === data.sender_id &&
-        m.sendStatus === 'sending' &&
-        // 检查发送时间是否在合理范围内（5秒内）
-        Math.abs(new Date(m.created_at).getTime() - new Date(data.created_at).getTime()) < 5000
-    );
+    let tempMessageIndex = -1;
+
+    if (data.client_message_id) {
+      tempMessageIndex = currentMessages.findIndex(
+        (m) => m.id === data.client_message_id && m.sendStatus === 'sending'
+      );
+    }
+
+    // fallback: 启发式匹配（兼容旧版后端）
+    if (tempMessageIndex === -1) {
+      tempMessageIndex = currentMessages.findIndex(
+        (m) =>
+          m.id.startsWith('temp-') &&
+          m.sender_id === data.sender_id &&
+          m.sendStatus === 'sending' &&
+          Math.abs(new Date(m.created_at).getTime() - new Date(data.created_at).getTime()) < 5000
+      );
+    }
 
     if (tempMessageIndex !== -1) {
       console.log('[WebSocketEventManager] 找到对应的临时消息，将替换为完整消息');
