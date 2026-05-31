@@ -283,7 +283,6 @@ const { conversations, loadConversations, createConversation } = useConversation
 const { friends, loadFriends, sendFriendRequest, handleFriendRequest, loadPendingRequests } =
   useFriends();
 const {
-  loadMessages,
   checkAndLoadIncremental,
   sendMessage,
   sendFileMessage,
@@ -452,10 +451,14 @@ const handleStartChatFromModal = async () => {
 };
 
 const handleSelectConversation = async (conversation: Conversation) => {
+  const prevId = selectedConversation.value?.id;
   selectedConversation.value = conversation;
   selectedUser.value = null;
   setCurrentConversation(conversation.id);
   clearUnreadCount(conversation.id);
+  if (prevId && prevId !== conversation.id) {
+    clearMessages(prevId);
+  }
   await checkAndLoadIncremental(conversation.id);
 };
 
@@ -736,10 +739,7 @@ watch(
 
 watch(selectedConversation, async (newConv, oldConv) => {
   if (newConv && newConv.id !== oldConv?.id) {
-    console.log('[ChatPanel] selectedConversation changed, loading messages for', newConv.id);
     clearMessages(oldConv?.id);
-    await loadMessages(newConv.id);
-    console.log('[ChatPanel] Messages loaded for conversation', newConv.id);
   }
 });
 
