@@ -1,7 +1,7 @@
 import { serve } from '@hono/node-server';
 import { createServer } from './server.js';
 
-const PORT = parseInt(process.env['PORT'] || '3001', 10);
+const PORT = parseInt(process.env['BOT_ENGINE_PORT'] || '3001', 10);
 const app = createServer();
 
 serve({

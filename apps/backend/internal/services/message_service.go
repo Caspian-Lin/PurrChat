@@ -294,6 +294,7 @@ func (s *MessageService) fillSender(ctx context.Context, msg *models.Message) {
 					ID:        bot.ID,
 					Username:  bot.Name,
 					AvatarURL: bot.AvatarURL,
+					IsBot:     true,
 				}
 			}
 		}

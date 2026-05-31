@@ -15,6 +15,8 @@ import (
 )
 
 // BotEngine Bot 处理引擎
+// Deprecated: 工作流处理已迁移至 TS 微服务 (apps/bot-engine)，
+// Go 引擎仅作为 TS 服务不可用时的 fallback。
 type BotEngine struct {
 	deployRepo     repository.BotDeploymentRepository
 	botRepo        repository.BotRepository
@@ -183,7 +185,7 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 			logger.InfofWithCaller("[BotEngine] Bot %s: mechanism[%d] trigger matched", bot.Name, i)
 
 			// 优先使用 TS 微服务（如果配置了 BOT_ENGINE_URL）
-			if e.tsClient != nil {
+			if e.tsClient != nil && e.tsClient.IsAvailable() {
 				contextMsgs := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
 				reply, sessionActive, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, bot.MechanismConfig, contextMsgs)
 				if tsErr == nil {
@@ -202,7 +204,8 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 			// 触发匹配成功（Go 引擎路径）
 			switch mech.Reply.Type {
 			case "workflow":
-				e.activateMechanismWorkflow(ctx, msg, bot, mech.Reply.Workflow)
+				// Deprecated: workflow handled by TS microservice
+				e.sendBotReply(ctx, bot, msg.ConversationID, "...")
 
 			case "predefined", "llm":
 				// 编译为简单工作流执行（统一执行路径）
