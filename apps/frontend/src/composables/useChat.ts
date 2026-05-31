@@ -3,6 +3,7 @@ import { api } from '../models/api';
 import { useNotification } from './useNotification';
 import { useMessageCache } from '../services/messageCache';
 import { useMessageStore } from '../stores/message';
+import { useAuthStore } from '../stores/auth';
 import type { Message, SendMessageRequest, FileMessageContent } from '../models/types';
 
 export const useChat = () => {
@@ -144,18 +145,32 @@ export const useChat = () => {
     }
 
     try {
+      const authStore = useAuthStore();
+      const currentUser = authStore.currentUser;
+
       // 创建临时消息ID（用于匹配WebSocket返回的消息）
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      // 先添加一条带"发送中"状态的消息到store
+      // 先添加一条带"发送中"状态的消息到store，携带完整的发送者信息
       const tempMessage: Message = {
         id: tempId,
         conversation_id: conversationId,
-        sender_id: '', // 临时值，稍后会更新
+        sender_id: currentUser?.id || '',
         content: content,
         msg_type: 'text',
         created_at: new Date().toISOString(),
-        sendStatus: 'sending', // 设置为发送中状态
+        sendStatus: 'sending',
+        sender: currentUser
+          ? {
+              id: currentUser.id,
+              uid: currentUser.uid,
+              username: currentUser.username,
+              avatar_url: currentUser.avatar_url,
+              email_verified: currentUser.email_verified,
+              phone_verified: currentUser.phone_verified,
+              created_at: currentUser.created_at,
+            }
+          : undefined,
       };
 
       console.log('[useChat] Adding temporary message with sending status:', tempMessage);
@@ -173,13 +188,8 @@ export const useChat = () => {
 
       console.log('[useChat] sendMessage response:', response);
       if (response.success && response.data) {
-        console.log('[useChat] Response successful, updating message status to sent');
-        // 更新临时消息的状态为"已发送"
-        messageStore.updateMessageStatus(conversationId, tempId, 'sent');
-
-        // 注意：这里不直接替换临时消息，而是等待WebSocket事件来更新
-        // WebSocket事件会携带完整的消息信息，包括正确的sender_id和created_at
-        // 当收到WebSocket事件时，我们会用完整消息替换临时消息
+        // 不在此处标记为已发送，等待 WebSocket 事件携带完整消息替换临时消息
+        // WebSocket 匹配逻辑依赖 sendStatus === 'sending' 来查找临时消息
 
         // 缓存发送的消息
         console.log('[useChat] Caching message');
@@ -192,7 +202,6 @@ export const useChat = () => {
         return true;
       }
       console.log('[useChat] sendMessage response not successful or no data');
-      // 更新临时消息的状态为"发送失败"
       messageStore.updateMessageStatus(conversationId, tempId, 'failed');
       return false;
     } catch (error) {
@@ -253,16 +262,30 @@ export const useChat = () => {
     const contentJson = JSON.stringify(fileContent);
 
     try {
+      const authStore = useAuthStore();
+      const currentUser = authStore.currentUser;
+
       const tempId = `temp-file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       const tempMessage: Message = {
         id: tempId,
         conversation_id: conversationId,
-        sender_id: '',
+        sender_id: currentUser?.id || '',
         content: contentJson,
         msg_type: 'file',
         created_at: new Date().toISOString(),
         sendStatus: 'sending',
+        sender: currentUser
+          ? {
+              id: currentUser.id,
+              uid: currentUser.uid,
+              username: currentUser.username,
+              avatar_url: currentUser.avatar_url,
+              email_verified: currentUser.email_verified,
+              phone_verified: currentUser.phone_verified,
+              created_at: currentUser.created_at,
+            }
+          : undefined,
       };
 
       messageStore.addMessage(conversationId, tempMessage);
@@ -276,8 +299,7 @@ export const useChat = () => {
       const response = await api.sendMessage(requestData);
 
       if (response.success && response.data) {
-        messageStore.updateMessageStatus(conversationId, tempId, 'sent');
-
+        // 不在此处标记为已发送，等待 WebSocket 事件替换临时消息
         try {
           await messageCache.addMessage(conversationId, response.data);
         } catch (error) {

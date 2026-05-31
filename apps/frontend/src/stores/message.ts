@@ -3,6 +3,16 @@ import { ref, computed } from 'vue';
 import type { Message } from '../models/types';
 import { useMessageCache } from '../services/messageCache';
 
+// 反转义后端 HTML 转义的消息内容
+function decodeMessageContent(msg: Message): Message {
+  if (msg.msg_type === 'text' && msg.content) {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = msg.content;
+    return { ...msg, content: textarea.value };
+  }
+  return msg;
+}
+
 export const useMessageStore = defineStore('message', () => {
   // 消息状态
   const messages = ref<Map<string, Message[]>>(new Map()); // conversationId -> messages
@@ -38,11 +48,12 @@ export const useMessageStore = defineStore('message', () => {
     console.log(
       `[MessageStore] Setting ${newMessages.length} messages for conversation ${conversationId}`
     );
-    messages.value.set(conversationId, newMessages);
+    messages.value.set(conversationId, newMessages.map(decodeMessageContent));
   }
 
   // 添加消息
   function addMessage(conversationId: string, message: Message) {
+    message = decodeMessageContent(message);
     console.log(`[MessageStore] ===== 添加消息开始 =====`);
     console.log(`[MessageStore] 会话ID: ${conversationId}`);
     console.log(`[MessageStore] 消息ID: ${message.id}`);
@@ -80,9 +91,10 @@ export const useMessageStore = defineStore('message', () => {
     console.log(
       `[MessageStore] Adding ${newMessages.length} messages to conversation ${conversationId}`
     );
+    const decodedMessages = newMessages.map(decodeMessageContent);
     const currentMessages = messages.value.get(conversationId) || [];
     // 只添加不存在的消息
-    const messagesToAdd = newMessages.filter(
+    const messagesToAdd = decodedMessages.filter(
       (msg) => !currentMessages.some((m) => m.id === msg.id)
     );
 
@@ -142,7 +154,7 @@ export const useMessageStore = defineStore('message', () => {
       // 类型转换：CachedMessage[] -> Message[]
       const messagesAsMessage: Message[] = cachedMessages.map((msg) => ({
         ...msg,
-        msg_type: msg.msg_type as 'text' | 'image' | 'file',
+        msg_type: msg.msg_type as 'text' | 'image' | 'file' | 'system',
         sender: msg.sender
           ? {
               id: msg.sender.id,

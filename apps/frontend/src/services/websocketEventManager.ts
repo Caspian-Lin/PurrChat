@@ -243,14 +243,14 @@ class WebSocketEventManager {
     console.log('[WebSocketEventManager] 准备添加消息到messageStore:', message);
 
     // 检查是否有对应的临时消息（发送中的消息）
-    // 通过比较消息内容和发送者ID来匹配
+    // 通过发送者ID + 发送状态 + 时间窗口匹配（不比较 content，因为后端返回的内容经过 HTML 转义）
     const currentMessages = messageStore.getMessages(data.conversation_id);
     const tempMessageIndex = currentMessages.findIndex(
       (m) =>
         m.id.startsWith('temp-') &&
-        m.content === data.content &&
+        m.sender_id === data.sender_id &&
         m.sendStatus === 'sending' &&
-        // 检查发送时间是否在合理范围内（比如5秒内）
+        // 检查发送时间是否在合理范围内（5秒内）
         Math.abs(new Date(m.created_at).getTime() - new Date(data.created_at).getTime()) < 5000
     );
 
@@ -491,6 +491,7 @@ class WebSocketEventManager {
    */
   onWorkflowChange(callback: WorkflowChangeCallback) {
     this.workflowCallbacks.add(callback);
+    return () => this.workflowCallbacks.delete(callback);
   }
 
   /**
