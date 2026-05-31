@@ -580,7 +580,12 @@ func (h *ChatHandler) GetUserByID(c *gin.Context) {
 		return
 	}
 
-	user, err := h.userService.GetUserByID(c.Request.Context(), id)
+	userIDStr, ok := getUserID(c)
+	if !ok {
+		return
+	}
+
+	user, err := h.userService.GetUserByID(c.Request.Context(), id, userIDStr)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get user by ID %s: %v", id, err)
 		c.JSON(http.StatusNotFound, models.AuthResponse{

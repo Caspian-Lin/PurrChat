@@ -205,6 +205,9 @@ func (r *userRepository) FindByPhone(ctx context.Context, phone string) (*models
 	return user, nil
 }
 
+// deletedUserID 系统占位用户 ID，用于消息匿名化，禁止出现在业务查询中
+var deletedUserID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
+
 // Search 搜索用户（通过UID、用户名、手机号、邮箱的模糊搜索，包含 Bot）
 func (r *userRepository) Search(ctx context.Context, query string) ([]*models.User, error) {
 	logger.InfofWithCaller("Search called with query: '%s'", query)
@@ -213,10 +216,12 @@ func (r *userRepository) Search(ctx context.Context, query string) ([]*models.Us
         SELECT DISTINCT ` + userSelectCols + `
         FROM users
         WHERE
-            CAST(uid AS TEXT) LIKE $1 OR
+            id != '` + deletedUserID.String() + `' AND
+            uid > 0 AND
+            (CAST(uid AS TEXT) LIKE $1 OR
             username LIKE $1 OR
             email LIKE $1 OR
-            phone LIKE $1
+            phone LIKE $1)
         LIMIT 20
     `
 

@@ -20,6 +20,7 @@ type FriendshipRepository interface {
 	FindByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Friendship, error)
 	FindPendingRequests(ctx context.Context, userID uuid.UUID) ([]*models.Friendship, error)
 	FindAllRequests(ctx context.Context, userID uuid.UUID) ([]*models.Friendship, error)
+	CountSentSince(ctx context.Context, userID uuid.UUID, since time.Time) (int, error)
 	Update(ctx context.Context, friendship *models.Friendship) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
@@ -240,4 +241,14 @@ func (r *friendshipRepository) FindAllRequests(ctx context.Context, userID uuid.
 
 	logger.InfofWithCaller("Found %d friend requests for user %s", len(friendships), userID)
 	return friendships, nil
+}
+
+// CountSentSince 统计用户在指定时间后发送的好友请求数量
+func (r *friendshipRepository) CountSentSince(ctx context.Context, userID uuid.UUID, since time.Time) (int, error) {
+	var count int
+	err := database.GetPool().QueryRow(ctx,
+		"SELECT COUNT(*) FROM friendships WHERE user_id = $1 AND created_at > $2",
+		userID, since,
+	).Scan(&count)
+	return count, err
 }

@@ -134,6 +134,12 @@ func (s *MessageService) SendMessage(ctx context.Context, senderID string, req *
 		return nil, errors.New("not a participant in this conversation")
 	}
 
+	// 禁止系统占位用户发送消息
+	if senderUUID == deletedUserID {
+		logger.ErrorfWithCaller("Deleted user placeholder attempted to send message")
+		return nil, errors.New("user not found")
+	}
+
 	// 创建消息（使用UTC时间）
 	// 对 text 类型消息内容进行 HTML 转义，防御存储型 XSS
 	content := req.Content

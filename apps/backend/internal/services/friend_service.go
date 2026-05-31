@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"time"
 
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/repository"
@@ -185,6 +186,20 @@ func (s *FriendService) SendFriendRequest(ctx context.Context, userID, targetUse
 	if err != nil {
 		logger.ErrorfWithCaller("Target user not found: %s", targetUserID)
 		return nil, errors.New("target user not found")
+	}
+
+	// 禁止向系统占位用户发送好友请求
+	if targetUUID == deletedUserID {
+		logger.ErrorfWithCaller("Attempt to send friend request to deleted user placeholder")
+		return nil, errors.New("target user not found")
+	}
+
+	// 每日好友请求上限检查
+	const dailyFriendRequestLimit = 50
+	dailyCount, err := s.friendshipRepo.CountSentSince(ctx, userUUID, time.Now().UTC().Truncate(24*time.Hour))
+	if err == nil && dailyCount >= dailyFriendRequestLimit {
+		logger.InfofWithCaller("User %s exceeded daily friend request limit: %d", userID, dailyCount)
+		return nil, errors.New("daily friend request limit reached")
 	}
 
 	// 检查是否已经存在好友关系
