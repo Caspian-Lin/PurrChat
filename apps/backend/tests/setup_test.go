@@ -32,7 +32,6 @@ var (
 
 // SetupTestDB 设置测试数据库（使用PostgreSQL）
 func SetupTestDB(t *testing.T) {
-	// 从环境变量获取数据库连接信息
 	dbHost := os.Getenv("TEST_DB_HOST")
 	if dbHost == "" {
 		dbHost = "localhost"
@@ -54,27 +53,21 @@ func SetupTestDB(t *testing.T) {
 		dbName = "testdb"
 	}
 
-	// 构建连接字符串
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPassword, dbName)
 
-	// 初始化数据库连接
 	ctx := context.Background()
 	err := database.Init(dsn)
 	if err != nil {
 		t.Fatalf("Failed to connect to test database: %v", err)
 	}
 
-	// 清理之前测试的数据
 	CleanupTestTables(t)
-
-	// 创建表结构
 	CreateTestTables(t, ctx)
 }
 
 // CreateTestTables 创建测试表
 func CreateTestTables(t *testing.T, ctx context.Context) {
-	// 先删除现有的表（注意顺序：先删除有外键约束的表）
 	tables := []string{
 		"user_settings",
 		"enrollments",
@@ -90,7 +83,6 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		}
 	}
 
-	// 删除所有conversation_messages表
 	_, err := database.GetPool().Exec(ctx, `
 		SELECT 'DROP TABLE IF EXISTS conversation_messages.' || table_name || ' CASCADE'
 		FROM information_schema.tables
@@ -137,7 +129,7 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		t.Fatalf("Failed to create bot username unique index: %v", err)
 	}
 
-	// 创建会话表（新结构）
+	// 创建会话表
 	_, err = database.GetPool().Exec(ctx, `
 		CREATE TABLE conversations (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -177,7 +169,7 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		t.Fatalf("Failed to create conversation_messages schema: %v", err)
 	}
 
-	// 创建enrollments表（用户与会话的多对多关系）
+	// 创建enrollments表
 	_, err = database.GetPool().Exec(ctx, `
 		CREATE TABLE enrollments (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -194,7 +186,7 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		t.Fatalf("Failed to create enrollments table: %v", err)
 	}
 
-	// 创建user_settings表（用户设置）
+	// 创建user_settings表
 	_, err = database.GetPool().Exec(ctx, `
 		CREATE TABLE user_settings (
 			user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -220,7 +212,6 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		t.Fatalf("Failed to create update_updated_at_column function: %v", err)
 	}
 
-	// 为conversations表创建更新时间触发器
 	_, err = database.GetPool().Exec(ctx, `
 		CREATE TRIGGER update_conversations_updated_at
 		BEFORE UPDATE ON conversations
@@ -231,15 +222,18 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		t.Fatalf("Failed to create update_conversations_updated_at trigger: %v", err)
 	}
 
-	// 先删除可能已存在的旧版本函数（返回类型变更无法用 CREATE OR REPLACE）
+	// 删除所有旧版本函数（签名变更无法用 CREATE OR REPLACE）
 	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS insert_conversation_message(UUID, UUID, TEXT, VARCHAR(20))`)
+	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS insert_conversation_message(UUID, UUID, TEXT, VARCHAR(20), UUID, VARCHAR(100))`)
+	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS insert_conversation_message(UUID, UUID, TEXT, VARCHAR(20), UUID, VARCHAR(100), VARCHAR(255))`)
 	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS get_conversation_messages(UUID, INT, INT)`)
 	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS get_conversation_messages_incremental(UUID, TIMESTAMP)`)
 	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS get_conversation_last_message(UUID)`)
+	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS get_conversation_message_by_client_id(UUID, VARCHAR(255))`)
 	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS create_conversation_message_table(UUID)`)
 	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS drop_conversation_message_table(UUID)`)
 
-	// 创建用于会话消息表的PostgreSQL函数（与迁移 007 保持同步）
+	// 创建用于会话消息表的PostgreSQL函数（与迁移 005 保持同步）
 	_, err = database.GetPool().Exec(ctx, `
 		CREATE OR REPLACE FUNCTION create_conversation_message_table(conversation_uuid UUID)
 		RETURNS VOID AS $$
@@ -247,6 +241,7 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			table_name TEXT;
 			idx_sender_name TEXT;
 			idx_created_at_name TEXT;
+			idx_client_msg_id_name TEXT;
 		BEGIN
 			table_name := replace(conversation_uuid::TEXT, '-', '_');
 
@@ -259,20 +254,18 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 					created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 					bot_id UUID,
 					bot_name VARCHAR(100),
+					client_message_id VARCHAR(255),
 					CONSTRAINT check_msg_type CHECK (msg_type IN (''text'', ''image'', ''file'', ''system''))
 				)',
 			table_name);
 
 			idx_sender_name := 'idx_' || table_name || '_sender_id';
 			idx_created_at_name := 'idx_' || table_name || '_created_at';
+			idx_client_msg_id_name := 'idx_' || table_name || '_client_message_id';
 
-			EXECUTE format('
-				CREATE INDEX IF NOT EXISTS %I ON conversation_messages.%I(sender_id)',
-			idx_sender_name, table_name);
-
-			EXECUTE format('
-				CREATE INDEX IF NOT EXISTS %I ON conversation_messages.%I(created_at DESC)',
-			idx_created_at_name, table_name);
+			EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON conversation_messages.%I(sender_id)', idx_sender_name, table_name);
+			EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON conversation_messages.%I(created_at DESC)', idx_created_at_name, table_name);
+			EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS %I ON conversation_messages.%I(client_message_id) WHERE client_message_id IS NOT NULL', idx_client_msg_id_name, table_name);
 		END;
 		$$ LANGUAGE plpgsql
 	`)
@@ -302,7 +295,8 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			msg_content TEXT,
 			msg_type VARCHAR(20),
 			bot_id UUID DEFAULT NULL,
-			bot_name VARCHAR(100) DEFAULT NULL
+			bot_name VARCHAR(100) DEFAULT NULL,
+			client_message_id VARCHAR(255) DEFAULT NULL
 		)
 		RETURNS UUID AS $$
 		DECLARE
@@ -310,19 +304,60 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			table_name TEXT;
 		BEGIN
 			table_name := replace(conversation_uuid::TEXT, '-', '_');
+
+			IF client_message_id IS NOT NULL THEN
+				EXECUTE format('SELECT id FROM conversation_messages.%I WHERE client_message_id = $1', table_name)
+				INTO new_message_id
+				USING client_message_id;
+				IF new_message_id IS NOT NULL THEN
+					RETURN new_message_id;
+				END IF;
+			END IF;
+
 			EXECUTE format('
-				INSERT INTO conversation_messages.%I (sender_id, content, msg_type, bot_id, bot_name)
-				VALUES ($1, $2, $3, $4, $5)
+				INSERT INTO conversation_messages.%I (sender_id, content, msg_type, bot_id, bot_name, client_message_id)
+				VALUES ($1, $2, $3, $4, $5, $6)
 				RETURNING id
 			', table_name)
 			INTO new_message_id
-			USING sender_uuid, msg_content, msg_type, bot_id, bot_name;
+			USING sender_uuid, msg_content, msg_type, bot_id, bot_name, client_message_id;
 			RETURN new_message_id;
 		END;
 		$$ LANGUAGE plpgsql
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create insert_conversation_message function: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE OR REPLACE FUNCTION get_conversation_message_by_client_id(
+			conversation_uuid UUID,
+			p_client_message_id VARCHAR(255)
+		)
+		RETURNS TABLE (
+			id UUID,
+			sender_id UUID,
+			content TEXT,
+			msg_type VARCHAR(20),
+			created_at TIMESTAMP,
+			bot_id UUID,
+			bot_name VARCHAR(100)
+		) AS $$
+		DECLARE
+			table_name TEXT;
+		BEGIN
+			table_name := replace(conversation_uuid::TEXT, '-', '_');
+			RETURN QUERY EXECUTE format('
+				SELECT id, sender_id, content, msg_type, created_at, bot_id, bot_name
+				FROM conversation_messages.%I
+				WHERE client_message_id = $1
+			', table_name)
+			USING p_client_message_id;
+		END;
+		$$ LANGUAGE plpgsql
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create get_conversation_message_by_client_id function: %v", err)
 	}
 
 	_, err = database.GetPool().Exec(ctx, `
@@ -446,9 +481,7 @@ func SetupTestRouter() {
 	gin.SetMode(gin.TestMode)
 	testRouter = gin.New()
 
-	// 注册自定义 UUID 验证器
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
-		// 注册 UUID 验证函数
 		_ = v.RegisterValidation("uuid", func(fl validator.FieldLevel) bool {
 			field := fl.Field()
 			if field.Kind() == reflect.String {
@@ -459,7 +492,6 @@ func SetupTestRouter() {
 		})
 	}
 
-	// 初始化依赖
 	userRepo := repository.NewUserRepository()
 	conversationRepo := repository.NewConversationRepository()
 	friendshipRepo := repository.NewFriendshipRepository()
@@ -476,7 +508,6 @@ func SetupTestRouter() {
 	authHandler = handlers.NewAuthHandler(authService, jwtSecret, false, nil)
 	chatHandler = handlers.NewChatHandler(authService, userService, conversationService, messageService, friendService, memberService)
 
-	// 配置路由
 	testRouter.POST("/api/register", authHandler.Register)
 	testRouter.POST("/api/login", authHandler.Login)
 	testRouter.GET("/api/me", handlers.AuthMiddleware(jwtSecret), authHandler.Me)
@@ -495,7 +526,6 @@ func SetupTestRouter() {
 	testRouter.POST("/api/friends/request", handlers.AuthMiddleware(jwtSecret), chatHandler.SendFriendRequest)
 	testRouter.POST("/api/friends/handle", handlers.AuthMiddleware(jwtSecret), chatHandler.HandleFriendRequest)
 
-	// 设置服务
 	settingsRepo := repository.NewSettingsRepository()
 	settingsService := services.NewSettingsService(settingsRepo)
 	settingsHandler := handlers.NewSettingsHandler(settingsService)
@@ -506,7 +536,6 @@ func SetupTestRouter() {
 
 // CleanupTestDB 清理测试数据库
 func CleanupTestDB(t *testing.T) {
-	// 清理数据库连接
 	if database.GetPool() != nil {
 		database.Close()
 	}
@@ -516,7 +545,6 @@ func CleanupTestDB(t *testing.T) {
 func CleanupTestTables(t *testing.T) {
 	ctx := context.Background()
 
-	// 删除所有conversation_messages表
 	_, err := database.GetPool().Exec(ctx, `
 		SELECT 'DROP TABLE IF EXISTS conversation_messages.' || table_name || ' CASCADE'
 		FROM information_schema.tables
@@ -526,7 +554,6 @@ func CleanupTestTables(t *testing.T) {
 		t.Logf("Warning: Failed to drop conversation_messages tables: %v", err)
 	}
 
-	// 清理表数据（注意顺序：先清理有外键约束的表）
 	tables := []string{
 		"user_settings",
 		"enrollments",
@@ -542,7 +569,6 @@ func CleanupTestTables(t *testing.T) {
 		}
 	}
 
-	// 重置序列
 	_, err = database.GetPool().Exec(ctx, "ALTER SEQUENCE user_uid_seq RESTART WITH 1")
 	if err != nil {
 		t.Logf("Warning: Failed to reset sequence: %v", err)
@@ -555,7 +581,6 @@ func CreateTestUser(t *testing.T, username, email, password string) *models.User
 
 	userRepo := repository.NewUserRepository()
 
-	// 生成唯一的 phone 值（基于 username，保持 VARCHAR(20) 以内）
 	phone := "1" + username
 
 	user := &models.User{
@@ -574,7 +599,6 @@ func CreateTestUser(t *testing.T, username, email, password string) *models.User
 		t.Fatalf("Failed to create test user: %v", err)
 	}
 
-	// 清除密码相关字段
 	user.PasswordHash = ""
 	user.Salt = ""
 
@@ -592,13 +616,10 @@ func GetAuthToken(t *testing.T, userID string) string {
 
 // TestMain 测试主函数
 func TestMain(m *testing.M) {
-	// 初始化日志
 	logger.Init()
 
-	// 运行测试
 	code := m.Run()
 
-	// 清理
 	CleanupTestDB(nil)
 
 	os.Exit(code)
