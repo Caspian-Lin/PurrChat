@@ -416,12 +416,8 @@ import { useLongPress } from '../../composables/useLongPress';
 import { usePlatform } from '../../composables/usePlatform';
 import { api } from '../../models/api';
 import { websocketEventManager } from '../../services/websocketEventManager';
-import type {
-  Conversation,
-  Message,
-  FileMessageContent,
-  SystemMessageContent,
-} from '../../models/types';
+import { formatSystemMessageText } from '../../utils/messageHelpers';
+import type { Conversation, Message, FileMessageContent } from '../../models/types';
 
 interface Props {
   conversation: Conversation | null;
@@ -619,7 +615,7 @@ const sendDisabled = computed(() => {
 // ===== 系统消息辅助函数 =====
 function isPokeMessage(message: Message): boolean {
   try {
-    const sys = JSON.parse(message.content) as SystemMessageContent;
+    const sys = JSON.parse(message.content);
     return sys.type === 'poke';
   } catch {
     return false;
@@ -627,40 +623,7 @@ function isPokeMessage(message: Message): boolean {
 }
 
 function getSystemMessageText(message: Message): string {
-  try {
-    const sys = JSON.parse(message.content) as SystemMessageContent;
-    switch (sys.type) {
-      case 'workflow_start':
-      case 'special_mode_start':
-        return `${sys.bot_name || 'Bot'} 进入了 Agent 模式`;
-      case 'workflow_end':
-      case 'special_mode_end':
-        return `${sys.bot_name || 'Bot'} 退出了 Agent 模式`;
-      case 'bot_deployed':
-        return `${sys.bot_name || 'Bot'} 已加入对话`;
-      case 'bot_undeployed':
-        return `${sys.bot_name || 'Bot'} 已离开对话`;
-      case 'poke': {
-        const pokerName = message.sender?.username || '某人';
-        const isSelfPoker = message.sender_id === props.currentUserId;
-        const isSelfTarget = sys.user_id === props.currentUserId;
-
-        if (isSelfPoker && isSelfTarget) {
-          return '你 拍了拍 自己';
-        } else if (isSelfPoker) {
-          return `你 拍了拍 ${sys.user_name}`;
-        } else if (isSelfTarget) {
-          return `${pokerName} 拍了拍 你`;
-        } else {
-          return `${pokerName} 拍了拍 ${sys.user_name}`;
-        }
-      }
-      default:
-        return message.content;
-    }
-  } catch {
-    return message.content;
-  }
+  return formatSystemMessageText(message, props.currentUserId);
 }
 
 // ===== 文件消息辅助函数 =====

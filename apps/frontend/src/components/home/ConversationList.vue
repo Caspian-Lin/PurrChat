@@ -127,6 +127,7 @@ import {
   getFriendshipStatusColor,
 } from '../../utils/userHelpers';
 import { formatConversationTime } from '../../utils/formatTime';
+import { formatLastMessagePreview } from '../../utils/messageHelpers';
 import { BsX } from 'vue-icons-plus/bs';
 import type { Conversation, Message } from '../../models/types';
 import BaseListItem from '../common/BaseListItem.vue';
@@ -147,18 +148,9 @@ const getConversationName = (conversation: Conversation): string => {
   return conversation.name || getUserUsername(getOtherUser(conversation, props.currentUserId));
 };
 
-// 格式化最后一条消息内容（文件消息显示文件名）
+// 格式化最后一条消息内容（文件消息显示文件名，系统消息显示可读文本）
 const formatLastMessageContent = (message: Message | undefined): string => {
-  if (!message) return '暂无消息';
-  if (message.msg_type === 'file') {
-    try {
-      const fileContent = JSON.parse(message.content);
-      return `[文件] ${fileContent.file_name}`;
-    } catch {
-      return '[文件]';
-    }
-  }
-  return message.content || '暂无消息';
+  return formatLastMessagePreview(message, props.currentUserId);
 };
 
 // 按最后消息时间排序所有会话

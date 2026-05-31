@@ -200,7 +200,7 @@
                 <span class="text-xs px-1 rounded-[var(--radius-xs)] bg-bg-secondary">群聊</span>
               </div>
               <div class="text-sm text-text-secondary truncate">
-                {{ conversation.last_message?.content || '暂无消息' }}
+                {{ formatLastMessagePreview(conversation.last_message, auth.currentUser?.id) }}
               </div>
             </BaseListItem>
           </div>
@@ -598,7 +598,7 @@
                   <span class="text-xs px-1 rounded-[var(--radius-xs)] bg-bg-secondary">群聊</span>
                 </div>
                 <div class="text-sm text-text-secondary truncate">
-                  {{ conversation.last_message?.content || '暂无消息' }}
+                  {{ formatLastMessagePreview(conversation.last_message, auth.currentUser?.id) }}
                 </div>
               </BaseListItem>
             </div>
@@ -766,6 +766,7 @@ import BasePanel from './BasePanel.vue';
 import BaseListItem from '../../common/BaseListItem.vue';
 import type { User, Friendship, Conversation } from '../../../models/types';
 import { BsX, BsCpu, BsChevronRight, BsChevronLeft } from 'vue-icons-plus/bs';
+import { formatLastMessagePreview } from '../../../utils/messageHelpers';
 
 // Platform
 const { isMobile } = usePlatform();
