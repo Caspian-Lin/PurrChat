@@ -96,7 +96,7 @@ const handleMessageUpdate = (conversationId: string, message: any) => {
   console.log('[HomeView] 发送者ID:', message.sender_id);
   console.log('[HomeView] 当前用户ID:', auth.currentUser?.id);
 
-  if (message.sender_id !== auth.currentUser?.id) {
+  if (message.sender_id !== auth.currentUser?.id && message.msg_type !== 'system') {
     console.log('[HomeView] 是他人发送的消息，显示通知');
     addNotification('info', '新消息', message.content);
   } else {

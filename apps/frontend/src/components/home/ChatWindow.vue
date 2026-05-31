@@ -78,13 +78,17 @@
 
             <!-- 消息行 -->
             <div
+              v-else
               :class="['flex gap-3', { 'flex-row-reverse': message.sender_id === currentUserId }]"
               @touchstart.passive="onMessageTouchStart($event, message)"
               @touchend="onMessageTouchEnd($event)"
               @touchmove="onMessageTouchMove($event)"
             >
               <!-- 头像 -->
-              <div class="size-10 rounded-xl overflow-hidden flex-shrink-0">
+              <div
+                class="size-10 rounded-xl overflow-hidden flex-shrink-0 cursor-pointer"
+                @contextmenu.prevent="onAvatarContextMenu($event, message)"
+              >
                 <!-- Bot 消息头像 -->
                 <template v-if="message.sender?.is_bot || message.bot_id">
                   <img
@@ -449,7 +453,8 @@ const contextMenu = ref<{
   visible: boolean;
   position: { x: number; y: number };
   message: Message | null;
-}>({ visible: false, position: { x: 0, y: 0 }, message: null });
+  source: 'bubble' | 'avatar';
+}>({ visible: false, position: { x: 0, y: 0 }, message: null, source: 'bubble' });
 
 const { handlers: longPressHandlers } = useLongPress((pos) => {
   // 长按触发时，通过当前触摸位置找到对应的消息
@@ -464,7 +469,12 @@ let touchTargetMessage: Message | null = null;
 
 function onBubbleContextMenu(event: MouseEvent, message: Message) {
   event.preventDefault();
-  showContextMenu(event.clientX, event.clientY, message);
+  showContextMenu(event.clientX, event.clientY, message, 'bubble');
+}
+
+function onAvatarContextMenu(event: MouseEvent, message: Message) {
+  event.preventDefault();
+  showContextMenu(event.clientX, event.clientY, message, 'avatar');
 }
 
 function onMessageTouchStart(event: TouchEvent, message: Message) {
@@ -482,23 +492,30 @@ function onMessageTouchMove(event: TouchEvent) {
   longPressHandlers.onTouchmove(event);
 }
 
-function showContextMenu(x: number, y: number, message: Message) {
+function showContextMenu(
+  x: number,
+  y: number,
+  message: Message,
+  source: 'bubble' | 'avatar' = 'bubble'
+) {
   contextMenu.value = {
     visible: true,
     position: { x, y },
     message,
+    source,
   };
 }
 
 function getContextMenuActions(message: Message): ContextMenuAction[] {
   const actions: ContextMenuAction[] = [];
 
-  // 所有消息（包括自己）都显示拍一拍
-  actions.push({
-    key: 'poke',
-    label: '拍一拍',
-    handler: () => handlePoke(message),
-  });
+  if (contextMenu.value.source === 'avatar' && message.sender_id !== props.currentUserId) {
+    actions.push({
+      key: 'poke',
+      label: '拍一拍',
+      handler: () => handlePoke(message),
+    });
+  }
 
   return actions;
 }
@@ -522,15 +539,21 @@ const activeWorkflow = ref<{ bot_id: string; bot_name: string; conversation_id: 
   null
 );
 
-websocketEventManager.onWorkflowChange((event, data) => {
+const workflowChangeHandler = (
+  event: string,
+  data: { bot_id: string; bot_name: string; conversation_id: string }
+) => {
   if (event === 'started') {
-    activeWorkflow.value = data;
+    if (data.conversation_id === props.conversation?.id) {
+      activeWorkflow.value = data;
+    }
   } else {
-    if (activeWorkflow.value?.bot_id === data?.bot_id) {
+    if (activeWorkflow.value?.conversation_id === data?.conversation_id) {
       activeWorkflow.value = null;
     }
   }
-});
+};
+const offWorkflow = websocketEventManager.onWorkflowChange(workflowChangeHandler);
 
 async function handleDeactivateWorkflow() {
   if (!activeWorkflow.value) return;
@@ -800,6 +823,13 @@ watch(
   { deep: true }
 );
 
+watch(
+  () => props.conversation?.id,
+  () => {
+    activeWorkflow.value = null;
+  }
+);
+
 onMounted(() => {
   const savedHeight = localStorage.getItem('chat-input-height');
   if (savedHeight) {
@@ -813,6 +843,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (hoverTimer) clearTimeout(hoverTimer);
+  offWorkflow();
 });
 
 // 暴露方法给父组件
