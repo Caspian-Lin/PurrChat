@@ -1,1 +1,0 @@
-../../storage/migrations/002_file_metadata.sql
