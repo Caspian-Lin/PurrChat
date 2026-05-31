@@ -22,7 +22,10 @@
 
       <!-- 搜索结果（全屏宽度） -->
       <div
-        v-if="showSearchResults && (filteredFriends.length > 0 || searchedUsers.length > 0 || filteredGroups.length > 0)"
+        v-if="
+          showSearchResults &&
+          (filteredFriends.length > 0 || searchedUsers.length > 0 || filteredGroups.length > 0)
+        "
         class="mobile-search-results"
       >
         <!-- 好友结果 -->
@@ -66,8 +69,13 @@
             @click="handleSelectGroup(conversation)"
           >
             <template #avatar>
-              <div class="w-9 h-9 rounded-[var(--radius-md)] overflow-hidden flex-shrink-0" style="background: var(--theme-gradient)">
-                <div class="w-full h-full flex items-center justify-center font-bold text-white text-sm">
+              <div
+                class="w-9 h-9 rounded-[var(--radius-md)] overflow-hidden flex-shrink-0"
+                style="background: var(--theme-gradient)"
+              >
+                <div
+                  class="w-full h-full flex items-center justify-center font-bold text-white text-sm"
+                >
                   {{ conversation.name?.charAt(0) || 'G' }}
                 </div>
               </div>
@@ -105,7 +113,9 @@
               </div>
             </template>
             <div class="flex items-center gap-2">
-              <span class="font-semibold truncate text-text-primary text-sm">{{ user.username }}</span>
+              <span class="font-semibold truncate text-text-primary text-sm">{{
+                user.username
+              }}</span>
               <span
                 v-if="user.is_bot"
                 class="text-xs px-1.5 py-0.5 rounded-[var(--radius-xs)] flex items-center gap-0.5"
@@ -114,7 +124,11 @@
                 <BsCpu :size="10" />
                 Bot
               </span>
-              <span v-else class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded-[var(--radius-xs)]">陌生人</span>
+              <span
+                v-else
+                class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded-[var(--radius-xs)]"
+                >陌生人</span
+              >
             </div>
             <div class="text-xs text-text-secondary">UID: {{ user.uid }}</div>
           </BaseListItem>
@@ -125,10 +139,7 @@
       <div class="mobile-request-entry" @click="mobileView = 'request-history'">
         <div class="mobile-request-icon">
           <span class="text-lg">🔔</span>
-          <div
-            v-if="pendingRequests.length > 0"
-            class="mobile-request-badge"
-          >
+          <div v-if="pendingRequests.length > 0" class="mobile-request-badge">
             {{ pendingRequests.length }}
           </div>
         </div>
@@ -171,8 +182,13 @@
               @click="handleSelectGroup(conversation)"
             >
               <template #avatar>
-                <div class="w-11 h-11 rounded-[var(--radius-md)] overflow-hidden" style="background: var(--theme-gradient)">
-                  <div class="w-full h-full flex items-center justify-center font-bold text-white text-lg">
+                <div
+                  class="w-11 h-11 rounded-[var(--radius-md)] overflow-hidden"
+                  style="background: var(--theme-gradient)"
+                >
+                  <div
+                    class="w-full h-full flex items-center justify-center font-bold text-white text-lg"
+                  >
                     {{ conversation.name?.charAt(0) || 'G' }}
                   </div>
                 </div>
@@ -208,7 +224,10 @@
         <div style="width: 44px" />
       </div>
       <div class="mobile-detail-content">
-        <div v-if="allFriendRequests.length === 0" class="flex-1 flex items-center justify-center text-text-tertiary">
+        <div
+          v-if="allFriendRequests.length === 0"
+          class="flex-1 flex items-center justify-center text-text-tertiary"
+        >
           <p>暂无好友申请记录</p>
         </div>
         <div v-else class="px-2 pt-2 space-y-1">
@@ -264,7 +283,10 @@
               </div>
               <div
                 v-else
-                :class="['px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-medium', getFriendRequestStatusClass(request.status)]"
+                :class="[
+                  'px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-medium',
+                  getFriendRequestStatusClass(request.status),
+                ]"
               >
                 {{ getFriendRequestStatusText(request.status) }}
               </div>
@@ -277,7 +299,13 @@
     <!-- 好友详情（全屏，从右侧滑入） -->
     <div v-else-if="mobileView === 'friend-detail' && selectedFriend" class="mobile-detail-view">
       <div class="mobile-detail-header">
-        <button class="mobile-back-btn" @click="mobileView = 'list'; selectedFriend = null">
+        <button
+          class="mobile-back-btn"
+          @click="
+            mobileView = 'list';
+            selectedFriend = null;
+          "
+        >
           <BsChevronLeft :size="22" />
         </button>
         <span class="mobile-detail-title">好友信息</span>
@@ -286,7 +314,10 @@
       <div class="mobile-detail-content">
         <FriendInfoModal
           :friendship="selectedFriend"
-          @close="mobileView = 'list'; selectedFriend = null"
+          @close="
+            mobileView = 'list';
+            selectedFriend = null;
+          "
           @start-chat="handleStartChatWithFriend"
         />
       </div>
