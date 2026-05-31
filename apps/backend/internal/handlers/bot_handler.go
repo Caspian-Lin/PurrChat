@@ -743,3 +743,43 @@ func (h *BotHandler) GetConversationBots(c *gin.Context) {
 
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: deployments})
 }
+
+// GetBotCallLogs 获取 Bot 调用日志
+// @Summary 获取 Bot 调用日志
+// @Tags Bot
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Bot ID"
+// @Param limit query int false "限制数量" default(20)
+// @Param offset query int false "偏移量" default(0)
+// @Success 200 {object} models.MessageResponse
+// @Router /api/bots/{id}/call-logs [get]
+func (h *BotHandler) GetBotCallLogs(c *gin.Context) {
+	botID := c.Param("id")
+	if botID == "" {
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
+		return
+	}
+
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	userIDStr, ok := getUserID(c)
+	if !ok {
+		return
+	}
+
+	result, err := h.botService.GetBotCallLogs(c.Request.Context(), botID, userIDStr, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: result})
+}

@@ -23,29 +23,88 @@ export class BotExecutor {
   }
 
   async execute(req: ExecuteRequest): Promise<ExecuteResponse> {
-    const config = this.normalizeConfig(req.mechanism_config);
+    const startTime = Date.now();
+    const noMatch: ExecuteResponse = {
+      reply: '',
+      session_active: false,
+      triggered: false,
+      execution_ms: 0,
+    };
 
-    // 遍历机制列表，首个匹配即响应
+    const config = this.normalizeConfig(req.mechanism_config);
+    const enabledCount = config.mechanisms.filter((m) => m.enabled).length;
+
+    console.log(
+      `[BotExecutor] START botID=${req.bot_id} senderID=${req.sender_id} ` +
+        `senderName=${req.sender_name} mechanisms=${config.mechanisms.length} ` +
+        `enabled=${enabledCount} contentLen=${req.content?.length || 0}`,
+    );
+
+    if (req.content) {
+      const preview = req.content.length > 80 ? req.content.slice(0, 80) + '...' : req.content;
+      console.log(`[BotExecutor]   content preview: "${preview}"`);
+    }
+
     for (const mech of config.mechanisms) {
       if (!mech.enabled) continue;
 
+      const evalStart = Date.now();
       const matched = this.evaluateTrigger(mech.trigger, req.content);
+      const evalMs = Date.now() - evalStart;
+
+      console.log(
+        `[BotExecutor] TRIGGER mech=${mech.id} name="${mech.name}" ` +
+          `type=${mech.trigger.type} matched=${matched} evalMs=${evalMs}`,
+      );
+
       if (!matched) continue;
 
-      // 触发匹配成功
-      if (mech.reply.type === 'workflow' && mech.reply.workflow) {
-        return this.executeWorkflow(req, mech.reply.workflow);
-      }
+      // 触发匹配成功，执行回复
+      const execStart = Date.now();
+      let result: ExecuteResponse;
 
-      if (mech.reply.type === 'predefined' || mech.reply.type === 'llm') {
+      if (mech.reply.type === 'workflow' && mech.reply.workflow) {
+        console.log(`[BotExecutor] WORKFLOW_START mech=${mech.id}`);
+        result = await this.executeWorkflow(req, mech.reply.workflow);
+        console.log(
+          `[BotExecutor] WORKFLOW_END mech=${mech.id} ` +
+            `sessionActive=${result.session_active} replyLen=${result.reply?.length || 0}`,
+        );
+      } else if (mech.reply.type === 'predefined' || mech.reply.type === 'llm') {
         const blueprint = this.compileSimpleMechanism(mech);
         if (blueprint) {
-          return this.executeSimpleFlow(req, blueprint);
+          console.log(`[BotExecutor] SIMPLE_FLOW_START mech=${mech.id} type=${mech.reply.type}`);
+          result = await this.executeSimpleFlow(req, blueprint);
+          console.log(
+            `[BotExecutor] SIMPLE_FLOW_END mech=${mech.id} replyLen=${result.reply?.length || 0}`,
+          );
+        } else {
+          console.log(`[BotExecutor] COMPILE_FAILED mech=${mech.id} type=${mech.reply.type}`);
+          result = { reply: '...', session_active: false, triggered: true, mechanism_id: mech.id, mechanism_name: mech.name, reply_type: mech.reply.type };
         }
+      } else {
+        console.log(`[BotExecutor] UNKNOWN_REPLY_TYPE mech=${mech.id} type=${mech.reply.type}`);
+        result = { reply: '...', session_active: false, triggered: true, mechanism_id: mech.id, mechanism_name: mech.name, reply_type: mech.reply.type };
       }
+
+      const totalMs = Date.now() - startTime;
+      result.triggered = true;
+      result.mechanism_id = mech.id;
+      result.mechanism_name = mech.name;
+      result.reply_type = mech.reply.type;
+      result.execution_ms = totalMs;
+
+      console.log(
+        `[BotExecutor] DONE botID=${req.bot_id} replyLen=${result.reply?.length || 0} ` +
+          `triggered=true mechanism=${mech.id} totalMs=${totalMs}`,
+      );
+      return result;
     }
 
-    return { reply: '', session_active: false };
+    const totalMs = Date.now() - startTime;
+    console.log(`[BotExecutor] NO_MATCH botID=${req.bot_id} totalMs=${totalMs}`);
+    noMatch.execution_ms = totalMs;
+    return noMatch;
   }
 
   private async executeWorkflow(
@@ -56,12 +115,12 @@ export class BotExecutor {
     const blueprint = this.specToBlueprint(spec);
 
     if (this.runtime.hasSession(sessionId)) {
-      // 已有会话，发送消息
+      console.log(`[BotExecutor]   session EXISTS sessionId=${sessionId}`);
       const reply = await this.runtime.sendMessage(sessionId, req.content);
-      return { reply, session_active: true, session_id: sessionId };
+      return { reply, session_active: true, session_id: sessionId, triggered: true };
     }
 
-    // 创建新会话
+    console.log(`[BotExecutor]   session NEW sessionId=${sessionId}`);
     this.runtime.createSession(sessionId, blueprint, {
       username: req.sender_name,
       contextBuffer: req.context_messages,
@@ -73,7 +132,7 @@ export class BotExecutor {
       conversationId: req.conversation_id,
     });
 
-    return { reply, session_active: true, session_id: sessionId };
+    return { reply, session_active: true, session_id: sessionId, triggered: true };
   }
 
   private async executeSimpleFlow(
@@ -89,14 +148,17 @@ export class BotExecutor {
       },
     });
 
-    return { reply, session_active: false };
+    return { reply, session_active: false, triggered: true };
   }
 
   // ─── 触发评估 ──────────────────────────────────────────────
 
   evaluateTrigger(trigger: TriggerSpec, content: string): boolean {
     if (trigger.type === 'probability') {
-      return Math.random() < (trigger.probability || 0);
+      const probability = trigger.probability || 0;
+      const result = Math.random() < probability;
+      console.log(`[BotExecutor]   PROBABILITY p=${probability} result=${result}`);
+      return result;
     }
 
     if (trigger.type === 'rule' && trigger.rules) {
@@ -117,23 +179,30 @@ export class BotExecutor {
     const text = rule.case_sensitive ? content : content.toLowerCase();
     const pattern = rule.case_sensitive ? rule.pattern : rule.pattern.toLowerCase();
 
+    let matched = false;
     switch (rule.type) {
       case 'keyword':
-        return text.includes(pattern);
+        matched = text.includes(pattern);
+        break;
       case 'equals':
-        return text === pattern;
+        matched = text === pattern;
+        break;
       case 'command':
-        return text.startsWith(pattern);
+        matched = text.startsWith(pattern);
+        break;
       case 'regex':
         try {
           const flags = rule.case_sensitive ? '' : 'i';
-          return new RegExp(rule.pattern, flags).test(content);
+          matched = new RegExp(rule.pattern, flags).test(content);
         } catch {
-          return false;
+          matched = false;
         }
-      default:
-        return false;
+        break;
     }
+
+    const patternPreview = rule.pattern.length > 50 ? rule.pattern.slice(0, 50) + '...' : rule.pattern;
+    console.log(`[BotExecutor]   RULE type=${rule.type} pattern="${patternPreview}" matched=${matched}`);
+    return matched;
   }
 
   // ─── 简单机制编译 ──────────────────────────────────────────
@@ -224,9 +293,9 @@ export class BotExecutor {
       if (reply.type === 'special_mode') {
         reply.type = 'workflow';
       }
-      if (reply.special_mode && !reply.workflow) {
-        reply.workflow = reply.special_mode;
-        delete reply.special_mode;
+      if ((reply as any).special_mode && !reply.workflow) {
+        reply.workflow = (reply as any).special_mode;
+        delete (reply as any).special_mode;
       }
 
       return { ...m, reply };

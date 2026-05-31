@@ -118,3 +118,31 @@ type BotDeployment struct {
 	Bot          *Bot          `json:"bot,omitempty"`
 	Conversation *Conversation `json:"conversation,omitempty"`
 }
+
+// BotCallLog Bot 调用日志
+type BotCallLog struct {
+	ID               uuid.UUID `json:"id"`
+	BotID            uuid.UUID `json:"bot_id"`
+	ConversationID   uuid.UUID `json:"conversation_id"`
+	SenderID         uuid.UUID `json:"sender_id"`
+	SenderName       string    `json:"sender_name"`
+	TriggerMessage   string    `json:"trigger_message"`
+	ReplyContent     string    `json:"reply_content"`
+	MechanismID      string    `json:"mechanism_id"`
+	MechanismName    string    `json:"mechanism_name"`
+	ReplyType        string    `json:"reply_type"`
+	ExecutionPath    string    `json:"execution_path"`
+	Success          bool      `json:"success"`
+	ErrorMessage     string    `json:"error_message,omitempty"`
+	DurationMs       int       `json:"duration_ms"`
+	CreatedAt        time.Time `json:"created_at"`
+	ConversationName string    `json:"conversation_name,omitempty"`
+}
+
+// BotCallLogListResponse 调用日志列表响应
+type BotCallLogListResponse struct {
+	Logs   []*BotCallLog `json:"logs"`
+	Total  int           `json:"total"`
+	Limit  int           `json:"limit"`
+	Offset int           `json:"offset"`
+}

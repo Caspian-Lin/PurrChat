@@ -1,3 +1,6 @@
+// Deprecated: Python 沙箱执行器已迁移至 TS 微服务。
+// 仅被 botengine/workflow.go 的 executePythonEvent 引用，作为 fallback。
+// 待 TS 接管后整个 sandbox 包将被移除。
 package sandbox
 
 import (

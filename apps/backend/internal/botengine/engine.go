@@ -15,13 +15,23 @@ import (
 )
 
 // BotEngine Bot 处理引擎
-// Deprecated: 工作流处理已迁移至 TS 微服务 (apps/bot-engine)，
-// Go 引擎仅作为 TS 服务不可用时的 fallback。
+//
+// 当前职责（保留）：
+//   - 消息路由入口：接收消息、查找 bot enrollment、调 TS/Go fallback
+//   - TS 微服务客户端：通过 client.go 调用 TS bot-engine
+//   - Bot 回复发送：sendBotReply、sendSystemMessage
+//   - 调用日志记录：recordCallLog（持久化到数据库）
+//
+// Deprecated（待迁移）：
+//   - Go fallback 路径：goFallbackProcess 中的触发评估和回复生成
+//   - 工作流会话管理：workflowSessions sync.Map
+//   - 调试会话管理：debugSessions sync.Map → 迁移至 TS /debug
 type BotEngine struct {
 	deployRepo     repository.BotDeploymentRepository
 	botRepo        repository.BotRepository
 	messageRepo    repository.ConversationMessageRepository
 	enrollmentRepo repository.EnrollmentRepository
+	callLogRepo    repository.BotCallLogRepository
 
 	// 工作流会话：记录活跃的工作流运行时状态
 	workflowSessions sync.Map // map[string]*SpecialModeSession — "conversationID:botID" -> session
@@ -53,6 +63,31 @@ func NewBotEngine(
 	}
 	e.startDebugSessionCleanup()
 	return e
+}
+
+// SetCallLogRepo 设置调用日志仓储（可选依赖）
+func (e *BotEngine) SetCallLogRepo(repo repository.BotCallLogRepository) {
+	e.callLogRepo = repo
+}
+
+// recordCallLog 记录调用日志（best-effort，失败不阻塞主流程）
+func (e *BotEngine) recordCallLog(ctx context.Context, log *models.BotCallLog) {
+	if e.callLogRepo == nil {
+		return
+	}
+	log.ID = uuid.New()
+	log.CreatedAt = time.Now().UTC()
+	if err := e.callLogRepo.Create(ctx, log); err != nil {
+		logger.ErrorfWithCaller("[BotEngine] Failed to record call log: %v", err)
+	}
+}
+
+// truncateStr 截断字符串
+func truncateStr(s string, maxLen int) string {
+	if len(s) > maxLen {
+		return s[:maxLen]
+	}
+	return s
 }
 
 // sendSystemMessage 发送系统消息到会话（居中显示，无头像）
@@ -122,8 +157,10 @@ func (e *BotEngine) OnMessage(ctx context.Context, msg *BotMessage) {
 }
 
 // processMessage 实际处理消息
+// 当 TS 服务可用时，直接将 mechanism_config 传给 TS，由 TS 全权处理触发评估和执行。
+// 仅在 TS 不可用时回退到 Go 引擎的本地触发评估。
 func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
-	// 忽略 Bot 自身发送的消息，避免无限循环
+	// 忽略系统消息
 	if msg.SenderID == uuid.Nil {
 		return
 	}
@@ -144,9 +181,7 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 		return
 	}
 
-	logger.InfofWithCaller("[BotEngine] Found %d bot(s) in conversation %s, processing...", len(botEnrollments), msg.ConversationID)
-
-	// 2. 对每个 Bot 评估机制列表
+	// 2. 对每个 Bot 处理
 	for _, enrollment := range botEnrollments {
 		bot, err := e.botRepo.FindByID(ctx, enrollment.UserID)
 		if err != nil {
@@ -156,81 +191,107 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 
 		// 检查 Bot 状态
 		if bot.Status != models.BotStatusActive {
-			logger.InfofWithCaller("[BotEngine] Bot %s is %s, skipping", bot.Name, bot.Status)
 			continue
 		}
 
-		logger.InfofWithCaller("[BotEngine] Evaluating bot %s for message: %q", bot.Name, msg.Content)
+		if e.tsClient != nil && e.tsClient.IsAvailable() {
+			// TS 路径：收集上下文，直接调 TS（TS 负责触发评估 + 执行）
+			contextMsgs := e.collectContextForMechanism(ctx, msg.ConversationID, nil)
+			start := time.Now()
+			execResp, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, bot.MechanismConfig, contextMsgs)
+			duration := time.Since(start)
 
-		// 解析机制配置
-		mechConfig, err := ParseMechanismConfig(bot.MechanismConfig)
-		if err != nil {
-			logger.ErrorfWithCaller("[BotEngine] Failed to parse mechanism config for bot %s: %v", bot.ID, err)
+			if tsErr == nil {
+				logger.InfofWithCaller("[BotEngine] TS bot=%s triggered=%v mechanism=%s reply=%q sessionActive=%v ms=%d",
+					bot.Name, execResp.Triggered, execResp.MechanismName,
+					truncateStr(execResp.Reply, 50), execResp.SessionActive, int(duration.Milliseconds()))
+
+				// 记录调用日志
+				e.recordCallLog(ctx, &models.BotCallLog{
+					BotID:          bot.ID,
+					ConversationID: msg.ConversationID,
+					SenderID:       msg.SenderID,
+					SenderName:     msg.SenderName,
+					TriggerMessage: msg.Content,
+					ReplyContent:   truncateStr(execResp.Reply, 500),
+					MechanismID:    execResp.MechanismID,
+					MechanismName:  execResp.MechanismName,
+					ReplyType:      execResp.ReplyType,
+					ExecutionPath:  "ts",
+					Success:        true,
+					DurationMs:     int(duration.Milliseconds()),
+				})
+
+				if execResp.Reply != "" {
+					e.sendBotReply(ctx, bot, msg.ConversationID, execResp.Reply)
+				}
+			} else {
+				logger.ErrorfWithCaller("[BotEngine] TS failed bot=%s error=%v", bot.Name, tsErr)
+				e.recordCallLog(ctx, &models.BotCallLog{
+					BotID:          bot.ID,
+					ConversationID: msg.ConversationID,
+					SenderID:       msg.SenderID,
+					SenderName:     msg.SenderName,
+					TriggerMessage: msg.Content,
+					ExecutionPath:  "ts",
+					Success:        false,
+					ErrorMessage:   tsErr.Error(),
+					DurationMs:     int(duration.Milliseconds()),
+				})
+			}
 			continue
 		}
 
-		// 遍历机制列表（从上到下，首个匹配即响应）
-		for i := range mechConfig.Mechanisms {
-			mech := &mechConfig.Mechanisms[i]
-			if !mech.Enabled {
-				continue
-			}
+		// Go fallback（TS 不可用时）
+		logger.InfofWithCaller("[BotEngine] TS unavailable, using Go fallback for bot %s", bot.Name)
+		e.goFallbackProcess(ctx, msg, bot)
+	}
+}
 
-			// 评估触发条件
-			matched := mech.Trigger.Evaluate(msg.Content)
-			if !matched {
-				continue
-			}
+// goFallbackProcess Go 引擎 fallback 路径：本地评估触发条件并执行
+// Deprecated: 仅在 TS 微服务不可用时使用，后续将完全迁移至 TS。
+func (e *BotEngine) goFallbackProcess(ctx context.Context, msg *BotMessage, bot *models.Bot) {
+	// 解析机制配置
+	mechConfig, err := ParseMechanismConfig(bot.MechanismConfig)
+	if err != nil {
+		logger.ErrorfWithCaller("[BotEngine] Failed to parse mechanism config for bot %s: %v", bot.ID, err)
+		return
+	}
 
-			logger.InfofWithCaller("[BotEngine] Bot %s: mechanism[%d] trigger matched", bot.Name, i)
+	// 遍历机制列表（从上到下，首个匹配即响应）
+	for i := range mechConfig.Mechanisms {
+		mech := &mechConfig.Mechanisms[i]
+		if !mech.Enabled {
+			continue
+		}
 
-			// 优先使用 TS 微服务（如果配置了 BOT_ENGINE_URL）
-			if e.tsClient != nil && e.tsClient.IsAvailable() {
+		// 评估触发条件
+		matched := mech.Trigger.Evaluate(msg.Content)
+		if !matched {
+			continue
+		}
+
+		logger.InfofWithCaller("[BotEngine] Bot %s: mechanism[%d] trigger matched (Go fallback)", bot.Name, i)
+
+		// 触发匹配成功（Go 引擎路径）
+		switch mech.Reply.Type {
+		case "workflow":
+			// Deprecated: workflow handled by TS microservice
+			e.sendBotReply(ctx, bot, msg.ConversationID, "...")
+
+		case "predefined", "llm":
+			// 编译为简单工作流执行（统一执行路径）
+			compiled := CompileSimpleMechanism(mech)
+			if compiled != nil {
 				contextMsgs := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
-				reply, sessionActive, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, bot.MechanismConfig, contextMsgs)
-				if tsErr == nil {
-					if sessionActive {
-						// 工作流会话由 TS 服务管理
-						e.sendBotReply(ctx, bot, msg.ConversationID, reply)
-					} else {
-						e.sendBotReply(ctx, bot, msg.ConversationID, reply)
-					}
-					break // 首个匹配机制响应后，跳过后续机制
+				reply, err := e.ExecuteSimpleFlow(ctx, compiled, msg, bot, contextMsgs)
+				if err != nil {
+					logger.ErrorfWithCaller("[BotEngine] Simple flow execution failed for bot %s: %v", bot.ID, err)
+					reply = "..."
 				}
-				// TS 服务调用失败，回退到 Go 引擎
-				logger.InfofWithCaller("[BotEngine] TS service failed for bot %s, falling back to Go engine: %v", bot.Name, tsErr)
-			}
-
-			// 触发匹配成功（Go 引擎路径）
-			switch mech.Reply.Type {
-			case "workflow":
-				// Deprecated: workflow handled by TS microservice
-				e.sendBotReply(ctx, bot, msg.ConversationID, "...")
-
-			case "predefined", "llm":
-				// 编译为简单工作流执行（统一执行路径）
-				compiled := CompileSimpleMechanism(mech)
-				if compiled != nil {
-					contextMsgs := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
-					reply, err := e.ExecuteSimpleFlow(ctx, compiled, msg, bot, contextMsgs)
-					if err != nil {
-						logger.ErrorfWithCaller("[BotEngine] Simple flow execution failed for bot %s: %v", bot.ID, err)
-						reply = "..."
-					}
-					e.sendBotReply(ctx, bot, msg.ConversationID, reply)
-				} else {
-					// 编译失败，回退到原始路径
-					contextMessages := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
-					contextVars := map[string]string{"time": time.Now().Format("15:04")}
-					reply, err := mech.Reply.GenerateReply(msg.Content, contextVars, contextMessages, msg.SenderName)
-					if err != nil {
-						reply = "..."
-					}
-					e.sendBotReply(ctx, bot, msg.ConversationID, reply)
-				}
-
-			default:
-				// 未知类型，使用原始回复路径
+				e.sendBotReply(ctx, bot, msg.ConversationID, reply)
+			} else {
+				// 编译失败，回退到原始路径
 				contextMessages := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
 				contextVars := map[string]string{"time": time.Now().Format("15:04")}
 				reply, err := mech.Reply.GenerateReply(msg.Content, contextVars, contextMessages, msg.SenderName)
@@ -239,8 +300,18 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 				}
 				e.sendBotReply(ctx, bot, msg.ConversationID, reply)
 			}
-			break // 首个匹配机制响应后，跳过后续机制
+
+		default:
+			// 未知类型，使用原始回复路径
+			contextMessages := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
+			contextVars := map[string]string{"time": time.Now().Format("15:04")}
+			reply, err := mech.Reply.GenerateReply(msg.Content, contextVars, contextMessages, msg.SenderName)
+			if err != nil {
+				reply = "..."
+			}
+			e.sendBotReply(ctx, bot, msg.ConversationID, reply)
 		}
+		break // 首个匹配机制响应后，跳过后续机制
 	}
 }
 

@@ -185,10 +185,14 @@ func (s *MessageService) SendMessage(ctx context.Context, senderID string, req *
 
 	// 异步触发 Bot 处理
 	if s.botEngine != nil {
+		senderName := ""
+		if sender != nil {
+			senderName = sender.Username
+		}
 		s.botEngine.OnMessage(ctx, &botengine.BotMessage{
 			ConversationID: req.ConversationID,
 			SenderID:       senderUUID,
-			SenderName:     "",
+			SenderName:     senderName,
 			Content:        req.Content,
 			MsgType:        req.MsgType,
 			CreatedAt:      message.CreatedAt,

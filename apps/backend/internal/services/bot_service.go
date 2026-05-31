@@ -25,6 +25,7 @@ type BotService struct {
 	conversationRepo repository.ConversationRepository
 	enrollmentRepo   repository.EnrollmentRepository
 	messageRepo      repository.ConversationMessageRepository
+	callLogRepo      repository.BotCallLogRepository
 }
 
 // NewBotService 创建 Bot 服务
@@ -36,6 +37,7 @@ func NewBotService(
 	conversationRepo repository.ConversationRepository,
 	enrollmentRepo repository.EnrollmentRepository,
 	messageRepo repository.ConversationMessageRepository,
+	callLogRepo repository.BotCallLogRepository,
 ) *BotService {
 	return &BotService{
 		botRepo:          botRepo,
@@ -45,6 +47,7 @@ func NewBotService(
 		conversationRepo: conversationRepo,
 		enrollmentRepo:   enrollmentRepo,
 		messageRepo:      messageRepo,
+		callLogRepo:      callLogRepo,
 	}
 }
 
@@ -640,4 +643,41 @@ func (s *BotService) GetActiveBotsForConversation(ctx context.Context, conversat
 	}
 
 	return deployments, nil
+}
+
+// GetBotCallLogs 获取 Bot 调用日志
+func (s *BotService) GetBotCallLogs(ctx context.Context, botID string, userID string, limit, offset int) (*models.BotCallLogListResponse, error) {
+	botUUID, err := uuid.Parse(botID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 验证 Bot 存在
+	bot, err := s.botRepo.FindByID(ctx, botUUID)
+	if err != nil {
+		return nil, errors.New("bot not found")
+	}
+
+	// 验证权限：只有 Bot owner 可以查看调用日志
+	userUUID, _ := uuid.Parse(userID)
+	if bot.OwnerID != userUUID {
+		return nil, errors.New("not the bot owner")
+	}
+
+	logs, err := s.callLogRepo.FindAllByBotID(ctx, botUUID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	total, err := s.callLogRepo.CountByBotID(ctx, botUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.BotCallLogListResponse{
+		Logs:   logs,
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	}, nil
 }

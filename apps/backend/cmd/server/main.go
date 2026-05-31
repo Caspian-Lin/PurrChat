@@ -217,8 +217,10 @@ func main() {
 	conversationMessageRepo := repository.NewConversationMessageRepository()
 	botRepo := repository.NewBotRepository()
 	botDeployRepo := repository.NewBotDeploymentRepository()
+	callLogRepo := repository.NewBotCallLogRepository()
 	authService := services.NewAuthService(userRepo, botRepo, cfg.JWT.Secret)
 	botEngine := botengine.NewBotEngine(botDeployRepo, botRepo, conversationMessageRepo, enrollmentRepo, os.Getenv("BOT_ENGINE_URL"))
+	botEngine.SetCallLogRepo(callLogRepo)
 	conversationService := services.NewConversationService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, friendshipRepo)
 	conversationService.SetBotRepo(botRepo)
 	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, botRepo, botEngine)
@@ -226,7 +228,7 @@ func main() {
 	friendService.SetBotRepo(botRepo)
 	memberService := services.NewMemberService(userRepo, conversationRepo, enrollmentRepo)
 	userService := services.NewUserService(userRepo)
-	botService := services.NewBotService(botRepo, botDeployRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, conversationMessageRepo)
+	botService := services.NewBotService(botRepo, botDeployRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, callLogRepo)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret, cfg.Port == "443" || os.Getenv("FORCE_SECURE_COOKIES") == "true", &cfg.Turnstile)
 	chatHandler := handlers.NewChatHandler(authService, userService, conversationService, messageService, friendService, memberService)
 	botHandler := handlers.NewBotHandler(botService, botEngine)
@@ -361,6 +363,7 @@ func main() {
 		bots.POST("/:id/debug", botHandler.DebugBot)
 		bots.POST("/:id/debug/step", botHandler.DebugStep)
 		bots.POST("/:id/debug/reset", botHandler.DebugReset)
+		bots.GET("/:id/call-logs", botHandler.GetBotCallLogs)
 	}
 
 	// 设置路由（per-User 限流）

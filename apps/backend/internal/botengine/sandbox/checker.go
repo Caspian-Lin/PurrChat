@@ -1,3 +1,4 @@
+// Deprecated: Python 沙箱安全检查器。随 python.go 一起废弃。
 package sandbox
 
 import (

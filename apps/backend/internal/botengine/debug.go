@@ -1,3 +1,6 @@
+// Deprecated: 调试功能已迁移至 TS 微服务 (apps/bot-engine)。
+// Go 端的调试实现仅作 fallback，待 TS /debug 端点就绪后移除。
+// 迁移状态：TS /debug 返回 501，Go 端仍被 bot_handler.go 引用。
 package botengine
 
 import (

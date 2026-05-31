@@ -50,10 +50,15 @@ type ExecuteResponse struct {
 	Reply         string `json:"reply"`
 	SessionActive bool   `json:"session_active"`
 	SessionID     string `json:"session_id,omitempty"`
+	Triggered     bool   `json:"triggered"`
+	MechanismID   string `json:"mechanism_id,omitempty"`
+	MechanismName string `json:"mechanism_name,omitempty"`
+	ReplyType     string `json:"reply_type,omitempty"`
+	ExecutionMs   int    `json:"execution_ms,omitempty"`
 }
 
 // Execute 调用 TS 服务执行消息处理
-func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uuid.UUID, botName string, mechanismConfig json.RawMessage, contextMessages []ContextMessage) (string, bool, error) {
+func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uuid.UUID, botName string, mechanismConfig json.RawMessage, contextMessages []ContextMessage) (*ExecuteResponse, error) {
 	req := ExecuteRequest{
 		ConversationID:  msg.ConversationID.String(),
 		BotID:           botID.String(),
@@ -68,32 +73,32 @@ func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uu
 
 	body, err := json.Marshal(req)
 	if err != nil {
-		return "", false, fmt.Errorf("failed to marshal execute request: %w", err)
+		return nil, fmt.Errorf("failed to marshal execute request: %w", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/execute", bytes.NewReader(body))
 	if err != nil {
-		return "", false, fmt.Errorf("failed to create execute request: %w", err)
+		return nil, fmt.Errorf("failed to create execute request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return "", false, fmt.Errorf("execute request failed: %w", err)
+		return nil, fmt.Errorf("execute request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return "", false, fmt.Errorf("execute returned status %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("execute returned status %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	var execResp ExecuteResponse
 	if err := json.NewDecoder(resp.Body).Decode(&execResp); err != nil {
-		return "", false, fmt.Errorf("failed to decode execute response: %w", err)
+		return nil, fmt.Errorf("failed to decode execute response: %w", err)
 	}
 
-	return execResp.Reply, execResp.SessionActive, nil
+	return &execResp, nil
 }
 
 // DebugRequest 调试请求

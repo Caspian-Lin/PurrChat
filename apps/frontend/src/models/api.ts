@@ -27,7 +27,6 @@ import type {
   UserSettings,
   UpdateSettingsRequest,
   ChangePasswordRequest,
-  DeleteAccountRequest,
   Bot,
   CreateBotRequest,
   UpdateBotRequest,
@@ -40,8 +39,9 @@ import type {
   DebugStepRequest,
   DebugResetRequest,
   DebugTraceResult,
+  BotCallLogListResponse,
 } from './types';
-import { getApiBaseUrl, getStorageApiBaseUrl, getBotEngineUrl, logger } from '../config/app';
+import { getApiBaseUrl, getStorageApiBaseUrl, logger } from '../config/app';
 
 // 创建 axios 实例
 const apiClient: AxiosInstance = axios.create({
@@ -49,7 +49,6 @@ const apiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // 启用 Cookie 携带
 });
 
 // 记录配置信息
@@ -59,7 +58,7 @@ logger.info('API 配置', {
   client: import.meta.env.VITE_APP_CLIENT,
 });
 
-// 请求拦截器 - 日志记录（Cookie 由浏览器自动发送）
+// 请求拦截器 - 添加 token
 apiClient.interceptors.request.use(
   (config) => {
     console.log('[axios] 请求拦截器', {
@@ -67,8 +66,13 @@ apiClient.interceptors.request.use(
       url: config.url,
       baseURL: config.baseURL,
       fullURL: `${config.baseURL}${config.url}`,
+      headers: config.headers,
       data: config.data,
     });
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {
@@ -99,8 +103,10 @@ apiClient.interceptors.response.use(
       // 只有在非登录/注册接口返回 401 时才跳转到登录页
       // 登录和注册接口返回 401 是正常的业务错误（如密码错误），不应触发页面刷新
       if (!url.includes('/api/login') && !url.includes('/api/register')) {
-        // Cookie 过期或无效，清除本地用户信息并跳转登录页
+        // Token 过期或无效，清除本地存储
+        localStorage.removeItem('token');
         localStorage.removeItem('user');
+        // 跳转到登录页
         window.location.href = '/login';
       }
     }
@@ -159,21 +165,6 @@ export const api = {
   // 修改密码
   changePassword: (data: ChangePasswordRequest): Promise<ApiResponse<void>> => {
     return apiClient.put('/api/password', data).then((res) => res.data);
-  },
-
-  // 用户登出（清除服务端 Cookie）
-  logout: (): Promise<ApiResponse<void>> => {
-    return apiClient.post('/api/logout').then((res) => res.data);
-  },
-
-  // 注销账号
-  deleteAccount: (data: DeleteAccountRequest): Promise<ApiResponse<void>> => {
-    return apiClient.delete('/api/account', { data }).then((res) => res.data);
-  },
-
-  // 获取 Turnstile 配置（site_key）
-  getTurnstileConfig: (): Promise<{ enabled: boolean; site_key?: string }> => {
-    return apiClient.get('/api/turnstile-config').then((res) => res.data);
   },
 
   // 搜索用户
@@ -253,16 +244,6 @@ export const api = {
   // 发送消息
   sendMessage: (data: SendMessageRequest): Promise<ApiResponse<Message>> => {
     return apiClient.post('/api/messages', data).then((res) => res.data);
-  },
-
-  // 拍一拍
-  pokeMessage: (conversationId: string, targetUserId: string): Promise<ApiResponse<Message>> => {
-    return apiClient
-      .post('/api/messages/poke', {
-        conversation_id: conversationId,
-        target_user_id: targetUserId,
-      })
-      .then((res) => res.data);
   },
 
   // 获取好友列表
@@ -409,17 +390,17 @@ export const api = {
     return apiClient.post(`/api/bots/${botId}/conversation`).then((res) => res.data);
   },
 
-  // 激活 Bot 工作流
-  activateWorkflow: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
+  // 激活 Bot 特殊模式
+  activateSpecialMode: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
     return apiClient
-      .post(`/api/bots/${botId}/workflow/activate`, { conversation_id: conversationId })
+      .post(`/api/bots/${botId}/special-mode/activate`, { conversation_id: conversationId })
       .then((res) => res.data);
   },
 
-  // 停用 Bot 工作流
-  deactivateWorkflow: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
+  // 停用 Bot 特殊模式
+  deactivateSpecialMode: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
     return apiClient
-      .post(`/api/bots/${botId}/workflow/deactivate`, { conversation_id: conversationId })
+      .post(`/api/bots/${botId}/special-mode/deactivate`, { conversation_id: conversationId })
       .then((res) => res.data);
   },
 
@@ -436,45 +417,15 @@ export const api = {
   debugReset: (botId: string, data: DebugResetRequest): Promise<ApiResponse<void>> => {
     return apiClient.post(`/api/bots/${botId}/debug/reset`, data).then((res) => res.data);
   },
-};
 
-// ─── Bot 微服务 API（XState 引擎） ───
-
-const botEngineUrl = getBotEngineUrl();
-
-export const botEngineApi = {
-  // 是否配置了 Bot 微服务
-  isAvailable: (): boolean => !!botEngineUrl,
-
-  // 执行消息处理
-  execute: async (data: {
-    conversation_id: string;
-    bot_id: string;
-    bot_name: string;
-    sender_id: string;
-    sender_name: string;
-    content: string;
-    msg_type: string;
-    mechanism_config: any;
-    context_messages?: Array<{ role: string; content: string }>;
-  }): Promise<{ reply: string; session_active: boolean; session_id?: string }> => {
-    const resp = await fetch(`${botEngineUrl}/execute`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!resp.ok) throw new Error(`Bot engine error: ${resp.status}`);
-    return resp.json();
-  },
-
-  // 健康检查
-  healthCheck: async (): Promise<boolean> => {
-    try {
-      const resp = await fetch(`${botEngineUrl}/health`);
-      return resp.ok;
-    } catch {
-      return false;
-    }
+  getBotCallLogs: (
+    botId: string,
+    limit = 20,
+    offset = 0
+  ): Promise<ApiResponse<BotCallLogListResponse>> => {
+    return apiClient
+      .get(`/api/bots/${botId}/call-logs`, { params: { limit, offset } })
+      .then((res) => res.data);
   },
 };
 
@@ -484,12 +435,15 @@ const storageApiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // 启用 Cookie 携带
 });
 
-// 存储服务请求拦截器 - Cookie 由浏览器自动发送
+// 存储服务请求拦截器 - 添加 token
 storageApiClient.interceptors.request.use(
   (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {

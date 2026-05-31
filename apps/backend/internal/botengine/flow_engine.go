@@ -1,3 +1,6 @@
+// Deprecated: 端口化 DAG 执行引擎已完全被 TS @purrchat/workflow-engine 替代。
+// 本文件仅被 workflow.go 和 debug.go 内部引用，作为 TS 不可用时的 fallback。
+// 待 TS 服务稳定后本文件及所有调用方将被移除。
 package botengine
 
 import (

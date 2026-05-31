@@ -1,3 +1,6 @@
+// Deprecated: 内置事件处理器已迁移至 TS 微服务。
+// 仅被 workflow.go 的 executeBuiltinEvent 引用，作为 fallback。
+// 待 TS 接管后移除。
 package botengine
 
 import (

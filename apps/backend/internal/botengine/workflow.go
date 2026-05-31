@@ -1,3 +1,7 @@
+// Deprecated: 工作流执行已迁移至 TS 微服务 (apps/bot-engine)。
+// Go 端仅保留 ActivateWorkflow/DeactivateWorkflow 用于会话状态管理，
+// 实际执行由 TS WorkflowRuntime 处理。待 TS 接管后移除。
+// 迁移状态：handler 仍引用 Activate/Deactivate，执行路径已切至 TS。
 package botengine
 
 import (

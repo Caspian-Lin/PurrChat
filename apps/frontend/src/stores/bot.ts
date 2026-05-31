@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { Bot, BotDeployment, PublicBotDetail } from '../models/types';
+import type { Bot, BotDeployment, PublicBotDetail, BotCallLog } from '../models/types';
 import { api } from '../models/api';
 
 export const useBotStore = defineStore('bot', () => {
@@ -18,9 +18,18 @@ export const useBotStore = defineStore('bot', () => {
   const searchHasMore = ref(false);
   const searchLoading = ref(false);
 
+  // 调用记录状态
+  const callLogs = ref<BotCallLog[]>([]);
+  const callLogsTotal = ref(0);
+  const callLogsOffset = ref(0);
+  const callLogsLoading = ref(false);
+
   // 计算属性
   const activeBot = computed(() => bots.value.find((b) => b.id === activeBotId.value) ?? null);
   const activeBots = computed(() => bots.value.filter((b) => b.status === 'active'));
+  const callLogsHasMore = computed(
+    () => callLogsOffset.value + callLogs.value.length < callLogsTotal.value
+  );
 
   // 加载 Bot 列表
   async function loadBots() {
@@ -106,6 +115,45 @@ export const useBotStore = defineStore('bot', () => {
     activeBotId.value = botId;
   }
 
+  // 加载调用记录（首次加载，重置分页）
+  async function loadCallLogs(botId: string) {
+    callLogsLoading.value = true;
+    callLogsOffset.value = 0;
+
+    try {
+      const response = await api.getBotCallLogs(botId, 20, 0);
+      if (response.success && response.data) {
+        callLogs.value = response.data.logs;
+        callLogsTotal.value = response.data.total;
+      }
+    } catch (err) {
+      console.error('[bot store] 加载调用记录失败:', err);
+      callLogs.value = [];
+    } finally {
+      callLogsLoading.value = false;
+    }
+  }
+
+  // 加载更多调用记录
+  async function loadMoreCallLogs(botId: string) {
+    if (!callLogsHasMore.value || callLogsLoading.value) return;
+
+    callLogsLoading.value = true;
+    const nextOffset = callLogsOffset.value + 20;
+
+    try {
+      const response = await api.getBotCallLogs(botId, 20, nextOffset);
+      if (response.success && response.data) {
+        callLogs.value = [...callLogs.value, ...response.data.logs];
+        callLogsOffset.value = nextOffset;
+      }
+    } catch (err) {
+      console.error('[bot store] 加载更多调用记录失败:', err);
+    } finally {
+      callLogsLoading.value = false;
+    }
+  }
+
   // 清除错误
   function clearError() {
     error.value = null;
@@ -123,6 +171,10 @@ export const useBotStore = defineStore('bot', () => {
     searchOffset.value = 0;
     searchHasMore.value = false;
     searchLoading.value = false;
+    callLogs.value = [];
+    callLogsTotal.value = 0;
+    callLogsOffset.value = 0;
+    callLogsLoading.value = false;
   }
 
   return {
@@ -138,10 +190,17 @@ export const useBotStore = defineStore('bot', () => {
     searchOffset,
     searchHasMore,
     searchLoading,
+    callLogs,
+    callLogsTotal,
+    callLogsOffset,
+    callLogsLoading,
+    callLogsHasMore,
     loadBots,
     loadDeployments,
     searchPublicBots,
     loadMoreSearchResults,
+    loadCallLogs,
+    loadMoreCallLogs,
     setActiveBot,
     clearError,
     reset,

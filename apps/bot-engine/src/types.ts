@@ -18,6 +18,11 @@ export interface ExecuteResponse {
   reply: string;
   session_active: boolean;
   session_id?: string;
+  triggered: boolean;
+  mechanism_id?: string;
+  mechanism_name?: string;
+  reply_type?: string;
+  execution_ms?: number;
 }
 
 // ─── 调试请求/响应 ───────────────────────────────────────────
