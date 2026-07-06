@@ -87,6 +87,7 @@ Issue 模板：
 - `dev`：日常集成分支。功能分支从 `dev` 创建，PR 合入 `dev`。
 - 功能分支：每个 issue 一个分支，建议 `feat/<issue-id>-short-name`、`fix/<issue-id>-short-name`、`docs/<issue-id>-short-name`。
 - 不在 `main` 直接开发；不把未完成、未测试、未 review 的功能直接合入 `dev`。
+- CI 只作为 PR 是否允许合并的凭证；CI 不负责自动合并分支，也不维护额外集成分支。
 
 ### 4. 单任务开发与 PR
 
@@ -95,7 +96,7 @@ Issue 模板：
 3. 本地运行匹配影响范围的测试；跨模块或不确定影响时运行完整 `make test`。
 4. 提交前遵守本文 commit 流程。
 5. 创建 PR，目标分支 `dev`。
-6. 等 CI 通过。
+6. 等 CI 通过。CI 会在 push 和面向 `main` / `dev` 的 PR 上运行。
 7. 开发者复查 PR diff、测试结果和 issue 完成标准。
 8. 请求 owner 或指定 reviewer 确认。
 9. reviewer 确认后才合并到 `dev`。
