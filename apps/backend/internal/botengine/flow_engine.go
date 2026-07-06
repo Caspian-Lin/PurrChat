@@ -299,7 +299,9 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 		fulfilledKey := "merge_fulfilled_" + event.ID
 		fulfilled := 0
 		if v, ok := ctx.Session.Variables[fulfilledKey]; ok {
-			fmt.Sscanf(v, "%d", &fulfilled)
+			if _, err := fmt.Sscanf(v, "%d", &fulfilled); err != nil {
+				fulfilled = 0
+			}
 		}
 		fulfilled++
 

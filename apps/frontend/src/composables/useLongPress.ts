@@ -13,7 +13,7 @@ interface Position {
  * @param moveThreshold 移动取消阈值（像素），默认 10px
  */
 export function useLongPress(
-  onLongPress: (position: Position) => void,
+  onLongPress: (_position: Position) => void,
   duration = 500,
   moveThreshold = 10
 ) {

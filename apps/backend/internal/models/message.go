@@ -28,16 +28,16 @@ type SystemMessageContent struct {
 
 // Message 消息模型
 type Message struct {
-	ID             uuid.UUID  `json:"id" db:"id"`
-	ConversationID uuid.UUID  `json:"conversation_id" db:"conversation_id"`
-	SenderID       uuid.UUID  `json:"sender_id" db:"sender_id"`
-	Content        string     `json:"content" db:"content"`
-	MsgType        MsgType    `json:"msg_type" db:"msg_type"`
-	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
-	BotID          *uuid.UUID `json:"bot_id,omitempty" db:"bot_id"`
-	BotName        *string    `json:"bot_name,omitempty" db:"bot_name"`
-	ClientMessageID *string   `json:"client_message_id,omitempty" db:"client_message_id"`
-	Sender         *User      `json:"sender,omitempty" db:"-"` // 发送者信息
+	ID              uuid.UUID  `json:"id" db:"id"`
+	ConversationID  uuid.UUID  `json:"conversation_id" db:"conversation_id"`
+	SenderID        uuid.UUID  `json:"sender_id" db:"sender_id"`
+	Content         string     `json:"content" db:"content"`
+	MsgType         MsgType    `json:"msg_type" db:"msg_type"`
+	CreatedAt       time.Time  `json:"created_at" db:"created_at"`
+	BotID           *uuid.UUID `json:"bot_id,omitempty" db:"bot_id"`
+	BotName         *string    `json:"bot_name,omitempty" db:"bot_name"`
+	ClientMessageID *string    `json:"client_message_id,omitempty" db:"client_message_id"`
+	Sender          *User      `json:"sender,omitempty" db:"-"` // 发送者信息
 }
 
 // FriendshipStatus 好友状态

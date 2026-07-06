@@ -150,18 +150,6 @@ func (e *BotEngine) activateWorkflowWithSpec(ctx context.Context, bot *models.Bo
 	return nil
 }
 
-// activateMechanismWorkflow 从机制触发自动激活工作流
-func (e *BotEngine) activateMechanismWorkflow(ctx context.Context, msg *BotMessage, bot *models.Bot, spec *WorkflowSpec) {
-	sessionKey := GetSessionKey(msg.ConversationID, bot.ID)
-	if _, exists := e.workflowSessions.Load(sessionKey); exists {
-		return // 已激活，不重复
-	}
-
-	if err := e.activateWorkflowWithSpec(ctx, bot, msg.ConversationID, spec); err != nil {
-		logger.ErrorfWithCaller("[BotEngine] Failed to auto-activate workflow for bot %s: %v", bot.ID, err)
-	}
-}
-
 // DeactivateWorkflow 停用工作流
 func (e *BotEngine) DeactivateWorkflow(ctx context.Context, botID, conversationID uuid.UUID) error {
 	sessionKey := GetSessionKey(conversationID, botID)

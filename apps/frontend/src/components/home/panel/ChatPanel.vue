@@ -282,13 +282,8 @@ const router = useRouter();
 const { conversations, loadConversations, createConversation } = useConversations();
 const { friends, loadFriends, sendFriendRequest, handleFriendRequest, loadPendingRequests } =
   useFriends();
-const {
-  checkAndLoadIncremental,
-  sendMessage,
-  sendFileMessage,
-  exportMessages,
-  clearMessages,
-} = useChat();
+const { checkAndLoadIncremental, sendMessage, sendFileMessage, exportMessages, clearMessages } =
+  useChat();
 const { addMessage: cacheMessage } = useMessageCache();
 const messageStore = useMessageStore();
 const {

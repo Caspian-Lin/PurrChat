@@ -142,10 +142,10 @@ export const useChat = () => {
   const sendMessage = async (conversationId: string, content: string): Promise<boolean> => {
     if (!content.trim()) return false;
 
-    try {
-      const authStore = useAuthStore();
-      const currentUser = authStore.currentUser;
+    const authStore = useAuthStore();
+    const currentUser = authStore.currentUser;
 
+    try {
       // client_message_id 同时作为本地临时 ID 和后端幂等令牌
       const clientMessageId = crypto.randomUUID();
 
@@ -205,7 +205,7 @@ export const useChat = () => {
       notify.error('发送消息失败');
       const currentMessages = messageStore.getMessages(conversationId);
       const tempMessage = currentMessages.find(
-        (m) => m.sendStatus === 'sending' && m.sender_id === authStore.currentUser?.id
+        (m) => m.sendStatus === 'sending' && m.sender_id === currentUser?.id
       );
       if (tempMessage) {
         messageStore.updateMessageStatus(conversationId, tempMessage.id, 'failed');
