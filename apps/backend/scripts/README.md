@@ -81,20 +81,23 @@ DB_PASSWORD=mypassword \
 
 #### 环境变量
 
-| 变量          | 说明                                         | 默认值      |
-| ------------- | -------------------------------------------- | ----------- |
-| `DB_HOST`     | 数据库主机                                   | `localhost` |
-| `DB_PORT`     | 数据库端口                                   | `5432`      |
-| `DB_NAME`     | 连接的数据库名称（用于删除 purrchat 数据库） | `postgres`  |
-| `DB_USER`     | 数据库用户                                   | `postgres`  |
-| `DB_PASSWORD` | 数据库密码                                   | （空）      |
+| 变量              | 说明                                             | 默认值        |
+| ----------------- | ------------------------------------------------ | ------------- |
+| `DB_HOST`         | 数据库主机                                       | `localhost`   |
+| `DB_PORT`         | 数据库端口                                       | `5432`        |
+| `DB_NAME`         | 管理连接数据库                                   | `postgres`    |
+| `DB_USER`         | 管理数据库用户，需要 `CREATEDB`/`CREATEROLE` 权限 | `postgres`    |
+| `DB_PASSWORD`     | 管理数据库用户密码                               | （空）        |
+| `APP_DB_NAME`     | 应用数据库名称                                   | `purrchat`    |
+| `APP_DB_USER`     | 应用迁移/运行用户                                | `purrchat`    |
+| `APP_DB_PASSWORD` | 应用数据库用户密码                               | `purrchat_pw` |
 
 ## 使用场景
 
 ### 场景 1：开发环境重置
 
 ```bash
-# 备份并清理开发数据库
+# 备份并清理开发数据库。脚本会创建 APP_DB_USER，并授予 public schema 的迁移权限。
 ./scripts/cleanup_database.sh --backup --yes
 
 # 重新初始化数据库
@@ -135,8 +138,8 @@ make migrate
 清理数据库后，需要运行新的迁移脚本来初始化数据库结构：
 
 ```bash
-# 方法 1：使用 psql
-psql -U postgres -d purrchat -f migrations/001_init_schema.sql
+# 方法 1：使用 psql 先修复应用用户权限，再执行迁移
+psql -U postgres -d purrchat -c "ALTER DATABASE purrchat OWNER TO purrchat; GRANT ALL PRIVILEGES ON DATABASE purrchat TO purrchat; GRANT USAGE, CREATE ON SCHEMA public TO purrchat; ALTER SCHEMA public OWNER TO purrchat;"
 
 # 方法 2：使用 Makefile（推荐）
 make migrate
