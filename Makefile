@@ -1,4 +1,4 @@
-.PHONY: help install dev build test lint lint-fix clean format type-check docker-up docker-down docker-logs docker-build migrate \
+.PHONY: help install dev build test lint lint-fix clean format type-check docker-up docker-down docker-logs docker-build migrate db-clean db-clean-yes db-reset db-reset-yes \
         android-dev android-build-debug android-build-release android-build-apk android-keystore android-clean
 
 # 日志目录
@@ -37,6 +37,9 @@ help:
 	@echo ""
 	@echo "数据库迁移:"
 	@echo "  make migrate      - 执行所有数据库迁移"
+	@echo "  make db-clean     - 删除并重建数据库（保留确认提示）"
+	@echo "  make db-reset     - 删除并重建数据库后执行迁移"
+	@echo "  make db-reset-yes - 跳过确认，删除并重建数据库后执行迁移"
 	@echo ""
 	@echo "存储服务:"
 	@echo "  make dev-storage  - 启动存储服务"
@@ -50,6 +53,28 @@ ifneq (,$(wildcard ./apps/storage/.env))
     include ./apps/storage/.env
     export
 endif
+
+DB_ADMIN_HOST ?= $(DB_HOST)
+DB_ADMIN_PORT ?= $(DB_PORT)
+DB_ADMIN_NAME ?= postgres
+DB_ADMIN_USER ?= postgres
+DB_ADMIN_PASSWORD ?=
+APP_DB_NAME ?= $(DB_NAME)
+APP_DB_USER ?= $(DB_USER)
+APP_DB_PASSWORD ?= $(DB_PASSWORD)
+
+define RUN_DB_CLEANUP
+DB_HOST="$(DB_ADMIN_HOST)" \
+DB_PORT="$(DB_ADMIN_PORT)" \
+DB_NAME="$(DB_ADMIN_NAME)" \
+DB_USER="$(DB_ADMIN_USER)" \
+DB_PASSWORD="$(DB_ADMIN_PASSWORD)" \
+APP_DB_NAME="$(APP_DB_NAME)" \
+APP_DB_USER="$(APP_DB_USER)" \
+APP_DB_PASSWORD="$(APP_DB_PASSWORD)" \
+apps/backend/scripts/cleanup_database.sh
+endef
+
 # 安装依赖
 install:
 	pnpm install
@@ -149,6 +174,19 @@ migrate:
 	@ln -sf ../../storage/migrations/002_file_metadata.sql apps/backend/migrations/003_storage_file_metadata.sql
 	cd apps/backend && go run cmd/server/main.go migrate
 	@rm -f apps/backend/migrations/003_storage_file_metadata.sql
+
+# 删除并重建数据库。管理员连接参数使用 DB_ADMIN_*，应用库参数使用 APP_DB_*。
+db-clean:
+	@echo "删除并重建数据库..."
+	@$(RUN_DB_CLEANUP)
+
+db-clean-yes:
+	@echo "删除并重建数据库..."
+	@$(RUN_DB_CLEANUP) --yes
+
+db-reset: db-clean migrate
+
+db-reset-yes: db-clean-yes migrate
 
 # 启动存储服务（独立开发）
 dev-storage:
