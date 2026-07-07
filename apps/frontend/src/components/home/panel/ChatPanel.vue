@@ -483,7 +483,10 @@ const handleMessageUpdate = async (conversationId: string, message: Message) => 
     conversations.value = [...conversations.value];
   }
 
-  if (conversationId !== selectedConversation.value?.id) {
+  if (
+    message.sender_id !== auth.currentUser?.id &&
+    conversationId !== selectedConversation.value?.id
+  ) {
     console.log('[ChatPanel] 不是当前会话，增加未读计数');
     incrementUnreadCount(conversationId);
   }

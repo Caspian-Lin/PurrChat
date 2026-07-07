@@ -9,6 +9,8 @@ export interface CachedMessage {
   content: string;
   msg_type: string;
   created_at: string;
+  client_message_id?: string;
+  sendStatus?: 'sending' | 'sent' | 'failed';
   sender?: {
     id: string;
     username: string;
@@ -275,6 +277,22 @@ class MessageCacheService {
     return this.cache.has(conversationId);
   }
 
+  private removeClientPendingMessage(
+    cache: ConversationCache,
+    message: Message | CachedMessage
+  ): number {
+    const clientMessageId = message.client_message_id;
+    if (!clientMessageId) return 0;
+
+    const before = cache.messages.length;
+    cache.messages = cache.messages.filter((cachedMessage) => {
+      if (cachedMessage.id === message.id) return true;
+      if (cachedMessage.id === clientMessageId) return false;
+      return cachedMessage.client_message_id !== clientMessageId;
+    });
+    return before - cache.messages.length;
+  }
+
   // 添加消息到缓存
   async addMessage(conversationId: string, message: Message | CachedMessage) {
     let cache = this.cache.get(conversationId);
@@ -287,9 +305,13 @@ class MessageCacheService {
       this.cache.set(conversationId, cache);
     }
 
+    const removedCount = this.removeClientPendingMessage(cache, message);
     const exists = cache.messages.some((m) => m.id === message.id);
     if (!exists) {
       cache.messages.push(message as CachedMessage);
+    }
+
+    if (!exists || removedCount > 0) {
       cache.lastUpdated = Date.now();
       await this.saveCacheToStorage(conversationId);
     }
@@ -308,7 +330,9 @@ class MessageCacheService {
     }
 
     let addedCount = 0;
+    let removedCount = 0;
     messages.forEach((message) => {
+      removedCount += this.removeClientPendingMessage(cache!, message);
       const exists = cache!.messages.some((m) => m.id === message.id);
       if (!exists) {
         cache!.messages.push(message as CachedMessage);
@@ -316,7 +340,7 @@ class MessageCacheService {
       }
     });
 
-    if (addedCount > 0) {
+    if (addedCount > 0 || removedCount > 0) {
       cache.lastUpdated = Date.now();
       await this.saveCacheToStorage(conversationId);
     }

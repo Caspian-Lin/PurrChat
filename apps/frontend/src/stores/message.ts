@@ -13,6 +13,12 @@ function decodeMessageContent(msg: Message): Message {
   return msg;
 }
 
+function sortMessagesByCreatedAt(messages: Message[]): Message[] {
+  return [...messages].sort(
+    (a, b) => Date.parse(a.created_at || '') - Date.parse(b.created_at || '')
+  );
+}
+
 export const useMessageStore = defineStore('message', () => {
   // 消息状态
   const messages = ref<Map<string, Message[]>>(new Map()); // conversationId -> messages
@@ -195,9 +201,10 @@ export const useMessageStore = defineStore('message', () => {
             }
           : undefined,
       }));
-      setMessages(conversationId, messagesAsMessage);
+      const sortedMessages = sortMessagesByCreatedAt(messagesAsMessage);
+      setMessages(conversationId, sortedMessages);
       console.log(`[MessageStore] Loaded ${cachedMessages.length} messages from cache`);
-      return messagesAsMessage;
+      return sortedMessages;
     }
     return [];
   }

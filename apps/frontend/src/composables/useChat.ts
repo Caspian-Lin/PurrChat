@@ -16,6 +16,13 @@ function decodeMessageContent(msg: Message): Message {
   return msg;
 }
 
+function getLatestMessageTimestamp(messages: Message[]): number {
+  return messages.reduce((latest, message) => {
+    const timestamp = Date.parse(message.created_at);
+    return Number.isNaN(timestamp) ? latest : Math.max(latest, timestamp);
+  }, 0);
+}
+
 export const useChat = () => {
   const notify = useNotification();
   const messageCache = useMessageCache();
@@ -58,26 +65,6 @@ export const useChat = () => {
       );
       const response = await api.getMessagesIncremental(conversationId, sinceTimestamp);
       if (response.success && response.data && response.data.length > 0) {
-        // 构建服务器消息 ID 集合，用于校准本地缓存
-        const serverMessageIds = new Set(response.data.map((msg) => msg.id));
-
-        // 校准本地缓存：移除服务器上不存在的消息（被撤回/删除的）
-        const removedCount = await messageCache.reconcileWithServer(
-          conversationId,
-          serverMessageIds
-        );
-        if (removedCount > 0) {
-          console.log(
-            `[useChat] Reconciled ${removedCount} removed messages for conversation ${conversationId}`
-          );
-          // 从 store 中移除已删除的消息
-          const currentStoreMessages = messageStore.getMessages(conversationId);
-          messageStore.setMessages(
-            conversationId,
-            currentStoreMessages.filter((m) => serverMessageIds.has(m.id))
-          );
-        }
-
         // 增量消息是按created_at ASC排序的（从旧到新）
         const newMessages: Message[] = [];
         const currentStoreMessages = messageStore.getMessages(conversationId);
@@ -118,11 +105,26 @@ export const useChat = () => {
   const checkAndLoadIncremental = async (conversationId: string) => {
     // 检查是否有缓存
     if (messageCache.hasCache(conversationId)) {
-      const lastUpdated = messageCache.getLastUpdated(conversationId);
+      const cachedMessages = await messageStore.loadFromCache(conversationId);
+      if (cachedMessages.length === 0) {
+        console.log(
+          `[useChat] Empty cache found for conversation ${conversationId}, loading all messages`
+        );
+        await loadMessages(conversationId);
+        return 0;
+      }
+
+      await scrollToBottom();
+      const latestMessageTimestamp = getLatestMessageTimestamp(cachedMessages);
       console.log(
-        `[useChat] Checking incremental messages for conversation ${conversationId}, last updated: ${lastUpdated}`
+        `[useChat] Restored ${cachedMessages.length} cached messages for conversation ${conversationId}, checking newer than ${latestMessageTimestamp}`
       );
-      const newMessageCount = await loadMessagesIncremental(conversationId, lastUpdated);
+
+      if (latestMessageTimestamp === 0) {
+        return 0;
+      }
+
+      const newMessageCount = await loadMessagesIncremental(conversationId, latestMessageTimestamp);
       return newMessageCount;
     } else {
       console.log(

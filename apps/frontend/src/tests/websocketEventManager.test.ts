@@ -26,6 +26,7 @@ vi.mock('../services/messageCache', () => ({
 
 import { websocketService } from '../services/websocket';
 import { websocketEventManager } from '../services/websocketEventManager';
+import { useMessageStore } from '../stores/message';
 
 // At this point, the WebSocketEventManager constructor has already run,
 // registering handlers via websocketService.on. Capture the handler map.
@@ -221,6 +222,35 @@ describe('WebSocketEventManager', () => {
       });
 
       expect(msgCb).toHaveBeenCalledWith('conv-1', expect.objectContaining({ id: 'msg-1' }));
+    });
+
+    it('should replace sending temp message when client_message_id matches', () => {
+      const store = useMessageStore();
+      store.addMessage('conv-1', {
+        id: 'client-message-1',
+        conversation_id: 'conv-1',
+        sender_id: 'user-1',
+        content: 'Hi',
+        msg_type: 'text',
+        created_at: '2026-07-07T10:00:00.000Z',
+        sendStatus: 'sending',
+      });
+
+      websocketEventManager.setCurrentConversation('conv-1');
+      triggerEvent('new_message', {
+        id: 'server-message-1',
+        conversation_id: 'conv-1',
+        sender_id: 'user-1',
+        content: 'Hi',
+        msg_type: 'text',
+        created_at: '2026-07-07T10:00:01.000Z',
+        client_message_id: 'client-message-1',
+      });
+
+      const messages = store.getMessages('conv-1');
+      expect(messages).toHaveLength(1);
+      expect(messages[0].id).toBe('server-message-1');
+      expect(messages[0].sendStatus).toBe('sent');
     });
   });
 

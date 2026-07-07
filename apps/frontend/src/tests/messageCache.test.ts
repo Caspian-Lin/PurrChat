@@ -201,6 +201,68 @@ describe('MessageCache', () => {
       const cachedMessages = messageCacheService.getMessages('conv1');
       expect(cachedMessages).toHaveLength(1);
     });
+
+    it('服务端确认消息应该替换对应的本地临时消息', async () => {
+      const tempMessage: Message = {
+        id: 'client-message-1',
+        conversation_id: 'conv1',
+        sender_id: 'user1',
+        content: 'Hello',
+        msg_type: 'text',
+        created_at: '2026-07-07T10:00:00.000Z',
+        sendStatus: 'sending',
+      };
+
+      const confirmedMessage: Message = {
+        id: 'server-message-1',
+        conversation_id: 'conv1',
+        sender_id: 'user1',
+        content: 'Hello',
+        msg_type: 'text',
+        created_at: '2026-07-07T10:00:01.000Z',
+        client_message_id: 'client-message-1',
+        sendStatus: 'sent',
+      };
+
+      await messageCacheService.addMessage('conv1', tempMessage);
+      await messageCacheService.addMessage('conv1', confirmedMessage);
+
+      const cachedMessages = messageCacheService.getMessages('conv1');
+      expect(cachedMessages).toHaveLength(1);
+      expect(cachedMessages[0].id).toBe('server-message-1');
+      expect(cachedMessages[0].sendStatus).toBe('sent');
+    });
+
+    it('批量添加服务端确认消息时应该替换对应的本地临时消息', async () => {
+      const tempMessage: Message = {
+        id: 'client-message-1',
+        conversation_id: 'conv1',
+        sender_id: 'user1',
+        content: 'Hello',
+        msg_type: 'text',
+        created_at: '2026-07-07T10:00:00.000Z',
+        sendStatus: 'sending',
+      };
+
+      const confirmedMessage: Message = {
+        id: 'server-message-1',
+        conversation_id: 'conv1',
+        sender_id: 'user1',
+        content: 'Hello',
+        msg_type: 'text',
+        created_at: '2026-07-07T10:00:01.000Z',
+        client_message_id: 'client-message-1',
+        sendStatus: 'sent',
+      };
+
+      await messageCacheService.addMessage('conv1', tempMessage);
+      await messageCacheService.addMessages('conv1', [confirmedMessage]);
+
+      const cachedMessages = messageCacheService.getMessages('conv1');
+      expect(cachedMessages).toHaveLength(1);
+      expect(cachedMessages[0].id).toBe('server-message-1');
+      expect(cachedMessages[0].sendStatus).toBe('sent');
+    });
   });
 
   describe('缓存持久化', () => {

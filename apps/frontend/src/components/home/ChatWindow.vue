@@ -60,7 +60,7 @@
 
             <!-- 系统消息（居中，无头像） -->
             <div
-              v-else-if="message.msg_type === 'system'"
+              v-if="message.msg_type === 'system'"
               class="flex justify-center py-1.5"
               :class="{ 'poke-message': isPokeMessage(message) }"
             >
