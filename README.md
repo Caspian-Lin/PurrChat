@@ -8,7 +8,7 @@
 
 探索人与 AI 的情感连接和灵感边界
 
-[![CI](https://github.com/Caspian-Lin/PurrChat/actions/workflows/dev-to-beta.yml/badge.svg)](https://github.com/Caspian-Lin/PurrChat/actions)
+[![CI](https://github.com/Caspian-Lin/PurrChat/actions/workflows/ci.yml/badge.svg)](https://github.com/Caspian-Lin/PurrChat/actions)
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 [English](#) &middot; 简体中文

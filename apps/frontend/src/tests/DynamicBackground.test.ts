@@ -5,7 +5,6 @@ import DynamicBackground from '../components/DynamicBackground.vue';
 
 describe('DynamicBackground Component', () => {
   let wrapper: ReturnType<typeof mount>;
-  const originalCreateElement = document.createElement.bind(document);
 
   beforeEach(() => {
     setActivePinia(createPinia());
