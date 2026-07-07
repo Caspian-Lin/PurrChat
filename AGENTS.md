@@ -97,7 +97,7 @@ Issue 模板：
 9. reviewer 确认后才合并到 `dev`。
 10. milestone 完成并经用户测试后，再从 `dev` 统一合入 `main`。
 
-PR 描述包含：GitHub closing keyword 关联 issue（如 `Closes #123`）、实现内容、本地验证命令与结果、风险/迁移/配置/回滚说明、UI 截图或录屏说明（如适用）。合入 `dev` 即代表单任务完成；仓库 workflow 会在 PR merge 到 `dev` / `main` 后关闭 PR 描述中 closing keyword 指向的 issue。
+PR 描述包含：GitHub closing keyword 关联 issue（如独立成行的 `Closes #123`）、实现内容、本地验证命令与结果、风险/迁移/配置/回滚说明、UI 截图或录屏说明（如适用）。合入 `dev` 即代表单任务完成；仓库 workflow 会在 PR merge 到 `dev` / `main` 后关闭 PR 描述中独立成行 closing keyword 指向的 issue，避免把正文示例误解析为真实 issue。
 
 ## GitHub 操作
 

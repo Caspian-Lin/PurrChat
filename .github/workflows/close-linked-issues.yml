@@ -28,11 +28,37 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const issueNumbers = new Set();
-            const closingKeywordPattern =
-              /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+(?:https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/)?#?(\d+)\b/gi;
+            const closingLinePattern =
+              /^\s*(?:[-*]\s*)?(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+(.+)$/i;
+            const issueRefPattern =
+              /(?:https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/issues\/)?#(\d+)\b/gi;
 
-            for (const match of body.matchAll(closingKeywordPattern)) {
-              issueNumbers.add(Number(match[1]));
+            let inFence = false;
+            for (const line of body.split(/\r?\n/)) {
+              if (line.trimStart().startsWith('```')) {
+                inFence = !inFence;
+                continue;
+              }
+
+              if (inFence) {
+                continue;
+              }
+
+              const closingLine = line.match(closingLinePattern);
+              if (!closingLine) {
+                continue;
+              }
+
+              for (const issueRef of closingLine[1].matchAll(issueRefPattern)) {
+                const refOwner = issueRef[1];
+                const refRepo = issueRef[2];
+                if ((refOwner && refOwner !== owner) || (refRepo && refRepo !== repo)) {
+                  core.info(`Skipping external issue reference: ${issueRef[0]}.`);
+                  continue;
+                }
+
+                issueNumbers.add(Number(issueRef[3]));
+              }
             }
 
             if (issueNumbers.size === 0) {
@@ -41,18 +67,45 @@ jobs:
             }
 
             for (const issue_number of issueNumbers) {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number,
-                body: `Fixed by #${pr.number} and merged into \`${pr.base.ref}\`.`,
-              });
+              let issue;
+              try {
+                const response = await github.rest.issues.get({
+                  owner,
+                  repo,
+                  issue_number,
+                });
+                issue = response.data;
+              } catch (error) {
+                if (error.status === 404) {
+                  core.warning(`Issue #${issue_number} was not found; skipping.`);
+                  continue;
+                }
+
+                throw error;
+              }
+
+              if (issue.pull_request) {
+                core.info(`#${issue_number} is a pull request; skipping.`);
+                continue;
+              }
+
+              if (issue.state === 'closed') {
+                core.info(`Issue #${issue_number} is already closed.`);
+                continue;
+              }
 
               await github.rest.issues.update({
                 owner,
                 repo,
                 issue_number,
                 state: 'closed',
+              });
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body: `Fixed by #${pr.number} and merged into \`${pr.base.ref}\`.`,
               });
 
               core.info(`Closed issue #${issue_number}.`);
