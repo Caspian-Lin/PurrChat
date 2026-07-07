@@ -36,7 +36,9 @@ BEGIN
     EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON conversation_messages.%I(created_at DESC)', idx_created_at_name, table_name);
     EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS %I ON conversation_messages.%I(client_message_id) WHERE client_message_id IS NOT NULL', idx_client_msg_id_name, table_name);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, conversation_messages, pg_temp;
 
 -- 2. 修改插入函数：支持 client_message_id 参数，幂等写入
 CREATE OR REPLACE FUNCTION insert_conversation_message(
@@ -79,7 +81,9 @@ BEGIN
 
     RETURN new_message_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, conversation_messages, pg_temp;
 
 -- 3. 新增查询函数：通过 client_message_id 查找消息
 CREATE OR REPLACE FUNCTION get_conversation_message_by_client_id(
@@ -106,7 +110,9 @@ BEGIN
     ', table_name)
     USING p_client_message_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, conversation_messages, pg_temp;
 
 -- 4. 辅助函数：为存量分表添加 client_message_id 列（幂等执行）
 CREATE OR REPLACE FUNCTION add_client_message_id_to_existing_tables()
@@ -140,7 +146,9 @@ BEGIN
         END IF;
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, conversation_messages, pg_temp;
 
 -- 执行存量表迁移
 SELECT add_client_message_id_to_existing_tables();

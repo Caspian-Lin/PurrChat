@@ -190,7 +190,9 @@ BEGIN
     EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON conversation_messages.%I(sender_id)', idx_sender_name, table_name);
     EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON conversation_messages.%I(created_at DESC)', idx_created_at_name, table_name);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, conversation_messages, pg_temp;
 
 -- 删除会话消息表
 CREATE OR REPLACE FUNCTION drop_conversation_message_table(conversation_uuid UUID)
@@ -201,7 +203,9 @@ BEGIN
     table_name := replace(conversation_uuid::TEXT, '-', '_');
     EXECUTE format('DROP TABLE IF EXISTS conversation_messages.%I CASCADE', table_name);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, conversation_messages, pg_temp;
 
 -- 向会话消息表插入消息
 CREATE OR REPLACE FUNCTION insert_conversation_message(
@@ -228,7 +232,9 @@ BEGIN
 
     RETURN new_message_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, conversation_messages, pg_temp;
 
 -- 从会话消息表获取消息（分页，按时间倒序）
 CREATE OR REPLACE FUNCTION get_conversation_messages(
@@ -257,7 +263,9 @@ BEGIN
     ', table_name)
     USING msg_limit, msg_offset;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, conversation_messages, pg_temp;
 
 -- 增量获取会话消息（按时间正序）
 CREATE OR REPLACE FUNCTION get_conversation_messages_incremental(
@@ -285,7 +293,9 @@ BEGIN
     ', table_name)
     USING since_timestamp;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, conversation_messages, pg_temp;
 
 -- 获取会话消息总数
 CREATE OR REPLACE FUNCTION get_conversation_message_count(conversation_uuid UUID)
@@ -303,7 +313,9 @@ BEGIN
 
     RETURN message_count;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, conversation_messages, pg_temp;
 
 -- 获取会话最后一条消息
 CREATE OR REPLACE FUNCTION get_conversation_last_message(conversation_uuid UUID)
@@ -327,7 +339,9 @@ BEGIN
         LIMIT 1
     ', table_name);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, conversation_messages, pg_temp;
 
 -- ============================================================
 -- 系统用户（已删除用户占位符）
