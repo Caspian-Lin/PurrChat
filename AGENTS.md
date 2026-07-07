@@ -91,7 +91,7 @@ Issue 模板：
 3. 本地运行匹配影响范围的测试；跨模块或不确定影响时运行完整 `make test`。
 4. 提交前遵守本文 commit 流程。
 5. 创建 PR，目标分支 `dev`。
-6. 等 CI 通过。CI 会在 push 和面向 `main` / `dev` 的 PR 上运行。
+6. 等 CI 通过。CI 会在面向 `main` / `dev` 的 PR 上运行，并在 `main` / `dev` 收到 push（含 PR merge）后再次验证集成分支。
 7. 开发者复查 PR diff、测试结果和 issue 完成标准。
 8. 请求 owner 或指定 reviewer 确认。
 9. reviewer 确认后才合并到 `dev`。
