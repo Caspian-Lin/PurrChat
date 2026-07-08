@@ -48,17 +48,14 @@ CREATE OR REPLACE FUNCTION insert_conversation_message(
     msg_type VARCHAR(20),
     bot_id UUID DEFAULT NULL,
     bot_name VARCHAR(100) DEFAULT NULL,
-    client_message_id VARCHAR(255) DEFAULT NULL,
-    message_created_at TIMESTAMP DEFAULT NULL
+    client_message_id VARCHAR(255) DEFAULT NULL
 )
 RETURNS UUID AS $$
 DECLARE
     new_message_id UUID;
     table_name TEXT;
-    created_at_value TIMESTAMP;
 BEGIN
     table_name := replace(conversation_uuid::TEXT, '-', '_');
-    created_at_value := COALESCE(message_created_at, CURRENT_TIMESTAMP);
 
     -- 幂等检查：如果 client_message_id 已存在，直接返回已有消息 ID
     IF client_message_id IS NOT NULL THEN
@@ -75,12 +72,12 @@ BEGIN
     END IF;
 
     EXECUTE format('
-        INSERT INTO conversation_messages.%I (sender_id, content, msg_type, bot_id, bot_name, client_message_id, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO conversation_messages.%I (sender_id, content, msg_type, bot_id, bot_name, client_message_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
     ', table_name)
     INTO new_message_id
-    USING sender_uuid, msg_content, msg_type, bot_id, bot_name, client_message_id, created_at_value;
+    USING sender_uuid, msg_content, msg_type, bot_id, bot_name, client_message_id;
 
     RETURN new_message_id;
 END;
