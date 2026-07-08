@@ -417,6 +417,7 @@ import { useNotification } from '../../composables/useNotification';
 import { useLongPress } from '../../composables/useLongPress';
 import { usePlatform } from '../../composables/usePlatform';
 import { api } from '../../models/api';
+import { platformAdapters } from '../../platform';
 import { websocketEventManager } from '../../services/websocketEventManager';
 import { formatSystemMessageText } from '../../utils/messageHelpers';
 import type { Conversation, Message, FileMessageContent } from '../../models/types';
@@ -457,8 +458,8 @@ const contextMenu = ref<{
 const { handlers: longPressHandlers } = useLongPress((pos) => {
   // 长按触发时，通过当前触摸位置找到对应的消息
   // 这里简化处理：使用最后记录的消息
-  if (contextMenu.value.message) {
-    showContextMenu(pos.x, pos.y, contextMenu.value.message);
+  if (touchTargetMessage) {
+    showContextMenu(pos.x, pos.y, touchTargetMessage);
   }
 });
 
@@ -481,8 +482,8 @@ function onMessageTouchStart(event: TouchEvent, message: Message) {
   longPressHandlers.onTouchstart(event);
 }
 
-function onMessageTouchEnd(event: TouchEvent) {
-  longPressHandlers.onTouchend(event);
+function onMessageTouchEnd(_event: TouchEvent) {
+  longPressHandlers.onTouchend();
   touchTargetMessage = null;
 }
 
@@ -529,17 +530,10 @@ function getContextMenuActions(message: Message): ContextMenuAction[] {
 
 async function copyMessageContent(message: Message) {
   try {
-    await navigator.clipboard.writeText(message.content);
+    await platformAdapters.clipboard.writeText(message.content);
     useNotification().success('已复制');
   } catch {
-    const textarea = document.createElement('textarea');
-    textarea.value = message.content;
-    textarea.style.cssText = 'position:fixed;opacity:0';
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
-    useNotification().success('已复制');
+    useNotification().error('复制失败');
   }
 }
 
@@ -739,17 +733,7 @@ async function handleFileDownload(message: Message) {
   if (!fileContent) return;
 
   try {
-    const response = await fetch(fileContent.public_url);
-    if (!response.ok) throw new Error('下载失败');
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileContent.file_name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    await platformAdapters.files.downloadUrl(fileContent.public_url, fileContent.file_name);
   } catch (error) {
     console.error('下载文件失败:', error);
     useNotification().error('下载文件失败');
@@ -758,13 +742,9 @@ async function handleFileDownload(message: Message) {
 
 function handlePreviewDownload() {
   if (!previewImageUrl.value) return;
-  const link = document.createElement('a');
-  link.href = previewImageUrl.value;
-  link.download = previewFileName.value;
-  link.target = '_blank';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  platformAdapters.files.downloadUrl(previewImageUrl.value, previewFileName.value).catch(() => {
+    useNotification().error('下载文件失败');
+  });
 }
 
 // ===== 滚动到底部 =====
