@@ -81,16 +81,16 @@ DB_PASSWORD=mypassword \
 
 #### 环境变量
 
-| 变量              | 说明                                             | 默认值        |
-| ----------------- | ------------------------------------------------ | ------------- |
-| `DB_HOST`         | 数据库主机                                       | `localhost`   |
-| `DB_PORT`         | 数据库端口                                       | `5432`        |
-| `DB_NAME`         | 管理连接数据库                                   | `postgres`    |
+| 变量              | 说明                                              | 默认值        |
+| ----------------- | ------------------------------------------------- | ------------- |
+| `DB_HOST`         | 数据库主机                                        | `localhost`   |
+| `DB_PORT`         | 数据库端口                                        | `5432`        |
+| `DB_NAME`         | 管理连接数据库                                    | `postgres`    |
 | `DB_USER`         | 管理数据库用户，需要 `CREATEDB`/`CREATEROLE` 权限 | `postgres`    |
-| `DB_PASSWORD`     | 管理数据库用户密码                               | （空）        |
-| `APP_DB_NAME`     | 应用数据库名称                                   | `purrchat`    |
-| `APP_DB_USER`     | 应用迁移/运行用户                                | `purrchat`    |
-| `APP_DB_PASSWORD` | 应用数据库用户密码                               | `purrchat_pw` |
+| `DB_PASSWORD`     | 管理数据库用户密码                                | （空）        |
+| `APP_DB_NAME`     | 应用数据库名称                                    | `purrchat`    |
+| `APP_DB_USER`     | 应用迁移/运行用户                                 | `purrchat`    |
+| `APP_DB_PASSWORD` | 应用数据库用户密码                                | `purrchat_pw` |
 
 ## 使用场景
 
@@ -220,7 +220,3 @@ ls -ld scripts/backups/
 2. 验证数据库连接配置
 3. 确认 PostgreSQL 服务状态
 4. 查阅故障排除部分
-
-## 许可证
-
-本脚本作为 PurrChat 项目的一部分，遵循项目许可证。

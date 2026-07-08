@@ -11,23 +11,23 @@
 
 ### P0 级 Bug
 
-| 问题 | 影响 |
-|------|------|
+| 问题                       | 影响                       |
+| -------------------------- | -------------------------- |
 | trigger 节点不注入上下文值 | 所有依赖上游数据的节点失效 |
-| merge 节点空实现 | 多分支汇聚场景完全不可用 |
-| template 节点走错分支 | template 节点抛异常 |
-| 控制流端口名不一致 | 某些连线配置下流程中断 |
-| wait 节点语义错误 | 等待功能形同虚设 |
+| merge 节点空实现           | 多分支汇聚场景完全不可用   |
+| template 节点走错分支      | template 节点抛异常        |
+| 控制流端口名不一致         | 某些连线配置下流程中断     |
+| wait 节点语义错误          | 等待功能形同虚设           |
 
 ### 架构问题
 
-| 问题 | 描述 |
-|------|------|
+| 问题               | 描述                                                      |
+| ------------------ | --------------------------------------------------------- |
 | 500 行 switch-case | `followControlFlow` 巨型 switch，新增节点类型需改引擎核心 |
-| 递归深度风险 | 纯递归执行，嵌套 loop + if 可能栈溢出 |
-| 无并发控制 | 同会话多条消息并发执行导致数据竞争 |
-| 状态无持久化 | sync.Map 内存存储，重启丢失所有会话 |
-| 上下文贫乏 | BotMessage 仅 5 字段，SenderName 未使用 |
+| 递归深度风险       | 纯递归执行，嵌套 loop + if 可能栈溢出                     |
+| 无并发控制         | 同会话多条消息并发执行导致数据竞争                        |
+| 状态无持久化       | sync.Map 内存存储，重启丢失所有会话                       |
+| 上下文贫乏         | BotMessage 仅 5 字段，SenderName 未使用                   |
 
 ### 命名问题
 
@@ -39,13 +39,13 @@
 
 ### 候选框架对比
 
-| 框架 | GitHub Stars | npm 周下载 | 零依赖 | 许可证 | 评估 |
-|------|-------------|-----------|--------|--------|------|
-| **Temporal TS SDK** | ~12K | **1.2M** | 否（需 Temporal Server） | MIT | 过重，需额外基础设施 |
-| **XState** | **29,380** | ~500K | **是** | MIT | **推荐** |
-| **OpenWorkflow** | ~200 | **4.1K** | **是** | Apache-2.0 | 有潜力但较新 |
-| flowcraft | ~50 | 771 | 是 | MIT | 过于小众 |
-| pi 架构 | 各项目不同 | N/A | 否 | 各异 | 不适用（编程代理框架） |
+| 框架                | GitHub Stars | npm 周下载 | 零依赖                   | 评估                   |
+| ------------------- | ------------ | ---------- | ------------------------ | ---------------------- |
+| **Temporal TS SDK** | ~12K         | **1.2M**   | 否（需 Temporal Server） | 过重，需额外基础设施   |
+| **XState**          | **29,380**   | ~500K      | **是**                   | **推荐**               |
+| **OpenWorkflow**    | ~200         | **4.1K**   | **是**                   | 有潜力但较新           |
+| flowcraft           | ~50          | 771        | 是                       | 过于小众               |
+| pi 架构             | 各项目不同   | N/A        | 否                       | 不适用（编程代理框架） |
 
 ### 排除的选项
 
@@ -59,18 +59,19 @@
 
 **XState**（29K stars，350 贡献者，484 版本）是状态机/状态图库，提供强大的底层原语：
 
-| XState 原语 | PurrChat 映射 |
-|------------|--------------|
-| State Machine | Blueprint（工作流定义） |
-| Actor | 每个 Bot 会话的运行实例 |
-| Context | 端口值 + 会话变量 |
+| XState 原语       | PurrChat 映射                     |
+| ----------------- | --------------------------------- |
+| State Machine     | Blueprint（工作流定义）           |
+| Actor             | 每个 Bot 会话的运行实例           |
+| Context           | 端口值 + 会话变量                 |
 | Services (invoke) | 异步节点执行（LLM、HTTP、Python） |
-| Actions | 副作用（发送回复、写入变量） |
-| Guards | 条件分支（IF 节点） |
-| Parallel States | 并行分支 + Merge |
-| Events | 用户消息、等待唤醒 |
+| Actions           | 副作用（发送回复、写入变量）      |
+| Guards            | 条件分支（IF 节点）               |
+| Parallel States   | 并行分支 + Merge                  |
+| Events            | 用户消息、等待唤醒                |
 
 **核心优势**：
+
 - 29K stars，极其成熟，零依赖
 - 原生 Vue 支持（`@xstate/vue`）
 - 官方可视化编辑器（Stately）
@@ -122,8 +123,8 @@ export interface NodeDefinition<
   TOutput extends Record<string, any> = Record<string, any>,
   TConfig extends Record<string, any> = Record<string, any>,
 > {
-  type: string;                    // "llm" | "reply" | "if" | ...
-  label: string;                   // 显示名称
+  type: string; // "llm" | "reply" | "if" | ...
+  label: string; // 显示名称
   category: 'trigger' | 'processing' | 'control' | 'output' | 'integration';
   icon: string;
   color: string;
@@ -131,7 +132,7 @@ export interface NodeDefinition<
     inputs: PortDefinition[];
     outputs: PortDefinition[];
   };
-  configSchema: z.ZodType<TConfig>;  // Zod schema，前端自动生成表单
+  configSchema: z.ZodType<TConfig>; // Zod schema，前端自动生成表单
   execute: (input: TInput, config: TConfig, ctx: ExecutionContext) => Promise<TOutput>;
 }
 ```
@@ -144,11 +145,21 @@ export interface NodeDefinition<
 export class NodeRegistry {
   private nodes = new Map<string, NodeDefinition>();
 
-  register(def: NodeDefinition): void { this.nodes.set(def.type, def); }
-  registerAll(defs: NodeDefinition[]): void { for (const d of defs) this.register(d); }
-  get(type: string): NodeDefinition | undefined { return this.nodes.get(type); }
-  getAll(): NodeDefinition[] { return Array.from(this.nodes.values()); }
-  getByCategory(cat: string): NodeDefinition[] { return this.getAll().filter(n => n.category === cat); }
+  register(def: NodeDefinition): void {
+    this.nodes.set(def.type, def);
+  }
+  registerAll(defs: NodeDefinition[]): void {
+    for (const d of defs) this.register(d);
+  }
+  get(type: string): NodeDefinition | undefined {
+    return this.nodes.get(type);
+  }
+  getAll(): NodeDefinition[] {
+    return Array.from(this.nodes.values());
+  }
+  getByCategory(cat: string): NodeDefinition[] {
+    return this.getAll().filter((n) => n.category === cat);
+  }
 }
 ```
 
@@ -167,7 +178,7 @@ export interface Blueprint {
 
 export interface BlueprintNode {
   id: string;
-  type: string;           // 对应 NodeDefinition.type
+  type: string; // 对应 NodeDefinition.type
   name: string;
   config: Record<string, any>;
   position: { x: number; y: number };
@@ -197,16 +208,24 @@ export class WorkflowRuntime {
   private sessions = new Map<string, ReturnType<typeof createActor>>();
 
   /** 单次执行（无状态，用于 simple 机制） */
-  async execute(blueprint: Blueprint, input: string): Promise<string> { /* ... */ }
+  async execute(blueprint: Blueprint, input: string): Promise<string> {
+    /* ... */
+  }
 
   /** 创建持久化会话（多轮对话） */
-  createSession(sessionId: string, blueprint: Blueprint): void { /* ... */ }
+  createSession(sessionId: string, blueprint: Blueprint): void {
+    /* ... */
+  }
 
   /** 向会话发送消息 */
-  async sendMessage(sessionId: string, input: string): Promise<string> { /* ... */ }
+  async sendMessage(sessionId: string, input: string): Promise<string> {
+    /* ... */
+  }
 
   /** 停止会话 */
-  destroySession(sessionId: string): void { /* ... */ }
+  destroySession(sessionId: string): void {
+    /* ... */
+  }
 }
 ```
 
@@ -247,7 +266,7 @@ states['llm-1'] = {
           'llm-1': event.output,
         }),
       }),
-      target: 'reply-1',  // 沿连线跳转
+      target: 'reply-1', // 沿连线跳转
     },
     onError: { target: '__error' },
   },
@@ -283,7 +302,7 @@ states['if-1'] = {
     },
   }),
   always: [
-    { guard: ({ context }) => context.nodeOutputs['if-1']?.result === true,  target: 'llm-2' },
+    { guard: ({ context }) => context.nodeOutputs['if-1']?.result === true, target: 'llm-2' },
     { guard: ({ context }) => context.nodeOutputs['if-1']?.result === false, target: 'reply-3' },
   ],
 };
@@ -312,8 +331,10 @@ states['loop-1'] = {
     }),
   }),
   always: [
-    { guard: ({ context }) => context.loopState.iteration >= context.loopState.maxIterations,
-      target: 'next-node' },
+    {
+      guard: ({ context }) => context.loopState.iteration >= context.loopState.maxIterations,
+      target: 'next-node',
+    },
     { target: 'loop-body-first-node' },
   ],
 };
@@ -329,7 +350,7 @@ states['loop-body-last'] = {
           iteration: context.loopState.iteration + 1,
         }),
       }),
-      target: 'loop-1',  // 自循环
+      target: 'loop-1', // 自循环
     },
   },
 };
@@ -378,8 +399,18 @@ parallel-region│                                    ├──→ merge-1 → n
 states['parallel-region'] = {
   type: 'parallel',
   states: {
-    branch_a: { initial: 'node-a1', states: { /* ... */ } },
-    branch_b: { initial: 'node-b1', states: { /* ... */ } },
+    branch_a: {
+      initial: 'node-a1',
+      states: {
+        /* ... */
+      },
+    },
+    branch_b: {
+      initial: 'node-b1',
+      states: {
+        /* ... */
+      },
+    },
   },
   onDone: { target: 'merge-1' },
 };
@@ -397,7 +428,9 @@ states['reply-1'] = {
         return replaceVariables('{llm-1.response}', context.nodeOutputs);
       },
     }),
-    ({ context }) => { context.sendReply(context.finalReply); },
+    ({ context }) => {
+      context.sendReply(context.finalReply);
+    },
   ],
   always: { target: 'end-1' },
 };
@@ -412,6 +445,7 @@ states['end-1'] = { type: 'final' };
 ### 完整示例：简单工作流的状态机
 
 Blueprint：
+
 ```
 trigger → llm → reply → end
 ```
@@ -430,6 +464,7 @@ trigger → llm → reply → end
 ```
 
 运行时流程：
+
 1. 用户发消息 → 创建 Actor，进入 `trigger` 状态
 2. `trigger` 立即跳转到 `llm`（invoke 异步调用 GPT-4）
 3. GPT-4 返回 → 输出写入 context，跳转到 `reply`
@@ -440,20 +475,20 @@ trigger → llm → reply → end
 
 ## 五、与当前 Go 引擎的对比
 
-| 维度 | 当前 Go 引擎 | XState + 抽象层 |
-|------|-------------|----------------|
-| 节点注册 | 500 行 switch-case | `registry.register(node)` |
-| 新增节点 | 修改引擎核心文件 | 新增一个文件 |
-| 条件分支 | 手写 if/else 逻辑 | XState guards（声明式） |
-| 循环 | 手写 for 循环 | XState 自循环 + guard |
-| 并发 | 无 | XState parallel states |
-| 等待 | 伪实现（取当前消息） | 原生事件等待（状态机暂停） |
-| 状态持久化 | sync.Map（内存） | XState snapshot → JSON |
-| 崩溃恢复 | 无（重启丢失） | 从 snapshot 重建 actor |
-| 调试 | 自建 trace | XState Inspector（官方工具） |
-| 可视化 | 自建 DAG 编辑器 | Stately 编辑器 + Vue Flow |
-| 类型安全 | Go 强类型 | TypeScript + Zod schema |
-| 测试 | 需要 mock 整个引擎 | 纯函数测试节点 + snapshot 断言 |
+| 维度       | 当前 Go 引擎         | XState + 抽象层                |
+| ---------- | -------------------- | ------------------------------ |
+| 节点注册   | 500 行 switch-case   | `registry.register(node)`      |
+| 新增节点   | 修改引擎核心文件     | 新增一个文件                   |
+| 条件分支   | 手写 if/else 逻辑    | XState guards（声明式）        |
+| 循环       | 手写 for 循环        | XState 自循环 + guard          |
+| 并发       | 无                   | XState parallel states         |
+| 等待       | 伪实现（取当前消息） | 原生事件等待（状态机暂停）     |
+| 状态持久化 | sync.Map（内存）     | XState snapshot → JSON         |
+| 崩溃恢复   | 无（重启丢失）       | 从 snapshot 重建 actor         |
+| 调试       | 自建 trace           | XState Inspector（官方工具）   |
+| 可视化     | 自建 DAG 编辑器      | Stately 编辑器 + Vue Flow      |
+| 类型安全   | Go 强类型            | TypeScript + Zod schema        |
+| 测试       | 需要 mock 整个引擎   | 纯函数测试节点 + snapshot 断言 |
 
 ---
 
@@ -464,6 +499,7 @@ trigger → llm → reply → end
 **目标**：从现有前端代码中抽取工作流相关类型为独立包，前后端共享。
 
 **收益**：
+
 - 前后端节点类型定义一处修改、处处生效
 - 新增节点类型时类型定义自动同步
 - 为后续微服务拆分打下基础
@@ -502,6 +538,7 @@ packages/
 **目标**：创建独立的 TS Bot 服务，基于 XState + 工作流抽象层。
 
 **实施步骤**：
+
 1. 创建 `apps/bot-engine/`（Node.js + TypeScript）
 2. 安装 `xstate` 依赖
 3. 实现 NodeRegistry + Compiler + Runtime
@@ -515,6 +552,7 @@ packages/
 **目标**：前端 DAG 编辑器和调试面板改为对接 Bot 微服务。
 
 **收益**：
+
 - 节点类型定义从 `@purrchat/workflow-types` 自动读取
 - 配置面板根据 `configSchema`（Zod）自动生成
 - 调试通过 WebSocket 实时流式获取执行状态
@@ -522,6 +560,7 @@ packages/
 ### 原 Phase A-D（命名重构 + 简单机制编译）
 
 这些是当前 Go 引擎的渐进改进，在微服务迁移完成前仍然需要：
+
 - **Phase A**：命名重构 `special_mode` → `workflow`（✅ 已完成）
 - **Phase B**：简单机制编译为工作流（✅ 已完成）
 - **Phase C**：修复 P0 Bug（待实现）
@@ -533,11 +572,11 @@ packages/
 
 ## 七、决策记录
 
-| 决策 | 选项 | 结论 | 理由 |
-|------|------|------|------|
-| 是否引入 pi 架构 | 是/否 | **否** | 编程代理框架，不适合聊天机器人场景 |
-| 是否引入 flowcraft | 是/否 | **否** | 过于小众（771 周下载） |
-| 是否引入 Temporal | 是/否 | **否** | 需要额外基础设施（Temporal Server） |
-| 底层引擎选型 | XState / OpenWorkflow / 自建 | **XState** | 29K stars，零依赖，原生 Vue 支持，Actor 模型适合会话管理 |
-| 是否抽取类型包 | 是/否 | **是，Phase 0** | 零风险、立即收益、为未来打基础 |
-| 微服务拆分时机 | 现在/Phase 1/不拆 | **Phase 1** | 先通过类型包验证方向 |
+| 决策               | 选项                         | 结论            | 理由                                                     |
+| ------------------ | ---------------------------- | --------------- | -------------------------------------------------------- |
+| 是否引入 pi 架构   | 是/否                        | **否**          | 编程代理框架，不适合聊天机器人场景                       |
+| 是否引入 flowcraft | 是/否                        | **否**          | 过于小众（771 周下载）                                   |
+| 是否引入 Temporal  | 是/否                        | **否**          | 需要额外基础设施（Temporal Server）                      |
+| 底层引擎选型       | XState / OpenWorkflow / 自建 | **XState**      | 29K stars，零依赖，原生 Vue 支持，Actor 模型适合会话管理 |
+| 是否抽取类型包     | 是/否                        | **是，Phase 0** | 零风险、立即收益、为未来打基础                           |
+| 微服务拆分时机     | 现在/Phase 1/不拆            | **Phase 1**     | 先通过类型包验证方向                                     |
