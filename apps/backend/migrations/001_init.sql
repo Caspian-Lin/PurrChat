@@ -258,7 +258,7 @@ BEGIN
     RETURN QUERY EXECUTE format('
         SELECT id, sender_id, content, msg_type, created_at, bot_id, bot_name
         FROM conversation_messages.%I
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, bot_id NULLS LAST
         LIMIT $1 OFFSET $2
     ', table_name)
     USING msg_limit, msg_offset;
@@ -289,7 +289,7 @@ BEGIN
         SELECT id, sender_id, content, msg_type, created_at, bot_id, bot_name
         FROM conversation_messages.%I
         WHERE created_at > $1
-        ORDER BY created_at ASC
+        ORDER BY created_at ASC, bot_id NULLS FIRST
     ', table_name)
     USING since_timestamp;
 END;
@@ -335,7 +335,7 @@ BEGIN
     RETURN QUERY EXECUTE format('
         SELECT id, sender_id, content, msg_type, created_at, bot_id, bot_name
         FROM conversation_messages.%I
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, bot_id NULLS LAST
         LIMIT 1
     ', table_name);
 END;

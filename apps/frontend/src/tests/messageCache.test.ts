@@ -263,6 +263,38 @@ describe('MessageCache', () => {
       expect(cachedMessages[0].id).toBe('server-message-1');
       expect(cachedMessages[0].sendStatus).toBe('sent');
     });
+
+    it('同 ID 服务端消息应该更新缓存中的时间戳并重新排序', async () => {
+      const cachedBotMessage: Message = {
+        id: 'bot-reply',
+        conversation_id: 'conv1',
+        sender_id: 'bot1',
+        content: 'Bot reply',
+        msg_type: 'text',
+        created_at: '2026-07-07T10:00:00Z',
+        bot_id: 'bot1',
+        bot_name: 'Bot',
+      };
+      const humanMessage: Message = {
+        id: 'human-trigger',
+        conversation_id: 'conv1',
+        sender_id: 'user1',
+        content: 'Hello',
+        msg_type: 'text',
+        created_at: '2026-07-07T10:00:00.250Z',
+      };
+      const updatedBotMessage: Message = {
+        ...cachedBotMessage,
+        created_at: '2026-07-07T10:00:00.500Z',
+      };
+
+      await messageCacheService.addMessages('conv1', [cachedBotMessage, humanMessage]);
+      await messageCacheService.addMessage('conv1', updatedBotMessage);
+
+      const cachedMessages = messageCacheService.getMessages('conv1');
+      expect(cachedMessages.map((message) => message.id)).toEqual(['human-trigger', 'bot-reply']);
+      expect(cachedMessages[1].created_at).toBe('2026-07-07T10:00:00.500Z');
+    });
   });
 
   describe('缓存持久化', () => {

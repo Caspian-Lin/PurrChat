@@ -102,4 +102,40 @@ describe('useChat', () => {
     expect(loadedCount).toBe(1);
     expect(store.getMessages('conv-1').map((message) => message.id)).toEqual(['m1', 'm2']);
   });
+
+  it('refreshes cached bot messages that only have second-level timestamps', async () => {
+    const humanTrigger = createMessage('human-trigger', '2026-07-07T10:00:00.250Z');
+    const cachedBotReply: Message = {
+      ...createMessage('bot-reply', '2026-07-07T10:00:00Z'),
+      sender_id: 'bot-1',
+      bot_id: 'bot-1',
+      bot_name: 'Bot',
+    };
+    const serverBotReply: Message = {
+      ...cachedBotReply,
+      created_at: '2026-07-07T10:00:00.500Z',
+    };
+
+    mocks.messageCache.hasCache.mockReturnValue(true);
+    mocks.messageCache.getMessages.mockReturnValue([cachedBotReply, humanTrigger]);
+    mocks.api.getMessages.mockResolvedValue({
+      success: true,
+      data: [serverBotReply, humanTrigger],
+    });
+
+    const { checkAndLoadIncremental } = useChat();
+    await checkAndLoadIncremental('conv-1');
+
+    const store = useMessageStore();
+    expect(mocks.api.getMessages).toHaveBeenCalledWith('conv-1');
+    expect(store.getMessages('conv-1').map((message) => message.id)).toEqual([
+      'human-trigger',
+      'bot-reply',
+    ]);
+    expect(store.getMessages('conv-1')[1].created_at).toBe('2026-07-07T10:00:00.500Z');
+    expect(mocks.api.getMessagesIncremental).toHaveBeenCalledWith(
+      'conv-1',
+      Date.parse('2026-07-07T10:00:00.500Z')
+    );
+  });
 });

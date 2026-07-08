@@ -91,6 +91,51 @@ describe('Message Store', () => {
       expect(store.messages.get('conv-1')).toHaveLength(1);
       expect(mockAddMessage).toHaveBeenCalledTimes(1);
     });
+
+    it('should update an existing message with server data', () => {
+      const store = useMessageStore();
+      store.addMessage('conv-1', createMessage('m1', { created_at: '2026-07-07T10:00:00Z' }));
+
+      store.addMessage(
+        'conv-1',
+        createMessage('m1', {
+          created_at: '2026-07-07T10:00:00.250Z',
+          sendStatus: 'sent',
+        })
+      );
+
+      const msgs = store.messages.get('conv-1');
+      expect(msgs).toHaveLength(1);
+      expect(msgs![0].created_at).toBe('2026-07-07T10:00:00.250Z');
+      expect(msgs![0].sendStatus).toBe('sent');
+      expect(mockAddMessage).toHaveBeenCalledTimes(2);
+    });
+
+    it('should keep bot replies after human messages when timestamps tie', () => {
+      const store = useMessageStore();
+
+      store.addMessage(
+        'conv-1',
+        createMessage('bot-reply', {
+          sender_id: 'bot-1',
+          bot_id: 'bot-1',
+          bot_name: 'Bot',
+          created_at: '2026-07-07T10:00:00.000Z',
+        })
+      );
+      store.addMessage(
+        'conv-1',
+        createMessage('human-trigger', {
+          sender_id: 'user-1',
+          created_at: '2026-07-07T10:00:00.000Z',
+        })
+      );
+
+      expect(store.getMessages('conv-1').map((message) => message.id)).toEqual([
+        'human-trigger',
+        'bot-reply',
+      ]);
+    });
   });
 
   describe('addMessages', () => {
@@ -102,6 +147,27 @@ describe('Message Store', () => {
 
       expect(store.messages.get('conv-1')).toHaveLength(2);
       expect(mockAddMessages).toHaveBeenCalledWith('conv-1', msgs);
+    });
+
+    it('should sort out-of-order realtime messages by created_at', () => {
+      const store = useMessageStore();
+      const botReply = createMessage('bot-reply', {
+        sender_id: 'bot-1',
+        bot_id: 'bot-1',
+        bot_name: 'Bot',
+        created_at: '2026-07-07T10:00:00.500Z',
+      });
+      const humanTrigger = createMessage('human-trigger', {
+        sender_id: 'user-1',
+        created_at: '2026-07-07T10:00:00.250Z',
+      });
+
+      store.addMessages('conv-1', [botReply, humanTrigger]);
+
+      expect(store.getMessages('conv-1').map((message) => message.id)).toEqual([
+        'human-trigger',
+        'bot-reply',
+      ]);
     });
 
     it('should filter out duplicate messages', () => {

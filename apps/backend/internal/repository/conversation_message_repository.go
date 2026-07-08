@@ -86,7 +86,7 @@ func (r *conversationMessageRepository) InsertMessage(ctx context.Context, conve
 	message.CreatedAt = time.Now().UTC()
 
 	query := `
-        SELECT insert_conversation_message($1, $2, $3, $4, $5, $6, $7::VARCHAR(255))
+        SELECT insert_conversation_message($1, $2, $3, $4, $5, $6, $7::VARCHAR(255), $8)
     `
 
 	err := database.GetPool().QueryRow(ctx, query,
@@ -97,6 +97,7 @@ func (r *conversationMessageRepository) InsertMessage(ctx context.Context, conve
 		message.BotID,
 		message.BotName,
 		message.ClientMessageID,
+		message.CreatedAt,
 	).Scan(&message.ID)
 
 	if err != nil {

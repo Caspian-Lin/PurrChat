@@ -23,6 +23,11 @@ function getLatestMessageTimestamp(messages: Message[]): number {
   }, 0);
 }
 
+function hasCoarseBotTimestamp(message: Message): boolean {
+  const isBotMessage = Boolean(message.bot_id || message.sender?.is_bot);
+  return isBotMessage && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(message.created_at);
+}
+
 export const useChat = () => {
   const notify = useNotification();
   const messageCache = useMessageCache();
@@ -66,19 +71,7 @@ export const useChat = () => {
       const response = await api.getMessagesIncremental(conversationId, sinceTimestamp);
       if (response.success && response.data && response.data.length > 0) {
         // 增量消息是按created_at ASC排序的（从旧到新）
-        const newMessages: Message[] = [];
-        const currentStoreMessages = messageStore.getMessages(conversationId);
-        response.data.forEach((msg) => {
-          // 检查消息是否已存在
-          const exists = currentStoreMessages.some((m) => m.id === msg.id);
-          if (!exists) {
-            newMessages.push(msg);
-          }
-        });
-
-        if (newMessages.length > 0) {
-          messageStore.addMessages(conversationId, newMessages);
-        }
+        messageStore.addMessages(conversationId, response.data);
         scrollToBottom();
 
         // 缓存新消息
@@ -105,13 +98,18 @@ export const useChat = () => {
   const checkAndLoadIncremental = async (conversationId: string) => {
     // 检查是否有缓存
     if (messageCache.hasCache(conversationId)) {
-      const cachedMessages = await messageStore.loadFromCache(conversationId);
+      let cachedMessages = await messageStore.loadFromCache(conversationId);
       if (cachedMessages.length === 0) {
         console.log(
           `[useChat] Empty cache found for conversation ${conversationId}, loading all messages`
         );
         await loadMessages(conversationId);
         return 0;
+      }
+
+      if (cachedMessages.some(hasCoarseBotTimestamp)) {
+        await loadMessages(conversationId);
+        cachedMessages = messageStore.getMessages(conversationId);
       }
 
       await scrollToBottom();
