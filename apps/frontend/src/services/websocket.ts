@@ -1,7 +1,8 @@
 import { ref, onUnmounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useConnectionStore } from '../stores/connection';
-import { getWebSocketUrl, logger, appConfig } from '../config/app';
+import { getWebSocketUrl, logger } from '../config/app';
+import { getCurrentPlatformCapabilities } from '../platform';
 
 export interface WebSocketMessage {
   type: string;
@@ -102,18 +103,19 @@ class WebSocketService {
     logger.info('Connecting to WebSocket', { url: wsUrl });
 
     try {
-      if (appConfig.isTauri) {
-        // Tauri 环境: 使用 Sec-WebSocket-Protocol 子协议传递 token
+      const platform = getCurrentPlatformCapabilities();
+      if (platform.runtime.isNative) {
+        // 原生环境: 使用 Sec-WebSocket-Protocol 子协议传递 token
         const auth = useAuthStore();
         if (!auth.token) {
-          logger.error('No auth token available for Tauri WebSocket');
+          logger.error('No auth token available for native WebSocket');
           this.connecting.value = false;
           this.connectionStore.setConnecting(false);
           return;
         }
         this.ws = new WebSocket(wsUrl, [`bearer,${auth.token}`]);
       } else {
-        // Web/Mobile 环境: 依赖浏览器自动携带 Cookie
+        // Web 环境: 依赖浏览器自动携带 Cookie
         this.ws = new WebSocket(wsUrl);
       }
 

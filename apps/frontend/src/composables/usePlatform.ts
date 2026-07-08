@@ -1,60 +1,68 @@
-import { ref, computed } from 'vue';
-import appConfig from '../config/app';
+import { computed, ref } from 'vue';
+import { detectPlatform, readBrowserPlatformInput, type PlatformCapabilities } from '../platform';
 
 /**
  * 平台检测 composable
- * 基于运行时环境 + appConfig.client 综合判断
+ * 分离运行时、设备类型和 viewport，避免窄桌面窗口被误判为移动端。
  * 使用懒初始化，避免模块级副作用
  */
 
-const isMobile = ref(false);
+const capabilities = ref<PlatformCapabilities>(detectPlatform(readBrowserPlatformInput()));
 let initialized = false;
+let cleanup: (() => void) | null = null;
 
-function detectMobile(): boolean {
-  // 1. 环境变量显式声明
-  if (appConfig.client === 'mobile') return true;
-
-  // 2. Tauri Mobile 运行时检测
-  //    Tauri 2 Mobile 在 Android WebView 中运行，__TAURI_INTERNALS__ 存在
-  //    且 userAgent 包含 'wv' (WebView) 或 'Mobile'
-  if (appConfig.isTauri && typeof navigator !== 'undefined') {
-    const ua = navigator.userAgent.toLowerCase();
-    if (ua.includes('android') || ua.includes('mobile') || ua.includes('wv')) {
-      return true;
-    }
-  }
-
-  // 3. 响应式视口检测（小屏幕设备）
-  if (typeof window !== 'undefined' && window.matchMedia) {
-    return window.matchMedia('(max-width: 768px)').matches;
-  }
-
-  return false;
+function refreshCapabilities() {
+  capabilities.value = detectPlatform(readBrowserPlatformInput());
 }
 
 function initialize() {
   if (initialized) return;
   initialized = true;
 
-  // 初始化检测
-  isMobile.value = detectMobile();
+  refreshCapabilities();
 
-  // 监听窗口尺寸变化（桌面端调整窗口大小时也能响应）
-  if (typeof window !== 'undefined' && window.matchMedia) {
-    const mql = window.matchMedia('(max-width: 768px)');
-    mql.addEventListener('change', (e) => {
-      isMobile.value = e.matches;
-    });
-  }
+  if (typeof window === 'undefined') return;
+
+  window.addEventListener('resize', refreshCapabilities);
+  window.addEventListener('online', refreshCapabilities);
+  window.addEventListener('offline', refreshCapabilities);
+
+  cleanup = () => {
+    window.removeEventListener('resize', refreshCapabilities);
+    window.removeEventListener('online', refreshCapabilities);
+    window.removeEventListener('offline', refreshCapabilities);
+  };
 }
 
 export function usePlatform() {
   initialize();
 
-  const isDesktop = computed(() => !isMobile.value);
+  const layoutMode = computed(() => capabilities.value.window.layoutMode);
+  const deviceType = computed(() => capabilities.value.window.deviceType);
+  const viewport = computed(() => capabilities.value.viewport);
+  const isMobile = computed(() => layoutMode.value === 'mobile');
+  const isTablet = computed(() => layoutMode.value === 'tablet');
+  const isDesktop = computed(() => layoutMode.value === 'desktop');
 
   return {
-    isMobile: computed(() => isMobile.value),
+    capabilities: computed(() => capabilities.value),
+    deviceType,
+    layoutMode,
+    viewport,
+    isMobile,
+    isTablet,
     isDesktop,
+    isCompactViewport: computed(() => capabilities.value.viewport.isCompact),
+    isTauri: computed(() => capabilities.value.runtime.kind === 'tauri'),
+    isNative: computed(() => capabilities.value.runtime.isNative),
+    isTouch: computed(() => capabilities.value.input.hasTouch),
+    refresh: refreshCapabilities,
   };
+}
+
+export function resetPlatformForTests() {
+  cleanup?.();
+  cleanup = null;
+  initialized = false;
+  refreshCapabilities();
 }
