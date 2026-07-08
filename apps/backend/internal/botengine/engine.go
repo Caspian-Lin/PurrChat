@@ -90,6 +90,10 @@ func truncateStr(s string, maxLen int) string {
 	return s
 }
 
+func formatMessageCreatedAt(t time.Time) string {
+	return t.UTC().Format(time.RFC3339Nano)
+}
+
 // sendSystemMessage 发送系统消息到会话（居中显示，无头像）
 func (e *BotEngine) sendSystemMessage(ctx context.Context, conversationID uuid.UUID, content *models.SystemMessageContent) {
 	contentJSON, err := json.Marshal(content)
@@ -122,7 +126,7 @@ func (e *BotEngine) sendSystemMessage(ctx context.Context, conversationID uuid.U
 					"sender_id":       uuid.Nil.String(),
 					"content":         string(contentJSON),
 					"msg_type":        "system",
-					"created_at":      message.CreatedAt.Format(time.RFC3339),
+					"created_at":      formatMessageCreatedAt(message.CreatedAt),
 				})
 			}
 		}
@@ -409,7 +413,7 @@ func (e *BotEngine) sendBotReply(ctx context.Context, bot *models.Bot, conversat
 					"sender_id":       message.SenderID.String(),
 					"content":         content,
 					"msg_type":        "text",
-					"created_at":      message.CreatedAt.Format(time.RFC3339),
+					"created_at":      formatMessageCreatedAt(message.CreatedAt),
 					"sender": map[string]any{
 						"id":         bot.ID.String(),
 						"username":   bot.Name,

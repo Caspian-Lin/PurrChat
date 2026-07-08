@@ -226,6 +226,7 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS insert_conversation_message(UUID, UUID, TEXT, VARCHAR(20))`)
 	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS insert_conversation_message(UUID, UUID, TEXT, VARCHAR(20), UUID, VARCHAR(100))`)
 	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS insert_conversation_message(UUID, UUID, TEXT, VARCHAR(20), UUID, VARCHAR(100), VARCHAR(255))`)
+	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS insert_conversation_message(UUID, UUID, TEXT, VARCHAR(20), UUID, VARCHAR(100), VARCHAR(255), TIMESTAMP)`)
 	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS get_conversation_messages(UUID, INT, INT)`)
 	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS get_conversation_messages_incremental(UUID, TIMESTAMP)`)
 	_, _ = database.GetPool().Exec(ctx, `DROP FUNCTION IF EXISTS get_conversation_last_message(UUID)`)
@@ -382,7 +383,7 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			RETURN QUERY EXECUTE format('
 				SELECT id, sender_id, content, msg_type, created_at, bot_id, bot_name
 				FROM conversation_messages.%I
-				ORDER BY created_at DESC
+				ORDER BY created_at DESC, bot_id NULLS LAST
 				LIMIT $1 OFFSET $2
 			', table_name)
 			USING msg_limit, msg_offset;
@@ -415,7 +416,7 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 				SELECT id, sender_id, content, msg_type, created_at, bot_id, bot_name
 				FROM conversation_messages.%I
 				WHERE created_at > $1
-				ORDER BY created_at ASC
+				ORDER BY created_at ASC, bot_id NULLS FIRST
 			', table_name)
 			USING since_timestamp;
 		END;

@@ -238,6 +238,7 @@ class WebSocketEventManager {
         : undefined,
       bot_id: data.bot_id,
       bot_name: data.bot_name,
+      client_message_id: data.client_message_id,
       sendStatus: 'sent', // WebSocket收到的消息都是已发送状态
     };
 

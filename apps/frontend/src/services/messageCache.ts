@@ -9,10 +9,15 @@ export interface CachedMessage {
   content: string;
   msg_type: string;
   created_at: string;
+  client_message_id?: string;
+  sendStatus?: 'sending' | 'sent' | 'failed';
+  bot_id?: string;
+  bot_name?: string;
   sender?: {
     id: string;
     username: string;
     avatar_url?: string;
+    is_bot?: boolean;
   };
 }
 
@@ -275,6 +280,64 @@ class MessageCacheService {
     return this.cache.has(conversationId);
   }
 
+  private removeClientPendingMessage(
+    cache: ConversationCache,
+    message: Message | CachedMessage
+  ): number {
+    const clientMessageId = message.client_message_id;
+    if (!clientMessageId) return 0;
+
+    const before = cache.messages.length;
+    cache.messages = cache.messages.filter((cachedMessage) => {
+      if (cachedMessage.id === message.id) return true;
+      if (cachedMessage.id === clientMessageId) return false;
+      return cachedMessage.client_message_id !== clientMessageId;
+    });
+    return before - cache.messages.length;
+  }
+
+  private sortMessages(messages: CachedMessage[]): CachedMessage[] {
+    return messages
+      .map((message, index) => ({ message, index }))
+      .sort((a, b) => {
+        const aTime = Date.parse(a.message.created_at || '');
+        const bTime = Date.parse(b.message.created_at || '');
+        const timeDiff = (Number.isNaN(aTime) ? 0 : aTime) - (Number.isNaN(bTime) ? 0 : bTime);
+        if (timeDiff !== 0) return timeDiff;
+
+        const aIsBot = Boolean(a.message.bot_id || a.message.sender?.is_bot);
+        const bIsBot = Boolean(b.message.bot_id || b.message.sender?.is_bot);
+        if (aIsBot !== bIsBot) return aIsBot ? 1 : -1;
+
+        return a.index - b.index;
+      })
+      .map(({ message }) => message);
+  }
+
+  private upsertMessage(cache: ConversationCache, message: Message | CachedMessage): boolean {
+    const cachedMessage = message as CachedMessage;
+    this.removeClientPendingMessage(cache, cachedMessage);
+
+    const existingIndex = cache.messages.findIndex((item) => item.id === cachedMessage.id);
+    if (existingIndex === -1) {
+      cache.messages.push(cachedMessage);
+      cache.messages = this.sortMessages(cache.messages);
+      return true;
+    }
+
+    const existingMessage = cache.messages[existingIndex];
+    const updatedMessage = {
+      ...existingMessage,
+      ...cachedMessage,
+    };
+    const changed = JSON.stringify(existingMessage) !== JSON.stringify(updatedMessage);
+    if (changed) {
+      cache.messages[existingIndex] = updatedMessage;
+      cache.messages = this.sortMessages(cache.messages);
+    }
+    return changed;
+  }
+
   // 添加消息到缓存
   async addMessage(conversationId: string, message: Message | CachedMessage) {
     let cache = this.cache.get(conversationId);
@@ -287,9 +350,8 @@ class MessageCacheService {
       this.cache.set(conversationId, cache);
     }
 
-    const exists = cache.messages.some((m) => m.id === message.id);
-    if (!exists) {
-      cache.messages.push(message as CachedMessage);
+    const changed = this.upsertMessage(cache, message);
+    if (changed) {
       cache.lastUpdated = Date.now();
       await this.saveCacheToStorage(conversationId);
     }
@@ -307,16 +369,14 @@ class MessageCacheService {
       this.cache.set(conversationId, cache);
     }
 
-    let addedCount = 0;
+    let changedCount = 0;
     messages.forEach((message) => {
-      const exists = cache!.messages.some((m) => m.id === message.id);
-      if (!exists) {
-        cache!.messages.push(message as CachedMessage);
-        addedCount++;
+      if (this.upsertMessage(cache!, message)) {
+        changedCount++;
       }
     });
 
-    if (addedCount > 0) {
+    if (changedCount > 0) {
       cache.lastUpdated = Date.now();
       await this.saveCacheToStorage(conversationId);
     }

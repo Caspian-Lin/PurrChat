@@ -104,6 +104,7 @@ export interface Message {
   sendStatus?: 'sending' | 'sent' | 'failed'; // 消息发送状态：发送中、已发送、发送失败
   bot_id?: string; // Bot 消息标识
   bot_name?: string; // Bot 名称
+  client_message_id?: string; // 客户端幂等消息 ID，用于发送确认去重
 }
 
 // 系统消息内容（JSON 格式存储在 Message.content 中）

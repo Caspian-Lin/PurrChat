@@ -13,6 +13,50 @@ function decodeMessageContent(msg: Message): Message {
   return msg;
 }
 
+function sortMessagesByCreatedAt(messages: Message[]): Message[] {
+  return messages
+    .map((message, index) => ({ message, index }))
+    .sort((a, b) => {
+      const aTime = Date.parse(a.message.created_at || '');
+      const bTime = Date.parse(b.message.created_at || '');
+      const timeDiff = (Number.isNaN(aTime) ? 0 : aTime) - (Number.isNaN(bTime) ? 0 : bTime);
+      if (timeDiff !== 0) return timeDiff;
+
+      const aIsBot = Boolean(a.message.bot_id || a.message.sender?.is_bot);
+      const bIsBot = Boolean(b.message.bot_id || b.message.sender?.is_bot);
+      if (aIsBot !== bIsBot) return aIsBot ? 1 : -1;
+
+      return a.index - b.index;
+    })
+    .map(({ message }) => message);
+}
+
+function upsertMessages(currentMessages: Message[], incomingMessages: Message[]): Message[] {
+  const merged = [...currentMessages];
+
+  incomingMessages.forEach((incomingMessage) => {
+    const existingIndex = merged.findIndex((message) => {
+      if (message.id === incomingMessage.id) return true;
+      if (!incomingMessage.client_message_id) return false;
+      return (
+        message.id === incomingMessage.client_message_id ||
+        message.client_message_id === incomingMessage.client_message_id
+      );
+    });
+
+    if (existingIndex === -1) {
+      merged.push(incomingMessage);
+    } else {
+      merged[existingIndex] = {
+        ...merged[existingIndex],
+        ...incomingMessage,
+      };
+    }
+  });
+
+  return sortMessagesByCreatedAt(merged);
+}
+
 export const useMessageStore = defineStore('message', () => {
   // 消息状态
   const messages = ref<Map<string, Message[]>>(new Map()); // conversationId -> messages
@@ -47,7 +91,7 @@ export const useMessageStore = defineStore('message', () => {
   function setMessages(conversationId: string, newMessages: Message[]) {
     const oldMessages = messages.value.get(conversationId) || [];
     const oldIds = new Set(oldMessages.map((m) => m.id));
-    const decoded = newMessages.map(decodeMessageContent);
+    const decoded = sortMessagesByCreatedAt(newMessages.map(decodeMessageContent));
     messages.value.set(conversationId, decoded);
     const toCache = decoded.filter((m) => !oldIds.has(m.id));
     if (toCache.length > 0) {
@@ -70,13 +114,8 @@ export const useMessageStore = defineStore('message', () => {
       if (serverClientIds.has(m.id)) return false;
       return true;
     });
-    messages.value.set(conversationId, [...decoded, ...localOnly]);
-    // 缓存服务器新消息
-    const oldIds = new Set(oldMessages.map((m) => m.id));
-    const toCache = decoded.filter((m) => !oldIds.has(m.id));
-    if (toCache.length > 0) {
-      messageCache.addMessages(conversationId, toCache);
-    }
+    messages.value.set(conversationId, upsertMessages(localOnly, decoded));
+    messageCache.addMessages(conversationId, decoded);
   }
 
   // 添加消息
@@ -97,7 +136,7 @@ export const useMessageStore = defineStore('message', () => {
     console.log(`[MessageStore] 消息是否已存在: ${exists}`);
 
     if (!exists) {
-      const newMessages = [...currentMessages, message];
+      const newMessages = upsertMessages(currentMessages, [message]);
       messages.value.set(conversationId, newMessages);
       console.log(`[MessageStore] 消息已添加，新消息数量: ${newMessages.length}`);
       console.log(
@@ -109,7 +148,18 @@ export const useMessageStore = defineStore('message', () => {
       messageCache.addMessage(conversationId, message);
       console.log(`[MessageStore] 消息已缓存`);
     } else {
-      console.log(`[MessageStore] 消息已存在，跳过添加`);
+      const existingMessage = currentMessages.find((m) => m.id === message.id);
+      const updatedMessage = existingMessage ? { ...existingMessage, ...message } : message;
+      if (JSON.stringify(existingMessage) === JSON.stringify(updatedMessage)) {
+        console.log(`[MessageStore] 消息已存在，跳过添加`);
+        console.log(`[MessageStore] ===== 添加消息结束 =====`);
+        return;
+      }
+
+      const newMessages = upsertMessages(currentMessages, [message]);
+      messages.value.set(conversationId, newMessages);
+      messageCache.addMessage(conversationId, message);
+      console.log(`[MessageStore] 消息已存在，已更新`);
     }
     console.log(`[MessageStore] ===== 添加消息结束 =====`);
   }
@@ -121,15 +171,12 @@ export const useMessageStore = defineStore('message', () => {
     );
     const decodedMessages = newMessages.map(decodeMessageContent);
     const currentMessages = messages.value.get(conversationId) || [];
-    // 只添加不存在的消息
-    const messagesToAdd = decodedMessages.filter(
-      (msg) => !currentMessages.some((m) => m.id === msg.id)
-    );
+    const mergedMessages = upsertMessages(currentMessages, decodedMessages);
+    const changed = mergedMessages.length !== currentMessages.length || decodedMessages.length > 0;
 
-    if (messagesToAdd.length > 0) {
-      messages.value.set(conversationId, [...currentMessages, ...messagesToAdd]);
-      // 缓存新消息
-      messageCache.addMessages(conversationId, messagesToAdd);
+    if (changed) {
+      messages.value.set(conversationId, mergedMessages);
+      messageCache.addMessages(conversationId, decodedMessages);
     }
   }
 
@@ -195,9 +242,10 @@ export const useMessageStore = defineStore('message', () => {
             }
           : undefined,
       }));
-      setMessages(conversationId, messagesAsMessage);
+      const sortedMessages = sortMessagesByCreatedAt(messagesAsMessage);
+      setMessages(conversationId, sortedMessages);
       console.log(`[MessageStore] Loaded ${cachedMessages.length} messages from cache`);
-      return messagesAsMessage;
+      return sortedMessages;
     }
     return [];
   }
