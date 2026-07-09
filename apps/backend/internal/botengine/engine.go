@@ -27,11 +27,12 @@ import (
 //   - 工作流会话管理：workflowSessions sync.Map
 //   - 调试会话管理：debugSessions sync.Map → 迁移至 TS /debug
 type BotEngine struct {
-	deployRepo     repository.BotDeploymentRepository
-	botRepo        repository.BotRepository
-	messageRepo    repository.ConversationMessageRepository
-	enrollmentRepo repository.EnrollmentRepository
-	callLogRepo    repository.BotCallLogRepository
+	deployRepo       repository.BotDeploymentRepository
+	botRepo          repository.BotRepository
+	messageRepo      repository.ConversationMessageRepository
+	enrollmentRepo   repository.EnrollmentRepository
+	callLogRepo      repository.BotCallLogRepository
+	installationRepo repository.BotInstallationRepository
 
 	// 工作流会话：记录活跃的工作流运行时状态
 	workflowSessions sync.Map // map[string]*SpecialModeSession — "conversationID:botID" -> session
@@ -70,6 +71,11 @@ func (e *BotEngine) SetCallLogRepo(repo repository.BotCallLogRepository) {
 	e.callLogRepo = repo
 }
 
+// SetInstallationRepo 设置安装仓储（用于 diagnostics_consent 控制调用日志内容）
+func (e *BotEngine) SetInstallationRepo(repo repository.BotInstallationRepository) {
+	e.installationRepo = repo
+}
+
 // recordCallLog 记录调用日志（best-effort，失败不阻塞主流程）
 func (e *BotEngine) recordCallLog(ctx context.Context, log *models.BotCallLog) {
 	if e.callLogRepo == nil {
@@ -77,9 +83,47 @@ func (e *BotEngine) recordCallLog(ctx context.Context, log *models.BotCallLog) {
 	}
 	log.ID = uuid.New()
 	log.CreatedAt = time.Now().UTC()
+
+	// 按 diagnostics_consent 决定是否记录消息内容
+	// denied(默认):清空 trigger_message,只记执行元数据
+	// granted:记录触发消息原文
+	if e.installationRepo != nil {
+		consent := e.resolveDiagnosticsConsent(ctx, log.BotID, log.ConversationID, log.SenderID)
+		if consent != models.DiagnosticsGranted {
+			log.TriggerMessage = ""
+		}
+	}
+
 	if err := e.callLogRepo.Create(ctx, log); err != nil {
 		logger.ErrorfWithCaller("[BotEngine] Failed to record call log: %v", err)
 	}
+}
+
+// resolveDiagnosticsConsent 查询 Bot 在目标会话/用户的诊断授权状态
+// 先查群聊 installation,不存在则查私聊 user installation
+func (e *BotEngine) resolveDiagnosticsConsent(ctx context.Context, botID, conversationID, senderID uuid.UUID) models.DiagnosticsConsent {
+	if inst, _ := e.installationRepo.FindByAppAndTarget(ctx, botID, models.InstallationTargetConversation, conversationID); inst != nil {
+		return inst.DiagnosticsConsent
+	}
+	if inst, _ := e.installationRepo.FindByAppAndTarget(ctx, botID, models.InstallationTargetUser, senderID); inst != nil {
+		return inst.DiagnosticsConsent
+	}
+	return models.DiagnosticsDenied
+}
+
+// resolveGrantedCapabilities 查询 Bot 在目标会话/用户授予的 capabilities
+// 先查群聊 installation,不存在则查私聊 user installation
+func (e *BotEngine) resolveGrantedCapabilities(ctx context.Context, botID, conversationID, senderID uuid.UUID) []string {
+	if e.installationRepo == nil {
+		return nil
+	}
+	if inst, _ := e.installationRepo.FindByAppAndTarget(ctx, botID, models.InstallationTargetConversation, conversationID); inst != nil {
+		return inst.GrantedCapabilities
+	}
+	if inst, _ := e.installationRepo.FindByAppAndTarget(ctx, botID, models.InstallationTargetUser, senderID); inst != nil {
+		return inst.GrantedCapabilities
+	}
+	return nil
 }
 
 // truncateStr 截断字符串
@@ -201,8 +245,10 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 		if e.tsClient != nil && e.tsClient.IsAvailable() {
 			// TS 路径：收集上下文，直接调 TS（TS 负责触发评估 + 执行）
 			contextMsgs := e.collectContextMessages(ctx, msg.ConversationID)
+			// 查询安装授予的 capabilities（运行时强制校验用）
+			grantedCaps := e.resolveGrantedCapabilities(ctx, bot.ID, msg.ConversationID, msg.SenderID)
 			start := time.Now()
-			execResp, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, bot.MechanismConfig, contextMsgs)
+			execResp, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, bot.MechanismConfig, contextMsgs, grantedCaps)
 			duration := time.Since(start)
 
 			if tsErr == nil {

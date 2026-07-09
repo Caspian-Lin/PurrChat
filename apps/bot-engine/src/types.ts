@@ -12,6 +12,8 @@ export interface ExecuteRequest {
   msg_type: string;
   mechanism_config: MechanismConfig;
   context_messages?: Array<{ role: string; content: string }>;
+  /** 安装时授予的 capabilities，传给 workflow-engine 做运行时强制校验 */
+  granted_capabilities?: string[];
 }
 
 export interface ExecuteResponse {

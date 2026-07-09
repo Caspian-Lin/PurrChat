@@ -69,6 +69,10 @@ export interface ExecutionContext {
   senderId: string;
   senderName: string;
   conversationId: string;
+  /** 安装时授予的 capabilities，运行时强制校验用（granted ⊆ requested）；undefined 表示不校验 */
+  grantedCapabilities?: string[];
+  /** 最近一次节点执行错误（用于透传 capability 拒绝等错误信息） */
+  lastError?: string;
 }
 
 // ─── Actor 输入（runtime -> machine） ────────────────────────
@@ -85,6 +89,8 @@ export interface ActorInput {
   time: string;
   contextBuffer: Array<{ role: string; content: string }>;
   variables: Record<string, string>;  // 额外会话变量
+  /** 安装时授予的 capabilities */
+  grantedCapabilities?: string[];
 }
 
 // ─── XState 事件 ─────────────────────────────────────────────

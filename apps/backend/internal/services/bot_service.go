@@ -277,6 +277,9 @@ func (s *BotService) UpdateBot(ctx context.Context, botID string, userID string,
 	if req.MechanismConfig != nil {
 		bot.MechanismConfig = req.MechanismConfig
 	}
+	if req.RequestedCapabilities != nil {
+		bot.RequestedCapabilities = req.RequestedCapabilities
+	}
 
 	err = s.botRepo.Update(ctx, bot)
 	if err != nil {
