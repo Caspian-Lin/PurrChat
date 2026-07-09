@@ -73,6 +73,8 @@ export interface ExecutionContext {
   grantedCapabilities?: string[];
   /** 最近一次节点执行错误（用于透传 capability 拒绝等错误信息） */
   lastError?: string;
+  /** 运行时解密后的 secret（key→value），引用解析用 */
+  secrets?: Record<string, string>;
 }
 
 // ─── Actor 输入（runtime -> machine） ────────────────────────
@@ -91,6 +93,8 @@ export interface ActorInput {
   variables: Record<string, string>;  // 额外会话变量
   /** 安装时授予的 capabilities */
   grantedCapabilities?: string[];
+  /** 运行时解密后的 secret 明文（key→value），用于解析 secrets.<name> 引用 */
+  secrets?: Record<string, string>;
 }
 
 // ─── XState 事件 ─────────────────────────────────────────────

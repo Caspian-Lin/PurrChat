@@ -7,12 +7,15 @@
  * 设计见 docs/bot-engine/BOT_APP_MODEL.md §2。
  */
 
-import { getNodeCapabilities } from '@purrchat/workflow-types';
+import { getNodeCapabilities, Capability } from '@purrchat/workflow-types';
+import { extractSecretRefs } from './secrets.js';
 import type { Blueprint, BlueprintNode } from './types.js';
 
 /**
  * 遍历工作流节点图，推导 Bot 所需的全部 capability（取并集）。
  * 发布时调用，结果写入 bot_apps.requested_capabilities。
+ *
+ * secrets:use 是动态 capability：当任一节点 config 引用了 secrets.<name> 时自动加入。
  */
 export function deriveCapabilities(blueprint: Blueprint): string[] {
   const set = new Set<string>();
@@ -20,6 +23,11 @@ export function deriveCapabilities(blueprint: Blueprint): string[] {
     const caps = getNodeCapabilities(node.type as any);
     for (const cap of caps) {
       set.add(cap);
+    }
+    // 扫描 config 中的 secrets.<name> 引用
+    const secretRefs = extractSecretRefs(node.config);
+    if (secretRefs.length > 0) {
+      set.add(Capability.SecretsUse);
     }
   }
   return [...set];

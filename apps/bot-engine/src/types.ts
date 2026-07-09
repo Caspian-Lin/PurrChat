@@ -14,6 +14,8 @@ export interface ExecuteRequest {
   context_messages?: Array<{ role: string; content: string }>;
   /** 安装时授予的 capabilities，传给 workflow-engine 做运行时强制校验 */
   granted_capabilities?: string[];
+  /** 运行时解密后的密钥明文（仅在 secrets:use 已授予时填充，内网传输） */
+  secrets?: Record<string, string>;
 }
 
 export interface ExecuteResponse {

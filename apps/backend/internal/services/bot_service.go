@@ -280,6 +280,9 @@ func (s *BotService) UpdateBot(ctx context.Context, botID string, userID string,
 	if req.RequestedCapabilities != nil {
 		bot.RequestedCapabilities = req.RequestedCapabilities
 	}
+	if req.AllowedEndpoints != nil {
+		bot.AllowedEndpoints = req.AllowedEndpoints
+	}
 
 	err = s.botRepo.Update(ctx, bot)
 	if err != nil {

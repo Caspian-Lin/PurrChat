@@ -10,6 +10,7 @@ import type {
 } from './types.js';
 import type { NodeRegistry } from './registry.js';
 import { getMissingCapabilities } from './capabilities.js';
+import { resolveSecrets, checkSecretCapability } from './secrets.js';
 
 /** 终态：节点无后继连接时统一进入 */
 const DONE_STATE = '__done';
@@ -82,6 +83,7 @@ export class Compiler {
       senderName: input?.senderName ?? '',
       conversationId: input?.conversationId ?? '',
       grantedCapabilities: input?.grantedCapabilities,
+      secrets: input?.secrets,
     };
   }
 
@@ -100,7 +102,17 @@ export class Compiler {
             `Capability denied: node "${node.name}" (${node.type}) requires [${missing.join(', ')}] but not granted`,
           );
         }
+        // 校验 secrets:use（引用了 secret 但未授予时拒绝）
+        const secretMissing = checkSecretCapability(node.config, context.grantedCapabilities);
+        if (secretMissing.length > 0) {
+          throw new Error(
+            `Capability denied: node "${node.name}" references secrets.* but [${secretMissing.join(', ')}] is not granted`,
+          );
+        }
       }
+
+      // 解析 secrets.<name> 引用，注入实际解密值
+      const resolvedConfig = resolveSecrets(node.config, context.secrets);
 
       const nodeInput = {
         ports: this.resolveNodeInputs(node.id, blueprint.connections, context),
@@ -114,7 +126,7 @@ export class Compiler {
         nameResolver: context.nameResolver,
         finalReply: context.finalReply,
       };
-      return def.execute(nodeInput, node.config || {}, nodeCtx);
+      return def.execute(nodeInput, resolvedConfig as Record<string, any>, nodeCtx);
     });
   }
 

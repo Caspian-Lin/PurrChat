@@ -39,6 +39,7 @@ type Bot struct {
 	IsSystem              bool            `json:"is_system"`
 	PublishedVersion      *int            `json:"published_version,omitempty"`
 	RequestedCapabilities []string        `json:"requested_capabilities"`
+	AllowedEndpoints      []string        `json:"allowed_endpoints"`
 	CreatedAt             time.Time       `json:"created_at"`
 	UpdatedAt             time.Time       `json:"updated_at"`
 }
@@ -62,6 +63,7 @@ type UpdateBotRequest struct {
 	Visibility            BotVisibility   `json:"visibility" binding:"omitempty,oneof=private public global"`
 	MechanismConfig       json.RawMessage `json:"mechanism_config"`
 	RequestedCapabilities []string        `json:"requested_capabilities" binding:"omitempty"`
+	AllowedEndpoints      []string        `json:"allowed_endpoints" binding:"omitempty"`
 }
 
 // DeployBotRequest 部署 Bot 请求

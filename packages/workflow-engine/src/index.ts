@@ -8,6 +8,7 @@ export { resolveInputPorts, replaceVariables, evaluateCondition } from './ports.
 export type { VariableResolveContext } from './ports.js';
 export { allNodes } from './nodes/index.js';
 export { deriveCapabilities, getMissingCapabilities } from './capabilities.js';
+export { resolveSecrets, extractSecretRefs, checkSecretCapability } from './secrets.js';
 
 export type {
   NodeDefinition,

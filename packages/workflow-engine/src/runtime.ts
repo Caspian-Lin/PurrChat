@@ -33,6 +33,8 @@ export interface ExecuteOptions {
   variables?: Record<string, string>;
   /** 安装时授予的 capabilities，运行时强制校验用 */
   grantedCapabilities?: string[];
+  /** 运行时解密后的 secret（key→value），引用解析用 */
+  secrets?: Record<string, string>;
   /** 单次执行等待超时（毫秒），默认 30000 */
   timeoutMs?: number;
 }
@@ -264,6 +266,7 @@ export class WorkflowRuntime {
       contextBuffer: options.contextBuffer ?? [],
       variables: options.variables ?? {},
       grantedCapabilities: options.grantedCapabilities,
+      secrets: options.secrets,
     };
   }
 

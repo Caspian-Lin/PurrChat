@@ -14,6 +14,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// SecretResolver 运行时解密 secret 的接口(解耦 botengine 与 services 包)
+type SecretResolver interface {
+	// ResolveSecrets 返回 appID 的 key->明文 映射;未配置加密时返回 error
+	ResolveSecrets(ctx context.Context, appID uuid.UUID) (map[string]string, error)
+}
+
 // BotEngine Bot 处理引擎
 //
 // 当前职责（保留）：
@@ -33,6 +39,7 @@ type BotEngine struct {
 	enrollmentRepo   repository.EnrollmentRepository
 	callLogRepo      repository.BotCallLogRepository
 	installationRepo repository.BotInstallationRepository
+	secretResolver   SecretResolver // 运行时解密 secret(仅在 secrets:use 已授予时调用)
 
 	// 工作流会话：记录活跃的工作流运行时状态
 	workflowSessions sync.Map // map[string]*SpecialModeSession — "conversationID:botID" -> session
@@ -74,6 +81,11 @@ func (e *BotEngine) SetCallLogRepo(repo repository.BotCallLogRepository) {
 // SetInstallationRepo 设置安装仓储（用于 diagnostics_consent 控制调用日志内容）
 func (e *BotEngine) SetInstallationRepo(repo repository.BotInstallationRepository) {
 	e.installationRepo = repo
+}
+
+// SetSecretResolver 设置 secret 解析器（用于运行时注入 secrets.<name> 引用）
+func (e *BotEngine) SetSecretResolver(resolver SecretResolver) {
+	e.secretResolver = resolver
 }
 
 // recordCallLog 记录调用日志（best-effort，失败不阻塞主流程）
@@ -247,8 +259,17 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 			contextMsgs := e.collectContextMessages(ctx, msg.ConversationID)
 			// 查询安装授予的 capabilities（运行时强制校验用）
 			grantedCaps := e.resolveGrantedCapabilities(ctx, bot.ID, msg.ConversationID, msg.SenderID)
+			// 仅在 secrets:use 已授予时解密注入 secret(纵深防御)
+			var secrets map[string]string
+			if e.secretResolver != nil && models.HasCapability(grantedCaps, models.CapabilitySecretsUse) {
+				if dec, err := e.secretResolver.ResolveSecrets(ctx, bot.ID); err == nil {
+					secrets = dec
+				} else {
+					logger.ErrorfWithCaller("[BotEngine] Failed to resolve secrets for bot %s: %v", bot.Name, err)
+				}
+			}
 			start := time.Now()
-			execResp, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, bot.MechanismConfig, contextMsgs, grantedCaps)
+			execResp, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, bot.MechanismConfig, contextMsgs, grantedCaps, secrets)
 			duration := time.Since(start)
 
 			if tsErr == nil {
