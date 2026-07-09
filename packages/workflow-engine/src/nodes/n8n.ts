@@ -18,19 +18,12 @@ export const n8nNode: NodeDefinition<z.infer<typeof n8nConfigSchema>> = {
   category: 'processing',
   icon: '⚡',
   configSchema: n8nConfigSchema,
-  async execute(input, config, _ctx) {
+  async execute(input, config, ctx) {
     const cfg = config as any;
     let webhookURL = cfg.webhook_url || '';
 
     // 变量替换
-    webhookURL = replaceVariables(webhookURL, {
-      nodeOutputs: {},
-      variables: {},
-      eventOutputs: {},
-      contextBuffer: [],
-      finalReply: '',
-      nameResolver: {},
-    });
+    webhookURL = replaceVariables(webhookURL, ctx);
 
     const method = cfg.method || 'POST';
     const headers: Record<string, string> = {

@@ -1,5 +1,15 @@
 import type { FlowConnection } from '@purrchat/workflow-types';
-import type { ExecutionContext } from './types.js';
+
+/**
+ * 变量解析所需的最小上下文结构。
+ * ExecutionContext 与 NodeContext 均满足此结构。
+ */
+export interface VariableResolveContext {
+  nodeOutputs: Record<string, Record<string, string>>;
+  eventOutputs: Record<string, string>;
+  variables: Record<string, string>;
+  nameResolver: Record<string, string>;
+}
 
 // ─── 端口值解析 ──────────────────────────────────────────────
 
@@ -10,7 +20,7 @@ import type { ExecutionContext } from './types.js';
 export function resolveInputPorts(
   nodeId: string,
   connections: FlowConnection[],
-  context: ExecutionContext,
+  context: VariableResolveContext,
 ): Record<string, string> {
   const result: Record<string, string> = {};
 
@@ -35,7 +45,7 @@ export function getPortValue(
   nodeId: string,
   portId: string,
   connections: FlowConnection[],
-  context: ExecutionContext,
+  context: VariableResolveContext,
 ): string {
   const key = `${nodeId}:${portId}`;
 
@@ -69,7 +79,7 @@ export function getPortValue(
  */
 export function replaceVariables(
   s: string,
-  context: ExecutionContext,
+  context: VariableResolveContext,
 ): string {
   // 替换 {name.port} 格式（最高优先级）
   s = s.replace(/\{([^}]+)\}/g, (match, ref: string) => {
@@ -113,7 +123,7 @@ export function replaceVariables(
  */
 export function evaluateCondition(
   condition: string,
-  context: ExecutionContext,
+  context: VariableResolveContext,
 ): boolean {
   if (!condition) return false;
 

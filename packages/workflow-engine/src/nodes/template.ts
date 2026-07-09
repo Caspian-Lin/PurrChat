@@ -31,15 +31,8 @@ export const templateNode: NodeDefinition<z.infer<typeof templateConfigSchema>> 
       };
     }
 
-    // 变量替换
-    let result = replaceVariables(template, {
-      nodeOutputs: {},
-      variables: ctx.variables,
-      eventOutputs: ctx.eventOutputs,
-      contextBuffer: ctx.contextBuffer,
-      finalReply: '',
-      nameResolver: {},
-    });
+    // 变量替换（使用完整上下文）
+    let result = replaceVariables(template, ctx);
 
     // 替换 {args} 和 {args:N}
     const rawInput = input.rawInput || '';

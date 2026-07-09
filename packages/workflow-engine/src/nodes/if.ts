@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
-import { evaluateOperatorCondition, getPortValue } from '../ports.js';
+import { evaluateOperatorCondition, replaceVariables } from '../ports.js';
 
 const conditionSchema = z.object({
   left: z.string(),
@@ -22,7 +22,7 @@ export const ifNode: NodeDefinition<z.infer<typeof ifConfigSchema>> = {
   category: 'control',
   icon: '◇',
   configSchema: ifConfigSchema,
-  async execute(input, config, _ctx) {
+  async execute(input, config, ctx) {
     const cfg = config as z.infer<typeof ifConfigSchema>;
     let result = false;
 
@@ -30,8 +30,9 @@ export const ifNode: NodeDefinition<z.infer<typeof ifConfigSchema>> = {
       // 新版多条件格式
       const logic = cfg.logic || 'and';
       const results = cfg.conditions.map((c: { left: string; operator: string; right: string }) => {
-        const left = resolvePortValue(c.left, input.ports);
-        const right = resolvePortValue(c.right, input.ports);
+        // 先解析 {节点名.端口名} / $变量 / $nodeId:portId 引用，再查输入端口
+        const left = resolvePortValue(replaceVariables(c.left, ctx), input.ports);
+        const right = resolvePortValue(replaceVariables(c.right, ctx), input.ports);
         return evaluateOperatorCondition(left, right, c.operator);
       });
 
@@ -40,8 +41,8 @@ export const ifNode: NodeDefinition<z.infer<typeof ifConfigSchema>> = {
         : results.some(Boolean);
     } else if (cfg.operator) {
       // 旧版单条件格式
-      const left = input.ports['in_exec'] || '';
-      const right = cfg.value || '';
+      const left = replaceVariables(input.ports['in_exec'] || '', ctx);
+      const right = replaceVariables(cfg.value || '', ctx);
       result = evaluateOperatorCondition(left, right, cfg.operator);
     } else {
       // 无条件配置，检查 in_exec 端口值
@@ -60,13 +61,11 @@ export const ifNode: NodeDefinition<z.infer<typeof ifConfigSchema>> = {
 
 /**
  * 解析端口值引用
- * 支持格式：直接值、{nodeName.portName}、$nodeID:portID
+ * 支持格式：直接值、{nodeName.portName}（已由上层 replaceVariables 解析）、$nodeID:portID
  */
 function resolvePortValue(ref: string, ports: Record<string, string>): string {
   // 直接是端口 ID
   if (ports[ref] !== undefined) return ports[ref];
 
-  // {name.port} 格式 — 由上层 replaceVariables 处理
-  // 这里只做简单的端口值查找
   return ref;
 }
