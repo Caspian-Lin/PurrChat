@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func TestBotAppInstallation(t *testing.T) {
 	callLogRepo := repository.NewBotCallLogRepository()
 
 	botService := services.NewBotService(botRepo, botDeployRepo, installationRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, messageRepo, callLogRepo)
-	installationService := services.NewInstallationService(installationRepo, botRepo, enrollmentRepo)
+	installationService := services.NewInstallationService(installationRepo, botRepo, enrollmentRepo, messageRepo)
 
 	owner := CreateTestUser(t, "botowner", "owner@test.com", "pass")
 
@@ -180,5 +181,114 @@ func TestBotAppInstallation(t *testing.T) {
 		botEnroll2, err := enrollmentRepo.FindByConversationAndUser(ctx, conv.ID, bot.ID)
 		assert.Error(t, err)
 		assert.Nil(t, botEnroll2)
+	})
+
+	// capability:granted 必须是 requested 的子集
+	t.Run("capability_granted_subset_requested", func(t *testing.T) {
+		otherUser := CreateTestUser(t, "capuser", "cap@test.com", "pass")
+
+		// Bot A 声明 [read_trigger, send, network:external]
+		botA, err := botService.CreateBot(ctx, owner.ID.String(), &models.CreateBotRequest{Name: "CapBotA", Visibility: models.BotVisibilityPublic})
+		require.NoError(t, err)
+		_, err = botService.UpdateBot(ctx, botA.ID.String(), owner.ID.String(), &models.UpdateBotRequest{
+			RequestedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend, models.CapabilityNetworkExternal},
+		})
+		require.NoError(t, err)
+
+		// 合法缩减:只授予 read_trigger + send(去掉 network:external)
+		inst, err := installationService.CreateInstallation(ctx, otherUser.ID.String(), botA.ID.String(), &models.CreateInstallationRequest{
+			TargetType:          models.InstallationTargetUser,
+			TargetID:            otherUser.ID,
+			GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
+		})
+		require.NoError(t, err)
+		assert.Len(t, inst.GrantedCapabilities, 2)
+
+		// 声明 network:external 的 Bot → diagnostics 强制 granted(基于 requested,与 granted 缩减无关)
+		assert.Equal(t, models.DiagnosticsGranted, inst.DiagnosticsConsent)
+
+		// Bot B 只声明 [read_trigger, send](不含 network:external)
+		botB, err := botService.CreateBot(ctx, owner.ID.String(), &models.CreateBotRequest{Name: "CapBotB", Visibility: models.BotVisibilityPublic})
+		require.NoError(t, err)
+		_, err = botService.UpdateBot(ctx, botB.ID.String(), owner.ID.String(), &models.UpdateBotRequest{
+			RequestedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
+		})
+		require.NoError(t, err)
+
+		// 非法:granted 包含 requested 未声明的 capability(secrets:use)
+		_, err = installationService.CreateInstallation(ctx, otherUser.ID.String(), botB.ID.String(), &models.CreateInstallationRequest{
+			TargetType:          models.InstallationTargetUser,
+			TargetID:            otherUser.ID,
+			GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySecretsUse},
+		})
+		assert.Error(t, err)
+
+		// 纯本地 Bot(无 network:external)→ diagnostics 默认 denied
+		instB, err := installationService.CreateInstallation(ctx, otherUser.ID.String(), botB.ID.String(), &models.CreateInstallationRequest{
+			TargetType: models.InstallationTargetUser,
+			TargetID:   otherUser.ID,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, models.DiagnosticsDenied, instB.DiagnosticsConsent)
+	})
+
+	// 外发 Bot 安装到群聊后强制发系统消息告知成员
+	t.Run("external_bot_group_warning", func(t *testing.T) {
+		conv := &models.Conversation{ConversationType: models.ConversationTypeGroup, CreatedBy: &owner.ID}
+		require.NoError(t, conversationRepo.Create(ctx, conv))
+		require.NoError(t, enrollmentRepo.Create(ctx, &models.Enrollment{ConversationID: conv.ID, UserID: owner.ID, Role: models.EnrollmentRoleOwner, JoinedAt: time.Now().UTC()}))
+
+		// 声明 network:external 的 Bot
+		extBot, err := botService.CreateBot(ctx, owner.ID.String(), &models.CreateBotRequest{Name: "ExtBot", Visibility: models.BotVisibilityPublic})
+		require.NoError(t, err)
+		_, err = botService.UpdateBot(ctx, extBot.ID.String(), owner.ID.String(), &models.UpdateBotRequest{
+			RequestedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilityNetworkExternal, models.CapabilitySend},
+		})
+		require.NoError(t, err)
+
+		// 安装到群聊
+		inst, err := installationService.CreateInstallation(ctx, owner.ID.String(), extBot.ID.String(), &models.CreateInstallationRequest{
+			TargetType: models.InstallationTargetConversation,
+			TargetID:   conv.ID,
+		})
+		require.NoError(t, err)
+
+		// diagnostics 强制 granted(外发 Bot)
+		assert.Equal(t, models.DiagnosticsGranted, inst.DiagnosticsConsent)
+
+		// 系统消息 bot_external_warning 已插入(用 messageRepo 查,因消息走分表函数)
+		msgs, err := messageRepo.FindAllMessages(ctx, conv.ID)
+		require.NoError(t, err)
+		found := false
+		for _, m := range msgs {
+			if strings.Contains(m.Content, "bot_external_warning") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "external warning system message should be inserted")
+
+		// 纯本地 Bot 安装不产生外发警告
+		localBot, err := botService.CreateBot(ctx, owner.ID.String(), &models.CreateBotRequest{Name: "LocalBot", Visibility: models.BotVisibilityPublic})
+		require.NoError(t, err)
+		conv2 := &models.Conversation{ConversationType: models.ConversationTypeGroup, CreatedBy: &owner.ID}
+		require.NoError(t, conversationRepo.Create(ctx, conv2))
+		require.NoError(t, enrollmentRepo.Create(ctx, &models.Enrollment{ConversationID: conv2.ID, UserID: owner.ID, Role: models.EnrollmentRoleOwner, JoinedAt: time.Now().UTC()}))
+		_, err = installationService.CreateInstallation(ctx, owner.ID.String(), localBot.ID.String(), &models.CreateInstallationRequest{
+			TargetType: models.InstallationTargetConversation,
+			TargetID:   conv2.ID,
+		})
+		require.NoError(t, err)
+
+		msgs2, err := messageRepo.FindAllMessages(ctx, conv2.ID)
+		require.NoError(t, err)
+		found2 := false
+		for _, m := range msgs2 {
+			if strings.Contains(m.Content, "bot_external_warning") {
+				found2 = true
+				break
+			}
+		}
+		assert.False(t, found2, "local bot should not produce external warning")
 	})
 }

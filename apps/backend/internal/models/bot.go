@@ -55,12 +55,13 @@ type CreateBotRequest struct {
 
 // UpdateBotRequest 更新 Bot 请求
 type UpdateBotRequest struct {
-	Name            string          `json:"name" binding:"omitempty,min=1,max=40"`
-	AvatarURL       string          `json:"avatar_url" binding:"omitempty,uri"`
-	Description     string          `json:"description" binding:"omitempty,max=500"`
-	Status          BotStatus       `json:"status" binding:"omitempty,oneof=active disabled"`
-	Visibility      BotVisibility   `json:"visibility" binding:"omitempty,oneof=private public global"`
-	MechanismConfig json.RawMessage `json:"mechanism_config"`
+	Name                  string          `json:"name" binding:"omitempty,min=1,max=40"`
+	AvatarURL             string          `json:"avatar_url" binding:"omitempty,uri"`
+	Description           string          `json:"description" binding:"omitempty,max=500"`
+	Status                BotStatus       `json:"status" binding:"omitempty,oneof=active disabled"`
+	Visibility            BotVisibility   `json:"visibility" binding:"omitempty,oneof=private public global"`
+	MechanismConfig       json.RawMessage `json:"mechanism_config"`
+	RequestedCapabilities []string        `json:"requested_capabilities" binding:"omitempty"`
 }
 
 // DeployBotRequest 部署 Bot 请求

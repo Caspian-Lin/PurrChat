@@ -50,6 +50,53 @@ const (
 	InstallationDisabled InstallationStatus = "disabled"
 )
 
+// ─── Capability 常量(与 workflow-types capabilities.ts 保持一致) ────
+
+const (
+	CapabilityReadTrigger     = "messages:read_trigger"
+	CapabilityReadHistory     = "messages:read_history"
+	CapabilitySend            = "messages:send"
+	CapabilityMembersRead     = "members:read"
+	CapabilityNetworkExternal = "network:external"
+	CapabilitySecretsUse      = "secrets:use"
+)
+
+// AllCapabilities 全部已知 capability(校验与文档用)
+var AllCapabilities = []string{
+	CapabilityReadTrigger,
+	CapabilityReadHistory,
+	CapabilitySend,
+	CapabilityMembersRead,
+	CapabilityNetworkExternal,
+	CapabilitySecretsUse,
+}
+
+// HasCapability 判断 capability 集合是否包含指定 capability
+func HasCapability(caps []string, cap string) bool {
+	for _, c := range caps {
+		if c == cap {
+			return true
+		}
+	}
+	return false
+}
+
+// IsGrantedSubsetOfRequested 校验 granted 是否为 requested 的子集
+// 返回 granted 中超出 requested 的违规 capability 列表(空表示合法)
+func IsGrantedSubsetOfRequested(granted, requested []string) []string {
+	reqSet := make(map[string]bool, len(requested))
+	for _, r := range requested {
+		reqSet[r] = true
+	}
+	var violations []string
+	for _, g := range granted {
+		if !reqSet[g] {
+			violations = append(violations, g)
+		}
+	}
+	return violations
+}
+
 // BotIdentity 系统身份投影(不可登录、不可好友;仅用于 message.sender_id)
 type BotIdentity struct {
 	AppID       uuid.UUID `json:"app_id"`

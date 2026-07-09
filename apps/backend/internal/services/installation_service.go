@@ -2,11 +2,13 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/repository"
+	"purr-chat-server/internal/websocket"
 	"purr-chat-server/pkg/logger"
 
 	"github.com/google/uuid"
@@ -22,25 +24,15 @@ var (
 	errBotNotDiscoverable   = errors.New("this bot is not publicly available")
 	errAlreadyInstalled     = errors.New("bot is already installed to this target")
 	errInstallationNotFound = errors.New("installation not found")
+	errGrantedExceedsReq    = errors.New("granted capabilities exceed requested capabilities")
 )
-
-// capabilityNetworkExternal 外发能力标识(含此能力时 diagnostics 强制 granted)
-const capabilityNetworkExternal = "network:external"
-
-func hasCapability(caps []string, cap string) bool {
-	for _, c := range caps {
-		if c == cap {
-			return true
-		}
-	}
-	return false
-}
 
 // InstallationService Bot 安装业务逻辑服务
 type InstallationService struct {
 	installationRepo repository.BotInstallationRepository
 	botRepo          repository.BotRepository
 	enrollmentRepo   repository.EnrollmentRepository
+	messageRepo      repository.ConversationMessageRepository
 }
 
 // NewInstallationService 创建安装服务
@@ -48,11 +40,13 @@ func NewInstallationService(
 	installationRepo repository.BotInstallationRepository,
 	botRepo repository.BotRepository,
 	enrollmentRepo repository.EnrollmentRepository,
+	messageRepo repository.ConversationMessageRepository,
 ) *InstallationService {
 	return &InstallationService{
 		installationRepo: installationRepo,
 		botRepo:          botRepo,
 		enrollmentRepo:   enrollmentRepo,
+		messageRepo:      messageRepo,
 	}
 }
 
@@ -108,13 +102,17 @@ func (s *InstallationService) CreateInstallation(ctx context.Context, installerI
 	if len(granted) == 0 {
 		granted = bot.RequestedCapabilities
 	}
+	// 校验 granted ⊆ requested(安装者只能缩减,不能超授权)
+	if violations := models.IsGrantedSubsetOfRequested(granted, bot.RequestedCapabilities); len(violations) > 0 {
+		return nil, errGrantedExceedsReq
+	}
 
 	// 5. diagnostics_consent:外发 Bot 强制 granted(数据已必然到达 owner 经第三方)
 	diag := req.DiagnosticsConsent
 	if diag == "" {
 		diag = models.DiagnosticsDenied
 	}
-	if hasCapability(bot.RequestedCapabilities, capabilityNetworkExternal) {
+	if models.HasCapability(bot.RequestedCapabilities, models.CapabilityNetworkExternal) {
 		diag = models.DiagnosticsGranted
 	}
 
@@ -128,6 +126,11 @@ func (s *InstallationService) CreateInstallation(ctx context.Context, installerI
 		}
 		if err := s.enrollmentRepo.Create(ctx, botEnrollment); err != nil {
 			logger.ErrorfWithCaller("[InstallationService] Failed to enroll bot in conversation: %v", err)
+		}
+
+		// 声明 network:external 的 Bot 安装到群聊后,强制向全体成员发系统消息告知外发
+		if models.HasCapability(bot.RequestedCapabilities, models.CapabilityNetworkExternal) {
+			s.notifyExternalBotInstalled(ctx, bot, req.TargetID, installerUUID)
 		}
 	}
 
@@ -239,7 +242,7 @@ func (s *InstallationService) UpdateInstallation(ctx context.Context, requesterI
 
 	// 外发 Bot 的 diagnostics 不可降级为 denied
 	if req.DiagnosticsConsent == models.DiagnosticsDenied && inst.App != nil &&
-		hasCapability(inst.App.RequestedCapabilities, capabilityNetworkExternal) {
+		models.HasCapability(inst.App.RequestedCapabilities, models.CapabilityNetworkExternal) {
 		req.DiagnosticsConsent = models.DiagnosticsGranted
 	}
 
@@ -305,4 +308,36 @@ func (s *InstallationService) canManage(ctx context.Context, inst *models.BotIns
 		}
 	}
 	return false
+}
+
+// notifyExternalBotInstalled 声明 network:external 的 Bot 安装到群聊后,发系统消息 + WS 通知告知外发
+func (s *InstallationService) notifyExternalBotInstalled(ctx context.Context, bot *models.Bot, conversationID uuid.UUID, installerID uuid.UUID) {
+	sysContent := &models.SystemMessageContent{
+		Type:    "bot_external_warning",
+		BotID:   bot.ID.String(),
+		BotName: bot.Name,
+	}
+	sysJSON, _ := json.Marshal(sysContent)
+	sysMessage := &models.Message{
+		SenderID: bot.ID,
+		Content:  string(sysJSON),
+		MsgType:  models.MsgTypeSystem,
+	}
+	if err := s.messageRepo.InsertMessage(ctx, conversationID, sysMessage); err != nil {
+		logger.ErrorfWithCaller("[InstallationService] Failed to insert external warning system message: %v", err)
+	}
+
+	if websocket.GlobalHub != nil {
+		members, err := s.enrollmentRepo.FindByConversationID(ctx, conversationID)
+		if err == nil {
+			for _, m := range members {
+				websocket.GlobalHub.SendToUser(m.UserID, "bot_external_warning", map[string]any{
+					"bot_id":          bot.ID.String(),
+					"bot_name":        bot.Name,
+					"conversation_id": conversationID.String(),
+					"installed_by":    installerID.String(),
+				})
+			}
+		}
+	}
 }

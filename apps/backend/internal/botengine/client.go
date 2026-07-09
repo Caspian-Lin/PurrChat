@@ -34,15 +34,16 @@ func NewBotEngineClient(baseURL string) *BotEngineClient {
 
 // ExecuteRequest 执行请求（对应 TS 服务的 POST /execute）
 type ExecuteRequest struct {
-	ConversationID  string           `json:"conversation_id"`
-	BotID           string           `json:"bot_id"`
-	BotName         string           `json:"bot_name"`
-	SenderID        string           `json:"sender_id"`
-	SenderName      string           `json:"sender_name"`
-	Content         string           `json:"content"`
-	MsgType         string           `json:"msg_type"`
-	MechanismConfig json.RawMessage  `json:"mechanism_config"`
-	ContextMessages []ContextMessage `json:"context_messages,omitempty"`
+	ConversationID      string           `json:"conversation_id"`
+	BotID               string           `json:"bot_id"`
+	BotName             string           `json:"bot_name"`
+	SenderID            string           `json:"sender_id"`
+	SenderName          string           `json:"sender_name"`
+	Content             string           `json:"content"`
+	MsgType             string           `json:"msg_type"`
+	MechanismConfig     json.RawMessage  `json:"mechanism_config"`
+	ContextMessages     []ContextMessage `json:"context_messages,omitempty"`
+	GrantedCapabilities []string         `json:"granted_capabilities,omitempty"`
 }
 
 // ExecuteResponse 执行响应
@@ -58,17 +59,18 @@ type ExecuteResponse struct {
 }
 
 // Execute 调用 TS 服务执行消息处理
-func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uuid.UUID, botName string, mechanismConfig json.RawMessage, contextMessages []ContextMessage) (*ExecuteResponse, error) {
+func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uuid.UUID, botName string, mechanismConfig json.RawMessage, contextMessages []ContextMessage, grantedCapabilities []string) (*ExecuteResponse, error) {
 	req := ExecuteRequest{
-		ConversationID:  msg.ConversationID.String(),
-		BotID:           botID.String(),
-		BotName:         botName,
-		SenderID:        msg.SenderID.String(),
-		SenderName:      msg.SenderName,
-		Content:         msg.Content,
-		MsgType:         msg.MsgType,
-		MechanismConfig: mechanismConfig,
-		ContextMessages: contextMessages,
+		ConversationID:      msg.ConversationID.String(),
+		BotID:               botID.String(),
+		BotName:             botName,
+		SenderID:            msg.SenderID.String(),
+		SenderName:          msg.SenderName,
+		Content:             msg.Content,
+		MsgType:             msg.MsgType,
+		MechanismConfig:     mechanismConfig,
+		ContextMessages:     contextMessages,
+		GrantedCapabilities: grantedCapabilities,
 	}
 
 	body, err := json.Marshal(req)
