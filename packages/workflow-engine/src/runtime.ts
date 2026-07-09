@@ -31,6 +31,8 @@ export interface ExecuteOptions {
   time?: string;
   contextBuffer?: Array<{ role: string; content: string }>;
   variables?: Record<string, string>;
+  /** 安装时授予的 capabilities，运行时强制校验用 */
+  grantedCapabilities?: string[];
   /** 单次执行等待超时（毫秒），默认 30000 */
   timeoutMs?: number;
 }
@@ -94,7 +96,7 @@ export class WorkflowRuntime {
       const context = (snapshot as RuntimeSnapshot).context as ExecutionContext;
 
       if (status === ExecutionStatus.Error) {
-        throw new Error('Workflow execution failed');
+        throw new Error(context.lastError || 'Workflow execution failed');
       }
       if (status === ExecutionStatus.Waiting) {
         // 一次性执行不允许暂停在 wait 节点
@@ -261,6 +263,7 @@ export class WorkflowRuntime {
       time: options.time ?? new Date().toLocaleTimeString('zh-CN', { hour12: false }),
       contextBuffer: options.contextBuffer ?? [],
       variables: options.variables ?? {},
+      grantedCapabilities: options.grantedCapabilities,
     };
   }
 

@@ -157,7 +157,7 @@ describe('终止语义', () => {
 
     await expect(
       runtime.execute(blueprint, { rawInput: 'x', timeoutMs: 3000 }),
-    ).rejects.toThrow(/failed/);
+    ).rejects.toThrow('template is empty');
   });
 
   it('未知节点类型在编译期失败', async () => {

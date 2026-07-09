@@ -9,6 +9,7 @@ import type {
   UserMessageEvent,
 } from './types.js';
 import type { NodeRegistry } from './registry.js';
+import { getMissingCapabilities } from './capabilities.js';
 
 /** 终态：节点无后继连接时统一进入 */
 const DONE_STATE = '__done';
@@ -80,6 +81,7 @@ export class Compiler {
       senderId: input?.senderId ?? '',
       senderName: input?.senderName ?? '',
       conversationId: input?.conversationId ?? '',
+      grantedCapabilities: input?.grantedCapabilities,
     };
   }
 
@@ -89,6 +91,17 @@ export class Compiler {
 
     return fromPromise(async ({ input }: { input: { context: ExecutionContext } }) => {
       const context = input.context;
+
+      // 运行时强制校验:仅当显式传入 grantedCapabilities 时校验（向后兼容旧调用方）
+      if (context.grantedCapabilities !== undefined) {
+        const missing = getMissingCapabilities(node, context.grantedCapabilities);
+        if (missing.length > 0) {
+          throw new Error(
+            `Capability denied: node "${node.name}" (${node.type}) requires [${missing.join(', ')}] but not granted`,
+          );
+        }
+      }
+
       const nodeInput = {
         ports: this.resolveNodeInputs(node.id, blueprint.connections, context),
         rawInput: context.variables['__rawInput__'] ?? '',
@@ -196,7 +209,13 @@ export class Compiler {
           src: actorKey,
           input: ({ context }: { context: ExecutionContext }) => ({ context }),
           onDone: onDoneTransitions,
-          onError: { target: ERROR_STATE },
+          onError: {
+            target: ERROR_STATE,
+            actions: assign({
+              lastError: ({ event }: { event: any }) =>
+                event?.error?.message ?? event?.data?.message ?? 'node execution failed',
+            }),
+          },
         },
       };
     }
@@ -211,7 +230,13 @@ export class Compiler {
           actions: onDoneActions,
           target: outConn ? outConn.targetNodeId : DONE_STATE,
         },
-        onError: { target: ERROR_STATE },
+        onError: {
+          target: ERROR_STATE,
+          actions: assign({
+            lastError: ({ event }: { event: any }) =>
+              event?.error?.message ?? event?.data?.message ?? 'node execution failed',
+          }),
+        },
       },
     };
   }

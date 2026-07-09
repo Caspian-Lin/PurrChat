@@ -135,6 +135,7 @@ export class BotExecutor {
       senderId: req.sender_id,
       conversationId: req.conversation_id,
       contextBuffer: req.context_messages,
+      grantedCapabilities: req.granted_capabilities,
     });
 
     const result = await this.runtime.sendMessage(sessionId, req.content, senderInfo);
@@ -158,6 +159,7 @@ export class BotExecutor {
       senderId: req.sender_id,
       conversationId: req.conversation_id,
       contextBuffer: req.context_messages,
+      grantedCapabilities: req.granted_capabilities,
     });
 
     return { reply: result.reply, session_active: false, triggered: true };
