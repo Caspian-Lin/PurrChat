@@ -55,10 +55,22 @@ func (r *botRepository) Create(ctx context.Context, bot *models.Bot) error {
 	if bot.MechanismConfig == nil {
 		bot.MechanismConfig = json.RawMessage(`[]`)
 	}
+	if bot.BotType == "" {
+		bot.BotType = models.BotTypeWorkflow
+	}
+	if bot.Discoverability == "" {
+		bot.Discoverability = models.DiscoverabilityUnlisted
+	}
+	if bot.Visibility == "" {
+		bot.Visibility = models.BotVisibilityPrivate
+	}
+	if bot.RequestedCapabilities == nil {
+		bot.RequestedCapabilities = []string{}
+	}
 
-	// 在事务中同时创建 user 记录和 bot 记录，共用同一 ID
+	// 在事务中同时创建 user 记录、bot 记录和 bot_identity 投影,共用同一 ID
 	err := pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
-		// 1. 创建 Bot 对应的 user 记录
+		// 1. 创建 Bot 对应的 user 记录(系统身份投影行)
 		_, err := tx.Exec(ctx, `
 			INSERT INTO users (id, username, password_hash, salt, avatar_url, is_bot, created_at)
 			VALUES ($1, $2, '', '', $3, TRUE, $4)
@@ -67,15 +79,31 @@ func (r *botRepository) Create(ctx context.Context, bot *models.Bot) error {
 			return fmt.Errorf("failed to create bot user record: %w", err)
 		}
 
-		// 2. 创建 bot 记录
+		// 2. 创建 bot 记录(含 App 化字段)
 		_, err = tx.Exec(ctx, `
-			INSERT INTO bots (id, owner_id, name, avatar_url, description, status, visibility, mechanism_config, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			INSERT INTO bots (id, owner_id, name, avatar_url, description, status, visibility, mechanism_config,
+			                  bot_type, discoverability, is_system, published_version, requested_capabilities,
+			                  created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		`,
 			bot.ID, bot.OwnerID, bot.Name, bot.AvatarURL, bot.Description,
-			bot.Status, bot.Visibility, bot.MechanismConfig, bot.CreatedAt, bot.UpdatedAt,
+			bot.Status, bot.Visibility, bot.MechanismConfig,
+			bot.BotType, bot.Discoverability, bot.IsSystem, bot.PublishedVersion, bot.RequestedCapabilities,
+			bot.CreatedAt, bot.UpdatedAt,
 		)
-		return err
+		if err != nil {
+			return fmt.Errorf("failed to create bot record: %w", err)
+		}
+
+		// 3. 创建 bot_identity 投影(不可登录、不可好友的系统身份)
+		_, err = tx.Exec(ctx, `
+			INSERT INTO bot_identities (app_id, user_id, display_name, avatar_url, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, bot.ID, bot.ID, bot.Name, bot.AvatarURL, bot.CreatedAt, bot.UpdatedAt)
+		if err != nil {
+			return fmt.Errorf("failed to create bot_identity: %w", err)
+		}
+		return nil
 	})
 
 	if err != nil {
@@ -89,14 +117,18 @@ func (r *botRepository) Create(ctx context.Context, bot *models.Bot) error {
 
 func (r *botRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Bot, error) {
 	query := `
-        SELECT id, owner_id, name, avatar_url, description, status, visibility, mechanism_config, created_at, updated_at
+        SELECT id, owner_id, name, avatar_url, description, status, visibility, mechanism_config,
+               bot_type, discoverability, is_system, published_version, requested_capabilities,
+               created_at, updated_at
         FROM bots WHERE id = $1
     `
 
 	bot := &models.Bot{}
 	err := database.GetPool().QueryRow(ctx, query, id).Scan(
 		&bot.ID, &bot.OwnerID, &bot.Name, &bot.AvatarURL, &bot.Description,
-		&bot.Status, &bot.Visibility, &bot.MechanismConfig, &bot.CreatedAt, &bot.UpdatedAt,
+		&bot.Status, &bot.Visibility, &bot.MechanismConfig,
+		&bot.BotType, &bot.Discoverability, &bot.IsSystem, &bot.PublishedVersion, &bot.RequestedCapabilities,
+		&bot.CreatedAt, &bot.UpdatedAt,
 	)
 
 	if err != nil {
@@ -108,7 +140,9 @@ func (r *botRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Bot
 
 func (r *botRepository) FindByOwner(ctx context.Context, ownerID uuid.UUID) ([]*models.Bot, error) {
 	query := `
-        SELECT id, owner_id, name, avatar_url, description, status, visibility, mechanism_config, created_at, updated_at
+        SELECT id, owner_id, name, avatar_url, description, status, visibility, mechanism_config,
+               bot_type, discoverability, is_system, published_version, requested_capabilities,
+               created_at, updated_at
         FROM bots WHERE owner_id = $1
         ORDER BY created_at DESC
     `
@@ -124,7 +158,9 @@ func (r *botRepository) FindByOwner(ctx context.Context, ownerID uuid.UUID) ([]*
 
 func (r *botRepository) FindPublic(ctx context.Context, q string, limit, offset int) ([]*models.Bot, error) {
 	sql := `
-        SELECT id, owner_id, name, avatar_url, description, status, visibility, mechanism_config, created_at, updated_at
+        SELECT id, owner_id, name, avatar_url, description, status, visibility, mechanism_config,
+               bot_type, discoverability, is_system, published_version, requested_capabilities,
+               created_at, updated_at
         FROM bots
         WHERE visibility IN ('public', 'global') AND status = 'active'
     `
@@ -175,7 +211,8 @@ func (r *botRepository) CountPublic(ctx context.Context, q string) (int, error) 
 func (r *botRepository) FindPublicWithDetails(ctx context.Context, q string, limit, offset int) ([]*models.PublicBotDetail, error) {
 	sql := `
         SELECT b.id, b.owner_id, b.name, b.avatar_url, b.description, b.status, b.visibility,
-               b.mechanism_config, b.created_at, b.updated_at,
+               b.mechanism_config, b.bot_type, b.discoverability, b.is_system, b.published_version, b.requested_capabilities,
+               b.created_at, b.updated_at,
                COALESCE(d.cnt, 0) AS deployment_count,
                COALESCE(u.username, '') AS owner_name
         FROM bots b
@@ -215,7 +252,9 @@ func (r *botRepository) FindPublicWithDetails(ctx context.Context, q string, lim
 		d := &models.PublicBotDetail{}
 		err := rows.Scan(
 			&d.ID, &d.OwnerID, &d.Name, &d.AvatarURL, &d.Description,
-			&d.Status, &d.Visibility, &d.MechanismConfig, &d.CreatedAt, &d.UpdatedAt,
+			&d.Status, &d.Visibility, &d.MechanismConfig,
+			&d.BotType, &d.Discoverability, &d.IsSystem, &d.PublishedVersion, &d.RequestedCapabilities,
+			&d.CreatedAt, &d.UpdatedAt,
 			&d.DeploymentCount, &d.OwnerName,
 		)
 		if err != nil {
@@ -241,15 +280,26 @@ func (r *botRepository) Update(ctx context.Context, bot *models.Bot) error {
 			return err
 		}
 
-		// 2. 更新 bots 表
+		// 2. 更新 bots 表(含 App 化字段)
 		_, err = tx.Exec(ctx, `
 			UPDATE bots SET name = $1, avatar_url = $2, description = $3, status = $4, visibility = $5,
-				mechanism_config = $6, updated_at = $7
-			WHERE id = $8
+				mechanism_config = $6, bot_type = $7, discoverability = $8, is_system = $9,
+				published_version = $10, requested_capabilities = $11, updated_at = $12
+			WHERE id = $13
 		`,
 			bot.Name, bot.AvatarURL, bot.Description, bot.Status, bot.Visibility,
-			bot.MechanismConfig, bot.UpdatedAt, bot.ID,
+			bot.MechanismConfig, bot.BotType, bot.Discoverability, bot.IsSystem,
+			bot.PublishedVersion, bot.RequestedCapabilities, bot.UpdatedAt, bot.ID,
 		)
+		if err != nil {
+			return err
+		}
+
+		// 3. 同步 bot_identity 的 display_name/avatar_url
+		_, err = tx.Exec(ctx, `
+			UPDATE bot_identities SET display_name = $1, avatar_url = $2, updated_at = $3
+			WHERE app_id = $4
+		`, bot.Name, bot.AvatarURL, bot.UpdatedAt, bot.ID)
 		return err
 	})
 
@@ -448,7 +498,9 @@ func scanBotsFromRows(rows pgx.Rows) ([]*models.Bot, error) {
 		bot := &models.Bot{}
 		err := rows.Scan(
 			&bot.ID, &bot.OwnerID, &bot.Name, &bot.AvatarURL, &bot.Description,
-			&bot.Status, &bot.Visibility, &bot.MechanismConfig, &bot.CreatedAt, &bot.UpdatedAt,
+			&bot.Status, &bot.Visibility, &bot.MechanismConfig,
+			&bot.BotType, &bot.Discoverability, &bot.IsSystem, &bot.PublishedVersion, &bot.RequestedCapabilities,
+			&bot.CreatedAt, &bot.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err

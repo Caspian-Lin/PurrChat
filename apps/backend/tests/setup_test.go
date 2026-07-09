@@ -70,6 +70,9 @@ func SetupTestDB(t *testing.T) {
 func CreateTestTables(t *testing.T, ctx context.Context) {
 	tables := []string{
 		"user_settings",
+		"bot_installations",
+		"bot_identities",
+		"bots",
 		"enrollments",
 		"friendships",
 		"conversations",
@@ -184,6 +187,73 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create enrollments table: %v", err)
+	}
+
+	// 创建 bots 表(App 化模型,见 migration 007)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bots (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			name VARCHAR(40) NOT NULL,
+			avatar_url TEXT DEFAULT '',
+			description TEXT DEFAULT '',
+			status VARCHAR(20) NOT NULL DEFAULT 'active',
+			visibility VARCHAR(20) NOT NULL DEFAULT 'private',
+			mechanism_config JSONB NOT NULL DEFAULT '[]'::jsonb,
+			bot_type VARCHAR(20) NOT NULL DEFAULT 'workflow',
+			discoverability VARCHAR(20) NOT NULL DEFAULT 'unlisted',
+			is_system BOOLEAN NOT NULL DEFAULT FALSE,
+			published_version INTEGER,
+			requested_capabilities TEXT[] NOT NULL DEFAULT '{}',
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT check_bot_status CHECK (status IN ('active', 'disabled')),
+			CONSTRAINT check_bot_visibility CHECK (visibility IN ('private', 'public', 'global')),
+			CONSTRAINT check_bot_type CHECK (bot_type IN ('builtin', 'workflow', 'external')),
+			CONSTRAINT check_bot_discoverability CHECK (discoverability IN ('unlisted', 'listed', 'featured'))
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bots table: %v", err)
+	}
+
+	// 创建 bot_identities 表
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_identities (
+			app_id UUID PRIMARY KEY REFERENCES bots(id) ON DELETE CASCADE,
+			user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+			display_name VARCHAR(40) NOT NULL,
+			avatar_url TEXT DEFAULT '',
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_identities table: %v", err)
+	}
+
+	// 创建 bot_installations 表
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_installations (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			app_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			installed_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			target_type VARCHAR(20) NOT NULL,
+			target_id UUID NOT NULL,
+			granted_capabilities TEXT[] NOT NULL DEFAULT '{}',
+			diagnostics_consent VARCHAR(20) NOT NULL DEFAULT 'denied',
+			status VARCHAR(20) NOT NULL DEFAULT 'active',
+			config JSONB DEFAULT '{}'::jsonb,
+			installed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(target_type, target_id, app_id),
+			CONSTRAINT check_installation_target CHECK (target_type IN ('user', 'conversation')),
+			CONSTRAINT check_installation_diag CHECK (diagnostics_consent IN ('denied', 'granted')),
+			CONSTRAINT check_installation_status CHECK (status IN ('active', 'paused', 'disabled'))
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_installations table: %v", err)
 	}
 
 	// 创建user_settings表
@@ -557,6 +627,9 @@ func CleanupTestTables(t *testing.T) {
 
 	tables := []string{
 		"user_settings",
+		"bot_installations",
+		"bot_identities",
+		"bots",
 		"enrollments",
 		"friendships",
 		"conversations",

@@ -24,26 +24,33 @@ const (
 	BotVisibilityGlobal  BotVisibility = "global"  // 系统级 Bot
 )
 
-// Bot Bot 模型
+// Bot Bot 模型(演进为 BotApp 等价物,见 docs/bot-engine/BOT_APP_MODEL.md)
 type Bot struct {
-	ID              uuid.UUID       `json:"id"`
-	OwnerID         uuid.UUID       `json:"owner_id"`
-	Name            string          `json:"name"`
-	AvatarURL       string          `json:"avatar_url"`
-	Description     string          `json:"description"`
-	Status          BotStatus       `json:"status"`
-	Visibility      BotVisibility   `json:"visibility"`
-	MechanismConfig json.RawMessage `json:"mechanism_config"`
-	CreatedAt       time.Time       `json:"created_at"`
-	UpdatedAt       time.Time       `json:"updated_at"`
+	ID                    uuid.UUID       `json:"id"`
+	OwnerID               uuid.UUID       `json:"owner_id"`
+	Name                  string          `json:"name"`
+	AvatarURL             string          `json:"avatar_url"`
+	Description           string          `json:"description"`
+	Status                BotStatus       `json:"status"`
+	Visibility            BotVisibility   `json:"visibility"` // deprecated, #36 迁移后移除
+	MechanismConfig       json.RawMessage `json:"mechanism_config"`
+	BotType               BotType         `json:"bot_type"`
+	Discoverability       Discoverability `json:"discoverability"`
+	IsSystem              bool            `json:"is_system"`
+	PublishedVersion      *int            `json:"published_version,omitempty"`
+	RequestedCapabilities []string        `json:"requested_capabilities"`
+	CreatedAt             time.Time       `json:"created_at"`
+	UpdatedAt             time.Time       `json:"updated_at"`
 }
 
 // CreateBotRequest 创建 Bot 请求
 type CreateBotRequest struct {
-	Name        string        `json:"name" binding:"required,min=1,max=40"`
-	AvatarURL   string        `json:"avatar_url" binding:"omitempty,uri"`
-	Description string        `json:"description" binding:"omitempty,max=500"`
-	Visibility  BotVisibility `json:"visibility" binding:"omitempty,oneof=private public global"`
+	Name            string          `json:"name" binding:"required,min=1,max=40"`
+	AvatarURL       string          `json:"avatar_url" binding:"omitempty,uri"`
+	Description     string          `json:"description" binding:"omitempty,max=500"`
+	Discoverability Discoverability `json:"discoverability" binding:"omitempty,oneof=unlisted listed featured"`
+	// Visibility deprecated,兼容旧客户端;若传则映射到 discoverability
+	Visibility BotVisibility `json:"visibility" binding:"omitempty,oneof=private public global"`
 }
 
 // UpdateBotRequest 更新 Bot 请求

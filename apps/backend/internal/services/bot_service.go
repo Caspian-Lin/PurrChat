@@ -20,6 +20,7 @@ import (
 type BotService struct {
 	botRepo          repository.BotRepository
 	botDeployRepo    repository.BotDeploymentRepository
+	installationRepo repository.BotInstallationRepository
 	userRepo         repository.UserRepository
 	friendshipRepo   repository.FriendshipRepository
 	conversationRepo repository.ConversationRepository
@@ -32,6 +33,7 @@ type BotService struct {
 func NewBotService(
 	botRepo repository.BotRepository,
 	botDeployRepo repository.BotDeploymentRepository,
+	installationRepo repository.BotInstallationRepository,
 	userRepo repository.UserRepository,
 	friendshipRepo repository.FriendshipRepository,
 	conversationRepo repository.ConversationRepository,
@@ -42,6 +44,7 @@ func NewBotService(
 	return &BotService{
 		botRepo:          botRepo,
 		botDeployRepo:    botDeployRepo,
+		installationRepo: installationRepo,
 		userRepo:         userRepo,
 		friendshipRepo:   friendshipRepo,
 		conversationRepo: conversationRepo,
@@ -58,9 +61,19 @@ func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.
 		return nil, err
 	}
 
+	// 可见性:优先用 discoverability;兼容旧 visibility 字段映射
 	visibility := req.Visibility
 	if visibility == "" {
 		visibility = models.BotVisibilityPrivate
+	}
+	discoverability := req.Discoverability
+	if discoverability == "" {
+		switch visibility {
+		case models.BotVisibilityPublic, models.BotVisibilityGlobal:
+			discoverability = models.DiscoverabilityListed
+		default:
+			discoverability = models.DiscoverabilityUnlisted
+		}
 	}
 
 	bot := &models.Bot{
@@ -70,6 +83,9 @@ func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.
 		Description:     req.Description,
 		Status:          models.BotStatusActive,
 		Visibility:      visibility,
+		Discoverability: discoverability,
+		IsSystem:        visibility == models.BotVisibilityGlobal,
+		BotType:         models.BotTypeWorkflow,
 		MechanismConfig: botengine.DefaultMechanismConfig(),
 	}
 
@@ -78,25 +94,7 @@ func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.
 		return nil, err
 	}
 
-	// 自动创建 owner ↔ bot 的双向好友关系（已接受状态）
-	friendship1 := &models.Friendship{
-		UserID:   ownerUUID,
-		FriendID: bot.ID,
-		Status:   models.FriendshipStatusAccepted,
-	}
-	friendship2 := &models.Friendship{
-		UserID:   bot.ID,
-		FriendID: ownerUUID,
-		Status:   models.FriendshipStatusAccepted,
-	}
-	if err := s.friendshipRepo.Create(ctx, friendship1); err != nil {
-		logger.ErrorfWithCaller("[BotService] Failed to create friendship owner→bot: %v", err)
-	}
-	if err := s.friendshipRepo.Create(ctx, friendship2); err != nil {
-		logger.ErrorfWithCaller("[BotService] Failed to create friendship bot→owner: %v", err)
-	}
-
-	// 自动创建 owner ↔ bot 的私聊会话
+	// 自动创建 owner ↔ bot 的私聊会话(Bot 作为 enrollment member 加入,消息路由仍依赖 enrollment)
 	conversation := &models.Conversation{
 		ConversationType: models.ConversationTypeDirect,
 		CreatedBy:        &ownerUUID,
@@ -123,16 +121,20 @@ func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.
 		if err := s.enrollmentRepo.Create(ctx, botEnrollment); err != nil {
 			logger.ErrorfWithCaller("[BotService] Failed to enroll bot in conversation: %v", err)
 		}
+	}
 
-		// 更新 friendship 关联 conversation_id
-		friendship1.ConversationID = conversation.ID
-		friendship2.ConversationID = conversation.ID
-		if err := s.friendshipRepo.Update(ctx, friendship1); err != nil {
-			logger.ErrorfWithCaller("[BotService] Failed to update friendship1 conversation_id: %v", err)
-		}
-		if err := s.friendshipRepo.Update(ctx, friendship2); err != nil {
-			logger.ErrorfWithCaller("[BotService] Failed to update friendship2 conversation_id: %v", err)
-		}
+	// 自动为 owner 创建 user 安装(替代旧的 friendship;新 Bot 不再创建任何 friendship)
+	installation := &models.BotInstallation{
+		AppID:               bot.ID,
+		InstalledBy:         ownerUUID,
+		TargetType:          models.InstallationTargetUser,
+		TargetID:            ownerUUID,
+		GrantedCapabilities: bot.RequestedCapabilities,
+		DiagnosticsConsent:  models.DiagnosticsGranted, // owner 自己的 Bot,默认可见诊断
+		Status:              models.InstallationActive,
+	}
+	if err := s.installationRepo.Create(ctx, installation); err != nil {
+		logger.ErrorfWithCaller("[BotService] Failed to create owner installation: %v", err)
 	}
 
 	return bot, nil
