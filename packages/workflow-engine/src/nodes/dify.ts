@@ -39,14 +39,7 @@ export const difyNode: NodeDefinition<z.infer<typeof difyConfigSchema>> = {
       try {
         const mapping = JSON.parse(inputsMapping);
         for (const [key, ref] of Object.entries(mapping)) {
-          inputs[key] = replaceVariables(ref as string, {
-            nodeOutputs: {},
-            variables: ctx.variables,
-            eventOutputs: ctx.eventOutputs,
-            contextBuffer: ctx.contextBuffer,
-            finalReply: '',
-            nameResolver: {},
-          });
+          inputs[key] = replaceVariables(ref as string, ctx);
         }
       } catch {
         // 忽略解析错误

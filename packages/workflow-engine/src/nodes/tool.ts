@@ -21,14 +21,7 @@ export const toolNode: NodeDefinition<z.infer<typeof toolConfigSchema>> = {
     let url = cfg.url || '';
 
     // 变量替换
-    url = replaceVariables(url, {
-      nodeOutputs: {},
-      variables: ctx.variables,
-      eventOutputs: ctx.eventOutputs,
-      contextBuffer: ctx.contextBuffer,
-      finalReply: '',
-      nameResolver: {},
-    });
+    url = replaceVariables(url, ctx);
 
     const body = input.ports['in_body'] || '';
     const headers: Record<string, string> = {

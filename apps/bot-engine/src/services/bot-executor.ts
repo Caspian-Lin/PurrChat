@@ -79,12 +79,12 @@ export class BotExecutor {
             `[BotExecutor] SIMPLE_FLOW_END mech=${mech.id} replyLen=${result.reply?.length || 0}`,
           );
         } else {
-          console.log(`[BotExecutor] COMPILE_FAILED mech=${mech.id} type=${mech.reply.type}`);
-          result = { reply: '...', session_active: false, triggered: true, mechanism_id: mech.id, mechanism_name: mech.name, reply_type: mech.reply.type };
+          console.warn(`[BotExecutor] COMPILE_FAILED mech=${mech.id} type=${mech.reply.type}`);
+          result = { reply: '', session_active: false, triggered: true, mechanism_id: mech.id, mechanism_name: mech.name, reply_type: mech.reply.type };
         }
       } else {
-        console.log(`[BotExecutor] UNKNOWN_REPLY_TYPE mech=${mech.id} type=${mech.reply.type}`);
-        result = { reply: '...', session_active: false, triggered: true, mechanism_id: mech.id, mechanism_name: mech.name, reply_type: mech.reply.type };
+        console.warn(`[BotExecutor] UNKNOWN_REPLY_TYPE mech=${mech.id} type=${mech.reply.type}`);
+        result = { reply: '', session_active: false, triggered: true, mechanism_id: mech.id, mechanism_name: mech.name, reply_type: mech.reply.type };
       }
 
       const totalMs = Date.now() - startTime;
@@ -114,41 +114,53 @@ export class BotExecutor {
     const sessionId = `${req.conversation_id}:${req.bot_id}`;
     const blueprint = this.specToBlueprint(spec);
 
+    const senderInfo = {
+      senderName: req.sender_name,
+      senderId: req.sender_id,
+      conversationId: req.conversation_id,
+    };
+
     if (this.runtime.hasSession(sessionId)) {
       console.log(`[BotExecutor]   session EXISTS sessionId=${sessionId}`);
-      const reply = await this.runtime.sendMessage(sessionId, req.content);
-      return { reply, session_active: true, session_id: sessionId, triggered: true };
+      const result = await this.runtime.sendMessage(sessionId, req.content, senderInfo);
+      if (!result.sessionActive) {
+        this.sessions.delete(sessionId);
+      }
+      return { reply: result.reply, session_active: result.sessionActive, session_id: sessionId, triggered: true };
     }
 
     console.log(`[BotExecutor]   session NEW sessionId=${sessionId}`);
     this.runtime.createSession(sessionId, blueprint, {
-      username: req.sender_name,
+      senderName: req.sender_name,
+      senderId: req.sender_id,
+      conversationId: req.conversation_id,
       contextBuffer: req.context_messages,
     });
 
-    const reply = await this.runtime.sendMessage(sessionId, req.content);
-    this.sessions.set(sessionId, {
-      botId: req.bot_id,
-      conversationId: req.conversation_id,
-    });
+    const result = await this.runtime.sendMessage(sessionId, req.content, senderInfo);
+    if (result.sessionActive) {
+      this.sessions.set(sessionId, {
+        botId: req.bot_id,
+        conversationId: req.conversation_id,
+      });
+    }
 
-    return { reply, session_active: true, session_id: sessionId, triggered: true };
+    return { reply: result.reply, session_active: result.sessionActive, session_id: sessionId, triggered: true };
   }
 
   private async executeSimpleFlow(
     req: ExecuteRequest,
     blueprint: Blueprint,
   ): Promise<ExecuteResponse> {
-    const reply = await this.runtime.execute(blueprint, {
+    const result = await this.runtime.execute(blueprint, {
       rawInput: req.content,
-      username: req.sender_name,
+      senderName: req.sender_name,
+      senderId: req.sender_id,
+      conversationId: req.conversation_id,
       contextBuffer: req.context_messages,
-      variables: {
-        time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-      },
     });
 
-    return { reply, session_active: false, triggered: true };
+    return { reply: result.reply, session_active: false, triggered: true };
   }
 
   // ─── 触发评估 ──────────────────────────────────────────────

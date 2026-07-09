@@ -17,15 +17,8 @@ export const replyNode: NodeDefinition = {
       content = (config as any).template;
     }
 
-    // 变量替换
-    content = replaceVariables(content, {
-      nodeOutputs: {},
-      variables: ctx.variables,
-      eventOutputs: ctx.eventOutputs,
-      contextBuffer: ctx.contextBuffer,
-      finalReply: '',
-      nameResolver: {},
-    });
+    // 变量替换（使用完整上下文，含 nodeOutputs / nameResolver）
+    content = replaceVariables(content, ctx);
 
     // 替换 {args} 变量
     content = replaceArgsVars(content, input.rawInput);

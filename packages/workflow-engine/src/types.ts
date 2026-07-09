@@ -25,6 +25,10 @@ export interface NodeContext {
   variables: Record<string, string>;
   eventOutputs: Record<string, string>;
   contextBuffer: Array<{ role: string; content: string }>;
+  // 完整执行上下文，供节点内部 replaceVariables / evaluateCondition 使用
+  nodeOutputs: Record<string, Record<string, string>>;
+  nameResolver: Record<string, string>;
+  finalReply: string;
 }
 
 // ─── Blueprint（工作流定义） ──────────────────────────────────
@@ -52,7 +56,7 @@ export interface Blueprint {
   endConditions: Array<{ type: string; pattern?: string; value?: number }>;
 }
 
-// ─── 执行上下文 ──────────────────────────────────────────────
+// ─── 执行上下文（XState machine context） ───────────────────
 
 export interface ExecutionContext {
   nodeOutputs: Record<string, Record<string, string>>;  // nodeId -> { portId -> value }
@@ -61,4 +65,57 @@ export interface ExecutionContext {
   contextBuffer: Array<{ role: string; content: string }>;
   finalReply: string;
   nameResolver: Record<string, string>;  // "nodeName.portName" -> "nodeID:portID"
+  // 会话元信息
+  senderId: string;
+  senderName: string;
+  conversationId: string;
+}
+
+// ─── Actor 输入（runtime -> machine） ────────────────────────
+
+/**
+ * 创建 actor 时传入的输入，用于初始化 machine context。
+ * runtime 负责构建，compiler 在 context 工厂函数中合并并注入 nameResolver。
+ */
+export interface ActorInput {
+  rawInput: string;
+  senderName: string;
+  senderId: string;
+  conversationId: string;
+  time: string;
+  contextBuffer: Array<{ role: string; content: string }>;
+  variables: Record<string, string>;  // 额外会话变量
+}
+
+// ─── XState 事件 ─────────────────────────────────────────────
+
+/**
+ * 用户消息事件。trigger / wait 节点监听此事件以推进工作流。
+ */
+export interface UserMessageEvent {
+  type: 'USER_MESSAGE';
+  input: string;
+  senderName?: string;
+  senderId?: string;
+  conversationId?: string;
+  time?: string;
+}
+
+export type WorkflowEvent = UserMessageEvent | { type: string };
+
+// ─── 执行结果 ────────────────────────────────────────────────
+
+export const enum ExecutionStatus {
+  Done = 'done',
+  Waiting = 'waiting',  // 工作流暂停在 wait 节点，等待下一条消息
+  Error = 'error',
+}
+
+export interface ExecuteResult {
+  reply: string;
+  status: ExecutionStatus;
+  /** 工作流是否仍保持会话（停在 wait 节点等待后续消息） */
+  sessionActive: boolean;
+  /** 当前会话轮次（从 1 开始） */
+  round: number;
 }
