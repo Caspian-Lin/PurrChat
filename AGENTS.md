@@ -82,7 +82,7 @@ Issue 模板：
 - milestone 集成分支：跨多个 issue 的里程碑用一个集成分支（命名 `m/<short-name>`，从 `dev` 创建）。该 milestone 下的功能分支 PR 以集成分支为 base；集成分支测试稳定后再整体 PR 合入 `dev`，即视为 milestone 完成。
 - 功能分支：每个 issue 一个分支，建议 `feat/<issue-id>-short-name`、`fix/<issue-id>-short-name`、`docs/<issue-id>-short-name`。
 - 不在 `main` 直接开发；不把未完成、未测试、未 review 的功能直接合入 `dev` 或集成分支。
-- CI 在所有分支的 push 与所有 PR 上运行（与目标分支无关），作为 PR 是否允许合并的凭证；CI 不负责自动合并分支。
+- CI 在所有 PR 上运行，并在 `main`、`dev`、`m/**` 长期分支 push 时运行；功能分支不单独触发 push CI，避免同一提交与 PR CI 重复运行。CI 作为 PR 是否允许合并的凭证，不负责自动合并分支。
 
 ### 4. 单任务开发与 PR
 
@@ -94,7 +94,7 @@ Issue 模板：
 4. 按「Commit Workflow」提交。
 5. push 功能分支到远程。
 6. 创建 PR：base 为 `dev` 或所属 milestone 集成分支；描述含独立成行的 closing keyword（如 `Closes #123`）、实现内容、本地验证命令与结果、风险/迁移/配置/回滚说明、UI 截图或录屏（如适用）。
-7. 等 CI 通过。CI 在所有分支的 push 与所有 PR 上运行。
+7. 等 CI 通过。CI 在所有 PR 上运行，并在 `main`、`dev`、`m/**` 长期分支 push 时运行。
 8. **CI 通过后，是否合并 PR 由 owner 确认**；未经确认不要合并。
 9. 合并目标为 PR 的 base 分支（`dev` 或 milestone 集成分支）。PR merge 时，仓库 workflow 会关闭描述中独立成行 closing keyword 指向的 issue。
 10. milestone 集成分支整体合入 `dev` 即视为 milestone 完成；`dev` 经充分用户测试后再统一合入 `main`。
