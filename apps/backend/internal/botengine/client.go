@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"purr-chat-server/internal/models"
@@ -18,17 +19,17 @@ import (
 // BotEngineClient Bot 微服务 HTTP 客户端
 // 用于调用 TypeScript 版 Bot 引擎（apps/bot-engine）
 type BotEngineClient struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL      string
+	httpClient   *http.Client
+	sharedSecret string // Go→TS 服务间鉴权(BOT_ENGINE_SHARED_SECRET)
 }
 
 // NewBotEngineClient 创建 Bot 微服务客户端
 func NewBotEngineClient(baseURL string) *BotEngineClient {
 	return &BotEngineClient{
-		baseURL: baseURL,
-		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
-		},
+		baseURL:      baseURL,
+		httpClient:   &http.Client{Timeout: 60 * time.Second},
+		sharedSecret: os.Getenv("BOT_ENGINE_SHARED_SECRET"),
 	}
 }
 
@@ -44,6 +45,8 @@ type ExecuteRequest struct {
 	MechanismConfig     json.RawMessage  `json:"mechanism_config"`
 	ContextMessages     []ContextMessage `json:"context_messages,omitempty"`
 	GrantedCapabilities []string         `json:"granted_capabilities,omitempty"`
+	// Secrets 运行时解密后的密钥明文(仅在 secrets:use 已授予时填充;内网传输)
+	Secrets map[string]string `json:"secrets,omitempty"`
 }
 
 // ExecuteResponse 执行响应
@@ -59,7 +62,7 @@ type ExecuteResponse struct {
 }
 
 // Execute 调用 TS 服务执行消息处理
-func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uuid.UUID, botName string, mechanismConfig json.RawMessage, contextMessages []ContextMessage, grantedCapabilities []string) (*ExecuteResponse, error) {
+func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uuid.UUID, botName string, mechanismConfig json.RawMessage, contextMessages []ContextMessage, grantedCapabilities []string, secrets map[string]string) (*ExecuteResponse, error) {
 	req := ExecuteRequest{
 		ConversationID:      msg.ConversationID.String(),
 		BotID:               botID.String(),
@@ -71,6 +74,7 @@ func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uu
 		MechanismConfig:     mechanismConfig,
 		ContextMessages:     contextMessages,
 		GrantedCapabilities: grantedCapabilities,
+		Secrets:             secrets,
 	}
 
 	body, err := json.Marshal(req)
@@ -83,6 +87,10 @@ func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uu
 		return nil, fmt.Errorf("failed to create execute request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	// 服务间鉴权:shared-secret header
+	if c.sharedSecret != "" {
+		httpReq.Header.Set("X-Bot-Engine-Secret", c.sharedSecret)
+	}
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -140,6 +148,9 @@ func (c *BotEngineClient) DebugExecute(ctx context.Context, botID uuid.UUID, req
 		return nil, fmt.Errorf("failed to create debug request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if c.sharedSecret != "" {
+		httpReq.Header.Set("X-Bot-Engine-Secret", c.sharedSecret)
+	}
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {

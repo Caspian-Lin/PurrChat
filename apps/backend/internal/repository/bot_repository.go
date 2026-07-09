@@ -67,6 +67,9 @@ func (r *botRepository) Create(ctx context.Context, bot *models.Bot) error {
 	if bot.RequestedCapabilities == nil {
 		bot.RequestedCapabilities = []string{}
 	}
+	if bot.AllowedEndpoints == nil {
+		bot.AllowedEndpoints = []string{}
+	}
 
 	// 在事务中同时创建 user 记录、bot 记录和 bot_identity 投影,共用同一 ID
 	err := pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
@@ -82,13 +85,13 @@ func (r *botRepository) Create(ctx context.Context, bot *models.Bot) error {
 		// 2. 创建 bot 记录(含 App 化字段)
 		_, err = tx.Exec(ctx, `
 			INSERT INTO bots (id, owner_id, name, avatar_url, description, status, visibility, mechanism_config,
-			                  bot_type, discoverability, is_system, published_version, requested_capabilities,
+			                  bot_type, discoverability, is_system, published_version, requested_capabilities, allowed_endpoints,
 			                  created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		`,
 			bot.ID, bot.OwnerID, bot.Name, bot.AvatarURL, bot.Description,
 			bot.Status, bot.Visibility, bot.MechanismConfig,
-			bot.BotType, bot.Discoverability, bot.IsSystem, bot.PublishedVersion, bot.RequestedCapabilities,
+			bot.BotType, bot.Discoverability, bot.IsSystem, bot.PublishedVersion, bot.RequestedCapabilities, bot.AllowedEndpoints,
 			bot.CreatedAt, bot.UpdatedAt,
 		)
 		if err != nil {
@@ -118,7 +121,7 @@ func (r *botRepository) Create(ctx context.Context, bot *models.Bot) error {
 func (r *botRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Bot, error) {
 	query := `
         SELECT id, owner_id, name, avatar_url, description, status, visibility, mechanism_config,
-               bot_type, discoverability, is_system, published_version, requested_capabilities,
+               bot_type, discoverability, is_system, published_version, requested_capabilities, allowed_endpoints,
                created_at, updated_at
         FROM bots WHERE id = $1
     `
@@ -127,7 +130,7 @@ func (r *botRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Bot
 	err := database.GetPool().QueryRow(ctx, query, id).Scan(
 		&bot.ID, &bot.OwnerID, &bot.Name, &bot.AvatarURL, &bot.Description,
 		&bot.Status, &bot.Visibility, &bot.MechanismConfig,
-		&bot.BotType, &bot.Discoverability, &bot.IsSystem, &bot.PublishedVersion, &bot.RequestedCapabilities,
+		&bot.BotType, &bot.Discoverability, &bot.IsSystem, &bot.PublishedVersion, &bot.RequestedCapabilities, &bot.AllowedEndpoints,
 		&bot.CreatedAt, &bot.UpdatedAt,
 	)
 
@@ -141,7 +144,7 @@ func (r *botRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Bot
 func (r *botRepository) FindByOwner(ctx context.Context, ownerID uuid.UUID) ([]*models.Bot, error) {
 	query := `
         SELECT id, owner_id, name, avatar_url, description, status, visibility, mechanism_config,
-               bot_type, discoverability, is_system, published_version, requested_capabilities,
+               bot_type, discoverability, is_system, published_version, requested_capabilities, allowed_endpoints,
                created_at, updated_at
         FROM bots WHERE owner_id = $1
         ORDER BY created_at DESC
@@ -159,7 +162,7 @@ func (r *botRepository) FindByOwner(ctx context.Context, ownerID uuid.UUID) ([]*
 func (r *botRepository) FindPublic(ctx context.Context, q string, limit, offset int) ([]*models.Bot, error) {
 	sql := `
         SELECT id, owner_id, name, avatar_url, description, status, visibility, mechanism_config,
-               bot_type, discoverability, is_system, published_version, requested_capabilities,
+               bot_type, discoverability, is_system, published_version, requested_capabilities, allowed_endpoints,
                created_at, updated_at
         FROM bots
         WHERE visibility IN ('public', 'global') AND status = 'active'
@@ -211,7 +214,7 @@ func (r *botRepository) CountPublic(ctx context.Context, q string) (int, error) 
 func (r *botRepository) FindPublicWithDetails(ctx context.Context, q string, limit, offset int) ([]*models.PublicBotDetail, error) {
 	sql := `
         SELECT b.id, b.owner_id, b.name, b.avatar_url, b.description, b.status, b.visibility,
-               b.mechanism_config, b.bot_type, b.discoverability, b.is_system, b.published_version, b.requested_capabilities,
+               b.mechanism_config, b.bot_type, b.discoverability, b.is_system, b.published_version, b.requested_capabilities, b.allowed_endpoints,
                b.created_at, b.updated_at,
                COALESCE(d.cnt, 0) AS deployment_count,
                COALESCE(u.username, '') AS owner_name
@@ -253,7 +256,7 @@ func (r *botRepository) FindPublicWithDetails(ctx context.Context, q string, lim
 		err := rows.Scan(
 			&d.ID, &d.OwnerID, &d.Name, &d.AvatarURL, &d.Description,
 			&d.Status, &d.Visibility, &d.MechanismConfig,
-			&d.BotType, &d.Discoverability, &d.IsSystem, &d.PublishedVersion, &d.RequestedCapabilities,
+			&d.BotType, &d.Discoverability, &d.IsSystem, &d.PublishedVersion, &d.RequestedCapabilities, &d.AllowedEndpoints,
 			&d.CreatedAt, &d.UpdatedAt,
 			&d.DeploymentCount, &d.OwnerName,
 		)
@@ -284,12 +287,12 @@ func (r *botRepository) Update(ctx context.Context, bot *models.Bot) error {
 		_, err = tx.Exec(ctx, `
 			UPDATE bots SET name = $1, avatar_url = $2, description = $3, status = $4, visibility = $5,
 				mechanism_config = $6, bot_type = $7, discoverability = $8, is_system = $9,
-				published_version = $10, requested_capabilities = $11, updated_at = $12
-			WHERE id = $13
+				published_version = $10, requested_capabilities = $11, allowed_endpoints = $12, updated_at = $13
+			WHERE id = $14
 		`,
 			bot.Name, bot.AvatarURL, bot.Description, bot.Status, bot.Visibility,
 			bot.MechanismConfig, bot.BotType, bot.Discoverability, bot.IsSystem,
-			bot.PublishedVersion, bot.RequestedCapabilities, bot.UpdatedAt, bot.ID,
+			bot.PublishedVersion, bot.RequestedCapabilities, bot.AllowedEndpoints, bot.UpdatedAt, bot.ID,
 		)
 		if err != nil {
 			return err
@@ -499,7 +502,7 @@ func scanBotsFromRows(rows pgx.Rows) ([]*models.Bot, error) {
 		err := rows.Scan(
 			&bot.ID, &bot.OwnerID, &bot.Name, &bot.AvatarURL, &bot.Description,
 			&bot.Status, &bot.Visibility, &bot.MechanismConfig,
-			&bot.BotType, &bot.Discoverability, &bot.IsSystem, &bot.PublishedVersion, &bot.RequestedCapabilities,
+			&bot.BotType, &bot.Discoverability, &bot.IsSystem, &bot.PublishedVersion, &bot.RequestedCapabilities, &bot.AllowedEndpoints,
 			&bot.CreatedAt, &bot.UpdatedAt,
 		)
 		if err != nil {

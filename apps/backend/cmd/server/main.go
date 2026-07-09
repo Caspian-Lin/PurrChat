@@ -232,6 +232,10 @@ func main() {
 	userService := services.NewUserService(userRepo)
 	botService := services.NewBotService(botRepo, botDeployRepo, installationRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, callLogRepo)
 	installationService := services.NewInstallationService(installationRepo, botRepo, enrollmentRepo, conversationMessageRepo)
+	secretRepo := repository.NewBotAppSecretRepository()
+	secretService := services.NewSecretService(secretRepo, botRepo)
+	secretHandler := handlers.NewSecretHandler(secretService)
+	botEngine.SetSecretResolver(secretService)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret, cfg.Port == "443" || os.Getenv("FORCE_SECURE_COOKIES") == "true", &cfg.Turnstile)
 	chatHandler := handlers.NewChatHandler(authService, userService, conversationService, messageService, friendService, memberService)
 	botHandler := handlers.NewBotHandler(botService, botEngine)
@@ -370,6 +374,10 @@ func main() {
 		bots.GET("/:id/call-logs", botHandler.GetBotCallLogs)
 		bots.POST("/:id/installations", installationHandler.CreateInstallation)
 		bots.GET("/:id/installations", installationHandler.ListByApp)
+		// Secret 管理(owner-only CRUD,不返回明文)
+		bots.GET("/:id/secrets", secretHandler.ListSecrets)
+		bots.PUT("/:id/secrets/:key", sensitiveRateLimit, secretHandler.SetSecret)
+		bots.DELETE("/:id/secrets/:key", sensitiveRateLimit, secretHandler.DeleteSecret)
 	}
 
 	// Bot 安装路由(per-User 限流)

@@ -69,6 +69,7 @@ func SetupTestDB(t *testing.T) {
 // CreateTestTables 创建测试表
 func CreateTestTables(t *testing.T, ctx context.Context) {
 	tables := []string{
+		"bot_app_secrets",
 		"user_settings",
 		"bot_installations",
 		"bot_identities",
@@ -205,6 +206,7 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			is_system BOOLEAN NOT NULL DEFAULT FALSE,
 			published_version INTEGER,
 			requested_capabilities TEXT[] NOT NULL DEFAULT '{}',
+			allowed_endpoints TEXT[] NOT NULL DEFAULT '{}',
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			CONSTRAINT check_bot_status CHECK (status IN ('active', 'disabled')),
@@ -254,6 +256,21 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create bot_installations table: %v", err)
+	}
+
+	// 创建 bot_app_secrets 表(见 migration 008)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_app_secrets (
+			app_id     UUID        NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			key_name   VARCHAR(64) NOT NULL,
+			ciphertext TEXT        NOT NULL,
+			created_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (app_id, key_name)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_app_secrets table: %v", err)
 	}
 
 	// 创建user_settings表
@@ -626,6 +643,7 @@ func CleanupTestTables(t *testing.T) {
 	}
 
 	tables := []string{
+		"bot_app_secrets",
 		"user_settings",
 		"bot_installations",
 		"bot_identities",
