@@ -217,6 +217,7 @@ func main() {
 	conversationMessageRepo := repository.NewConversationMessageRepository()
 	botRepo := repository.NewBotRepository()
 	botDeployRepo := repository.NewBotDeploymentRepository()
+	installationRepo := repository.NewBotInstallationRepository()
 	callLogRepo := repository.NewBotCallLogRepository()
 	authService := services.NewAuthService(userRepo, botRepo, cfg.JWT.Secret)
 	botEngine := botengine.NewBotEngine(botDeployRepo, botRepo, conversationMessageRepo, enrollmentRepo, os.Getenv("BOT_ENGINE_URL"))
@@ -228,10 +229,12 @@ func main() {
 	friendService.SetBotRepo(botRepo)
 	memberService := services.NewMemberService(userRepo, conversationRepo, enrollmentRepo)
 	userService := services.NewUserService(userRepo)
-	botService := services.NewBotService(botRepo, botDeployRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, callLogRepo)
+	botService := services.NewBotService(botRepo, botDeployRepo, installationRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, callLogRepo)
+	installationService := services.NewInstallationService(installationRepo, botRepo, enrollmentRepo)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret, cfg.Port == "443" || os.Getenv("FORCE_SECURE_COOKIES") == "true", &cfg.Turnstile)
 	chatHandler := handlers.NewChatHandler(authService, userService, conversationService, messageService, friendService, memberService)
 	botHandler := handlers.NewBotHandler(botService, botEngine)
+	installationHandler := handlers.NewInstallationHandler(installationService)
 	settingsRepo := repository.NewSettingsRepository()
 	settingsService := services.NewSettingsService(settingsRepo)
 	settingsHandler := handlers.NewSettingsHandler(settingsService)
@@ -364,6 +367,20 @@ func main() {
 		bots.POST("/:id/debug/step", botHandler.DebugStep)
 		bots.POST("/:id/debug/reset", botHandler.DebugReset)
 		bots.GET("/:id/call-logs", botHandler.GetBotCallLogs)
+		bots.POST("/:id/installations", installationHandler.CreateInstallation)
+		bots.GET("/:id/installations", installationHandler.ListByApp)
+	}
+
+	// Bot 安装路由(per-User 限流)
+	installations := r.Group("/api/installations")
+	installations.Use(handlers.AuthMiddleware(cfg.JWT.Secret))
+	installations.Use(userRateLimit)
+	{
+		installations.GET("", installationHandler.ListByTarget)
+		installations.GET("/mine", installationHandler.ListMine)
+		installations.GET("/:iid", installationHandler.GetInstallation)
+		installations.PATCH("/:iid", installationHandler.UpdateInstallation)
+		installations.DELETE("/:iid", installationHandler.UninstallInstallation)
 	}
 
 	// 设置路由（per-User 限流）

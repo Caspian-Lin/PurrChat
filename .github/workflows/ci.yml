@@ -1,8 +1,12 @@
 name: CI
 
-# 所有分支的 push 与所有 PR 均触发，与目标分支无关
+# 功能分支由 PR 校验；长期分支在 push/合并后校验，避免同一提交重复运行
 on:
   push:
+    branches:
+      - main
+      - dev
+      - 'm/**'
   pull_request:
 
 env:
