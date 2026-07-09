@@ -1,14 +1,9 @@
 name: CI
 
+# 所有分支的 push 与所有 PR 均触发，与目标分支无关
 on:
   push:
-    branches:
-      - main
-      - dev
   pull_request:
-    branches:
-      - main
-      - dev
 
 env:
   GO_VERSION: '1.25'
