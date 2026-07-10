@@ -25,10 +25,19 @@ export interface NodeContext {
   variables: Record<string, string>;
   eventOutputs: Record<string, string>;
   contextBuffer: Array<{ role: string; content: string }>;
-  // 完整执行上下文，供节点内部 replaceVariables / evaluateCondition 使用
+  // 完整执行上下文，供节点内部 resolveTemplate / evaluateCondition 使用
   nodeOutputs: Record<string, Record<string, string>>;
   nameResolver: Record<string, string>;
   finalReply: string;
+  // 统一变量解析器所需上下文
+  nodeKeyMap: Record<string, string>;
+  rawInput: string;
+  senderId: string;
+  senderName: string;
+  conversationId: string;
+  history: Array<{ role: string; content: string }>;
+  secrets: Record<string, string>;
+  session: Record<string, string>;
 }
 
 // ─── Blueprint（工作流定义） ──────────────────────────────────
@@ -37,6 +46,8 @@ export interface BlueprintNode {
   id: string;
   type: string;
   name: string;
+  /** 稳定 key：用于变量引用 ${nodes.<key>.outputs.<port>} */
+  key?: string;
   config: Record<string, any>;
   ports?: EventPort[];
   position?: { x: number; y: number };
@@ -65,10 +76,14 @@ export interface ExecutionContext {
   contextBuffer: Array<{ role: string; content: string }>;
   finalReply: string;
   nameResolver: Record<string, string>;  // "nodeName.portName" -> "nodeID:portID"
+  nodeKeyMap: Record<string, string>;  // "nodeKey" -> "nodeId"
   // 会话元信息
   senderId: string;
   senderName: string;
   conversationId: string;
+  rawInput: string;
+  history: Array<{ role: string; content: string }>;
+  session: Record<string, string>;
   /** 安装时授予的 capabilities，运行时强制校验用（granted ⊆ requested）；undefined 表示不校验 */
   grantedCapabilities?: string[];
   /** 最近一次节点执行错误（用于透传 capability 拒绝等错误信息） */
