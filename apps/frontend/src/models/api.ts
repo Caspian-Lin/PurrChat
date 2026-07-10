@@ -42,6 +42,7 @@ import type {
   BotCallLogListResponse,
   WorkflowDocumentResponse,
   WorkflowValidationResponse,
+  WorkflowVersion,
 } from './types';
 import { getApiBaseUrl, getStorageApiBaseUrl, logger } from '../config/app';
 
@@ -433,29 +434,44 @@ export const api = {
 
   // ─── Workflow Document API (#13) ───
 
-  getWorkflow: (botId: string): Promise<ApiResponse<WorkflowDocumentResponse>> => {
+  getWorkflow: (botId: string): Promise<WorkflowDocumentResponse> => {
     return apiClient.get(`/api/bots/${botId}/workflow`).then((res) => res.data);
   },
 
   updateWorkflow: (
     botId: string,
     data: { revision: number; document: unknown }
-  ): Promise<ApiResponse<WorkflowDocumentResponse>> => {
-    return apiClient.put(`/api/bots/${botId}/workflow`, data).then((res) => res.data);
+  ): Promise<WorkflowDocumentResponse> => {
+    return apiClient
+      .put(`/api/bots/${botId}/workflow`, data, {
+        headers: { 'If-Match': String(data.revision) },
+      })
+      .then((res) => res.data);
   },
 
-  validateWorkflow: (
-    botId: string,
-    document: unknown
-  ): Promise<ApiResponse<WorkflowValidationResponse>> => {
+  validateWorkflow: (botId: string, document: unknown): Promise<WorkflowValidationResponse> => {
     return apiClient
       .post(`/api/bots/${botId}/workflow/validate`, { document })
       .then((res) => res.data);
   },
 
-  publishWorkflow: (botId: string, revision: number): Promise<ApiResponse<unknown>> => {
+  publishWorkflow: (botId: string, revision: number): Promise<WorkflowVersion> => {
     return apiClient
-      .post(`/api/bots/${botId}/workflow/publish`, { revision })
+      .post(
+        `/api/bots/${botId}/workflow/publish`,
+        { revision },
+        { headers: { 'If-Match': String(revision) } }
+      )
+      .then((res) => res.data);
+  },
+
+  listWorkflowVersions: (botId: string): Promise<WorkflowVersion[]> => {
+    return apiClient.get(`/api/bots/${botId}/workflow/versions`).then((res) => res.data);
+  },
+
+  rollbackWorkflow: (botId: string, revision: number): Promise<WorkflowDocumentResponse> => {
+    return apiClient
+      .post(`/api/bots/${botId}/workflow/versions/${revision}/rollback`)
       .then((res) => res.data);
   },
 
@@ -469,11 +485,11 @@ export const api = {
       sender_name?: string;
       session_id?: string;
     }
-  ): Promise<ApiResponse<unknown>> => {
+  ): Promise<unknown> => {
     return apiClient.post(`/api/bots/${botId}/workflow/test-runs`, data).then((res) => res.data);
   },
 
-  testRunStep: (botId: string, sessionId: string): Promise<ApiResponse<unknown>> => {
+  testRunStep: (botId: string, sessionId: string): Promise<unknown> => {
     return apiClient
       .post(`/api/bots/${botId}/workflow/test-runs/step`, { session_id: sessionId })
       .then((res) => res.data);

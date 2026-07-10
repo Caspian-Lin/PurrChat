@@ -521,6 +521,7 @@ export interface SpecialModeEvent {
   id: string;
   type: EventType;
   name: string;
+  key?: string;
   config: Record<string, any>;
   ports?: EventPort[];
   position?: { x: number; y: number };
@@ -659,10 +660,20 @@ export interface BotCallLogListResponse {
 // ─── Workflow Document API 类型 (#13) ─────────────────────────
 
 export interface WorkflowDocumentResponse {
-  document: unknown;
+  document: import('@purrchat/workflow-types').WorkflowDocument;
   revision: number;
   etag: string;
   published_revision?: number;
+}
+
+export interface WorkflowVersion {
+  id: string;
+  bot_id: string;
+  revision: number;
+  document: import('@purrchat/workflow-types').WorkflowDocument;
+  capabilities: string[];
+  published_by?: string;
+  published_at: string;
 }
 
 export interface WorkflowValidationIssue {

@@ -44,6 +44,8 @@ interface YamlNode {
   name: string;
   type: string;
   id?: string; // 可选，导入时自动生成
+  key?: string;
+  position?: { x: number; y: number };
   config?: Record<string, any>;
 }
 
@@ -72,6 +74,9 @@ export function flowToYaml(events: WorkflowEvent[], connections: FlowConnection[
     const node: YamlNode = {
       name: evt.name,
       type: evt.type,
+      id: evt.id,
+      key: evt.key,
+      position: evt.position,
     };
     // 保留 config（仅非空字段）
     if (evt.config && Object.keys(evt.config).length > 0) {
@@ -151,8 +156,10 @@ export function yamlToFlow(yamlStr: string): YamlImportResult {
       id,
       type: yamlNode.type as any,
       name: yamlNode.name,
+      key: yamlNode.key,
       config: yamlNode.config || {},
       ports: defaultPorts,
+      position: yamlNode.position,
     });
   }
 
@@ -216,6 +223,7 @@ export function flowToDocument(
         id: e.id,
         type: e.type as any,
         name: e.name,
+        key: e.key,
         config: e.config ?? {},
         ports: e.ports,
         position: e.position,
@@ -240,6 +248,7 @@ export function documentToFlow(doc: WorkflowDocument): {
       id: n.id,
       type: n.type as any,
       name: n.name,
+      key: n.key,
       config: n.config ?? {},
       ports: n.ports,
       position: n.position,

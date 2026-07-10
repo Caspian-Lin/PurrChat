@@ -5,7 +5,6 @@
  * 前端编辑器据此阻止保存或展示警告。
  */
 
-import { useMemoize } from '@vueuse/core';
 import {
   NodeRegistry,
   allNodes,
@@ -21,13 +20,9 @@ export function useWorkflowValidator() {
     return validateWorkflowDocument(doc, registry);
   }
 
-  const memoizedValidate = useMemoize(validate, {
-    getKey: (doc) => JSON.stringify(doc),
-  });
-
   return {
     validate,
-    validateCached: memoizedValidate,
+    validateCached: validate,
     registry,
   };
 }
