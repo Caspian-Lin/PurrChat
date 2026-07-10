@@ -75,6 +75,8 @@ export interface WorkflowEvent {
   id: string;
   type: EventType;
   name: string;
+  /** 稳定 key：用于变量引用 ${nodes.<key>.outputs.<port>} */
+  key?: string;
   config: Record<string, any>;
   ports?: EventPort[];
   position?: { x: number; y: number };

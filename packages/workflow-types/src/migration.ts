@@ -13,6 +13,7 @@
 import type { MechanismConfig, WorkflowSpec } from './workflow.js';
 import type { WorkflowDocument, WorkflowDocumentNode } from './document.js';
 import { createEmptyDocument } from './document.js';
+import { generateNodeKey } from './variables.js';
 
 export function migrateMechanismToDocument(
   raw: unknown,
@@ -33,14 +34,20 @@ export function migrateMechanismToDocument(
   const wf: WorkflowSpec | undefined =
     mech.reply?.workflow ?? mech.reply?.special_mode;
   if (wf) {
-    doc.spec.nodes = (wf.events ?? []).map((e): WorkflowDocumentNode => ({
-      id: e.id,
-      type: e.type,
-      name: e.name,
-      config: e.config ?? {},
-      ports: e.ports,
-      position: e.position,
-    }));
+    const typeCounter: Record<string, number> = {};
+    doc.spec.nodes = (wf.events ?? []).map((e): WorkflowDocumentNode => {
+      const type = e.type;
+      const idx = (typeCounter[type] = (typeCounter[type] ?? 0) + 1);
+      return {
+        id: e.id,
+        type,
+        key: generateNodeKey(type, idx),
+        name: e.name,
+        config: e.config ?? {},
+        ports: e.ports,
+        position: e.position,
+      };
+    });
     doc.spec.connections = wf.connections ?? [];
     doc.spec.endConditions = wf.end_conditions ?? [];
   }
