@@ -2,6 +2,10 @@
 export type { PortDataType, EventType, EventPort, FlowConnection, NodeTypeMeta } from './ports';
 export { PORT_COLORS, NODE_TYPE_META, isPortCompatible, getDefaultPorts, canConnect, getPortById } from './ports';
 
+// 节点发布清单
+export { NODE_MANIFEST } from './manifest';
+export type { NodeManifestEntry } from './manifest';
+
 // Capability 权限模型
 export { Capability, ALL_CAPABILITIES, NODE_CAPABILITIES, CAPABILITY_META, getNodeCapabilities, isSensitiveCapability } from './capabilities';
 export type { CapabilityMeta } from './capabilities';

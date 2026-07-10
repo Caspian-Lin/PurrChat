@@ -176,6 +176,33 @@ describe('终止语义', () => {
   });
 });
 
+describe('模板节点', () => {
+  it('渲染变量并把输出传给回复节点', async () => {
+    const { runtime } = makeRuntime();
+    const blueprint = bp(
+      [
+        node('t', 'trigger', '触发'),
+        node('tpl', 'template', '模板', { template: 'hello {触发.用户消息}' }),
+        node('r', 'reply', '回复'),
+        node('e', 'end', '结束'),
+      ],
+      [
+        conn('c1', 't', 'out_exec', 'tpl', 'in_exec'),
+        conn('c2', 'tpl', 'out_output', 'r', 'in_content'),
+        conn('c3', 'tpl', 'out_exec', 'r', 'in_exec'),
+        conn('c4', 'r', 'out_exec', 'e', 'in_exec'),
+      ],
+    );
+
+    const result = await runtime.execute(blueprint, {
+      rawInput: 'world',
+      timeoutMs: 3000,
+    });
+
+    expect(result.reply).toBe('hello world');
+  });
+});
+
 // ─── AC5: if 条件分支（成功与失败路径） ─────────────────────
 
 describe('if 条件分支', () => {

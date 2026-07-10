@@ -12,35 +12,21 @@
 
         <!-- 类型选择（仅新建时） -->
         <div v-if="!isEditing" class="modal-body">
-          <!-- 控制流 -->
-          <div class="type-section-label">控制流</div>
-          <div class="type-selector type-selector--control">
-            <button
-              v-for="t in controlTypes"
-              :key="t.value"
-              class="type-card"
-              :class="{ 'type-card--active': form.type === t.value }"
-              @click="selectType(t.value)"
-            >
-              <span class="type-card__icon">{{ t.icon }}</span>
-              <span class="type-card__label">{{ t.label }}</span>
-            </button>
-          </div>
-
-          <!-- 处理 / 输出 -->
-          <div class="type-section-label">处理 / 输出</div>
-          <div class="type-selector type-selector--process">
-            <button
-              v-for="t in processTypes"
-              :key="t.value"
-              class="type-card"
-              :class="{ 'type-card--active': form.type === t.value }"
-              @click="selectType(t.value)"
-            >
-              <span class="type-card__icon">{{ t.icon }}</span>
-              <span class="type-card__label">{{ t.label }}</span>
-            </button>
-          </div>
+          <template v-for="group in nodeTypeGroups" :key="group.category">
+            <div class="type-section-label">{{ group.label }}</div>
+            <div class="type-selector">
+              <button
+                v-for="node in group.nodes"
+                :key="node.type"
+                class="type-card"
+                :class="{ 'type-card--active': form.type === node.type }"
+                @click="selectType(node.type)"
+              >
+                <span class="type-card__icon">{{ node.icon }}</span>
+                <span class="type-card__label">{{ node.label }}</span>
+              </button>
+            </div>
+          </template>
         </div>
 
         <!-- 配置表单 -->
@@ -83,17 +69,17 @@
               <div class="logic-toggle">
                 <button
                   class="logic-toggle__btn"
-                  :class="{ 'logic-toggle__btn--active': ifLogic === 'AND' }"
+                  :class="{ 'logic-toggle__btn--active': ifLogic === 'and' }"
                   type="button"
-                  @click="ifLogic = 'AND'"
+                  @click="ifLogic = 'and'"
                 >
                   AND（全部满足）
                 </button>
                 <button
                   class="logic-toggle__btn"
-                  :class="{ 'logic-toggle__btn--active': ifLogic === 'OR' }"
+                  :class="{ 'logic-toggle__btn--active': ifLogic === 'or' }"
                   type="button"
-                  @click="ifLogic = 'OR'"
+                  @click="ifLogic = 'or'"
                 >
                   OR（任一满足）
                 </button>
@@ -788,8 +774,14 @@ import { reactive, computed, watch, ref, nextTick } from 'vue';
 import { BsX } from 'vue-icons-plus/bs';
 import { useAiStore } from '../../../../../stores/ai';
 import { useAuthStore } from '../../../../../stores/auth';
-import { getDefaultPorts, NODE_TYPE_META, type EventType } from '../../../../../utils/portTypes';
-import type { EventPort, WorkflowEvent, FlowConnection } from '../../../../../models/types';
+import { getDefaultPorts, type EventType } from '../../../../../utils/portTypes';
+import {
+  generateNodeKey,
+  type EventPort,
+  type WorkflowEvent,
+  type FlowConnection,
+} from '@purrchat/workflow-types';
+import { PRODUCTION_NODE_MANIFEST } from '../../../../../utils/workflowDocument';
 import VarReferencePicker from './VarReferencePicker.vue';
 
 interface Props {
@@ -849,7 +841,7 @@ const ifConditions = computed({
 });
 
 const ifLogic = computed({
-  get: () => (form.config.logic as string) || 'AND',
+  get: () => ((form.config.logic as string) || 'and').toLowerCase(),
   set: (val) => {
     form.config.logic = val;
   },
@@ -901,14 +893,19 @@ const switchCases = computed({
   },
 });
 
-// 类型分组
-const controlTypes = (
-  ['trigger', 'end', 'wait', 'if', 'loop', 'switch', 'merge'] as EventType[]
-).map((value) => ({ value, ...NODE_TYPE_META[value] }));
+const categoryLabels = {
+  control: '控制流',
+  process: '处理',
+  output: '输出',
+} as const;
 
-const processTypes = (
-  ['llm', 'builtin', 'python', 'template', 'tool', 'dify', 'n8n', 'reply'] as EventType[]
-).map((value) => ({ value, ...NODE_TYPE_META[value] }));
+const nodeTypeGroups = (['control', 'process', 'output'] as const)
+  .map((category) => ({
+    category,
+    label: categoryLabels[category],
+    nodes: PRODUCTION_NODE_MANIFEST.filter((node) => node.category === category),
+  }))
+  .filter((group) => group.nodes.length > 0);
 
 // 是否为支持自定义端口的节点类型
 const supportsCustomPorts = computed(() =>
@@ -934,74 +931,14 @@ const builtinTypes = [
   { value: 'template', label: '模板' },
 ];
 
-// 根据类型返回默认 config
 function getDefaultConfig(type: EventType): Record<string, any> {
-  switch (type) {
-    case 'llm':
-      return {
-        api_url: '',
-        api_key: '',
-        model: '',
-        system_prompt: '',
-        temperature: 0.7,
-        max_tokens: 1000,
-        context_window: 20,
-      };
-    case 'builtin':
-      return { builtin_type: 'random_number' };
-    case 'python':
-      return { code: '', timeout_ms: 5000 };
-    case 'template':
-      return { template: '' };
-    case 'history':
-      return { count: 20 };
-    case 'reply':
-      return { template: '' };
-    case 'wait':
-      return { wait_type: 'user_message', condition: '' };
-    case 'if':
-      return { logic: 'AND', conditions: [{ left: '', operator: '==', right: '' }] };
-    case 'loop':
-      return { condition: '', max_iterations: 10 };
-    case 'switch':
-      return {
-        cases: [
-          { value: '', label: '分支 1' },
-          { value: '', label: '分支 2' },
-        ],
-      };
-    case 'merge':
-      return { input_count: 2 };
-    case 'tool':
-      return { method: 'GET', url: '', headers: '{}', body: '', timeout_ms: 10000 };
-    case 'dify':
-      return {
-        app_type: 'workflow',
-        api_base: '',
-        api_key: '',
-        inputs_mapping: '',
-        output_path: '',
-        response_mode: 'blocking',
-        timeout_ms: 30000,
-      };
-    case 'n8n':
-      return {
-        webhook_url: '',
-        method: 'POST',
-        body: '',
-        auth_type: 'none',
-        auth_credential: '',
-        timeout_ms: 30000,
-      };
-    case 'trigger':
-    case 'end':
-    default:
-      return {};
-  }
+  const manifest = PRODUCTION_NODE_MANIFEST.find((node) => node.type === type);
+  return manifest ? structuredClone(manifest.defaultConfig) : {};
 }
 
 interface FormData {
   id: string;
+  key?: string;
   type: EventType;
   name: string;
   config: Record<string, any>;
@@ -1011,10 +948,10 @@ interface FormData {
 
 const form = reactive<FormData>({
   id: '',
-  type: 'llm',
+  type: PRODUCTION_NODE_MANIFEST[0].type,
   name: '',
-  config: getDefaultConfig('llm'),
-  ports: getDefaultPorts('llm'),
+  config: getDefaultConfig(PRODUCTION_NODE_MANIFEST[0].type),
+  ports: getDefaultPorts(PRODUCTION_NODE_MANIFEST[0].type),
 });
 
 // 选择类型时重置 config、ports 和名称
@@ -1022,7 +959,7 @@ function selectType(type: EventType) {
   form.type = type;
   form.config = getDefaultConfig(type);
   form.ports = getDefaultPorts(type);
-  form.name = NODE_TYPE_META[type].label;
+  form.name = PRODUCTION_NODE_MANIFEST.find((node) => node.type === type)?.label || type;
   customPorts.length = 0;
   nameValidationError.value = '';
 }
@@ -1064,9 +1001,10 @@ watch(
     if (props.visible && props.editingEvent) {
       Object.assign(form, {
         id: props.editingEvent.id,
+        key: props.editingEvent.key,
         type: props.editingEvent.type,
         name: props.editingEvent.name,
-        config: { ...props.editingEvent.config },
+        config: structuredClone(props.editingEvent.config),
         ports: [...(props.editingEvent.ports || getDefaultPorts(props.editingEvent.type))],
         position: props.editingEvent.position ? { ...props.editingEvent.position } : undefined,
       });
@@ -1075,9 +1013,10 @@ watch(
       const extracted = extractCustomPorts(props.editingEvent);
       extracted.forEach((p) => customPorts.push(p));
     } else if (props.visible) {
-      const type: EventType = 'llm';
+      const type = PRODUCTION_NODE_MANIFEST[0].type;
       Object.assign(form, {
         id: `evt_${Date.now()}`,
+        key: undefined,
         type,
         name: '',
         config: getDefaultConfig(type),
@@ -1113,6 +1052,15 @@ function handleConfirm() {
     id: form.id,
     type: form.type,
     name: form.name,
+    key:
+      form.key ||
+      (() => {
+        const existingKeys = new Set(props.existingEvents.map((item) => item.key).filter(Boolean));
+        let index = 1;
+        let key = generateNodeKey(form.type, index);
+        while (existingKeys.has(key)) key = generateNodeKey(form.type, ++index);
+        return key;
+      })(),
     config: { ...form.config },
     ports: [...defaultPorts, ...customEventPorts],
   };

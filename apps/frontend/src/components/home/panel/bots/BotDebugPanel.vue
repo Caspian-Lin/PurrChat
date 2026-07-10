@@ -208,10 +208,8 @@ async function handleRunAll() {
       session_id: sessionId.value || undefined,
     });
 
-    if (result.success && result.data) {
-      trace.value = result.data as unknown as RunTrace;
-      sessionId.value = trace.value.session_id ?? trace.value.runId;
-    }
+    trace.value = result as RunTrace;
+    sessionId.value = trace.value.session_id ?? trace.value.runId;
   } catch (err: any) {
     const errorMsg = err.response?.data?.error || err.response?.data?.message || '调试执行失败';
     trace.value = {
@@ -242,10 +240,8 @@ async function handleStepMode() {
       session_id: sessionId.value || undefined,
     });
 
-    if (result.success && result.data) {
-      trace.value = result.data as unknown as RunTrace;
-      sessionId.value = trace.value.session_id ?? trace.value.runId;
-    }
+    trace.value = result as RunTrace;
+    sessionId.value = trace.value.session_id ?? trace.value.runId;
   } catch (err: any) {
     const errorMsg = err.response?.data?.error || '调试执行失败';
     trace.value = {
@@ -267,9 +263,7 @@ async function handleNextStep() {
 
   try {
     const result = await api.testRunStep(props.botId, sessionId.value);
-    if (result.success && result.data) {
-      trace.value = result.data as unknown as RunTrace;
-    }
+    trace.value = result as RunTrace;
   } catch (err: any) {
     const errorMsg = err.response?.data?.error || '逐步执行失败';
     if (trace.value) {

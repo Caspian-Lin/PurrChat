@@ -17,7 +17,7 @@
   </div>
 
   <!-- 桌面端：正常编辑器 -->
-  <div v-else class="flex flex-col h-screen bg-bg-primary">
+  <div v-else class="relative flex flex-col h-screen bg-bg-primary">
     <!-- 顶部工具栏 -->
     <div
       class="flex items-center gap-3 px-5 py-3 bg-bg-secondary border-b border-border-subtle flex-shrink-0"
@@ -37,19 +37,63 @@
         </h2>
         <p class="text-xs text-text-tertiary truncate">工作流事件链编辑器</p>
       </div>
-      <!-- 自动保存提示 -->
+      <div class="workflow-status" aria-live="polite">
+        <span>草稿 r{{ revision }}</span>
+        <span>已发布 {{ publishedRevision === null ? '无' : `r${publishedRevision}` }}</span>
+        <span v-if="dirty" class="workflow-status__dirty">未保存</span>
+      </div>
       <span v-if="saveState === 'saving'" class="text-xs text-text-tertiary">保存中...</span>
+      <span v-else-if="saveState === 'publishing'" class="text-xs text-text-tertiary"
+        >发布中...</span
+      >
       <span v-else-if="saveState === 'saved'" class="text-xs text-green-600">已保存</span>
       <span v-else-if="saveState === 'error'" class="text-xs text-red-500">保存失败</span>
       <button
+        class="toolbar-btn"
+        :disabled="saveState === 'saving' || saveState === 'publishing'"
+        @click="toggleHistory"
+      >
+        版本历史
+      </button>
+      <button
         class="px-4 py-1.5 text-xs rounded-[var(--radius-sm,8px)] text-white transition-colors"
         style="background: var(--theme-primary)"
-        :disabled="saveState === 'saving'"
+        :disabled="saveState === 'saving' || saveState === 'publishing'"
         @click="handleSave"
       >
         保存
       </button>
+      <button
+        class="px-4 py-1.5 text-xs rounded-[var(--radius-sm,8px)] border border-border-subtle text-text-primary bg-bg-quaternary transition-colors hover:border-[var(--theme-primary)]"
+        :disabled="saveState === 'saving' || saveState === 'publishing'"
+        @click="handlePublish"
+      >
+        发布
+      </button>
     </div>
+
+    <div v-if="operationError" class="workflow-error" role="alert">{{ operationError }}</div>
+
+    <section v-if="showHistory" class="version-popover" aria-label="工作流版本历史">
+      <div class="version-popover__header">
+        <strong>版本历史</strong>
+        <button class="version-popover__close" @click="showHistory = false">关闭</button>
+      </div>
+      <p class="version-popover__hint">恢复操作只创建新草稿，不会自动发布。</p>
+      <p v-if="historyLoading" class="version-popover__empty">加载中...</p>
+      <p v-else-if="versions.length === 0" class="version-popover__empty">尚无已发布版本</p>
+      <div v-else class="version-list">
+        <div v-for="version in versions" :key="version.id" class="version-item">
+          <div>
+            <strong>r{{ version.revision }}</strong>
+            <span>{{ formatPublishedAt(version.published_at) }}</span>
+          </div>
+          <button :disabled="historyLoading" @click="restoreVersion(version.revision)">
+            恢复为草稿
+          </button>
+        </div>
+      </div>
+    </section>
 
     <!-- 加载状态 -->
     <div v-if="loading" class="flex-1 flex items-center justify-center">
@@ -121,7 +165,7 @@
             YAML
           </button>
           <span v-if="validationIssues.length" class="toolbar-validation-badge">
-            {{ validationIssues.filter((i) => i.type === 'error').length }} 个问题
+            {{ validationIssues.filter((i) => i.level === 'error').length }} 个问题
           </span>
         </div>
 
@@ -131,9 +175,9 @@
             v-for="(issue, idx) in validationIssues"
             :key="idx"
             class="editor-validation__item"
-            :class="`editor-validation__item--${issue.type}`"
+            :class="`editor-validation__item--${issue.level}`"
           >
-            {{ issue.type === 'error' ? '×' : '!' }} {{ issue.message }}
+            {{ issue.level === 'error' ? '×' : '!' }} {{ issue.message }}
           </div>
         </div>
 
@@ -247,12 +291,10 @@
           </div>
 
           <div class="guide-section">
-            <h4 class="guide-section__title">循环与条件</h4>
+            <h4 class="guide-section__title">条件分支</h4>
             <p class="guide-section__desc">
-              <strong>条件节点</strong>（◇）接收一个布尔值，根据真假走不同分支。
-              <strong>循环节点</strong
-              >（↻）从「循环体」出口开始执行一条子链，子链末尾需要连回循环节点的「执行」入口，
-              形成可见的回环线。当条件为假时，从「完成」出口退出循环。
+              <strong>条件节点</strong
+              >（◇）根据条件结果选择真或假分支。未通过生产验证的节点不会出现在添加列表中。
             </p>
           </div>
         </div>
@@ -291,48 +333,45 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick, markRaw, reactive, provide } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { ref, computed, onMounted, onBeforeUnmount, markRaw, reactive, provide } from 'vue';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { VueFlow, ConnectionMode } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import { BsArrowLeft, BsPlus, BsUpload, BsDownload, BsPcDisplay } from 'vue-icons-plus/bs';
 import { usePlatform } from '../composables/usePlatform';
 import { api } from '../models/api';
-
-// Platform
-const { isMobile } = usePlatform();
-import type {
-  Bot,
-  Mechanism,
-  WorkflowEvent as FullEvent,
-  FlowConnection,
-  WorkflowEndCondition,
-} from '../models/types';
+import type { Bot, Mechanism, WorkflowVersion } from '../models/types';
 import type { Node, Edge } from '@vue-flow/core';
-import {
-  eventsToFlowNodes,
-  eventsToFlowEdges,
-  autoLayoutEvents,
-  validateEventChain,
-} from '../utils/eventFlowUtils';
-import type { ValidationIssue } from '../utils/eventFlowUtils';
+import { eventsToFlowNodes, eventsToFlowEdges, autoLayoutEvents } from '../utils/eventFlowUtils';
 import { canConnect, getPortById, getDefaultPorts } from '../utils/portTypes';
 import { ensurePorts } from '../utils/eventPorts';
-import { flowToYaml, yamlToFlow } from '../utils/yamlIR';
+import { documentToYaml, sanitizeForExport } from '@purrchat/workflow-engine';
+import {
+  isWorkflowDocument,
+  migrateMechanismToDocument,
+  type FlowConnection,
+  type WorkflowDocument,
+  type WorkflowEndCondition,
+  type WorkflowEvent,
+} from '@purrchat/workflow-types';
+import { useWorkflowValidator } from '../composables/useWorkflowValidator';
+import {
+  cloneWorkflowDocument,
+  evaluateWorkflowGate,
+  nextUniqueNodeKey,
+  parseWorkflowYamlCandidate,
+  serializeWorkflowDocument,
+} from '../utils/workflowDocument';
 import TriggerNode from '../components/home/panel/bots/events/TriggerNode.vue';
 import EndNode from '../components/home/panel/bots/events/EndNode.vue';
 import WaitNode from '../components/home/panel/bots/events/WaitNode.vue';
 import IfNode from '../components/home/panel/bots/events/IfNode.vue';
-import LoopNode from '../components/home/panel/bots/events/LoopNode.vue';
-import SwitchNode from '../components/home/panel/bots/events/SwitchNode.vue';
-import MergeNode from '../components/home/panel/bots/events/MergeNode.vue';
 import ToolNode from '../components/home/panel/bots/events/ToolNode.vue';
 import DifyNode from '../components/home/panel/bots/events/DifyNode.vue';
 import N8nNode from '../components/home/panel/bots/events/N8nNode.vue';
 import LlmNode from '../components/home/panel/bots/events/LlmNode.vue';
 import BuiltinNode from '../components/home/panel/bots/events/BuiltinNode.vue';
-import PythonNode from '../components/home/panel/bots/events/PythonNode.vue';
 import TemplateNode from '../components/home/panel/bots/events/TemplateNode.vue';
 import ReplyNode from '../components/home/panel/bots/events/ReplyNode.vue';
 import HistoryNode from '../components/home/panel/bots/events/HistoryNode.vue';
@@ -343,6 +382,8 @@ import BotDebugPanel from '../components/home/panel/bots/BotDebugPanel.vue';
 
 const route = useRoute();
 const router = useRouter();
+const { isMobile } = usePlatform();
+const { validate } = useWorkflowValidator();
 
 const botId = route.params.botId as string;
 const mechanismId = route.params.mechanismId as string;
@@ -350,9 +391,17 @@ const mechanismId = route.params.mechanismId as string;
 // 状态
 const loading = ref(true);
 const error = ref<string | null>(null);
-const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
+const operationError = ref<string | null>(null);
+const saveState = ref<'idle' | 'saving' | 'publishing' | 'saved' | 'error'>('idle');
 const activeBottomTab = ref<'guide' | 'conditions' | 'debug'>('conditions');
 const showAddModal = ref(false);
+const showHistory = ref(false);
+const historyLoading = ref(false);
+const versions = ref<WorkflowVersion[]>([]);
+const revision = ref(0);
+const publishedRevision = ref<number | null>(null);
+const baseline = ref('');
+const workflowDocument = ref<WorkflowDocument | null>(null);
 
 // 连线提示 toast
 const connectionToast = reactive<{ visible: boolean; message: string; type: 'error' | 'warn' }>({
@@ -371,41 +420,43 @@ function showConnectionToast(message: string, type: 'error' | 'warn' = 'error') 
     connectionToast.visible = false;
   }, 3000);
 }
-const editingEvent = ref<FullEvent | null>(null);
+const editingEvent = ref<WorkflowEvent | null>(null);
 
 // 供子组件（EventEdge）直接删除连线，避免走 VueFlow 的 edges-change 回调
 function removeConnection(connectionId: string) {
-  if (!localMechanism.value?.reply?.workflow) return;
+  if (!workflowDocument.value) return;
   const updated = connections.value.filter((c) => c.id !== connectionId);
-  if (updated.length !== connections.value.length) {
-    localMechanism.value.reply.workflow.connections = updated;
-  }
+  if (updated.length !== connections.value.length)
+    workflowDocument.value.spec.connections = updated;
 }
 provide('removeWorkflowConnection', removeConnection);
 
 // 数据
 const bot = ref<Bot | null>(null);
-const localMechanism = ref<Mechanism | null>(null);
+const legacyMechanism = ref<Mechanism | null>(null);
 
 const botName = computed(() => bot.value?.name || 'Bot');
-const mechanismName = computed(() => localMechanism.value?.name || '机制');
+const mechanismName = computed(() => legacyMechanism.value?.name || '工作流');
 
-const events = computed<FullEvent[]>(() => {
-  const raw = localMechanism.value?.reply?.workflow?.events || [];
-  return ensurePorts(raw);
+const events = computed<WorkflowEvent[]>(() => {
+  const raw = workflowDocument.value?.spec.nodes || [];
+  return ensurePorts(raw) as WorkflowEvent[];
 });
 
 const endConditions = computed<WorkflowEndCondition[]>(() => {
-  return localMechanism.value?.reply?.workflow?.end_conditions || [];
+  return workflowDocument.value?.spec.endConditions || [];
 });
 
 const connections = computed<FlowConnection[]>(() => {
-  return localMechanism.value?.reply?.workflow?.connections || [];
+  return workflowDocument.value?.spec.connections || [];
 });
 
-const validationIssues = computed<ValidationIssue[]>(() => {
-  return validateEventChain(events.value, connections.value);
-});
+const validationResult = computed(() => validate(workflowDocument.value));
+const validationIssues = computed(() => validationResult.value.issues);
+const dirty = computed(
+  () =>
+    !!workflowDocument.value && serializeWorkflowDocument(workflowDocument.value) !== baseline.value
+);
 
 // VueFlow 注册
 
@@ -414,15 +465,15 @@ const customNodeTypes: Record<string, any> = {
   end: markRaw(EndNode),
   wait: markRaw(WaitNode),
   if: markRaw(IfNode),
-  loop: markRaw(LoopNode),
-  switch: markRaw(SwitchNode),
-  merge: markRaw(MergeNode),
+  loop: markRaw(BuiltinNode),
+  switch: markRaw(BuiltinNode),
+  merge: markRaw(BuiltinNode),
   tool: markRaw(ToolNode),
   dify: markRaw(DifyNode),
   n8n: markRaw(N8nNode),
   llm: markRaw(LlmNode),
   builtin: markRaw(BuiltinNode),
-  python: markRaw(PythonNode),
+  python: markRaw(BuiltinNode),
   template: markRaw(TemplateNode),
   reply: markRaw(ReplyNode),
   history: markRaw(HistoryNode),
@@ -436,14 +487,11 @@ const defaultEdgeOptions = {
   type: 'event',
 };
 
-// 节点位置缓存（普通对象，非响应式，避免 watch→computed→watch 无限循环）
-const positionCache: Record<string, { x: number; y: number }> = {};
 const positionTrigger = ref(0);
 
 const flowNodes = computed<Node[]>(() => {
-  // 读取 positionTrigger 以建立依赖（仅自动布局时递增）
   positionTrigger.value;
-  return eventsToFlowNodes(events.value, positionCache, connections.value);
+  return eventsToFlowNodes(events.value, undefined, connections.value);
 });
 
 const flowEdges = computed<Edge[]>(() => {
@@ -461,54 +509,73 @@ try {
 
 onMounted(async () => {
   await loadData();
-  nextTick(() => handleAutoLayout());
-
-  // 监听来自其他 Tab 的数据变更通知
   channel?.addEventListener('message', (e) => {
     if (e.data.type === 'bot-updated' && e.data.botId === botId) {
-      loadData();
+      if (!dirty.value) loadData();
     }
   });
+  window.addEventListener('beforeunload', handleBeforeUnload);
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload);
+  channel?.close();
+  if (toastTimer) clearTimeout(toastTimer);
+});
+
+onBeforeRouteLeave(() => !dirty.value || window.confirm('工作流有未保存修改，确定离开吗？'));
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!dirty.value) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
 
 async function loadData() {
   loading.value = true;
   error.value = null;
 
   try {
-    const result = await api.getBot(botId);
-    if (!result.success || !result.data) {
+    const [botResult, workflowResult] = await Promise.all([
+      api.getBot(botId),
+      api.getWorkflow(botId).catch((requestError: any) => {
+        if (requestError.response?.status === 404) return null;
+        throw requestError;
+      }),
+    ]);
+    if (!botResult.success || !botResult.data) {
       error.value = 'Bot 不存在或加载失败';
       return;
     }
 
-    bot.value = result.data;
-
-    // 从 mechanism_config 中找到对应的机制
-    const mechanisms = result.data.mechanism_config?.mechanisms || [];
+    bot.value = botResult.data;
+    const mechanisms = botResult.data.mechanism_config?.mechanisms || [];
     const found = mechanisms.find((m) => m.id === mechanismId);
+    legacyMechanism.value = found || null;
 
-    if (!found) {
-      error.value = `未找到机制 ${mechanismId}`;
+    let documentValue = workflowResult?.document;
+    const loadedPersistedDocument =
+      isWorkflowDocument(documentValue) && documentValue.spec.nodes.length > 0;
+    if (!isWorkflowDocument(documentValue) || documentValue.spec.nodes.length === 0) {
+      const migrationSource = found ? { mechanisms: [found] } : botResult.data.mechanism_config;
+      const migrated = migrateMechanismToDocument(migrationSource, botResult.data.name);
+      if (!isWorkflowDocument(documentValue) || migrated.spec.nodes.length > 0)
+        documentValue = migrated;
+    }
+
+    if (!isWorkflowDocument(documentValue)) {
+      error.value = '工作流文档格式无效';
       return;
     }
 
-    // 深拷贝一份用于本地编辑
-    localMechanism.value = deepCloneMechanism(found);
-
-    // 防御性检查：确保事件链有 trigger 节点
-    const sm = localMechanism.value.reply?.workflow;
-    if (sm && sm.events.length === 0) {
-      sm.events = [
-        {
-          id: 'evt_trigger_default',
-          type: 'trigger' as const,
-          name: '触发',
-          config: {},
-          ports: getDefaultPorts('trigger'),
-        },
-      ];
-    }
+    revision.value = workflowResult?.revision ?? 0;
+    publishedRevision.value = workflowResult?.published_revision ?? null;
+    documentValue.metadata.revision = revision.value;
+    ensureStableKeys(documentValue);
+    workflowDocument.value = cloneWorkflowDocument(documentValue);
+    baseline.value = loadedPersistedDocument
+      ? serializeWorkflowDocument(workflowDocument.value)
+      : '';
   } catch (err: any) {
     error.value = err.response?.data?.message || '加载失败';
   } finally {
@@ -516,70 +583,104 @@ async function loadData() {
   }
 }
 
-function deepCloneMechanism(m: Mechanism): Mechanism {
-  return {
-    id: m.id,
-    name: m.name,
-    enabled: m.enabled,
-    trigger: {
-      ...m.trigger,
-      rules: m.trigger?.rules?.map((r) => ({ ...r })) || [],
-    },
-    reply: {
-      ...m.reply,
-      predefined: m.reply.predefined
-        ? { ...m.reply.predefined, replies: [...(m.reply.predefined.replies || [])] }
-        : undefined,
-      llm: m.reply.llm ? { ...m.reply.llm } : undefined,
-      workflow: m.reply.workflow
-        ? {
-            events: m.reply.workflow.events.map((e) => ({
-              ...e,
-              config: e.config ? { ...e.config } : {},
-              ports: e.ports ? e.ports.map((p) => ({ ...p })) : undefined,
-              position: e.position ? { ...e.position } : undefined,
-            })),
-            end_conditions: m.reply.workflow.end_conditions.map((c) => ({ ...c })),
-            connections: m.reply.workflow.connections?.map((c) => ({ ...c })) || [],
-          }
-        : undefined,
-    },
-  };
+function ensureStableKeys(documentValue: WorkflowDocument) {
+  const used = new Set<string>();
+  for (const node of documentValue.spec.nodes) {
+    if (node.key && !used.has(node.key)) {
+      used.add(node.key);
+      continue;
+    }
+    node.key = nextUniqueNodeKey(documentValue, node.type);
+    used.add(node.key);
+  }
 }
 
-async function handleSave() {
-  if (!localMechanism.value) return;
+function showGateErrors(prefix: string, errors: string[]) {
+  operationError.value = `${prefix}：${errors.join('；')}`;
+}
+
+async function passValidationGate(action: string): Promise<boolean> {
+  if (!workflowDocument.value) return false;
+  operationError.value = null;
+  const localGate = evaluateWorkflowGate(validationResult.value, (message) =>
+    window.confirm(message)
+  );
+  if (!localGate.allowed) {
+    if (localGate.errors.length) showGateErrors(`${action}已被本地验证阻止`, localGate.errors);
+    return false;
+  }
+
+  const serverResult = await api.validateWorkflow(botId, workflowDocument.value);
+  const serverGate = evaluateWorkflowGate(
+    { issues: serverResult.issues.map((issue) => ({ ...issue, nodeId: issue.node_id })) },
+    (message) => window.confirm(message)
+  );
+  if (!serverGate.allowed) {
+    if (serverGate.errors.length) showGateErrors(`${action}已被服务端验证阻止`, serverGate.errors);
+    return false;
+  }
+  return true;
+}
+
+async function handleSave(): Promise<boolean> {
+  if (!workflowDocument.value || saveState.value === 'saving') return false;
   saveState.value = 'saving';
-
   try {
-    // 构建更新后的 mechanism_config
-    const mechanisms = bot.value?.mechanism_config?.mechanisms?.map((m) =>
-      m.id === mechanismId ? deepCloneMechanism(localMechanism.value!) : m
-    ) || [deepCloneMechanism(localMechanism.value!)];
-
-    const result = await api.updateBot(botId, {
-      mechanism_config: { mechanisms },
-    });
-
-    if (result.success && result.data) {
-      bot.value = result.data;
-      // 重新从更新后的数据中找到机制
-      const found = result.data.mechanism_config?.mechanisms?.find((m) => m.id === mechanismId);
-      if (found) {
-        localMechanism.value = deepCloneMechanism(found);
-      }
-      saveState.value = 'saved';
-      // 通知主 Tab 数据已更新
-      channel?.postMessage({ type: 'bot-updated', botId });
-      setTimeout(() => {
-        if (saveState.value === 'saved') saveState.value = 'idle';
-      }, 2000);
-    } else {
+    if (!(await passValidationGate('保存'))) {
       saveState.value = 'error';
+      return false;
     }
-  } catch {
+    workflowDocument.value.metadata.revision = revision.value + 1;
+    const response = await api.updateWorkflow(botId, {
+      revision: revision.value,
+      document: workflowDocument.value,
+    });
+    applyWorkflowResponse(response);
+    saveState.value = 'saved';
+    channel?.postMessage({ type: 'bot-updated', botId });
+    return true;
+  } catch (requestError: any) {
+    operationError.value = apiErrorMessage(requestError, '保存失败');
+    saveState.value = 'error';
+    return false;
+  }
+}
+
+async function handlePublish() {
+  if (!workflowDocument.value) return;
+  if (dirty.value && !(await handleSave())) return;
+  saveState.value = 'publishing';
+  try {
+    if (!(await passValidationGate('发布'))) {
+      saveState.value = 'error';
+      return;
+    }
+    const version = await api.publishWorkflow(botId, revision.value);
+    publishedRevision.value = version.revision;
+    saveState.value = 'saved';
+    if (showHistory.value) await loadVersions();
+  } catch (requestError: any) {
+    operationError.value = apiErrorMessage(requestError, '发布失败');
     saveState.value = 'error';
   }
+}
+
+function applyWorkflowResponse(response: Awaited<ReturnType<typeof api.getWorkflow>>) {
+  const next = cloneWorkflowDocument(response.document);
+  revision.value = response.revision;
+  publishedRevision.value = response.published_revision ?? publishedRevision.value;
+  next.metadata.revision = response.revision;
+  ensureStableKeys(next);
+  workflowDocument.value = next;
+  baseline.value = serializeWorkflowDocument(next);
+  operationError.value = null;
+}
+
+function apiErrorMessage(requestError: any, fallback: string): string {
+  if (requestError.response?.status === 409) {
+    return '版本冲突：服务端草稿已更新。你的本地内容已保留，请刷新版本后再决定如何处理。';
+  }
+  return requestError.response?.data?.error || requestError.response?.data?.message || fallback;
 }
 
 function goBack() {
@@ -588,9 +689,7 @@ function goBack() {
 
 function onNodeClick({ node }: { node: Node }) {
   const evt = events.value.find((e) => e.id === node.id);
-  if (evt) {
-    editingEvent.value = { ...evt };
-  }
+  if (evt) editingEvent.value = structuredClone(evt);
 }
 
 function closeModal() {
@@ -598,8 +697,8 @@ function closeModal() {
   editingEvent.value = null;
 }
 
-function handleEventConfirm(event: FullEvent) {
-  if (!localMechanism.value?.reply?.workflow) return;
+function handleEventConfirm(event: WorkflowEvent) {
+  if (!workflowDocument.value) return;
 
   // 确保事件有 ports
   if (!event.ports || event.ports.length === 0) {
@@ -615,12 +714,13 @@ function handleEventConfirm(event: FullEvent) {
     currentEvents.push(event);
   }
 
-  localMechanism.value.reply.workflow.events = currentEvents;
+  event.key ||= nextUniqueNodeKey(workflowDocument.value, event.type);
+  workflowDocument.value.spec.nodes = currentEvents;
   closeModal();
 }
 
 function handleEventDelete(eventId: string) {
-  if (!localMechanism.value?.reply?.workflow) return;
+  if (!workflowDocument.value) return;
 
   const updatedEvents = events.value.filter((e) => e.id !== eventId);
 
@@ -629,25 +729,17 @@ function handleEventDelete(eventId: string) {
     (c) => c.sourceNodeId !== eventId && c.targetNodeId !== eventId
   );
 
-  localMechanism.value.reply.workflow.events = updatedEvents;
-  localMechanism.value.reply.workflow.connections = updatedConnections;
+  workflowDocument.value.spec.nodes = updatedEvents;
+  workflowDocument.value.spec.connections = updatedConnections;
   closeModal();
 }
 
 function handleEndConditionsUpdate(conditions: WorkflowEndCondition[]) {
-  if (!localMechanism.value?.reply?.workflow) return;
-  localMechanism.value.reply.workflow.end_conditions = conditions;
+  if (workflowDocument.value) workflowDocument.value.spec.endConditions = conditions;
 }
 
-// 监听 flowNodes 变化并缓存位置（写入普通对象，不触发 computed 重算）
-watch(flowNodes, (nodes) => {
-  for (const node of nodes) {
-    positionCache[node.id] = { ...node.position };
-  }
-});
-
 // 在事件 ports 中查找端口，找不到时 fallback 到 getDefaultPorts
-function findPort(event: FullEvent, portId: string) {
+function findPort(event: WorkflowEvent, portId: string) {
   return getPortById(event.ports || [], portId) || getPortById(getDefaultPorts(event.type), portId);
 }
 
@@ -663,7 +755,7 @@ function onConnect(connection: {
     return;
   }
 
-  if (!localMechanism.value?.reply?.workflow) return;
+  if (!workflowDocument.value) return;
 
   const sourceEvent = events.value.find((e) => e.id === connection.source);
   const targetEvent = events.value.find((e) => e.id === connection.target);
@@ -701,7 +793,7 @@ function onConnect(connection: {
     targetPortId: connection.targetHandle || '',
   };
 
-  localMechanism.value.reply.workflow.connections = [...connections.value, newConnection];
+  workflowDocument.value.spec.connections = [...connections.value, newConnection];
 }
 
 // 连线变更：仅做日志，不再处理 remove（删除由 removeConnection 通过 provide/inject 驱动）
@@ -709,11 +801,11 @@ function onEdgesChange(_changes: any[]) {
   // no-op: 边删除通过 removeConnection() 直接操作 localMechanism 状态
 }
 
-// 节点变更：捕获位置变化并缓存（写入普通对象即可，VueFlow 内部已管理位置）
 function onNodesChange(changes: any[]) {
   for (const change of changes) {
     if (change.type === 'position' && change.dragging === false && change.position) {
-      positionCache[change.id] = { ...change.position };
+      const node = workflowDocument.value?.spec.nodes.find((item) => item.id === change.id);
+      if (node) node.position = { ...change.position };
     }
   }
 }
@@ -739,25 +831,18 @@ function isValidConnection(connection: {
 
 // 自动布局：使用 dagre 重新计算节点位置
 function handleAutoLayout() {
+  if (!workflowDocument.value) return;
   const layouted = autoLayoutEvents(events.value, 'LR', connections.value);
   for (const node of layouted) {
-    positionCache[node.id] = { ...node.position };
+    const documentNode = workflowDocument.value.spec.nodes.find((item) => item.id === node.id);
+    if (documentNode) documentNode.position = { ...node.position };
   }
-  // 递增 trigger 以通知 flowNodes computed 使用新位置
   positionTrigger.value++;
 }
 
-// 事件变化时自动布局
-watch(
-  () => [events.value.length, connections.value.length],
-  () => {
-    nextTick(() => handleAutoLayout());
-  }
-);
-
-// YAML 导出：将当前 events + connections 导出为 YAML 文件
 function handleYamlExport() {
-  const yamlStr = flowToYaml(events.value, connections.value);
+  if (!workflowDocument.value) return;
+  const yamlStr = documentToYaml(sanitizeForExport(workflowDocument.value));
   const blob = new Blob([yamlStr], { type: 'text/yaml' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -767,7 +852,6 @@ function handleYamlExport() {
   URL.revokeObjectURL(url);
 }
 
-// YAML 导入：从 YAML 文件解析 events + connections
 function handleYamlImport() {
   const input = document.createElement('input');
   input.type = 'file';
@@ -777,29 +861,162 @@ function handleYamlImport() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      try {
-        const result = yamlToFlow(ev.target?.result as string);
-        if (result.errors.length > 0) {
-          console.warn('[YAML Import]', result.errors);
-        }
-        if (result.events.length > 0 && localMechanism.value) {
-          if (!localMechanism.value.reply) localMechanism.value.reply = {} as any;
-          if (!localMechanism.value.reply.workflow) localMechanism.value.reply.workflow = {} as any;
-          localMechanism.value.reply.workflow.events = result.events;
-          localMechanism.value.reply.workflow.connections = result.connections;
-          handleSave();
-        }
-      } catch (err) {
-        console.error('[YAML Import] 解析失败:', err);
+      const result = parseWorkflowYamlCandidate(ev.target?.result as string, validate);
+      if (!result.candidate) {
+        showGateErrors('YAML 导入失败，当前草稿未变更', result.errors);
+        return;
       }
+      if (
+        result.warnings.length > 0 &&
+        !window.confirm(
+          `导入内容包含以下警告：\n\n${result.warnings.join('\n')}\n\n仍要替换当前草稿吗？`
+        )
+      ) {
+        return;
+      }
+      const candidate = cloneWorkflowDocument(result.candidate);
+      candidate.metadata.revision = revision.value;
+      ensureStableKeys(candidate);
+      workflowDocument.value = candidate;
+      operationError.value = null;
     };
     reader.readAsText(file);
   };
   input.click();
 }
+
+async function toggleHistory() {
+  showHistory.value = !showHistory.value;
+  if (showHistory.value) await loadVersions();
+}
+
+async function loadVersions() {
+  historyLoading.value = true;
+  try {
+    versions.value = await api.listWorkflowVersions(botId);
+  } catch (requestError: any) {
+    operationError.value = apiErrorMessage(requestError, '版本历史加载失败');
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+async function restoreVersion(versionRevision: number) {
+  if (dirty.value && !window.confirm('恢复版本会覆盖当前未保存修改，确定继续吗？')) return;
+  if (!window.confirm(`将已发布的 r${versionRevision} 恢复为新草稿？恢复后不会自动发布。`)) return;
+  historyLoading.value = true;
+  try {
+    const response = await api.rollbackWorkflow(botId, versionRevision);
+    applyWorkflowResponse(response);
+    saveState.value = 'saved';
+    showHistory.value = false;
+  } catch (requestError: any) {
+    operationError.value = apiErrorMessage(requestError, '恢复版本失败');
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+function formatPublishedAt(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
 </script>
 
 <style scoped>
+.workflow-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-tertiary-color, #a8a29e);
+}
+
+.workflow-status__dirty {
+  color: var(--color-warning, #b45309);
+  font-weight: 600;
+}
+
+.workflow-error {
+  padding: 8px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-error, #dc2626) 20%, transparent);
+  background: color-mix(in srgb, var(--color-error, #dc2626) 8%, transparent);
+  color: var(--color-error, #dc2626);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.version-popover {
+  position: absolute;
+  top: 52px;
+  right: 20px;
+  z-index: 30;
+  width: min(360px, calc(100vw - 40px));
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 16px;
+  border-radius: var(--radius-md, 12px);
+  background: var(--strong-background-color, #fff);
+  box-shadow: var(--shadow-md, 0 4px 16px rgba(28, 25, 23, 0.08));
+}
+
+.version-popover__header,
+.version-item,
+.version-item > div {
+  display: flex;
+  align-items: center;
+}
+
+.version-popover__header,
+.version-item {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.version-popover__header {
+  color: var(--text-color, #1c1917);
+  font-size: 13px;
+}
+
+.version-popover__close,
+.version-item button {
+  color: var(--theme-primary, #5a8f4e);
+  font-size: 11px;
+}
+
+.version-popover__hint,
+.version-popover__empty {
+  margin-top: 6px;
+  color: var(--text-tertiary-color, #a8a29e);
+  font-size: 11px;
+}
+
+.version-list {
+  margin-top: 12px;
+}
+
+.version-item {
+  padding: 10px 0;
+  border-top: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.06));
+}
+
+.version-item > div {
+  gap: 8px;
+  color: var(--text-secondary-color, #57534e);
+  font-size: 11px;
+}
+
+.version-item strong {
+  color: var(--text-color, #1c1917);
+}
+
+.version-item button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 /* ── Mobile notice ──────────────────────────────────────── */
 
 .mobile-workflow-notice {
