@@ -34,6 +34,8 @@ type Bot struct {
 	Status                BotStatus       `json:"status"`
 	Visibility            BotVisibility   `json:"visibility"` // deprecated, #36 迁移后移除
 	MechanismConfig       json.RawMessage `json:"mechanism_config"`
+	WorkflowDocument      json.RawMessage `json:"workflow_document,omitempty"`
+	WorkflowRevision      int             `json:"workflow_revision"`
 	BotType               BotType         `json:"bot_type"`
 	Discoverability       Discoverability `json:"discoverability"`
 	IsSystem              bool            `json:"is_system"`

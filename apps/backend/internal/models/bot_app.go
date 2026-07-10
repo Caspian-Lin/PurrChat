@@ -97,6 +97,23 @@ func IsGrantedSubsetOfRequested(granted, requested []string) []string {
 	return violations
 }
 
+// ─── 节点类型 → Capability 映射(与 workflow-types capabilities.ts 同步) ────
+
+var nodeCapabilities = map[string][]string{
+	"trigger":  {CapabilityReadTrigger},
+	"llm":      {CapabilityNetworkExternal, CapabilityReadHistory},
+	"tool":     {CapabilityNetworkExternal},
+	"dify":     {CapabilityNetworkExternal},
+	"n8n":      {CapabilityNetworkExternal},
+	"history":  {CapabilityReadHistory},
+	"reply":    {CapabilitySend},
+	"template": {CapabilitySend},
+}
+
+func GetNodeCapabilities(nodeType string) []string {
+	return nodeCapabilities[nodeType]
+}
+
 // BotIdentity 系统身份投影(不可登录、不可好友;仅用于 message.sender_id)
 type BotIdentity struct {
 	AppID       uuid.UUID `json:"app_id"`

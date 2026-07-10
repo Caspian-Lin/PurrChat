@@ -78,6 +78,11 @@ func (e *BotEngine) SetCallLogRepo(repo repository.BotCallLogRepository) {
 	e.callLogRepo = repo
 }
 
+// GetTSClient 返回 TS 微服务客户端（可能为 nil）
+func (e *BotEngine) GetTSClient() *BotEngineClient {
+	return e.tsClient
+}
+
 // SetInstallationRepo 设置安装仓储（用于 diagnostics_consent 控制调用日志内容）
 func (e *BotEngine) SetInstallationRepo(repo repository.BotInstallationRepository) {
 	e.installationRepo = repo
