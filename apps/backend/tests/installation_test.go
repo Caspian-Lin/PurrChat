@@ -23,7 +23,6 @@ func TestBotAppInstallation(t *testing.T) {
 	ctx := context.Background()
 
 	botRepo := repository.NewBotRepository()
-	botDeployRepo := repository.NewBotDeploymentRepository()
 	installationRepo := repository.NewBotInstallationRepository()
 	userRepo := repository.NewUserRepository()
 	friendshipRepo := repository.NewFriendshipRepository()
@@ -32,7 +31,7 @@ func TestBotAppInstallation(t *testing.T) {
 	messageRepo := repository.NewConversationMessageRepository()
 	callLogRepo := repository.NewBotCallLogRepository()
 
-	botService := services.NewBotService(botRepo, botDeployRepo, installationRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, messageRepo, callLogRepo)
+	botService := services.NewBotService(botRepo, installationRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, messageRepo, callLogRepo)
 	installationService := services.NewInstallationService(installationRepo, botRepo, enrollmentRepo, messageRepo)
 
 	owner := CreateTestUser(t, "botowner", "owner@test.com", "pass")
