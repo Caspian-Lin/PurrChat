@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { reactive } from 'vue';
 import {
   createEmptyDocument,
   generateNodeKey,
@@ -9,6 +10,7 @@ import { documentToYaml } from '@purrchat/workflow-engine';
 import { flowToDocumentYaml, yamlToFlowDocument } from '../utils/yamlIR';
 import {
   PRODUCTION_NODE_MANIFEST,
+  cloneWorkflowEvent,
   evaluateWorkflowGate,
   nextUniqueNodeKey,
   parseWorkflowYamlCandidate,
@@ -98,6 +100,22 @@ describe('WorkflowDocument YAML', () => {
 });
 
 describe('稳定节点 key 与验证 gate', () => {
+  it('可复制包含嵌套响应式配置的节点用于编辑', () => {
+    const event = reactive({
+      id: 'reply',
+      key: 'reply_1',
+      type: 'reply' as const,
+      name: '回复',
+      config: { template: '${input.text}', nested: { enabled: true } },
+    });
+
+    const cloned = cloneWorkflowEvent(event);
+
+    expect(cloned).toEqual(event);
+    expect(cloned).not.toBe(event);
+    expect(cloned.config).not.toBe(event.config);
+  });
+
   it('为同文档变量引用生成唯一且与节点名称无关的 key', () => {
     const document = createEmptyDocument('key');
     document.spec.nodes = [node('a', 'reply_1'), node('b', 'reply_2')];
