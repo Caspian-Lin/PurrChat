@@ -20,6 +20,7 @@ import type {
   FlowConnection,
 } from '@purrchat/workflow-types';
 import {
+  NODE_MANIFEST,
   getDefaultPorts,
   isPortCompatible,
   extractVariablePaths,
@@ -57,6 +58,12 @@ const SENSITIVE_CONFIG_KEYS = new Set([
   'webhook_secret',
   'authorization',
 ]);
+
+const PRODUCTION_NODE_TYPES = new Set(
+  NODE_MANIFEST.filter(
+    (node) => node.implemented && node.tested && node.productionReady,
+  ).map((node) => node.type),
+);
 
 export function validateWorkflowDocument(
   doc: unknown,
@@ -167,6 +174,18 @@ function validateNodes(
     if (!registry.has(node.type)) {
       issues.push(
         err('unknown_node_type', `未知节点类型: ${node.type}`, `${base}.type`, node.id),
+      );
+      continue;
+    }
+
+    if (!PRODUCTION_NODE_TYPES.has(node.type)) {
+      issues.push(
+        err(
+          'node_not_production_ready',
+          `节点类型尚未通过生产验证: ${node.type}`,
+          `${base}.type`,
+          node.id,
+        ),
       );
       continue;
     }
