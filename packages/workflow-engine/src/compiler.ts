@@ -25,6 +25,7 @@ export class Compiler {
     if (!triggerNode) throw new Error('Blueprint must have a trigger node');
 
     const nameResolver = this.buildNameResolver(blueprint);
+    const nodeKeyMap = this.buildNodeKeyMap(blueprint);
     const states: Record<string, any> = {};
     const actors: Record<string, any> = {};
 
@@ -56,15 +57,19 @@ export class Compiler {
     }).createMachine({
       id: blueprint.nodes.map((n) => n.id).join('-') || 'workflow',
       initial: triggerNode.id,
-      context: ({ input }) => this.buildInitialContext(input, nameResolver),
+      context: ({ input }) => this.buildInitialContext(input, nameResolver, nodeKeyMap),
       states,
     });
 
     return machine as AnyStateMachine;
   }
 
-  /** 从 actor input 构建初始 context，注入 compile 期构建的 nameResolver */
-  private buildInitialContext(input: ActorInput, nameResolver: Record<string, string>): ExecutionContext {
+  /** 从 actor input 构建初始 context，注入 compile 期构建的 nameResolver + nodeKeyMap */
+  private buildInitialContext(
+    input: ActorInput,
+    nameResolver: Record<string, string>,
+    nodeKeyMap: Record<string, string>,
+  ): ExecutionContext {
     return {
       nodeOutputs: {},
       variables: {
@@ -79,9 +84,13 @@ export class Compiler {
       contextBuffer: input?.contextBuffer ?? [],
       finalReply: '',
       nameResolver,
+      nodeKeyMap,
       senderId: input?.senderId ?? '',
       senderName: input?.senderName ?? '',
       conversationId: input?.conversationId ?? '',
+      rawInput: input?.rawInput ?? '',
+      history: input?.contextBuffer ?? [],
+      session: {},
       grantedCapabilities: input?.grantedCapabilities,
       secrets: input?.secrets,
     };
@@ -125,6 +134,14 @@ export class Compiler {
         nodeOutputs: context.nodeOutputs,
         nameResolver: context.nameResolver,
         finalReply: context.finalReply,
+        nodeKeyMap: context.nodeKeyMap,
+        rawInput: context.rawInput,
+        senderId: context.senderId,
+        senderName: context.senderName,
+        conversationId: context.conversationId,
+        history: context.history,
+        secrets: context.secrets ?? {},
+        session: context.session,
       };
       return def.execute(nodeInput, resolvedConfig as Record<string, any>, nodeCtx);
     });
@@ -322,5 +339,16 @@ export class Compiler {
       }
     }
     return resolver;
+  }
+
+  /** 构建 nodeKey → nodeId 映射，用于 ${nodes.<key>.outputs.<port>} 解析 */
+  private buildNodeKeyMap(blueprint: Blueprint): Record<string, string> {
+    const map: Record<string, string> = {};
+    for (const node of blueprint.nodes) {
+      if (node.key) {
+        map[node.key] = node.id;
+      }
+    }
+    return map;
   }
 }

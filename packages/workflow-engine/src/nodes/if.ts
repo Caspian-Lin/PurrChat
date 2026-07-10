@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
-import { evaluateOperatorCondition, replaceVariables } from '../ports.js';
+import { evaluateOperatorCondition } from '../ports.js';
+import { resolveTemplate } from '../resolver.js';
 
 const conditionSchema = z.object({
   left: z.string(),
@@ -30,9 +31,9 @@ export const ifNode: NodeDefinition<z.infer<typeof ifConfigSchema>> = {
       // 新版多条件格式
       const logic = cfg.logic || 'and';
       const results = cfg.conditions.map((c: { left: string; operator: string; right: string }) => {
-        // 先解析 {节点名.端口名} / $变量 / $nodeId:portId 引用，再查输入端口
-        const left = resolvePortValue(replaceVariables(c.left, ctx), input.ports);
-        const right = resolvePortValue(replaceVariables(c.right, ctx), input.ports);
+        // 统一变量解析后再查输入端口
+        const left = resolvePortValue(resolveTemplate(c.left, ctx), input.ports);
+        const right = resolvePortValue(resolveTemplate(c.right, ctx), input.ports);
         return evaluateOperatorCondition(left, right, c.operator);
       });
 
@@ -41,8 +42,8 @@ export const ifNode: NodeDefinition<z.infer<typeof ifConfigSchema>> = {
         : results.some(Boolean);
     } else if (cfg.operator) {
       // 旧版单条件格式
-      const left = replaceVariables(input.ports['in_exec'] || '', ctx);
-      const right = replaceVariables(cfg.value || '', ctx);
+      const left = resolveTemplate(input.ports['in_exec'] || '', ctx);
+      const right = resolveTemplate(cfg.value || '', ctx);
       result = evaluateOperatorCondition(left, right, cfg.operator);
     } else {
       // 无条件配置，检查 in_exec 端口值

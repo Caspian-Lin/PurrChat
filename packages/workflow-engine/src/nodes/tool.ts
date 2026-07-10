@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
-import { replaceVariables } from '../ports.js';
+import { resolveTemplate } from '../resolver.js';
 
 const toolConfigSchema = z.object({
   method: z.string().optional().default('GET'),
@@ -20,8 +20,8 @@ export const toolNode: NodeDefinition<z.infer<typeof toolConfigSchema>> = {
     const method = cfg.method || 'GET';
     let url = cfg.url || '';
 
-    // 变量替换
-    url = replaceVariables(url, ctx);
+    // 统一变量替换
+    url = resolveTemplate(url, ctx);
 
     const body = input.ports['in_body'] || '';
     const headers: Record<string, string> = {

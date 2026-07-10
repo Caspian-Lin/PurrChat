@@ -50,3 +50,17 @@ export type {
 
 // 迁移工具
 export { migrateMechanismToDocument, isWorkflowDocument } from './migration';
+
+// 统一变量模型
+export {
+  VARIABLE_SCOPES,
+  VARIABLE_REF_RE,
+  BUILTIN_VARIABLES,
+  extractVariablePaths,
+  nodeOutputPath,
+  parseNodeOutputPath,
+  isSecretPath,
+  parseSecretName,
+  generateNodeKey,
+} from './variables';
+export type { VariableScope, BuiltinVariableMeta } from './variables';

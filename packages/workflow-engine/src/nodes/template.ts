@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
-import { replaceVariables } from '../ports.js';
+import { resolveTemplate } from '../resolver.js';
 
 const templateConfigSchema = z.object({
   template: z.string().optional(),
@@ -31,22 +31,8 @@ export const templateNode: NodeDefinition<z.infer<typeof templateConfigSchema>> 
       };
     }
 
-    // 变量替换（使用完整上下文）
-    let result = replaceVariables(template, ctx);
-
-    // 替换 {args} 和 {args:N}
-    const rawInput = input.rawInput || '';
-    const args = rawInput.trim().split(/\s+/);
-    result = result.replace(/\{args:(\d+)\}/g, (_match, index: string) => {
-      const i = parseInt(index, 10) - 1;
-      return i >= 0 && i < args.length ? args[i]! : '';
-    });
-    result = result.replaceAll('{args}', rawInput.trim());
-
-    // 替换 {变量名} 格式
-    for (const [key, value] of Object.entries(ctx.variables)) {
-      result = result.replaceAll(`{${key}}`, value);
-    }
+    // 统一变量替换（${path} + 所有遗留格式由同一 resolver 处理）
+    const result = resolveTemplate(template, ctx);
 
     return {
       ports: {

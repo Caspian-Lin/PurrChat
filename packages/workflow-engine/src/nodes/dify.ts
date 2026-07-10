@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
-import { replaceVariables } from '../ports.js';
+import { resolveTemplate } from '../resolver.js';
 
 const difyConfigSchema = z.object({
   api_base: z.string(),
@@ -39,7 +39,7 @@ export const difyNode: NodeDefinition<z.infer<typeof difyConfigSchema>> = {
       try {
         const mapping = JSON.parse(inputsMapping);
         for (const [key, ref] of Object.entries(mapping)) {
-          inputs[key] = replaceVariables(ref as string, ctx);
+          inputs[key] = resolveTemplate(ref as string, ctx);
         }
       } catch {
         // 忽略解析错误

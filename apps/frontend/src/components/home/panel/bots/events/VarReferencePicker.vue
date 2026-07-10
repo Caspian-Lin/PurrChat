@@ -61,14 +61,20 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { PORT_COLORS, type PortDataType } from '../../../../../utils/portTypes';
+import { BUILTIN_VARIABLES, nodeOutputPath } from '@purrchat/workflow-types';
 import type { WorkflowEvent, FlowConnection } from '../../../../../models/types';
 
 interface VariableItem {
-  ref: string; // 人类可读的引用格式，如 {触发.用户消息}
-  key: string; // 用于搜索匹配
+  /** 显示用引用路径，如 ${input.text} */
+  ref: string;
+  /** 用于搜索匹配 */
+  key: string;
+  /** 人类可读标签 */
   label: string;
+  /** 数据类型 */
   dataType: PortDataType;
-  value: string; // 实际插入的引用字符串，如 $evt_xxx:out_input
+  /** 实际插入配置文本的规范引用字符串 */
+  value: string;
 }
 
 interface Props {
@@ -113,41 +119,15 @@ watch(
   }
 );
 
-// 内置变量（总是可用）
+// 内置变量（总是可用，使用规范 ${path} 格式）
 const builtinVars = computed<VariableItem[]>(() => {
-  const trigger = props.events.find((e) => e.type === 'trigger');
-  const tid = trigger?.id || '';
-
-  const vars: VariableItem[] = [
-    {
-      ref: '{input}',
-      key: 'input input 用户消息',
-      label: '用户消息',
-      dataType: 'string',
-      value: tid ? `$${tid}:out_input` : '{input}',
-    },
-    {
-      ref: '{username}',
-      key: 'username 发送者 用户名',
-      label: '发送者',
-      dataType: 'string',
-      value: tid ? `$${tid}:out_username` : '{username}',
-    },
-    {
-      ref: '{time}',
-      key: 'time 时间',
-      label: '时间',
-      dataType: 'string',
-      value: tid ? `$${tid}:out_time` : '{time}',
-    },
-    {
-      ref: '{args}',
-      key: 'args 参数',
-      label: '参数',
-      dataType: 'string',
-      value: tid ? `$${tid}:out_args` : '{args}',
-    },
-  ];
+  const vars: VariableItem[] = BUILTIN_VARIABLES.map((v) => ({
+    ref: `\${${v.path}}`,
+    key: `${v.path} ${v.label}`,
+    label: v.label,
+    dataType: v.dataType as PortDataType,
+    value: `\${${v.path}}`,
+  }));
 
   return filterBySearch(vars);
 });
@@ -172,15 +152,24 @@ const upstreamGroups = computed(() => {
     const evt = props.events.find((e) => e.id === nodeId);
     if (!evt) continue;
 
+    // 使用稳定 key 生成规范引用；无 key 时回退到遗留格式
+    const refKey = (evt as any).key || nodeId;
+
     const outputPorts = (evt.ports || []).filter((p) => p.direction === 'output');
     const items: VariableItem[] = outputPorts
-      .map((p) => ({
-        ref: `{${evt.name}.${p.name}}`,
-        key: `${evt.name} ${p.name} ${p.id} ${nodeId}`,
-        label: p.name,
-        dataType: p.dataType,
-        value: `$${nodeId}:${p.id}`,
-      }))
+      .map((p) => {
+        // 规范格式 ${nodes.<key>.outputs.<port>}；有 key 用 key，无 key 回退 {name.port}
+        const varPath = (evt as any).key
+          ? `\${${nodeOutputPath(refKey, p.id)}}`
+          : `{${evt.name}.${p.name}}`;
+        return {
+          ref: varPath,
+          key: `${evt.name} ${p.name} ${p.id} ${nodeId}`,
+          label: p.name,
+          dataType: p.dataType,
+          value: varPath,
+        };
+      })
       .filter((item) => !search.value || item.key.includes(search.value.toLowerCase()));
 
     if (items.length > 0) {
