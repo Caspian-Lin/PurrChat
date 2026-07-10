@@ -192,31 +192,28 @@
           </h3>
           <BotDebugPanel :bot-id="bot.id" :mechanism="specialModeMechanism" :bot-name="form.name" />
         </section>
-
-        <!-- 保存按钮 -->
-        <div class="flex justify-end gap-3 pb-6">
-          <button
-            class="px-4 py-2 text-sm rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-secondary hover:bg-hover-bg transition-colors"
-            @click="resetForm"
-          >
-            重置
-          </button>
-          <button
-            class="px-4 py-2 text-sm rounded-[var(--radius-sm,8px)] text-white transition-colors disabled:opacity-50"
-            style="background: var(--theme-primary)"
-            :disabled="saving"
-            @click="handleSave"
-          >
-            {{ saving ? '保存中...' : '保存更改' }}
-          </button>
-        </div>
       </div>
+    </div>
+
+    <!-- 浮动保存按钮 -->
+    <div class="fixed bottom-12 right-12 z-40 flex items-center gap-2">
+      <Transition name="reset-btn">
+        <button
+          v-if="isDirty && !saving"
+          class="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-secondary hover:bg-hover-bg transition-all duration-200 active:scale-[0.98]"
+          @click="resetForm"
+        >
+          <BsArrowCounterclockwise :size="16" />
+          重置
+        </button>
+      </Transition>
+      <SaveButton :is-dirty="isDirty" :is-saving="saving" @save="handleSave" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, computed } from 'vue';
+import { reactive, ref, computed, watch } from 'vue';
 import {
   BsArrowLeft,
   BsInfoCircle,
@@ -226,6 +223,7 @@ import {
   BsDownload,
   BsPlus,
   BsClockHistory,
+  BsArrowCounterclockwise,
 } from 'vue-icons-plus/bs';
 import type {
   Bot,
@@ -238,6 +236,7 @@ import type {
 import MechanismCard from './MechanismCard.vue';
 import BotDebugPanel from './BotDebugPanel.vue';
 import BotCallLogs from './BotCallLogs.vue';
+import SaveButton from '../settings/SaveButton.vue';
 
 interface Props {
   bot: Bot;
@@ -348,6 +347,35 @@ const form = reactive({
   mechanisms: extractMechanisms(props.bot),
 });
 
+// ─── Dirty 检测 ──────────────────────────────────────────────
+
+function serializeForm(): string {
+  return JSON.stringify({
+    name: form.name,
+    description: form.description,
+    visibility: form.visibility,
+    status: form.status,
+    mechanisms: form.mechanisms,
+  });
+}
+
+const baseline = ref(serializeForm());
+
+const isDirty = computed(() => serializeForm() !== baseline.value);
+
+// Bot 切换时重置 baseline
+watch(
+  () => props.bot.id,
+  () => {
+    form.name = props.bot.name;
+    form.description = props.bot.description;
+    form.visibility = props.bot.visibility;
+    form.status = props.bot.status;
+    form.mechanisms = extractMechanisms(props.bot);
+    baseline.value = serializeForm();
+  }
+);
+
 // 计算属性：是否已有概率机制
 const hasProbabilityMechanism = computed(() => {
   return form.mechanisms.some((m) => m.trigger.type === 'probability');
@@ -364,6 +392,7 @@ function resetForm() {
   form.visibility = props.bot.visibility;
   form.status = props.bot.status;
   form.mechanisms = extractMechanisms(props.bot);
+  baseline.value = serializeForm();
 }
 
 function generateId(): string {
@@ -487,8 +516,27 @@ async function handleSave() {
       status: form.status,
       mechanism_config: mechanismConfig,
     });
+
+    baseline.value = serializeForm();
   } finally {
     saving.value = false;
   }
 }
 </script>
+
+<style scoped>
+.reset-btn-enter-active {
+  transition: all 200ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+.reset-btn-leave-active {
+  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reset-btn-enter-from {
+  opacity: 0;
+  transform: translateY(16px);
+}
+.reset-btn-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+</style>
