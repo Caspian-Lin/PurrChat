@@ -386,6 +386,7 @@ func main() {
 		bots.POST("/:id/workflow/validate", workflowHandler.ValidateWorkflow)
 		bots.POST("/:id/workflow/publish", workflowHandler.PublishWorkflow)
 		bots.POST("/:id/workflow/test-runs", workflowHandler.TestRunWorkflow)
+		bots.POST("/:id/workflow/test-runs/step", workflowHandler.TestRunStep)
 		// Secret 管理(owner-only CRUD,不返回明文)
 		bots.GET("/:id/secrets", secretHandler.ListSecrets)
 		bots.PUT("/:id/secrets/:key", sensitiveRateLimit, secretHandler.SetSecret)

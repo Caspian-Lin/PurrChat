@@ -461,9 +461,22 @@ export const api = {
 
   testRunWorkflow: (
     botId: string,
-    data: { message: string; document?: unknown }
+    data: {
+      message: string;
+      document?: unknown;
+      side_effects?: string;
+      step_mode?: boolean;
+      sender_name?: string;
+      session_id?: string;
+    }
   ): Promise<ApiResponse<unknown>> => {
     return apiClient.post(`/api/bots/${botId}/workflow/test-runs`, data).then((res) => res.data);
+  },
+
+  testRunStep: (botId: string, sessionId: string): Promise<ApiResponse<unknown>> => {
+    return apiClient
+      .post(`/api/bots/${botId}/workflow/test-runs/step`, { session_id: sessionId })
+      .then((res) => res.data);
   },
 };
 

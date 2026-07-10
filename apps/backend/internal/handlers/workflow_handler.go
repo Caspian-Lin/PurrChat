@@ -128,6 +128,24 @@ func (h *WorkflowHandler) TestRunWorkflow(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+func (h *WorkflowHandler) TestRunStep(c *gin.Context) {
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := h.workflowService.TestRunStep(c.Request.Context(), req.SessionID)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 func isRevisionMismatch(err error) bool {
 	return strings.Contains(err.Error(), "revision mismatch")
 }

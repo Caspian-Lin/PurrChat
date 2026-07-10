@@ -265,9 +265,11 @@
         <!-- 调试面板 -->
         <div v-if="activeBottomTab === 'debug'" class="p-4">
           <BotDebugPanel
-            v-if="localMechanism"
+            v-if="events.length > 0"
             :bot-id="botId"
-            :mechanism="localMechanism"
+            :events="events"
+            :connections="connections"
+            :end-conditions="endConditions"
             :bot-name="botName"
           />
           <p v-else class="text-xs text-text-quaternary">无法加载调试面板</p>

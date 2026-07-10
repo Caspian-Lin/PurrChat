@@ -64,3 +64,16 @@ export {
   generateNodeKey,
 } from './variables';
 export type { VariableScope, BuiltinVariableMeta } from './variables';
+
+// Debug Trace 类型
+export type {
+  NodeTraceStatus,
+  NodeTrace,
+  RunTraceStatus,
+  RunTrace,
+  SideEffectPolicy,
+  DebugRunRequest,
+  DebugStepRequest as TraceDebugStepRequest,
+  DebugCancelRequest,
+  DebugResetRequest as TraceDebugResetRequest,
+} from './trace';
