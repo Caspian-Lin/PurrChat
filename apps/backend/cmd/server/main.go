@@ -197,9 +197,9 @@ func main() {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 		}
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, If-Match, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
-		c.Writer.Header().Set("Access-Control-Expose-Headers", "Set-Cookie")
+		c.Writer.Header().Set("Access-Control-Expose-Headers", "Set-Cookie, ETag")
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
@@ -385,6 +385,8 @@ func main() {
 		bots.PUT("/:id/workflow", workflowHandler.UpdateWorkflow)
 		bots.POST("/:id/workflow/validate", workflowHandler.ValidateWorkflow)
 		bots.POST("/:id/workflow/publish", workflowHandler.PublishWorkflow)
+		bots.GET("/:id/workflow/versions", workflowHandler.ListPublishedVersions)
+		bots.POST("/:id/workflow/versions/:revision/rollback", workflowHandler.RollbackWorkflow)
 		bots.POST("/:id/workflow/test-runs", workflowHandler.TestRunWorkflow)
 		bots.POST("/:id/workflow/test-runs/step", workflowHandler.TestRunStep)
 		// Secret 管理(owner-only CRUD,不返回明文)
