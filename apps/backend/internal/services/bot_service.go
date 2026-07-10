@@ -19,7 +19,6 @@ import (
 // BotService Bot 业务逻辑服务
 type BotService struct {
 	botRepo          repository.BotRepository
-	botDeployRepo    repository.BotDeploymentRepository
 	installationRepo repository.BotInstallationRepository
 	userRepo         repository.UserRepository
 	friendshipRepo   repository.FriendshipRepository
@@ -32,7 +31,6 @@ type BotService struct {
 // NewBotService 创建 Bot 服务
 func NewBotService(
 	botRepo repository.BotRepository,
-	botDeployRepo repository.BotDeploymentRepository,
 	installationRepo repository.BotInstallationRepository,
 	userRepo repository.UserRepository,
 	friendshipRepo repository.FriendshipRepository,
@@ -43,7 +41,6 @@ func NewBotService(
 ) *BotService {
 	return &BotService{
 		botRepo:          botRepo,
-		botDeployRepo:    botDeployRepo,
 		installationRepo: installationRepo,
 		userRepo:         userRepo,
 		friendshipRepo:   friendshipRepo,
@@ -52,6 +49,15 @@ func NewBotService(
 		messageRepo:      messageRepo,
 		callLogRepo:      callLogRepo,
 	}
+}
+
+// deriveDiagnosticsConsent 根据 requested_capabilities 推导 diagnostics_consent
+// 声明 network:external 的 Bot 强制 granted(数据已必然到达 owner 经第三方)
+func deriveDiagnosticsConsent(requestedCapabilities []string) models.DiagnosticsConsent {
+	if models.HasCapability(requestedCapabilities, models.CapabilityNetworkExternal) {
+		return models.DiagnosticsGranted
+	}
+	return models.DiagnosticsDenied
 }
 
 // CreateBot 创建 Bot
@@ -216,7 +222,7 @@ func (s *BotService) GetDeployableConversations(ctx context.Context, userID stri
         WHERE e.user_id = $1
           AND c.conversation_type = 'group'
           AND c.id NOT IN (
-              SELECT conversation_id FROM bot_deployments WHERE bot_id = $2
+              SELECT target_id FROM bot_installations WHERE target_type = 'conversation' AND app_id = $2
           )
         GROUP BY c.id, c.name
         ORDER BY c.updated_at DESC
@@ -313,7 +319,7 @@ func (s *BotService) DeleteBot(ctx context.Context, botID string, userID string)
 }
 
 // DeployBot 将 Bot 部署到会话
-func (s *BotService) DeployBot(ctx context.Context, botID, userID string, req *models.DeployBotRequest) (*models.BotDeployment, error) {
+func (s *BotService) DeployBot(ctx context.Context, botID, userID string, req *models.DeployBotRequest) (*models.BotInstallation, error) {
 	botUUID, err := uuid.Parse(botID)
 	if err != nil {
 		return nil, err
@@ -362,18 +368,18 @@ func (s *BotService) DeployBot(ctx context.Context, botID, userID string, req *m
 		return nil, err
 	}
 
-	// 创建 deployment 记录（审计用途）
-	deployment := &models.BotDeployment{
-		BotID:          botUUID,
-		ConversationID: req.ConversationID,
-		DeployedBy:     userUUID,
-		Status:         models.BotDeploymentActive,
+	// 创建 installation 记录(替代 deployment)
+	installation := &models.BotInstallation{
+		AppID:               botUUID,
+		InstalledBy:         userUUID,
+		TargetType:          models.InstallationTargetConversation,
+		TargetID:            req.ConversationID,
+		GrantedCapabilities: bot.RequestedCapabilities,
+		DiagnosticsConsent:  deriveDiagnosticsConsent(bot.RequestedCapabilities),
+		Status:              models.InstallationActive,
 	}
-
-	err = s.botDeployRepo.Create(ctx, deployment)
-	if err != nil {
-		// deployment 创建失败不影响 enrollment
-		logger.ErrorfWithCaller("[BotService] Failed to create deployment record: %v", err)
+	if err := s.installationRepo.Create(ctx, installation); err != nil {
+		logger.ErrorfWithCaller("[BotService] Failed to create installation record: %v", err)
 	}
 
 	// 插入系统消息：Bot 已加入对话（sender_id = bot 的 user_id）
@@ -407,9 +413,9 @@ func (s *BotService) DeployBot(ctx context.Context, botID, userID string, req *m
 		}
 	}
 
-	logger.InfofWithCaller("Bot %s deployed to conversation %s by user %s", botID, req.ConversationID.String(), userID)
+	logger.InfofWithCaller("Bot %s installed to conversation %s by user %s", botID, req.ConversationID.String(), userID)
 
-	return deployment, nil
+	return installation, nil
 }
 
 // UndeployBot 从会话移除 Bot
@@ -445,9 +451,9 @@ func (s *BotService) UndeployBot(ctx context.Context, botID, conversationID, use
 		logger.ErrorfWithCaller("[BotService] Failed to remove bot enrollment: %v", err)
 	}
 
-	// 删除 deployment 记录
-	if err := s.botDeployRepo.DeleteByBotAndConversation(ctx, botUUID, convUUID); err != nil {
-		logger.ErrorfWithCaller("[BotService] Failed to remove deployment record: %v", err)
+	// 删除 installation 记录
+	if err := s.installationRepo.DeleteByAppAndTarget(ctx, botUUID, models.InstallationTargetConversation, convUUID); err != nil {
+		logger.ErrorfWithCaller("[BotService] Failed to remove installation record: %v", err)
 	}
 
 	// 插入系统消息：Bot 已离开对话（sender_id = bot 的 user_id）
@@ -484,42 +490,42 @@ func (s *BotService) UndeployBot(ctx context.Context, botID, conversationID, use
 	return nil
 }
 
-// GetBotDeployments 获取用户可见的 Bot 部署列表
-func (s *BotService) GetBotDeployments(ctx context.Context, userID string) ([]*models.BotDeployment, error) {
+// GetBotDeployments 获取用户可见的 Bot 安装列表
+func (s *BotService) GetBotDeployments(ctx context.Context, userID string) ([]*models.BotInstallation, error) {
 	id, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.botDeployRepo.FindByUser(ctx, id)
+	return s.installationRepo.FindByInstaller(ctx, id)
 }
 
-// UpdateDeploymentStatus 更新部署状态（暂停/恢复）
+// UpdateDeploymentStatus 更新安装状态（暂停/恢复）
 func (s *BotService) UpdateDeploymentStatus(ctx context.Context, botID, userID string, req *models.UpdateDeploymentStatusRequest) error {
 	botUUID, _ := uuid.Parse(botID)
 	convUUID := req.ConversationID
 
-	deployment, err := s.botDeployRepo.FindByBotAndConversation(ctx, botUUID, convUUID)
+	inst, err := s.installationRepo.FindByAppAndTarget(ctx, botUUID, models.InstallationTargetConversation, convUUID)
 	if err != nil {
-		return errors.New("deployment not found")
+		return errors.New("installation not found")
 	}
 
-	deployment.Status = models.BotDeploymentStatus(req.Status)
-	return s.botDeployRepo.Update(ctx, deployment)
+	inst.Status = models.InstallationStatus(req.Status)
+	return s.installationRepo.Update(ctx, inst)
 }
 
 // ActivateWorkflow 激活工作流
 func (s *BotService) ActivateWorkflow(ctx context.Context, botID, userID string, conversationID uuid.UUID) error {
 	userUUID, _ := uuid.Parse(userID)
 
-	// 验证部署存在
-	deployment, err := s.botDeployRepo.FindByBotAndConversation(ctx, uuid.MustParse(botID), conversationID)
+	// 验证安装存在
+	inst, err := s.installationRepo.FindByAppAndTarget(ctx, uuid.MustParse(botID), models.InstallationTargetConversation, conversationID)
 	if err != nil {
-		return errors.New("bot not deployed to this conversation")
+		return errors.New("bot not installed to this conversation")
 	}
 
-	// 验证权限：部署者或 Bot owner 可以激活
-	if deployment.DeployedBy != userUUID {
+	// 验证权限：安装者或 Bot owner 可以激活
+	if inst.InstalledBy != userUUID {
 		bot, err := s.botRepo.FindByID(ctx, uuid.MustParse(botID))
 		if err != nil || bot.OwnerID != userUUID {
 			return errors.New("not authorized")
@@ -527,10 +533,10 @@ func (s *BotService) ActivateWorkflow(ctx context.Context, botID, userID string,
 	}
 
 	// 检查该会话是否已有其他 Bot 的工作流活跃
-	deployments, err := s.botDeployRepo.FindByConversationID(ctx, conversationID)
+	installations, err := s.installationRepo.FindActiveByConversation(ctx, conversationID)
 	if err == nil {
-		for _, d := range deployments {
-			if d.WorkflowActive && d.BotID.String() != botID {
+		for _, i := range installations {
+			if i.Status == models.InstallationActive && i.AppID.String() != botID {
 				return errors.New("another bot's workflow is already active in this conversation")
 			}
 		}
@@ -543,14 +549,14 @@ func (s *BotService) ActivateWorkflow(ctx context.Context, botID, userID string,
 func (s *BotService) DeactivateWorkflow(ctx context.Context, botID, userID string, conversationID uuid.UUID) error {
 	userUUID, _ := uuid.Parse(userID)
 
-	// 验证部署存在
-	deployment, err := s.botDeployRepo.FindByBotAndConversation(ctx, uuid.MustParse(botID), conversationID)
+	// 验证安装存在
+	inst, err := s.installationRepo.FindByAppAndTarget(ctx, uuid.MustParse(botID), models.InstallationTargetConversation, conversationID)
 	if err != nil {
-		return errors.New("bot not deployed to this conversation")
+		return errors.New("bot not installed to this conversation")
 	}
 
 	// 验证权限
-	if deployment.DeployedBy != userUUID {
+	if inst.InstalledBy != userUUID {
 		bot, err := s.botRepo.FindByID(ctx, uuid.MustParse(botID))
 		if err != nil || bot.OwnerID != userUUID {
 			return errors.New("not authorized")
@@ -560,9 +566,8 @@ func (s *BotService) DeactivateWorkflow(ctx context.Context, botID, userID strin
 	return nil // 实际停用由 BotEngine 处理
 }
 
-// CreateBotConversation 创建与 Bot 的私聊会话
-// Bot 现在是 users 表中的真实用户，私聊统一走 chatService.CreateConversation
-// 此方法保留用于兼容：查找已有的 owner↔bot 私聊会话
+// CreateBotConversation 创建与 Bot 的私聊会话(幂等)
+// 任何用户均可添加 listed/featured Bot;unlisted Bot 只有 owner 可以
 func (s *BotService) CreateBotConversation(ctx context.Context, botID, userID string) (*models.Conversation, error) {
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
@@ -575,14 +580,21 @@ func (s *BotService) CreateBotConversation(ctx context.Context, botID, userID st
 	}
 
 	// 验证 Bot 存在
-	_, err = s.botRepo.FindByID(ctx, botUUID)
+	bot, err := s.botRepo.FindByID(ctx, botUUID)
 	if err != nil {
 		return nil, errors.New("bot not found")
 	}
 
-	// 查找已有的私聊会话
+	// 权限校验:unlisted Bot 只有 owner 可以添加
+	if bot.OwnerID != userUUID && bot.Discoverability == models.DiscoverabilityUnlisted {
+		return nil, errors.New("this bot is private")
+	}
+
+	// 查找已有的私聊会话(幂等)
 	existingConv, err := s.conversationRepo.FindByUsers(ctx, userUUID, botUUID)
 	if err == nil {
+		// 确保 installation 存在(幂等)
+		s.ensureUserInstallation(ctx, bot, userUUID)
 		return existingConv, nil
 	}
 
@@ -616,41 +628,49 @@ func (s *BotService) CreateBotConversation(ctx context.Context, botID, userID st
 		return nil, err
 	}
 
-	// 创建 deployment 记录（审计用途）
-	deployment := &models.BotDeployment{
-		BotID:          botUUID,
-		ConversationID: conversation.ID,
-		DeployedBy:     userUUID,
-		Status:         models.BotDeploymentActive,
-	}
-	if err := s.botDeployRepo.Create(ctx, deployment); err != nil {
-		logger.ErrorfWithCaller("[BotService] Failed to create deployment record for bot conversation: %v", err)
-	}
+	// 创建 installation 记录(替代 deployment)
+	s.ensureUserInstallation(ctx, bot, userUUID)
 
 	return conversation, nil
 }
 
-// GetActiveBotsForConversation 获取会话中活跃的 Bot 列表（含 Bot 信息）
-func (s *BotService) GetActiveBotsForConversation(ctx context.Context, conversationID string) ([]*models.BotDeployment, error) {
+// ensureUserInstallation 幂等创建 user 安装(ON CONFLICT DO NOTHING)
+func (s *BotService) ensureUserInstallation(ctx context.Context, bot *models.Bot, userID uuid.UUID) {
+	installation := &models.BotInstallation{
+		AppID:               bot.ID,
+		InstalledBy:         userID,
+		TargetType:          models.InstallationTargetUser,
+		TargetID:            userID,
+		GrantedCapabilities: bot.RequestedCapabilities,
+		DiagnosticsConsent:  deriveDiagnosticsConsent(bot.RequestedCapabilities),
+		Status:              models.InstallationActive,
+	}
+	if err := s.installationRepo.Create(ctx, installation); err != nil {
+		logger.ErrorfWithCaller("[BotService] Failed to create user installation: %v", err)
+	}
+}
+
+// GetActiveBotsForConversation 获取会话中活跃的 Bot 安装列表（含 Bot 信息）
+func (s *BotService) GetActiveBotsForConversation(ctx context.Context, conversationID string) ([]*models.BotInstallation, error) {
 	convUUID, err := uuid.Parse(conversationID)
 	if err != nil {
 		return nil, err
 	}
 
-	deployments, err := s.botDeployRepo.FindActiveByConversation(ctx, convUUID)
+	installations, err := s.installationRepo.FindActiveByConversation(ctx, convUUID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 为每个部署填充 Bot 信息
-	for _, dep := range deployments {
-		bot, err := s.botRepo.FindByID(ctx, dep.BotID)
+	// 填充 Bot 信息
+	for _, inst := range installations {
+		bot, err := s.botRepo.FindByID(ctx, inst.AppID)
 		if err == nil {
-			dep.Bot = bot
+			inst.App = bot
 		}
 	}
 
-	return deployments, nil
+	return installations, nil
 }
 
 // GetBotCallLogs 获取 Bot 调用日志

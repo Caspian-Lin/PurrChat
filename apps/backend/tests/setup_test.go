@@ -70,6 +70,7 @@ func SetupTestDB(t *testing.T) {
 func CreateTestTables(t *testing.T, ctx context.Context) {
 	tables := []string{
 		"bot_app_secrets",
+		"bot_deployments",
 		"user_settings",
 		"bot_installations",
 		"bot_identities",
@@ -271,6 +272,25 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create bot_app_secrets table: %v", err)
+	}
+
+	// 创建 bot_deployments 表(legacy,用于迁移测试)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_deployments (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+			deployed_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			status VARCHAR(20) NOT NULL DEFAULT 'active',
+			special_mode_active BOOLEAN DEFAULT FALSE,
+			special_mode_started_at TIMESTAMP,
+			deployed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(bot_id, conversation_id),
+			CONSTRAINT check_deployment_status CHECK (status IN ('active', 'paused'))
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_deployments table: %v", err)
 	}
 
 	// 创建user_settings表
@@ -644,6 +664,7 @@ func CleanupTestTables(t *testing.T) {
 
 	tables := []string{
 		"bot_app_secrets",
+		"bot_deployments",
 		"user_settings",
 		"bot_installations",
 		"bot_identities",

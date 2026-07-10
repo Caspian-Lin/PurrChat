@@ -19,7 +19,6 @@ type FriendService struct {
 	friendshipRepo          repository.FriendshipRepository
 	enrollmentRepo          repository.EnrollmentRepository
 	conversationMessageRepo repository.ConversationMessageRepository
-	botRepo                 repository.BotRepository
 }
 
 // NewFriendService 创建好友服务
@@ -37,11 +36,6 @@ func NewFriendService(
 	}
 }
 
-// SetBotRepo 设置 Bot 仓储（可选依赖）
-func (s *FriendService) SetBotRepo(botRepo repository.BotRepository) {
-	s.botRepo = botRepo
-}
-
 // GetFriends 获取用户的好友列表
 func (s *FriendService) GetFriends(ctx context.Context, userID string) ([]*models.Friendship, error) {
 	id, err := uuid.Parse(userID)
@@ -54,8 +48,7 @@ func (s *FriendService) GetFriends(ctx context.Context, userID string) ([]*model
 		return nil, err
 	}
 
-	// 按 friend ID 去重（Bot 创建时会建立双向好友关系，
-	// FindByUserID 的 OR 查询会导致同一好友返回两条记录）
+	// 按 friend ID 去重(FindByUserID 的 OR 查询可能导致同一好友返回两条记录)
 	seen := make(map[uuid.UUID]bool)
 	var deduped []*models.Friendship
 	for _, fs := range friendships {
@@ -216,68 +209,9 @@ func (s *FriendService) SendFriendRequest(ctx context.Context, userID, targetUse
 		// 如果是 blocked 状态，允许重新发送请求
 	}
 
-	// 检查目标是否是 Bot，走不同的好友添加逻辑
-	if targetUser.IsBot && s.botRepo != nil {
-		bot, botErr := s.botRepo.FindByID(ctx, targetUUID)
-		if botErr != nil {
-			return nil, errors.New("bot not found")
-		}
-
-		// private Bot 不允许被添加为好友
-		if bot.Visibility == models.BotVisibilityPrivate {
-			return nil, errors.New("this bot is private")
-		}
-
-		// 创建会话（双方 enrollment）
-		conversation, err := createConversationFn(ctx, userID, targetUserID)
-		if err != nil {
-			logger.ErrorfWithCaller("Failed to create conversation for bot friend request: %v", err)
-			return nil, err
-		}
-
-		// 创建好友关系
-		autoAccept := bot.Visibility == models.BotVisibilityGlobal
-		friendshipStatus := models.FriendshipStatusAccepted
-		if !autoAccept {
-			friendshipStatus = models.FriendshipStatusPending
-		}
-
-		friendship := &models.Friendship{
-			UserID:         userUUID,
-			FriendID:       targetUUID,
-			ConversationID: conversation.ID,
-			Status:         friendshipStatus,
-		}
-		err = s.friendshipRepo.Create(ctx, friendship)
-		if err != nil {
-			return nil, err
-		}
-
-		// WebSocket 通知
-		if websocket.GlobalHub != nil {
-			if autoAccept {
-				websocket.GlobalHub.SendToUser(userUUID, "friend_request_update", map[string]interface{}{
-					"conversation_id": conversation.ID.String(),
-					"status":          "accepted",
-					"action":          "auto_accept",
-				})
-			} else {
-				websocket.GlobalHub.SendToUser(bot.OwnerID, "new_friend_request", map[string]interface{}{
-					"conversation_id": conversation.ID.String(),
-					"sender_id":       userID,
-					"status":          "pending",
-					"bot_id":          bot.ID.String(),
-				})
-				websocket.GlobalHub.SendToUser(userUUID, "friend_request_update", map[string]interface{}{
-					"conversation_id": conversation.ID.String(),
-					"status":          "pending",
-					"action":          "sent",
-				})
-			}
-		}
-
-		logger.InfofWithCaller("Bot friend request processed: user=%s, bot=%s, visibility=%s, autoAccept=%v", userID, targetUserID, bot.Visibility, autoAccept)
-		return conversation, nil
+	// Bot 不再走好友流程,使用 Bot 安装 API
+	if targetUser.IsBot {
+		return nil, errors.New("bots cannot be added as friends, use the bot installation API instead")
 	}
 
 	// 创建会话
@@ -359,15 +293,6 @@ func (s *FriendService) HandleFriendRequest(ctx context.Context, userID, convers
 	if friendship == nil {
 		logger.ErrorfWithCaller("No pending friend request found for user %s", userID)
 		return errors.New("no pending friend request found")
-	}
-
-	// 检查是否是 Bot 好友请求：验证当前处理者是 Bot 的 owner
-	senderUser, senderErr := s.userRepo.FindByID(ctx, senderUUID)
-	if senderErr == nil && senderUser.IsBot && s.botRepo != nil {
-		bot, botErr := s.botRepo.FindByID(ctx, senderUUID)
-		if botErr == nil && bot.OwnerID != userUUID {
-			return errors.New("only bot owner can approve bot friend requests")
-		}
 	}
 
 	// 如果提供了 conversation_id，使用它；否则查找对应的会话

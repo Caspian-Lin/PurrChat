@@ -220,7 +220,7 @@ func (r *botRepository) FindPublicWithDetails(ctx context.Context, q string, lim
                COALESCE(u.username, '') AS owner_name
         FROM bots b
         LEFT JOIN users u ON b.owner_id = u.id
-        LEFT JOIN (SELECT bot_id, COUNT(*) AS cnt FROM bot_deployments GROUP BY bot_id) d ON b.id = d.bot_id
+               LEFT JOIN (SELECT app_id, COUNT(*) AS cnt FROM bot_installations GROUP BY app_id) d ON b.id = d.app_id
         WHERE b.visibility IN ('public', 'global') AND b.status = 'active'
     `
 	args := []any{}

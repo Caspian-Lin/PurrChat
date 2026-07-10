@@ -318,7 +318,7 @@ func (h *BotHandler) DeployBot(c *gin.Context) {
 		return
 	}
 
-	deployment, err := h.botService.DeployBot(c.Request.Context(), botID, userIDStr, &req)
+	installation, err := h.botService.DeployBot(c.Request.Context(), botID, userIDStr, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to deploy bot: %v", err)
 		c.JSON(http.StatusBadRequest, models.APIResponse{
@@ -331,7 +331,7 @@ func (h *BotHandler) DeployBot(c *gin.Context) {
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Bot deployed successfully",
-		Data:    deployment,
+		Data:    installation,
 	})
 }
 
