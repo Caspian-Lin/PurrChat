@@ -476,7 +476,7 @@ function validateSingleVarRef(
 
 // ─── 辅助 ──────────────────────────────────────────────────────
 
-function toBlueprint(doc: WorkflowDocument): Blueprint {
+export function toBlueprint(doc: WorkflowDocument): Blueprint {
   return {
     nodes: doc.spec.nodes.map((n) => ({
       id: n.id,

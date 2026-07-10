@@ -13,8 +13,11 @@ export { deriveCapabilities, getMissingCapabilities } from './capabilities.js';
 export { resolveSecrets, extractSecretRefs, checkSecretCapability } from './secrets.js';
 
 // Workflow Document Validator
-export { validateWorkflowDocument } from './validator.js';
+export { validateWorkflowDocument, toBlueprint } from './validator.js';
 export type { ValidationResult, ValidationIssue, ValidationLevel } from './validator.js';
+
+// Debug Runner
+export { DebugRunner } from './debug-runner.js';
 
 // YAML / JSON 往返
 export {
