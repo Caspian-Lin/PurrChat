@@ -34,3 +34,19 @@ export type {
   DebugStepRequest,
   DebugResetRequest,
 } from './debug';
+
+// 版本化 Workflow Document
+export {
+  WORKFLOW_API_VERSION,
+  WORKFLOW_KIND,
+  createEmptyDocument,
+} from './document';
+export type {
+  WorkflowDocument,
+  WorkflowDocumentMetadata,
+  WorkflowDocumentNode,
+  WorkflowDocumentSpec,
+} from './document';
+
+// 迁移工具
+export { migrateMechanismToDocument, isWorkflowDocument } from './migration';

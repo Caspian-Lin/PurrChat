@@ -69,6 +69,7 @@ func SetupTestDB(t *testing.T) {
 // CreateTestTables 创建测试表
 func CreateTestTables(t *testing.T, ctx context.Context) {
 	tables := []string{
+		"workflow_versions",
 		"bot_app_secrets",
 		"bot_deployments",
 		"user_settings",
@@ -202,6 +203,8 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			status VARCHAR(20) NOT NULL DEFAULT 'active',
 			visibility VARCHAR(20) NOT NULL DEFAULT 'private',
 			mechanism_config JSONB NOT NULL DEFAULT '[]'::jsonb,
+			workflow_document JSONB,
+			workflow_revision INTEGER NOT NULL DEFAULT 0,
 			bot_type VARCHAR(20) NOT NULL DEFAULT 'workflow',
 			discoverability VARCHAR(20) NOT NULL DEFAULT 'unlisted',
 			is_system BOOLEAN NOT NULL DEFAULT FALSE,
@@ -291,6 +294,23 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create bot_deployments table: %v", err)
+	}
+
+	// 创建 workflow_versions 表(见 migration 010)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE workflow_versions (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			revision INTEGER NOT NULL,
+			document JSONB NOT NULL,
+			capabilities TEXT[] DEFAULT '{}',
+			published_by UUID REFERENCES users(id),
+			published_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(bot_id, revision)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create workflow_versions table: %v", err)
 	}
 
 	// 创建user_settings表
@@ -663,6 +683,7 @@ func CleanupTestTables(t *testing.T) {
 	}
 
 	tables := []string{
+		"workflow_versions",
 		"bot_app_secrets",
 		"bot_deployments",
 		"user_settings",

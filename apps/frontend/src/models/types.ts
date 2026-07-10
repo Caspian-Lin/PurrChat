@@ -655,3 +655,27 @@ export interface BotCallLogListResponse {
   limit: number;
   offset: number;
 }
+
+// ─── Workflow Document API 类型 (#13) ─────────────────────────
+
+export interface WorkflowDocumentResponse {
+  document: unknown;
+  revision: number;
+  etag: string;
+  published_revision?: number;
+}
+
+export interface WorkflowValidationIssue {
+  level: 'error' | 'warning';
+  code: string;
+  message: string;
+  path?: string;
+  node_id?: string;
+  connection_id?: string;
+}
+
+export interface WorkflowValidationResponse {
+  valid: boolean;
+  issues: WorkflowValidationIssue[];
+  derived_capabilities?: string[];
+}

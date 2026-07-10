@@ -242,6 +242,13 @@ func main() {
 	settingsRepo := repository.NewSettingsRepository()
 	settingsService := services.NewSettingsService(settingsRepo)
 	settingsHandler := handlers.NewSettingsHandler(settingsService)
+	workflowRepo := repository.NewWorkflowRepository()
+	var tsExecutor services.TSDebugExecutor
+	if tsClient := botEngine.GetTSClient(); tsClient != nil {
+		tsExecutor = tsClient
+	}
+	workflowService := services.NewWorkflowService(workflowRepo, botRepo, tsExecutor)
+	workflowHandler := handlers.NewWorkflowHandler(workflowService)
 
 	// 初始化WebSocket hub
 	websocket.InitHubWithConfig(cfg.WebSocket.MaxConnections, cfg.WebSocket.MaxUserConnections)
@@ -373,6 +380,12 @@ func main() {
 		bots.GET("/:id/call-logs", botHandler.GetBotCallLogs)
 		bots.POST("/:id/installations", installationHandler.CreateInstallation)
 		bots.GET("/:id/installations", installationHandler.ListByApp)
+		// Workflow Document API (#13)
+		bots.GET("/:id/workflow", workflowHandler.GetWorkflow)
+		bots.PUT("/:id/workflow", workflowHandler.UpdateWorkflow)
+		bots.POST("/:id/workflow/validate", workflowHandler.ValidateWorkflow)
+		bots.POST("/:id/workflow/publish", workflowHandler.PublishWorkflow)
+		bots.POST("/:id/workflow/test-runs", workflowHandler.TestRunWorkflow)
 		// Secret 管理(owner-only CRUD,不返回明文)
 		bots.GET("/:id/secrets", secretHandler.ListSecrets)
 		bots.PUT("/:id/secrets/:key", sensitiveRateLimit, secretHandler.SetSecret)
