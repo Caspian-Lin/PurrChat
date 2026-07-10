@@ -358,6 +358,7 @@ import {
 import { useWorkflowValidator } from '../composables/useWorkflowValidator';
 import {
   cloneWorkflowDocument,
+  cloneWorkflowEvent,
   evaluateWorkflowGate,
   nextUniqueNodeKey,
   parseWorkflowYamlCandidate,
@@ -689,7 +690,7 @@ function goBack() {
 
 function onNodeClick({ node }: { node: Node }) {
   const evt = events.value.find((e) => e.id === node.id);
-  if (evt) editingEvent.value = structuredClone(evt);
+  if (evt) editingEvent.value = cloneWorkflowEvent(evt);
 }
 
 function closeModal() {

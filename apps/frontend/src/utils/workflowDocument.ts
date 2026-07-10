@@ -1,4 +1,9 @@
-import { NODE_MANIFEST, generateNodeKey, type WorkflowDocument } from '@purrchat/workflow-types';
+import {
+  NODE_MANIFEST,
+  generateNodeKey,
+  type WorkflowDocument,
+  type WorkflowEvent,
+} from '@purrchat/workflow-types';
 import { yamlToDocument, type ValidationResult } from '@purrchat/workflow-engine';
 
 export const PRODUCTION_NODE_MANIFEST = NODE_MANIFEST.filter(
@@ -7,6 +12,10 @@ export const PRODUCTION_NODE_MANIFEST = NODE_MANIFEST.filter(
 
 export function cloneWorkflowDocument(document: WorkflowDocument): WorkflowDocument {
   return structuredClone(document);
+}
+
+export function cloneWorkflowEvent(event: WorkflowEvent): WorkflowEvent {
+  return JSON.parse(JSON.stringify(event)) as WorkflowEvent;
 }
 
 export function serializeWorkflowDocument(document: WorkflowDocument): string {
