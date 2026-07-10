@@ -139,17 +139,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { api } from '../../../../models/api';
-import type {
-  WorkflowEvent,
-  WorkflowEndCondition,
-  FlowConnection,
-  RunTrace,
-  NodeTrace,
-  NodeTraceStatus,
-  RunTraceStatus,
-} from '../../../../models/types';
+import {
+  createEmptyDocument,
+  type WorkflowEvent,
+  type WorkflowEndCondition,
+  type FlowConnection,
+  type RunTrace,
+  type NodeTrace,
+  type NodeTraceStatus,
+  type RunTraceStatus,
+} from '@purrchat/workflow-types';
 
 interface Props {
   botId: string;
@@ -171,30 +172,25 @@ const expandedNodes = ref<Set<string>>(new Set());
 
 /** 从编辑器状态构建 WorkflowDocument */
 function buildDocument(): unknown {
-  return {
-    apiVersion: 'purrchat/v1',
-    kind: 'WorkflowDocument',
-    metadata: { name: 'debug', version: '1.0.0' },
-    spec: {
-      nodes: props.events.map((e, i) => ({
-        id: e.id,
-        type: e.type,
-        name: e.name,
-        key: (e as any).key ?? `${e.type}_${i}`,
-        config: e.config ?? {},
-        ports: e.ports,
-        position: e.position,
-      })),
-      connections: props.connections.map((c, i) => ({
-        id: c.id ?? `conn_${i}`,
-        sourceNodeId: c.sourceNodeId,
-        sourcePortId: c.sourcePortId,
-        targetNodeId: c.targetNodeId,
-        targetPortId: c.targetPortId,
-      })),
-      endConditions: props.endConditions,
-    },
-  };
+  const doc = createEmptyDocument('debug');
+  doc.spec.nodes = props.events.map((e, i) => ({
+    id: e.id,
+    type: e.type,
+    name: e.name,
+    key: (e as any).key ?? `${e.type}_${i}`,
+    config: e.config ?? {},
+    ports: e.ports,
+    position: e.position,
+  }));
+  doc.spec.connections = props.connections.map((c, i) => ({
+    id: c.id ?? `conn_${i}`,
+    sourceNodeId: c.sourceNodeId,
+    sourcePortId: c.sourcePortId,
+    targetNodeId: c.targetNodeId,
+    targetPortId: c.targetPortId,
+  }));
+  doc.spec.endConditions = props.endConditions;
+  return doc;
 }
 
 async function handleRunAll() {

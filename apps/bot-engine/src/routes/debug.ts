@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
 import type { BotExecutor } from '../services/bot-executor.js';
 import { NodeRegistry, allNodes, DebugRunner } from '@purrchat/workflow-engine';
-import type {
-  WorkflowDocument,
-  RunTrace,
-  SideEffectPolicy,
+import {
+  createEmptyDocument,
+  type WorkflowDocument,
+  type RunTrace,
+  type SideEffectPolicy,
 } from '@purrchat/workflow-types';
 
 // 共享 DebugRunner 实例（in-memory 会话）
@@ -12,7 +13,7 @@ const registry = new NodeRegistry();
 registry.registerAll(allNodes);
 const debugRunner = new DebugRunner(registry);
 
-/** 将 Go 侧的 WorkflowSpec（旧格式）转为 WorkflowDocument — 兼容旧调用方 */
+/** 将旧格式 WorkflowSpec 转为 WorkflowDocument — 兼容旧调用方 */
 function specToDocument(spec: unknown): WorkflowDocument | null {
   if (!spec || typeof spec !== 'object') return null;
   const s = spec as any;
@@ -20,30 +21,25 @@ function specToDocument(spec: unknown): WorkflowDocument | null {
 
   // 尝试从旧格式 events/connections 转换
   if (s.events && Array.isArray(s.events)) {
-    return {
-      apiVersion: 'purrchat/v1',
-      kind: 'WorkflowDocument',
-      metadata: { name: 'debug', version: '1.0.0' },
-      spec: {
-        nodes: s.events.map((e: any, i: number) => ({
-          id: e.id,
-          type: e.type,
-          name: e.name,
-          key: e.key ?? `${e.type}_${i}`,
-          config: e.config ?? {},
-          ports: e.ports,
-          position: e.position,
-        })),
-        connections: (s.connections ?? []).map((c: any, i: number) => ({
-          id: c.id ?? `conn_${i}`,
-          sourceNodeId: c.sourceNodeId,
-          sourcePortId: c.sourcePortId,
-          targetNodeId: c.targetNodeId,
-          targetPortId: c.targetPortId,
-        })),
-        endConditions: s.end_conditions ?? [],
-      },
-    };
+    const doc = createEmptyDocument('debug');
+    doc.spec.nodes = s.events.map((e: any, i: number) => ({
+      id: e.id,
+      type: e.type,
+      name: e.name,
+      key: e.key ?? `${e.type}_${i}`,
+      config: e.config ?? {},
+      ports: e.ports,
+      position: e.position,
+    }));
+    doc.spec.connections = (s.connections ?? []).map((c: any, i: number) => ({
+      id: c.id ?? `conn_${i}`,
+      sourceNodeId: c.sourceNodeId,
+      sourcePortId: c.sourcePortId,
+      targetNodeId: c.targetNodeId,
+      targetPortId: c.targetPortId,
+    }));
+    doc.spec.endConditions = s.end_conditions ?? [];
+    return doc;
   }
 
   return null;

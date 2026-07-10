@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { DebugRunner } from '../debug-runner.js';
 import { NodeRegistry, allNodes } from '../index.js';
-import type { WorkflowDocument } from '@purrchat/workflow-types';
+import {
+  createEmptyDocument,
+  type WorkflowDocument,
+} from '@purrchat/workflow-types';
 
 function createRegistry(): NodeRegistry {
   const reg = new NodeRegistry();
@@ -10,30 +13,24 @@ function createRegistry(): NodeRegistry {
 }
 
 function makeDoc(nodes: any[], connections: any[]): WorkflowDocument {
-  return {
-    apiVersion: 'purrchat/v1',
-    kind: 'WorkflowDocument',
-    metadata: { name: 'test-bot', version: '1.0.0' },
-    spec: {
-      nodes: nodes.map((n, i) => ({
-        id: n.id,
-        type: n.type,
-        name: n.name ?? n.type,
-        key: n.key ?? `${n.type}_${i}`,
-        config: n.config ?? {},
-        ports: n.ports,
-        position: n.position,
-      })),
-      connections: connections.map((c, i) => ({
-        id: c.id ?? `conn_${i}`,
-        sourceNodeId: c.from?.nodeId ?? c.sourceNodeId,
-        sourcePortId: c.from?.portId ?? c.sourcePortId,
-        targetNodeId: c.to?.nodeId ?? c.targetNodeId,
-        targetPortId: c.to?.portId ?? c.targetPortId,
-      })),
-      endConditions: [],
-    },
-  };
+  const doc = createEmptyDocument('test-bot');
+  doc.spec.nodes = nodes.map((n, i) => ({
+    id: n.id,
+    type: n.type,
+    name: n.name ?? n.type,
+    key: n.key ?? `${n.type}_${i}`,
+    config: n.config ?? {},
+    ports: n.ports,
+    position: n.position,
+  }));
+  doc.spec.connections = connections.map((c, i) => ({
+    id: c.id ?? `conn_${i}`,
+    sourceNodeId: c.from?.nodeId ?? c.sourceNodeId,
+    sourcePortId: c.from?.portId ?? c.sourcePortId,
+    targetNodeId: c.to?.nodeId ?? c.targetNodeId,
+    targetPortId: c.to?.portId ?? c.targetPortId,
+  }));
+  return doc;
 }
 
 const SIMPLE_DOC = makeDoc(
