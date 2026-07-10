@@ -679,3 +679,38 @@ export interface WorkflowValidationResponse {
   issues: WorkflowValidationIssue[];
   derived_capabilities?: string[];
 }
+
+// ─── Debug Trace 类型 (#15) ───────────────────────────────────
+
+export type NodeTraceStatus = 'pending' | 'running' | 'success' | 'error' | 'skip';
+
+export interface NodeTrace {
+  nodeId: string;
+  nodeKey?: string;
+  nodeType: string;
+  nodeName?: string;
+  status: NodeTraceStatus;
+  input?: Record<string, string>;
+  output?: Record<string, string>;
+  branch?: string;
+  error?: string;
+  startTime?: number;
+  endTime?: number;
+  durationMs?: number;
+}
+
+export type RunTraceStatus = 'running' | 'completed' | 'error' | 'cancelled';
+
+export interface RunTrace {
+  runId: string;
+  status: RunTraceStatus;
+  nodes: NodeTrace[];
+  startedAt: number;
+  completedAt?: number;
+  durationMs?: number;
+  reply?: string;
+  input: string;
+  senderName?: string;
+  waitingForStep?: boolean;
+  session_id?: string;
+}

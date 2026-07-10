@@ -18,7 +18,7 @@
         逐步执行
       </button>
       <button
-        v-if="waitingForStep"
+        v-if="trace?.waiting_for_step"
         class="debug-toolbar__btn debug-toolbar__btn--accent"
         :disabled="isRunning"
         @click="handleNextStep"
@@ -26,12 +26,17 @@
         下一步
       </button>
       <div class="debug-toolbar__spacer" />
+      <!-- 副作用策略 -->
+      <select v-model="sideEffectPolicy" class="debug-toolbar__select" :disabled="isRunning">
+        <option value="mock">Mock 副作用</option>
+        <option value="sandbox">Sandbox (真实调用)</option>
+      </select>
       <button
         class="debug-toolbar__btn debug-toolbar__btn--danger"
         :disabled="!sessionId"
         @click="handleReset"
       >
-        重置会话
+        重置
       </button>
     </div>
 
@@ -43,62 +48,92 @@
         class="debug-input__field"
         placeholder="输入模拟消息..."
         :disabled="isRunning"
-        @keydown.enter="handleQuickSend"
+        @keydown.enter="stepMode ? handleStepMode() : handleRunAll()"
       />
-      <div class="debug-input__sender">
-        <input
-          v-model="senderName"
-          type="text"
-          class="debug-input__sender-field"
-          placeholder="发送者"
-        />
-        <button
-          class="debug-input__send"
-          :disabled="isRunning || !inputMessage.trim()"
-          @click="stepMode ? handleStepMode() : handleRunAll()"
-        >
-          发送
-        </button>
+    </div>
+
+    <!-- 节点 trace 流 -->
+    <div v-if="trace" class="debug-trace">
+      <!-- 状态摘要 -->
+      <div class="debug-trace__summary">
+        <span class="debug-trace__status" :class="`debug-trace__status--${trace.status}`">
+          {{ statusLabel(trace.status) }}
+        </span>
+        <span v-if="trace.durationMs !== undefined" class="debug-trace__meta">
+          {{ trace.durationMs }}ms
+        </span>
+        <span v-if="trace.reply" class="debug-trace__meta debug-trace__reply-preview">
+          → {{ trace.reply.slice(0, 60) }}{{ trace.reply.length > 60 ? '...' : '' }}
+        </span>
       </div>
-    </div>
 
-    <!-- Tab 切换 -->
-    <div class="debug-tabs">
-      <button
-        v-for="tab in tabs"
-        :key="tab.id"
-        class="debug-tabs__btn"
-        :class="{ 'debug-tabs__btn--active': activeTab === tab.id }"
-        @click="activeTab = tab.id"
-      >
-        {{ tab.label }}
-        <span v-if="tab.count !== undefined" class="debug-tabs__count">{{ tab.count }}</span>
-      </button>
-    </div>
-
-    <!-- Tab 内容 -->
-    <div class="debug-content">
-      <DebugEventFlow v-if="activeTab === 'flow'" :events="events" :event-traces="eventTraces" />
-      <DebugContextViewer
-        v-else-if="activeTab === 'context'"
-        :messages="contextMessages"
-        :round="round"
-      />
-      <DebugOutputViewer v-else-if="activeTab === 'output'" :traces="eventTraces" />
-
-      <!-- 模拟对话记录 -->
-      <div v-if="messages.length > 0" class="debug-messages">
-        <div class="debug-messages__divider">对话记录</div>
+      <!-- 节点列表 -->
+      <div class="debug-trace__nodes">
         <div
-          v-for="(msg, i) in messages"
-          :key="i"
-          class="debug-messages__item"
-          :class="`debug-messages__item--${msg.role}`"
+          v-for="node in trace.nodes"
+          :key="node.nodeId"
+          class="trace-node"
+          :class="`trace-node--${node.status}`"
         >
-          <span class="debug-messages__sender">{{ msg.sender }}</span>
-          <span class="debug-messages__text">{{ msg.content }}</span>
+          <div class="trace-node__header" @click="toggleNode(node.nodeId)">
+            <span class="trace-node__icon">{{ statusIcon(node.status) }}</span>
+            <span class="trace-node__type">{{ node.nodeType }}</span>
+            <span class="trace-node__name">{{ node.nodeName || node.nodeId }}</span>
+            <span v-if="node.branch" class="trace-node__branch"> branch: {{ node.branch }} </span>
+            <span v-if="node.durationMs !== undefined" class="trace-node__duration">
+              {{ node.durationMs }}ms
+            </span>
+            <span v-if="node.error" class="trace-node__error-icon">⚠</span>
+          </div>
+
+          <!-- 展开详情 -->
+          <div v-if="expandedNodes.has(node.nodeId)" class="trace-node__detail">
+            <!-- 错误信息 -->
+            <div v-if="node.error" class="trace-node__error-detail">
+              <strong>错误:</strong> {{ node.error }}
+            </div>
+
+            <!-- 输入端口 -->
+            <div
+              v-if="node.input && Object.keys(node.input).length > 0"
+              class="trace-node__section"
+            >
+              <span class="trace-node__section-label">输入</span>
+              <div class="trace-node__ports">
+                <div v-for="(val, key) in node.input" :key="key" class="trace-node__port">
+                  <code class="trace-node__port-key">{{ key }}</code>
+                  <span class="trace-node__port-val">{{ truncate(val) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 输出端口 -->
+            <div
+              v-if="node.output && Object.keys(node.output).length > 0"
+              class="trace-node__section"
+            >
+              <span class="trace-node__section-label">输出</span>
+              <div class="trace-node__ports">
+                <div v-for="(val, key) in node.output" :key="key" class="trace-node__port">
+                  <code class="trace-node__port-key">{{ key }}</code>
+                  <span class="trace-node__port-val">{{ truncate(val) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      <!-- Bot 回复 -->
+      <div v-if="trace.reply" class="debug-trace__reply">
+        <h4 class="debug-trace__reply-title">Bot 回复</h4>
+        <p class="debug-trace__reply-content">{{ trace.reply }}</p>
+      </div>
+    </div>
+
+    <!-- 空状态 -->
+    <div v-else class="debug-panel__empty">
+      <p>输入消息并点击"全部运行"开始调试</p>
     </div>
   </div>
 </template>
@@ -107,80 +142,90 @@
 import { ref, computed } from 'vue';
 import { api } from '../../../../models/api';
 import type {
-  Mechanism,
   WorkflowEvent,
-  EventTrace,
-  DebugContextMessage,
-  DebugTraceResult,
+  WorkflowEndCondition,
+  FlowConnection,
+  RunTrace,
+  NodeTrace,
+  NodeTraceStatus,
+  RunTraceStatus,
 } from '../../../../models/types';
-import DebugEventFlow from './debug/DebugEventFlow.vue';
-import DebugContextViewer from './debug/DebugContextViewer.vue';
-import DebugOutputViewer from './debug/DebugOutputViewer.vue';
 
 interface Props {
   botId: string;
-  mechanism: Mechanism;
+  events: WorkflowEvent[];
+  connections: FlowConnection[];
+  endConditions: WorkflowEndCondition[];
   botName: string;
 }
 
 const props = defineProps<Props>();
 
-// 状态
 const inputMessage = ref('');
-const senderName = ref('调试用户');
 const sessionId = ref<string | null>(null);
 const stepMode = ref(false);
 const isRunning = ref(false);
-const waitingForStep = ref(false);
-const activeTab = ref<'flow' | 'context' | 'output'>('flow');
-const round = ref(0);
+const sideEffectPolicy = ref<'mock' | 'sandbox'>('mock');
+const trace = ref<RunTrace | null>(null);
+const expandedNodes = ref<Set<string>>(new Set());
 
-const eventTraces = ref<EventTrace[]>([]);
-const contextMessages = ref<DebugContextMessage[]>([]);
-const messages = ref<{ role: 'user' | 'assistant'; sender: string; content: string }[]>([]);
-
-const events = computed<WorkflowEvent[]>(() => {
-  return (props.mechanism.reply?.workflow ?? props.mechanism.reply?.special_mode)?.events || [];
-});
-
-const tabs = computed(() => [
-  { id: 'flow' as const, label: '事件流', count: eventTraces.value.length },
-  { id: 'context' as const, label: '上下文', count: contextMessages.value.length },
-  {
-    id: 'output' as const,
-    label: '输出',
-    count: eventTraces.value.filter((t) => t.status !== 'pending').length,
-  },
-]);
+/** 从编辑器状态构建 WorkflowDocument */
+function buildDocument(): unknown {
+  return {
+    apiVersion: 'purrchat/v1',
+    kind: 'WorkflowDocument',
+    metadata: { name: 'debug', version: '1.0.0' },
+    spec: {
+      nodes: props.events.map((e, i) => ({
+        id: e.id,
+        type: e.type,
+        name: e.name,
+        key: (e as any).key ?? `${e.type}_${i}`,
+        config: e.config ?? {},
+        ports: e.ports,
+        position: e.position,
+      })),
+      connections: props.connections.map((c, i) => ({
+        id: c.id ?? `conn_${i}`,
+        sourceNodeId: c.sourceNodeId,
+        sourcePortId: c.sourcePortId,
+        targetNodeId: c.targetNodeId,
+        targetPortId: c.targetPortId,
+      })),
+      endConditions: props.endConditions,
+    },
+  };
+}
 
 async function handleRunAll() {
   if (!inputMessage.value.trim()) return;
-
   isRunning.value = true;
   stepMode.value = false;
-  waitingForStep.value = false;
-
-  const message = inputMessage.value;
-  inputMessage.value = '';
-  messages.value.push({ role: 'user', sender: senderName.value, content: message });
-  activeTab.value = 'flow';
 
   try {
-    const result = await api.debugBot(props.botId, {
-      message,
+    const result = await api.testRunWorkflow(props.botId, {
+      message: inputMessage.value.trim(),
+      document: buildDocument(),
+      side_effects: sideEffectPolicy.value,
       step_mode: false,
+      sender_name: '调试用户',
       session_id: sessionId.value || undefined,
-      sender_name: senderName.value,
-      workflow_config: (props.mechanism.reply?.workflow ??
-        props.mechanism.reply?.special_mode) as any,
     });
 
     if (result.success && result.data) {
-      applyResult(result.data, message);
+      trace.value = result.data as unknown as RunTrace;
+      sessionId.value = trace.value.session_id ?? trace.value.runId;
     }
   } catch (err: any) {
-    const errorMsg = err.response?.data?.message || '调试执行失败';
-    messages.value.push({ role: 'assistant', sender: '系统', content: `[错误] ${errorMsg}` });
+    const errorMsg = err.response?.data?.error || err.response?.data?.message || '调试执行失败';
+    trace.value = {
+      runId: 'error',
+      status: 'error',
+      nodes: [],
+      startedAt: Date.now(),
+      input: inputMessage.value,
+      reply: `[错误] ${errorMsg}`,
+    };
   } finally {
     isRunning.value = false;
   }
@@ -188,31 +233,33 @@ async function handleRunAll() {
 
 async function handleStepMode() {
   if (!inputMessage.value.trim()) return;
-
   isRunning.value = true;
   stepMode.value = true;
 
-  const message = inputMessage.value;
-  inputMessage.value = '';
-  messages.value.push({ role: 'user', sender: senderName.value, content: message });
-  activeTab.value = 'flow';
-
   try {
-    const result = await api.debugBot(props.botId, {
-      message,
+    const result = await api.testRunWorkflow(props.botId, {
+      message: inputMessage.value.trim(),
+      document: buildDocument(),
+      side_effects: sideEffectPolicy.value,
       step_mode: true,
+      sender_name: '调试用户',
       session_id: sessionId.value || undefined,
-      sender_name: senderName.value,
-      workflow_config: (props.mechanism.reply?.workflow ??
-        props.mechanism.reply?.special_mode) as any,
     });
 
     if (result.success && result.data) {
-      applyResult(result.data, message);
+      trace.value = result.data as unknown as RunTrace;
+      sessionId.value = trace.value.session_id ?? trace.value.runId;
     }
   } catch (err: any) {
-    const errorMsg = err.response?.data?.message || '调试执行失败';
-    messages.value.push({ role: 'assistant', sender: '系统', content: `[错误] ${errorMsg}` });
+    const errorMsg = err.response?.data?.error || '调试执行失败';
+    trace.value = {
+      runId: 'error',
+      status: 'error',
+      nodes: [],
+      startedAt: Date.now(),
+      input: inputMessage.value,
+      reply: `[错误] ${errorMsg}`,
+    };
   } finally {
     isRunning.value = false;
   }
@@ -223,57 +270,78 @@ async function handleNextStep() {
   isRunning.value = true;
 
   try {
-    const result = await api.debugStep(props.botId, {
-      session_id: sessionId.value,
-    });
-
+    const result = await api.testRunStep(props.botId, sessionId.value);
     if (result.success && result.data) {
-      applyResult(result.data);
+      trace.value = result.data as unknown as RunTrace;
     }
   } catch (err: any) {
-    const errorMsg = err.response?.data?.message || '逐步执行失败';
-    messages.value.push({ role: 'assistant', sender: '系统', content: `[错误] ${errorMsg}` });
+    const errorMsg = err.response?.data?.error || '逐步执行失败';
+    if (trace.value) {
+      trace.value.status = 'error';
+      trace.value.reply = `[错误] ${errorMsg}`;
+    }
   } finally {
     isRunning.value = false;
   }
 }
 
-function applyResult(data: DebugTraceResult, _userMessage?: string) {
-  sessionId.value = data.session_id;
-  round.value = data.round;
-  eventTraces.value = data.event_traces;
-  contextMessages.value = data.context_messages;
-  waitingForStep.value = data.waiting_for_step;
-
-  if (data.reply) {
-    messages.value.push({ role: 'assistant', sender: props.botName, content: data.reply });
-  }
-}
-
 async function handleReset() {
   if (!sessionId.value) return;
-
   try {
-    await api.debugReset(props.botId, { session_id: sessionId.value });
+    await api.testRunWorkflow(props.botId, {
+      message: '',
+      document: buildDocument(),
+    });
   } catch {
-    // 静默处理
+    // reset 失败静默处理
   }
-
   sessionId.value = null;
   stepMode.value = false;
-  waitingForStep.value = false;
-  round.value = 0;
-  eventTraces.value = [];
-  contextMessages.value = [];
-  messages.value = [];
+  trace.value = null;
+  expandedNodes.value.clear();
 }
 
-function handleQuickSend() {
-  if (stepMode.value) {
-    handleStepMode();
+function toggleNode(nodeId: string) {
+  if (expandedNodes.value.has(nodeId)) {
+    expandedNodes.value.delete(nodeId);
   } else {
-    handleRunAll();
+    expandedNodes.value.add(nodeId);
   }
+}
+
+function statusIcon(status: NodeTraceStatus): string {
+  switch (status) {
+    case 'success':
+      return '✓';
+    case 'error':
+      return '✗';
+    case 'skip':
+      return '○';
+    case 'running':
+      return '◐';
+    default:
+      return '○';
+  }
+}
+
+function statusLabel(status: RunTraceStatus): string {
+  switch (status) {
+    case 'completed':
+      return '完成';
+    case 'error':
+      return '出错';
+    case 'cancelled':
+      return '已取消';
+    case 'running':
+      return '执行中';
+    default:
+      return status;
+  }
+}
+
+function truncate(val: string): string {
+  if (!val) return '';
+  return val.length > 200 ? val.slice(0, 200) + '...' : val;
 }
 </script>
 
@@ -282,10 +350,6 @@ function handleQuickSend() {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.06));
-  border-radius: var(--radius-md, 12px);
-  padding: 12px;
-  background: var(--surface-color, #eeeae5);
 }
 
 /* 工具栏 */
@@ -350,16 +414,19 @@ function handleQuickSend() {
 
 .debug-toolbar__btn--danger:hover:not(:disabled) {
   color: var(--color-error, #dc2626);
-  border-color: color-mix(in srgb, var(--color-error, #dc2626) 30%, transparent);
+}
+
+.debug-toolbar__select {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.1));
+  background: var(--input-background, #fff);
+  color: var(--text-secondary-color, #57534e);
+  outline: none;
 }
 
 /* 输入区 */
-.debug-input {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .debug-input__field {
   width: 100%;
   padding: 8px 12px;
@@ -381,125 +448,225 @@ function handleQuickSend() {
   opacity: 0.5;
 }
 
-.debug-input__sender {
+/* Trace 区域 */
+.debug-trace {
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.debug-input__sender-field {
-  width: 100px;
-  padding: 5px 8px;
+.debug-trace__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
+  padding: 4px 0;
+}
+
+.debug-trace__status {
+  font-weight: 500;
+  padding: 2px 8px;
   border-radius: var(--radius-xs, 4px);
-  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.1));
-  background: var(--input-background, #fff);
+}
+
+.debug-trace__status--completed {
+  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 12%, transparent);
+  color: var(--theme-primary, #5a8f4e);
+}
+
+.debug-trace__status--error {
+  background: color-mix(in srgb, var(--color-error, #dc2626) 12%, transparent);
+  color: var(--color-error, #dc2626);
+}
+
+.debug-trace__status--cancelled {
+  background: var(--surface-tertiary-color, rgba(0, 0, 0, 0.06));
+  color: var(--text-tertiary-color, #a8a29e);
+}
+
+.debug-trace__status--running {
+  background: color-mix(in srgb, var(--color-info, #2563eb) 12%, transparent);
+  color: var(--color-info, #2563eb);
+}
+
+.debug-trace__meta {
+  color: var(--text-tertiary-color, #a8a29e);
+}
+
+.debug-trace__reply-preview {
   color: var(--text-secondary-color, #57534e);
-  outline: none;
 }
 
-.debug-input__sender-field:focus {
-  border-color: var(--theme-primary, #5a8f4e);
-}
-
-.debug-input__send {
-  padding: 5px 14px;
-  font-size: 12px;
-  border-radius: var(--radius-xs, 4px);
-  border: none;
-  background: var(--theme-primary, #5a8f4e);
-  color: white;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.debug-input__send:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* Tab */
-.debug-tabs {
+/* 节点列表 */
+.debug-trace__nodes {
   display: flex;
+  flex-direction: column;
   gap: 2px;
 }
 
-.debug-tabs__btn {
-  padding: 6px 12px;
-  font-size: 12px;
-  border: none;
+.trace-node {
   border-radius: var(--radius-xs, 4px);
-  background: none;
-  color: var(--text-tertiary-color, #a8a29e);
-  cursor: pointer;
-  transition: all 0.15s;
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.06));
+  overflow: hidden;
 }
 
-.debug-tabs__btn:hover {
-  color: var(--text-secondary-color, #57534e);
+.trace-node--skip {
+  opacity: 0.45;
+}
+
+.trace-node--error {
+  border-color: color-mix(in srgb, var(--color-error, #dc2626) 30%, transparent);
+}
+
+.trace-node__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  background: var(--surface-secondary-color, rgba(0, 0, 0, 0.02));
+  transition: background 0.1s;
+}
+
+.trace-node__header:hover {
   background: var(--surface-tertiary-color, rgba(0, 0, 0, 0.04));
 }
 
-.debug-tabs__btn--active {
-  color: var(--text-color, #1c1917);
-  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 8%, transparent);
-  font-weight: 500;
+.trace-node__icon {
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
-.debug-tabs__count {
-  font-size: 10px;
-  margin-left: 4px;
-  padding: 0 5px;
-  border-radius: 10px;
-  background: var(--surface-tertiary-color, #e8e4de);
-  color: var(--text-tertiary-color, #a8a29e);
-}
-
-.debug-tabs__btn--active .debug-tabs__count {
-  background: color-mix(in srgb, var(--theme-primary, #5a8f4e) 10%, transparent);
+.trace-node--success .trace-node__icon {
   color: var(--theme-primary, #5a8f4e);
 }
 
-/* 内容区 */
-.debug-content {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.trace-node--error .trace-node__icon {
+  color: var(--color-error, #dc2626);
 }
 
-/* 对话记录 */
-.debug-messages {
-  margin-top: 4px;
-}
-
-.debug-messages__divider {
-  font-size: 11px;
+.trace-node--skip .trace-node__icon {
   color: var(--text-tertiary-color, #a8a29e);
+}
+
+.trace-node__type {
+  font-size: 10px;
+  color: var(--text-tertiary-color, #a8a29e);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.trace-node__name {
+  color: var(--text-color, #1c1917);
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-node__branch {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--surface-tertiary-color, rgba(0, 0, 0, 0.06));
+  color: var(--text-secondary-color, #57534e);
+}
+
+.trace-node__duration {
+  font-size: 10px;
+  color: var(--text-tertiary-color, #a8a29e);
+  flex-shrink: 0;
+}
+
+.trace-node__error-icon {
+  color: var(--color-error, #dc2626);
+}
+
+/* 节点详情 */
+.trace-node__detail {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.06));
+  background: var(--surface-color, #faf9f7);
+}
+
+.trace-node__error-detail {
+  font-size: 12px;
+  color: var(--color-error, #dc2626);
   padding: 4px 0;
-  border-bottom: 1px dashed var(--border-subtle-color, rgba(0, 0, 0, 0.06));
   margin-bottom: 6px;
 }
 
-.debug-messages__item {
-  display: flex;
-  gap: 8px;
-  padding: 4px 0;
-  font-size: 12px;
-  line-height: 1.5;
+.trace-node__section {
+  margin-top: 4px;
 }
 
-.debug-messages__sender {
+.trace-node__section-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-tertiary-color, #a8a29e);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.trace-node__ports {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.trace-node__port {
+  display: flex;
+  gap: 6px;
+  font-size: 11px;
+  align-items: baseline;
+}
+
+.trace-node__port-key {
+  font-family: monospace;
+  color: var(--theme-primary, #5a8f4e);
   flex-shrink: 0;
+}
+
+.trace-node__port-val {
+  color: var(--text-secondary-color, #57534e);
+  word-break: break-word;
+}
+
+/* 回复 */
+.debug-trace__reply {
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.08));
+  background: var(--surface-secondary-color, #f4f1ec);
+  padding: 10px;
+}
+
+.debug-trace__reply-title {
+  font-size: 11px;
   font-weight: 500;
   color: var(--text-secondary-color, #57534e);
-  min-width: 48px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
-.debug-messages__item--user .debug-messages__sender {
-  color: var(--theme-primary, #5a8f4e);
-}
-
-.debug-messages__text {
+.debug-trace__reply-content {
+  font-size: 13px;
   color: var(--text-color, #1c1917);
+  line-height: 1.5;
   word-break: break-word;
+  margin: 0;
+}
+
+/* 空状态 */
+.debug-panel__empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-tertiary-color, #a8a29e);
 }
 </style>
