@@ -40,6 +40,8 @@ import type {
   DebugResetRequest,
   DebugTraceResult,
   BotCallLogListResponse,
+  WorkflowDocumentResponse,
+  WorkflowValidationResponse,
 } from './types';
 import { getApiBaseUrl, getStorageApiBaseUrl, logger } from '../config/app';
 
@@ -427,6 +429,41 @@ export const api = {
     return apiClient
       .get(`/api/bots/${botId}/call-logs`, { params: { limit, offset } })
       .then((res) => res.data);
+  },
+
+  // ─── Workflow Document API (#13) ───
+
+  getWorkflow: (botId: string): Promise<ApiResponse<WorkflowDocumentResponse>> => {
+    return apiClient.get(`/api/bots/${botId}/workflow`).then((res) => res.data);
+  },
+
+  updateWorkflow: (
+    botId: string,
+    data: { revision: number; document: unknown }
+  ): Promise<ApiResponse<WorkflowDocumentResponse>> => {
+    return apiClient.put(`/api/bots/${botId}/workflow`, data).then((res) => res.data);
+  },
+
+  validateWorkflow: (
+    botId: string,
+    document: unknown
+  ): Promise<ApiResponse<WorkflowValidationResponse>> => {
+    return apiClient
+      .post(`/api/bots/${botId}/workflow/validate`, { document })
+      .then((res) => res.data);
+  },
+
+  publishWorkflow: (botId: string, revision: number): Promise<ApiResponse<unknown>> => {
+    return apiClient
+      .post(`/api/bots/${botId}/workflow/publish`, { revision })
+      .then((res) => res.data);
+  },
+
+  testRunWorkflow: (
+    botId: string,
+    data: { message: string; document?: unknown }
+  ): Promise<ApiResponse<unknown>> => {
+    return apiClient.post(`/api/bots/${botId}/workflow/test-runs`, data).then((res) => res.data);
   },
 };
 
