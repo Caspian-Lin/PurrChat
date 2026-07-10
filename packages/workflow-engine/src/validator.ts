@@ -22,6 +22,9 @@ import type {
 import {
   getDefaultPorts,
   isPortCompatible,
+  extractVariablePaths,
+  parseNodeOutputPath,
+  parseSecretName,
 } from '@purrchat/workflow-types';
 import type { NodeRegistry } from './registry.js';
 import { deriveCapabilities } from './capabilities.js';
@@ -73,6 +76,7 @@ export function validateWorkflowDocument(
 
   validateNodes(document, registry, issues);
   validateConnections(document, nodeMap, issues);
+  validateVariableRefs(document, nodeMap, issues);
   detectCycles(document, issues);
   validateSecrets(document, issues);
 
@@ -355,6 +359,121 @@ function isSecretRef(value: string): boolean {
   return /^secrets\.[a-zA-Z0-9_]+$/.test(value.trim());
 }
 
+// ─── 变量引用校验 ──────────────────────────────────────────────
+
+/**
+ * 扫描节点 config 中的 ${path} 变量引用，检查：
+ * - nodes.<key>.outputs.<port>: 节点 key 和端口是否存在
+ * - secrets.<name>: 是否需要 secrets:use capability（已在 validateSecrets 中检查明文，
+ *   这里仅对 ${secrets.<name>} 规范格式做额外 warning）
+ */
+function validateVariableRefs(
+  doc: WorkflowDocument,
+  nodeMap: Map<string, WorkflowDocumentNode>,
+  issues: ValidationIssue[],
+): void {
+  // 构建 key → node 映射
+  const keyMap = new Map<string, WorkflowDocumentNode>();
+  for (const n of doc.spec.nodes) {
+    if (n.key) keyMap.set(n.key, n);
+  }
+
+  for (const node of doc.spec.nodes) {
+    scanConfigForVarRefs(node.config, node, keyMap, issues);
+  }
+}
+
+function scanConfigForVarRefs(
+  obj: Record<string, any>,
+  node: WorkflowDocumentNode,
+  keyMap: Map<string, WorkflowDocumentNode>,
+  issues: ValidationIssue[],
+): void {
+  for (const [, value] of Object.entries(obj)) {
+    if (typeof value === 'string') {
+      const paths = extractVariablePaths(value);
+      for (const path of paths) {
+        validateSingleVarRef(path, node, keyMap, issues);
+      }
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      scanConfigForVarRefs(value, node, keyMap, issues);
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === 'string') {
+          const paths = extractVariablePaths(item);
+          for (const path of paths) {
+            validateSingleVarRef(path, node, keyMap, issues);
+          }
+        } else if (item && typeof item === 'object') {
+          scanConfigForVarRefs(item, node, keyMap, issues);
+        }
+      }
+    }
+  }
+}
+
+function validateSingleVarRef(
+  path: string,
+  node: WorkflowDocumentNode,
+  keyMap: Map<string, WorkflowDocumentNode>,
+  issues: ValidationIssue[],
+): void {
+  // nodes.<key>.outputs.<port>
+  const nodeRef = parseNodeOutputPath(path);
+  if (nodeRef) {
+    const targetNode = keyMap.get(nodeRef.nodeKey);
+    if (!targetNode) {
+      issues.push(
+        warn(
+          'var_ref_unknown_node',
+          `变量 ${path} 引用了不存在的节点 key: ${nodeRef.nodeKey}`,
+          `config`,
+          node.id,
+        ),
+      );
+      return;
+    }
+    const ports = getEffectivePorts(targetNode);
+    const portExists = ports.some(
+      (p) => p.id === nodeRef.portId && p.direction === 'output',
+    );
+    if (!portExists) {
+      issues.push(
+        warn(
+          'var_ref_unknown_port',
+          `变量 ${path} 引用了节点 ${targetNode.name} 不存在的输出端口: ${nodeRef.portId}`,
+          `config`,
+          node.id,
+        ),
+      );
+    }
+    return;
+  }
+
+  // secrets.<name> — 规范格式引用
+  const secretName = parseSecretName(path);
+  if (secretName) {
+    // secrets 引用通过现有 validateSecrets + checkSecretCapability 处理
+    // 这里不重复检查
+    return;
+  }
+
+  // input.* / sender.* / conversation.* / history.* — 内置变量，始终可用
+  if (
+    path.startsWith('input.') ||
+    path.startsWith('sender.') ||
+    path.startsWith('conversation.') ||
+    path.startsWith('history.')
+  ) {
+    return;
+  }
+
+  // session.* — 运行时变量，静态无法校验
+  if (path.startsWith('session.')) {
+    return;
+  }
+}
+
 // ─── 辅助 ──────────────────────────────────────────────────────
 
 function toBlueprint(doc: WorkflowDocument): Blueprint {
@@ -363,6 +482,7 @@ function toBlueprint(doc: WorkflowDocument): Blueprint {
       id: n.id,
       type: n.type,
       name: n.name,
+      key: n.key,
       config: n.config,
       ports: n.ports,
       position: n.position,
