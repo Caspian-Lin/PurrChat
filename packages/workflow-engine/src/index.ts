@@ -6,6 +6,8 @@ export { Compiler } from './compiler.js';
 export { WorkflowRuntime } from './runtime.js';
 export { resolveInputPorts, replaceVariables, evaluateCondition } from './ports.js';
 export type { VariableResolveContext } from './ports.js';
+export { resolveTemplate } from './resolver.js';
+export type { ResolveContext } from './resolver.js';
 export { allNodes } from './nodes/index.js';
 export { deriveCapabilities, getMissingCapabilities } from './capabilities.js';
 export { resolveSecrets, extractSecretRefs, checkSecretCapability } from './secrets.js';

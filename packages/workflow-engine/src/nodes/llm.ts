@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
+import { resolveTemplate } from '../resolver.js';
 
 const llmConfigSchema = z.object({
   api_url: z.string(),
@@ -25,7 +26,8 @@ export const llmNode: NodeDefinition<z.infer<typeof llmConfigSchema>> = {
     const messages: Array<{ role: string; content: string }> = [];
 
     if (config.system_prompt) {
-      messages.push({ role: 'system', content: config.system_prompt });
+      // LLM 节点的 system_prompt 也支持统一变量解析
+      messages.push({ role: 'system', content: resolveTemplate(config.system_prompt, ctx) });
     }
 
     // 截取上下文窗口

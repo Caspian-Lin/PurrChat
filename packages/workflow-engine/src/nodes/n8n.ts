@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
-import { replaceVariables } from '../ports.js';
+import { resolveTemplate } from '../resolver.js';
 
 const n8nConfigSchema = z.object({
   webhook_url: z.string(),
@@ -22,8 +22,8 @@ export const n8nNode: NodeDefinition<z.infer<typeof n8nConfigSchema>> = {
     const cfg = config as any;
     let webhookURL = cfg.webhook_url || '';
 
-    // 变量替换
-    webhookURL = replaceVariables(webhookURL, ctx);
+    // 统一变量替换
+    webhookURL = resolveTemplate(webhookURL, ctx);
 
     const method = cfg.method || 'POST';
     const headers: Record<string, string> = {
