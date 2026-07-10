@@ -83,6 +83,9 @@ importers:
       '@iconify/vue':
         specifier: ^5.0.0
         version: 5.0.0(vue@3.5.27(typescript@5.9.3))
+      '@purrchat/workflow-engine':
+        specifier: workspace:*
+        version: link:../../packages/workflow-engine
       '@purrchat/workflow-types':
         specifier: workspace:*
         version: link:../../packages/workflow-types
@@ -224,6 +227,9 @@ importers:
       '@purrchat/workflow-types':
         specifier: workspace:*
         version: link:../workflow-types
+      js-yaml:
+        specifier: ^4.1.1
+        version: 4.1.1
       xstate:
         specifier: ^5.19.0
         version: 5.32.0
@@ -231,6 +237,9 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
     devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
