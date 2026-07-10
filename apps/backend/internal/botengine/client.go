@@ -205,3 +205,99 @@ func (c *BotEngineClient) IsAvailable() bool {
 	}
 	return true
 }
+
+// TestRunRequest test-run 请求（对应 TS 服务 POST /debug）
+type TestRunRequest struct {
+	Message     string            `json:"message"`
+	Document    json.RawMessage   `json:"document,omitempty"`
+	SideEffects string            `json:"side_effects,omitempty"`
+	StepMode    bool              `json:"step_mode,omitempty"`
+	SenderName  string            `json:"sender_name,omitempty"`
+	SessionID   string            `json:"session_id,omitempty"`
+	Secrets     map[string]string `json:"secrets,omitempty"`
+}
+
+// TestRunResponse test-run 响应（RunTrace）
+type TestRunResponse struct {
+	RunID          string          `json:"runId"`
+	Status         string          `json:"status"`
+	Nodes          json.RawMessage `json:"nodes"`
+	StartedAt      int64           `json:"startedAt"`
+	CompletedAt    *int64          `json:"completedAt,omitempty"`
+	DurationMs     *int64          `json:"durationMs,omitempty"`
+	Reply          string          `json:"reply,omitempty"`
+	Input          string          `json:"input"`
+	SenderName     string          `json:"senderName,omitempty"`
+	WaitingForStep bool            `json:"waitingForStep,omitempty"`
+	SessionID      string          `json:"session_id,omitempty"`
+}
+
+// TestRun 调用 TS 服务的 test-run (debug)
+func (c *BotEngineClient) TestRun(ctx context.Context, req *TestRunRequest) (*TestRunResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal test-run request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/debug", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create test-run request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.sharedSecret != "" {
+		httpReq.Header.Set("X-Bot-Engine-Secret", c.sharedSecret)
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("test-run request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("test-run returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var result TestRunResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode test-run response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// TestRunStep 调用 TS 服务的单步执行 (POST /debug/step)
+func (c *BotEngineClient) TestRunStep(ctx context.Context, sessionID string) (*TestRunResponse, error) {
+	body, err := json.Marshal(map[string]string{"session_id": sessionID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal step request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/debug/step", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create step request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.sharedSecret != "" {
+		httpReq.Header.Set("X-Bot-Engine-Secret", c.sharedSecret)
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("step request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("step returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var result TestRunResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode step response: %w", err)
+	}
+
+	return &result, nil
+}

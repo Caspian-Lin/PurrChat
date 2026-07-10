@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"purr-chat-server/internal/botengine"
 	"purr-chat-server/internal/models"
 	"purr-chat-server/pkg/logger"
 
@@ -32,6 +33,8 @@ type BotOwnerChecker interface {
 
 type TSDebugExecutor interface {
 	IsAvailable() bool
+	TestRun(ctx context.Context, req *botengine.TestRunRequest) (*botengine.TestRunResponse, error)
+	TestRunStep(ctx context.Context, sessionID string) (*botengine.TestRunResponse, error)
 }
 
 func NewWorkflowService(wfRepo WorkflowRepo, botRepo BotOwnerChecker, tsClient TSDebugExecutor) *WorkflowService {
@@ -153,13 +156,47 @@ func (s *WorkflowService) PublishWorkflow(ctx context.Context, botID string, req
 	return version, nil
 }
 
-func (s *WorkflowService) TestRunWorkflow(ctx context.Context, botID string, req *models.TestRunWorkflowRequest) (map[string]any, error) {
+func (s *WorkflowService) TestRunWorkflow(ctx context.Context, botID string, req *models.TestRunWorkflowRequest) (*botengine.TestRunResponse, error) {
 	if s.tsClient == nil || !s.tsClient.IsAvailable() {
 		return nil, errors.New("test-run requires bot-engine service to be available")
 	}
-	return map[string]any{
-		"message": "test-run endpoint is available; full TS delegation requires bot-engine workflow document support",
-	}, nil
+
+	// 如果请求未携带 document，从数据库加载最新草稿
+	document := req.Document
+	if len(document) == 0 {
+		id, err := uuid.Parse(botID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid bot ID: %w", err)
+		}
+		doc, _, err := s.workflowRepo.GetDocument(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load workflow document: %w", err)
+		}
+		document = doc
+	}
+
+	tsReq := &botengine.TestRunRequest{
+		Message:     req.Message,
+		Document:    document,
+		SideEffects: "mock",
+	}
+
+	logger.InfofWithCaller("[WorkflowService] TestRun bot=%s msgLen=%d", botID, len(req.Message))
+
+	result, err := s.tsClient.TestRun(ctx, tsReq)
+	if err != nil {
+		return nil, fmt.Errorf("test-run delegation failed: %w", err)
+	}
+
+	return result, nil
+}
+
+func (s *WorkflowService) TestRunStep(ctx context.Context, sessionID string) (*botengine.TestRunResponse, error) {
+	if s.tsClient == nil || !s.tsClient.IsAvailable() {
+		return nil, errors.New("test-run requires bot-engine service to be available")
+	}
+
+	return s.tsClient.TestRunStep(ctx, sessionID)
 }
 
 // ─── Go 端基础结构校验 ─────────────────────────────────────────
