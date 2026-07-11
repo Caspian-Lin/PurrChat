@@ -282,8 +282,8 @@ export class DebugRunner {
         const def = this.registry.get(node.type);
         if (!def) throw new Error(`未知节点类型: ${node.type}`);
 
-        // 解析 secrets 引用
-        const resolvedConfig = resolveSecrets(node.config, session.context.secrets);
+        // 解析 secrets 引用；注入 __nodeId__ 供节点内部使用
+        const resolvedConfig = { ...(resolveSecrets(node.config, session.context.secrets) as Record<string, unknown>), __nodeId__: node.id };
 
         const nodeInput: NodeInput = {
           ports,
