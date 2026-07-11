@@ -452,6 +452,7 @@ var productionWorkflowNodeTypes = map[string]bool{
 	"builtin":  true,
 	"template": true,
 	"reply":    true,
+	"history":  true,
 }
 
 func deriveCapabilitiesFromDoc(raw json.RawMessage) []string {

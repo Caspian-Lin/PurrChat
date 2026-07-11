@@ -114,10 +114,12 @@ export class DebugRunner {
     senderName?: string;
     sessionId?: string;
     secrets?: Record<string, string>;
+    contextBuffer?: Array<{ role: string; content: string }>;
   }): Promise<RunTrace> {
     const sideEffects = options.sideEffects ?? 'mock';
     const stepMode = options.stepMode ?? false;
     const blueprint = toBlueprint(options.document);
+    const contextBuffer = options.contextBuffer ?? [];
 
     // 查找 trigger 节点
     const trigger = blueprint.nodes.find((n) => n.type === 'trigger');
@@ -142,7 +144,7 @@ export class DebugRunner {
         time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
       },
       eventOutputs: {},
-      contextBuffer: [],
+      contextBuffer,
       finalReply: '',
       nameResolver,
       nodeKeyMap,
@@ -150,7 +152,7 @@ export class DebugRunner {
       senderName: options.senderName ?? '',
       conversationId: '',
       rawInput: options.message,
-      history: [],
+      history: contextBuffer,
       session: {},
       secrets: options.secrets ?? {},
     };

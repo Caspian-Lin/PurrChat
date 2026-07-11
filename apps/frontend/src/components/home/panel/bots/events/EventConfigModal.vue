@@ -746,9 +746,29 @@
                 class="form-input"
                 placeholder="20"
               />
-              <p class="form-hint">
-                获取最近 N 条会话消息，格式化为 prompt 字符串。图片消息将显示为 [图片]。
-              </p>
+              <p class="form-hint">获取最近 N 条会话消息，上限 100 条。</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">消息类型过滤</label>
+              <div class="checkbox-row">
+                <label v-for="t in messageTypeOptions" :key="t.value" class="checkbox-item">
+                  <input
+                    type="checkbox"
+                    :value="t.value"
+                    :checked="form.config.message_types?.includes(t.value)"
+                    @change="toggleMessageType(t.value)"
+                  />
+                  {{ t.label }}
+                </label>
+              </div>
+              <p class="form-hint">留空表示包含所有类型的消息。</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">排序方式</label>
+              <select v-model="form.config.sort_order" class="form-input">
+                <option value="asc">正序（最早→最新）</option>
+                <option value="desc">倒序（最新→最早）</option>
+              </select>
             </div>
           </template>
 
@@ -965,6 +985,23 @@ const builtinTypes = [
   { value: 'count', label: '计数器' },
   { value: 'template', label: '模板' },
 ];
+
+const messageTypeOptions = [
+  { value: 'user', label: '用户' },
+  { value: 'assistant', label: 'AI' },
+  { value: 'system', label: '系统' },
+];
+
+function toggleMessageType(value: string) {
+  const arr: string[] = Array.isArray(form.config.message_types) ? form.config.message_types : [];
+  const idx = arr.indexOf(value);
+  if (idx >= 0) {
+    arr.splice(idx, 1);
+  } else {
+    arr.push(value);
+  }
+  form.config.message_types = arr;
+}
 
 function getDefaultConfig(type: EventType): Record<string, any> {
   const manifest = PRODUCTION_NODE_MANIFEST.find((node) => node.type === type);
@@ -1310,6 +1347,19 @@ function handleConfirm() {
   font-size: 11px;
   color: var(--text-tertiary-color, #a8a29e);
   margin-top: 4px;
+}
+
+.checkbox-row {
+  display: flex;
+  gap: 16px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  cursor: pointer;
 }
 
 /* 自定义端口 */

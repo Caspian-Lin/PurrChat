@@ -159,10 +159,10 @@ const NODE_MANIFEST_STATUS = [
   },
   {
     type: 'history',
-    defaultConfig: { count: 20 },
+    defaultConfig: { count: 20, message_types: [], sort_order: 'asc' },
     implemented: true,
-    tested: false,
-    productionReady: false,
+    tested: true,
+    productionReady: true,
   },
 ] as const satisfies readonly NodeManifestStatus[];
 
