@@ -69,6 +69,8 @@ func SetupTestDB(t *testing.T) {
 // CreateTestTables 创建测试表
 func CreateTestTables(t *testing.T, ctx context.Context) {
 	tables := []string{
+		"bot_api_credential_audit_logs",
+		"bot_api_credentials",
 		"bot_call_logs",
 		"workflow_versions",
 		"bot_app_secrets",
@@ -276,6 +278,41 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create bot_app_secrets table: %v", err)
+	}
+
+	// 创建 external Bot API credential 与无敏感正文审计表(见 migration 012)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_api_credentials (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			name VARCHAR(64) NOT NULL,
+			token_hash BYTEA NOT NULL UNIQUE,
+			token_prefix VARCHAR(20) NOT NULL,
+			last_used_at TIMESTAMP,
+			expires_at TIMESTAMP,
+			revoked_at TIMESTAMP,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT check_bot_api_credential_name CHECK (char_length(trim(name)) > 0)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_api_credentials table: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_api_credential_audit_logs (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			credential_id UUID NOT NULL REFERENCES bot_api_credentials(id) ON DELETE CASCADE,
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+			event_type VARCHAR(32) NOT NULL,
+			metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT check_bot_api_credential_audit_event CHECK (event_type IN ('created', 'rotated', 'revoked', 'connected', 'invoked'))
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_api_credential_audit_logs table: %v", err)
 	}
 
 	// 创建 bot_deployments 表(legacy,用于迁移测试)
@@ -726,6 +763,8 @@ func CleanupTestTables(t *testing.T) {
 	}
 
 	tables := []string{
+		"bot_api_credential_audit_logs",
+		"bot_api_credentials",
 		"bot_call_logs",
 		"workflow_versions",
 		"bot_app_secrets",
