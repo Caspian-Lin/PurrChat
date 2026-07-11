@@ -44,6 +44,7 @@ help:
 	@echo ""
 	@echo "存储服务:"
 	@echo "  make dev-storage  - 启动存储服务"
+	@echo "  make dev-bot-engine - 启动 Bot Engine 微服务"
 
 ifneq (,$(wildcard ./apps/backend/.env))
     include ./apps/backend/.env
@@ -97,20 +98,23 @@ test:
 	echo "  运行完整的CI测试流程" | tee -a $$LOG_FILE; \
 	echo "======================================" | tee -a $$LOG_FILE; \
 	echo "" | tee -a $$LOG_FILE; \
-	echo "[1/5] 前端 Lint..." | tee -a $$LOG_FILE; \
+	echo "[1/6] 前端 Lint..." | tee -a $$LOG_FILE; \
 	$(MAKE) lint-frontend >> $$LOG_FILE 2>&1 || (echo "" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && echo "  ❌ 测试失败！" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && exit 1); \
 	echo "" | tee -a $$LOG_FILE; \
-	echo "[2/5] 后端 Lint..." | tee -a $$LOG_FILE; \
+	echo "[2/6] 后端 Lint..." | tee -a $$LOG_FILE; \
 	$(MAKE) lint-backend >> $$LOG_FILE 2>&1 || (echo "" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && echo "  ❌ 测试失败！" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && exit 1); \
 	echo "" | tee -a $$LOG_FILE; \
-	echo "[3/5] 前端测试..." | tee -a $$LOG_FILE; \
+	echo "[3/6] 前端测试..." | tee -a $$LOG_FILE; \
 	$(MAKE) test-frontend >> $$LOG_FILE 2>&1 || (echo "" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && echo "  ❌ 测试失败！" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && exit 1); \
 	echo "" | tee -a $$LOG_FILE; \
-	echo "[4/5] 后端测试..." | tee -a $$LOG_FILE; \
+	echo "[4/6] 后端测试..." | tee -a $$LOG_FILE; \
 	$(MAKE) test-backend >> $$LOG_FILE 2>&1 || (echo "" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && echo "  ❌ 测试失败！" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && exit 1); \
 	echo "" | tee -a $$LOG_FILE; \
-	echo "[5/5] 存储服务测试..." | tee -a $$LOG_FILE; \
+	echo "[5/6] 存储服务测试..." | tee -a $$LOG_FILE; \
 	$(MAKE) test-storage >> $$LOG_FILE 2>&1 || (echo "" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && echo "  ❌ 测试失败！" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && exit 1); \
+	echo "" | tee -a $$LOG_FILE; \
+	echo "[6/6] Bot Engine 测试..." | tee -a $$LOG_FILE; \
+	$(MAKE) test-bot-engine >> $$LOG_FILE 2>&1 || (echo "" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && echo "  ❌ 测试失败！" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && exit 1); \
 	echo "" | tee -a $$LOG_FILE; \
 	echo "======================================" | tee -a $$LOG_FILE; \
 	echo "  ✅ 所有测试通过！" | tee -a $$LOG_FILE; \
@@ -209,6 +213,16 @@ test-storage:
 lint-storage:
 	@echo "Running storage lint..."
 	cd apps/storage && golangci-lint run --timeout=5m 2>/dev/null || go vet ./...
+
+# Bot Engine 微服务
+dev-bot-engine:
+	pnpm -F bot-engine run dev
+
+test-bot-engine:
+	@echo "Running bot-engine tests..."
+	pnpm -F bot-engine run lint
+	pnpm -F bot-engine run type-check
+	pnpm -F bot-engine test
 
 # Docker 启动
 docker-up:

@@ -126,9 +126,7 @@ class WebSocketEventManager {
     // 用户在线状态事件
     websocketService.on('user_online_status', this.handleUserOnlineStatus.bind(this));
 
-    // Bot 工作流事件（新旧事件名并存，向后兼容）
-    websocketService.on('bot_special_mode_started', this.handleWorkflowStarted.bind(this));
-    websocketService.on('bot_special_mode_ended', this.handleWorkflowEnded.bind(this));
+    // Bot 工作流事件
     websocketService.on('bot_workflow_started', this.handleWorkflowStarted.bind(this));
     websocketService.on('bot_workflow_ended', this.handleWorkflowEnded.bind(this));
   }

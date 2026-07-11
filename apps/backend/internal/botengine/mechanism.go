@@ -1,10 +1,8 @@
 package botengine
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"regexp"
 	"strconv"
 	"strings"
@@ -62,11 +60,10 @@ type TriggerSpec struct {
 
 // ReplySpec 回复规格
 type ReplySpec struct {
-	Type              string            `json:"type"` // "predefined" | "llm" | "workflow"
-	Predefined        *PredefinedConfig `json:"predefined,omitempty"`
-	LLM               *LLMConfig        `json:"llm,omitempty"`
-	Workflow          *WorkflowSpec     `json:"workflow,omitempty"`
-	SpecialModeCompat *WorkflowSpec     `json:"special_mode,omitempty"` // 向后兼容：接受旧数据
+	Type       string            `json:"type"` // "predefined" | "llm" | "workflow"
+	Predefined *PredefinedConfig `json:"predefined,omitempty"`
+	LLM        *LLMConfig        `json:"llm,omitempty"`
+	Workflow   *WorkflowSpec     `json:"workflow,omitempty"`
 }
 
 // WorkflowSpec 工作流规格（嵌套在机制中）
@@ -87,18 +84,6 @@ func ParseMechanismConfig(raw json.RawMessage) (*MechanismConfig, error) {
 	var config MechanismConfig
 	if err := json.Unmarshal(raw, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse mechanism config: %w", err)
-	}
-
-	// 归一化：将旧的 special_mode 类型和字段迁移为 workflow
-	for i := range config.Mechanisms {
-		m := &config.Mechanisms[i]
-		if m.Reply.Type == "special_mode" {
-			m.Reply.Type = "workflow"
-		}
-		if m.Reply.SpecialModeCompat != nil && m.Reply.Workflow == nil {
-			m.Reply.Workflow = m.Reply.SpecialModeCompat
-			m.Reply.SpecialModeCompat = nil
-		}
 	}
 
 	return &config, nil
@@ -211,150 +196,6 @@ func validateReplySpec(rs *ReplySpec) error {
 	return nil
 }
 
-// ===== 触发评估 =====
-
-// Evaluate 评估消息是否触发该机制
-func (ts *TriggerSpec) Evaluate(content string) bool {
-	switch ts.Type {
-	case "rule":
-		return ts.evaluateRules(content)
-	case "probability":
-		if ts.Probability <= 0 {
-			return false
-		}
-		return rand.Float64() < ts.Probability
-	default:
-		return false
-	}
-}
-
-// evaluateRules 规则触发评估（任一规则匹配即触发）
-func (ts *TriggerSpec) evaluateRules(content string) bool {
-	if len(ts.Rules) == 0 {
-		return true // 无规则时默认触发
-	}
-
-	for _, rule := range ts.Rules {
-		switch rule.Type {
-		case "keyword":
-			checkContent := content
-			checkPattern := rule.Pattern
-			if !rule.CaseSensitive {
-				checkContent = strings.ToLower(content)
-				checkPattern = strings.ToLower(rule.Pattern)
-			}
-			if strings.Contains(checkContent, checkPattern) {
-				return true
-			}
-
-		case "regex":
-			flags := ""
-			if !rule.CaseSensitive {
-				flags = "(?i)"
-			}
-			re, err := regexp.Compile(flags + rule.Pattern)
-			if err != nil {
-				continue // 无效正则跳过
-			}
-			if re.MatchString(content) {
-				return true
-			}
-
-		case "command":
-			// 命令前缀匹配
-			checkContent := content
-			checkPattern := rule.Pattern
-			if !rule.CaseSensitive {
-				checkContent = strings.ToLower(content)
-				checkPattern = strings.ToLower(rule.Pattern)
-			}
-			if strings.HasPrefix(checkContent, checkPattern) {
-				return true
-			}
-
-		case "equals":
-			// 精确匹配
-			checkContent := strings.TrimSpace(content)
-			checkPattern := rule.Pattern
-			if !rule.CaseSensitive {
-				checkContent = strings.ToLower(checkContent)
-				checkPattern = strings.ToLower(rule.Pattern)
-			}
-			if checkContent == checkPattern {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-// ===== 回复生成 =====
-
-// GenerateReply 生成回复
-func (rs *ReplySpec) GenerateReply(input string, contextVars map[string]string, messages []ContextMessage, senderName string) (string, error) {
-	switch rs.Type {
-	case "predefined":
-		return generatePredefinedReply(rs.Predefined, input, contextVars, senderName)
-	case "llm":
-		return generateLLMReply(rs.LLM, input, messages)
-	default:
-		return "", fmt.Errorf("unsupported reply type: %q", rs.Type)
-	}
-}
-
-// generatePredefinedReply 生成预定义回复（复用 reply.go 中的逻辑）
-func generatePredefinedReply(config *PredefinedConfig, input string, vars map[string]string, senderName string) (string, error) {
-	if config == nil {
-		return "...", nil
-	}
-
-	switch config.Mode {
-	case "fixed":
-		if len(config.Replies) > 0 {
-			return config.Replies[0], nil
-		}
-		return "...", nil
-
-	case "random":
-		if len(config.Replies) > 0 {
-			return config.Replies[rand.Intn(len(config.Replies))], nil
-		}
-		return "...", nil
-
-	case "template":
-		result := config.Template
-		if result == "" {
-			result = "{input}"
-		}
-
-		// 替换变量
-		result = strings.ReplaceAll(result, "{input}", input)
-		result = strings.ReplaceAll(result, "{username}", senderName)
-
-		// 替换 args 变量（{args}, {args:N}）
-		result = ReplaceArgsVars(result, input)
-
-		// 替换自定义变量
-		for k, v := range vars {
-			result = strings.ReplaceAll(result, "{"+k+"}", v)
-		}
-
-		return result, nil
-
-	default:
-		return "...", nil
-	}
-}
-
-// generateLLMReply 调用 LLM 生成回复（复用 reply.go 中的 CallLLM）
-func generateLLMReply(config *LLMConfig, input string, messages []ContextMessage) (string, error) {
-	if config == nil || config.APIURL == "" {
-		return "...", nil
-	}
-	return CallLLM(context.TODO(), config, input, messages)
-}
-
 // ===== 辅助函数 =====
 
 // FindWorkflowMechanism 在机制列表中查找工作流类型的机制
@@ -404,121 +245,4 @@ func GetMechanismSummary(mechanism Mechanism) (triggerSummary string, replySumma
 	}
 
 	return triggerSummary, replySummary
-}
-
-// CompileSimpleMechanism 将 predefined/llm 机制编译为 WorkflowSpec
-// 使简单机制在底层也走 workflow 执行路径
-func CompileSimpleMechanism(mech *Mechanism) *WorkflowSpec {
-	triggerID := "compiled_trigger"
-	replyID := "compiled_reply"
-	endID := "compiled_end"
-
-	events := []WorkflowEvent{
-		{
-			ID:     triggerID,
-			Type:   "trigger",
-			Name:   "触发",
-			Config: map[string]any{},
-			Ports: []EventPort{
-				{ID: "out_output", Name: "输出", DataType: "string", Direction: "output"},
-				{ID: "out_exec", Name: "执行", DataType: "trigger", Direction: "output"},
-			},
-		},
-	}
-
-	var replyEvent WorkflowEvent
-
-	switch mech.Reply.Type {
-	case "predefined":
-		template := ""
-		if mech.Reply.Predefined != nil {
-			switch mech.Reply.Predefined.Mode {
-			case "fixed":
-				if len(mech.Reply.Predefined.Replies) > 0 {
-					template = mech.Reply.Predefined.Replies[0]
-				}
-			case "template":
-				template = mech.Reply.Predefined.Template
-			default:
-				template = "{input}"
-			}
-		}
-		replyEvent = WorkflowEvent{
-			ID:     replyID,
-			Type:   "reply",
-			Name:   "回复",
-			Config: map[string]any{"template": template},
-			Ports: []EventPort{
-				{ID: "in_content", Name: "内容", DataType: "string", Direction: "input"},
-			},
-		}
-
-	case "llm":
-		llmID := "compiled_llm"
-		llmConfig := mech.Reply.LLM
-		if llmConfig == nil {
-			return nil
-		}
-		events = append(events, WorkflowEvent{
-			ID:   llmID,
-			Type: "llm",
-			Name: "LLM",
-			Config: map[string]any{
-				"api_url":        llmConfig.APIURL,
-				"api_key":        llmConfig.APIKey,
-				"model":          llmConfig.Model,
-				"system_prompt":  llmConfig.SystemPrompt,
-				"temperature":    llmConfig.Temperature,
-				"max_tokens":     float64(llmConfig.MaxTokens),
-				"context_window": float64(llmConfig.ContextWindow),
-				"context_scope":  "last:20",
-			},
-			Ports: []EventPort{
-				{ID: "in_prompt", Name: "提示词", DataType: "string", Direction: "input"},
-				{ID: "out_output", Name: "输出", DataType: "string", Direction: "output"},
-				{ID: "out_exec", Name: "执行", DataType: "trigger", Direction: "output"},
-			},
-		})
-		replyEvent = WorkflowEvent{
-			ID:     replyID,
-			Type:   "reply",
-			Name:   "回复",
-			Config: map[string]any{"template": "{" + llmID + ".out_output}"},
-			Ports: []EventPort{
-				{ID: "in_content", Name: "内容", DataType: "string", Direction: "input"},
-			},
-		}
-
-	default:
-		return nil
-	}
-
-	events = append(events, replyEvent)
-	events = append(events, WorkflowEvent{
-		ID:     endID,
-		Type:   "end",
-		Name:   "结束",
-		Config: map[string]any{},
-	})
-
-	// 构建连线
-	var connections []FlowConnection
-	if mech.Reply.Type == "llm" {
-		llmID := "compiled_llm"
-		connections = []FlowConnection{
-			{ID: "c1", SourceNodeID: triggerID, SourcePortID: "out_exec", TargetNodeID: llmID, TargetPortID: "in_prompt"},
-			{ID: "c2", SourceNodeID: llmID, SourcePortID: "out_exec", TargetNodeID: replyID, TargetPortID: "in_content"},
-			{ID: "c3", SourceNodeID: replyID, SourcePortID: "out_exec", TargetNodeID: endID, TargetPortID: "in_exec"},
-		}
-	} else {
-		connections = []FlowConnection{
-			{ID: "c1", SourceNodeID: triggerID, SourcePortID: "out_exec", TargetNodeID: replyID, TargetPortID: "in_content"},
-			{ID: "c2", SourceNodeID: replyID, SourcePortID: "out_exec", TargetNodeID: endID, TargetPortID: "in_exec"},
-		}
-	}
-
-	return &WorkflowSpec{
-		Events:      events,
-		Connections: connections,
-	}
 }

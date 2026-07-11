@@ -36,11 +36,10 @@ export interface TriggerRule {
 
 // 回复规格
 export interface ReplySpec {
-  type: 'predefined' | 'llm' | 'workflow' | 'special_mode';
+  type: 'predefined' | 'llm' | 'workflow';
   predefined?: PredefinedConfig;
   llm?: LLMConfig;
   workflow?: WorkflowSpec;
-  special_mode?: WorkflowSpec;
 }
 
 // 预定义回复配置

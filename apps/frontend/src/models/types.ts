@@ -109,7 +109,7 @@ export interface Message {
 
 // 系统消息内容（JSON 格式存储在 Message.content 中）
 export interface SystemMessageContent {
-  type: 'special_mode_start' | 'special_mode_end' | 'bot_deployed' | 'bot_undeployed';
+  type: 'workflow_start' | 'workflow_end' | 'bot_deployed' | 'bot_undeployed';
   bot_id?: string;
   bot_name?: string;
   user_id?: string;
@@ -345,8 +345,6 @@ export interface Bot {
   trigger_config?: TriggerConfig;
   /** @deprecated 使用 mechanism_config */
   reply_config?: ReplyConfig;
-  /** @deprecated 使用 mechanism_config */
-  special_mode_config?: SpecialModeConfig;
   created_at: string;
   updated_at: string;
 }
@@ -358,8 +356,6 @@ export interface BotDeployment {
   conversation_id: string;
   deployed_by: string;
   status: 'active' | 'paused';
-  special_mode_active: boolean;
-  special_mode_started_at?: string;
   deployed_at: string;
   bot?: Bot;
   conversation?: Conversation;
@@ -408,8 +404,6 @@ export interface UpdateBotRequest {
   trigger_config?: TriggerConfig;
   /** @deprecated 使用 mechanism_config */
   reply_config?: ReplyConfig;
-  /** @deprecated 使用 mechanism_config */
-  special_mode_config?: SpecialModeConfig;
 }
 
 // 部署 Bot 请求
@@ -471,13 +465,6 @@ export interface LLMConfig {
   context_window?: number;
 }
 
-// 特殊模式配置（事件链）
-/** @deprecated 使用 SpecialModeSpec（在 MechanismConfig 中） */
-export interface SpecialModeConfig {
-  events?: SpecialModeEvent[];
-  end_conditions?: SpecialModeEndCondition[];
-}
-
 // ===== 机制列表类型定义 =====
 
 // 机制配置（Bot 的新统一配置格式）
@@ -503,21 +490,21 @@ export interface TriggerSpec {
 
 // 回复规格
 export interface ReplySpec {
-  type: 'predefined' | 'llm' | 'special_mode';
+  type: 'predefined' | 'llm' | 'workflow';
   predefined?: PredefinedConfig;
   llm?: LLMConfig;
-  special_mode?: SpecialModeSpec;
+  workflow?: WorkflowSpec;
 }
 
-// 特殊模式规格（嵌套在机制中）
-export interface SpecialModeSpec {
-  events: SpecialModeEvent[];
+// 工作流规格（嵌套在机制中）
+export interface WorkflowSpec {
+  events: WorkflowEvent[];
   connections?: FlowConnection[];
-  end_conditions: SpecialModeEndCondition[];
+  end_conditions: WorkflowEndCondition[];
 }
 
-// 特殊模式事件
-export interface SpecialModeEvent {
+// 工作流事件
+export interface WorkflowEvent {
   id: string;
   type: EventType;
   name: string;
@@ -525,8 +512,13 @@ export interface SpecialModeEvent {
   config: Record<string, any>;
   ports?: EventPort[];
   position?: { x: number; y: number };
-  /** @deprecated 使用 connections 代替 */
-  next?: string[];
+}
+
+// 工作流结束条件
+export interface WorkflowEndCondition {
+  type: 'message_match' | 'max_rounds' | 'timeout';
+  pattern?: string;
+  value?: number;
 }
 
 // LLM 事件配置
@@ -567,23 +559,6 @@ export interface ReplyEventConfig {
   template: string;
 }
 
-// 特殊模式结束条件
-export interface SpecialModeEndCondition {
-  type: 'message_match' | 'max_rounds' | 'timeout';
-  pattern?: string;
-  value?: number;
-}
-
-// 特殊模式运行时会话（调试用）
-export interface SpecialModeSession {
-  conversation_id: string;
-  bot_id: string;
-  bot_name: string;
-  round: number;
-  started_at: string;
-  event_outputs: Record<string, string>;
-}
-
 // ─── 调试相关类型 ───
 
 export interface EventTrace {
@@ -618,7 +593,6 @@ export interface DebugBotRequest {
   step_mode?: boolean;
   session_id?: string;
   sender_name?: string;
-  special_mode_config?: SpecialModeConfig;
 }
 
 export interface DebugStepRequest {

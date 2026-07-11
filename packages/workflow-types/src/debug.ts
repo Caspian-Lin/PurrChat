@@ -35,7 +35,6 @@ export interface DebugBotRequest {
   session_id?: string;
   sender_name?: string;
   workflow_config?: WorkflowSpec;
-  special_mode_config?: WorkflowSpec;
 }
 
 export interface DebugStepRequest {

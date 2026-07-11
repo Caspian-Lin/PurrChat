@@ -286,8 +286,8 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
 			deployed_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 			status VARCHAR(20) NOT NULL DEFAULT 'active',
-			special_mode_active BOOLEAN DEFAULT FALSE,
-			special_mode_started_at TIMESTAMP,
+			workflow_active BOOLEAN DEFAULT FALSE,
+			workflow_started_at TIMESTAMP,
 			deployed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(bot_id, conversation_id),
 			CONSTRAINT check_deployment_status CHECK (status IN ('active', 'paused'))

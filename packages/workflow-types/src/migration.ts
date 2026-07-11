@@ -6,7 +6,7 @@
  *
  * 迁移规则：
  * 1. 取第一个 enabled mechanism（或第一个）作为 trigger + workflow 来源
- * 2. reply.type !== 'workflow' / 'special_mode' 的机制不迁移（predefined/llm 保持旧逻辑）
+ * 2. reply.type !== 'workflow' 的机制不迁移（predefined/llm 保持旧逻辑）
  * 3. migration 保持 revision=0（未发布草稿）
  */
 
@@ -31,8 +31,7 @@ export function migrateMechanismToDocument(
 
   doc.spec.trigger = mech.trigger;
 
-  const wf: WorkflowSpec | undefined =
-    mech.reply?.workflow ?? mech.reply?.special_mode;
+  const wf: WorkflowSpec | undefined = mech.reply?.workflow;
   if (wf) {
     const typeCounter: Record<string, number> = {};
     doc.spec.nodes = (wf.events ?? []).map((e): WorkflowDocumentNode => {
