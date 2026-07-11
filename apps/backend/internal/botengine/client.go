@@ -42,7 +42,8 @@ type ExecuteRequest struct {
 	SenderName          string           `json:"sender_name"`
 	Content             string           `json:"content"`
 	MsgType             string           `json:"msg_type"`
-	MechanismConfig     json.RawMessage  `json:"mechanism_config"`
+	Document            json.RawMessage  `json:"document"`
+	Revision            int              `json:"revision"`
 	ContextMessages     []ContextMessage `json:"context_messages,omitempty"`
 	GrantedCapabilities []string         `json:"granted_capabilities,omitempty"`
 	// Secrets 运行时解密后的密钥明文(仅在 secrets:use 已授予时填充;内网传输)
@@ -62,7 +63,7 @@ type ExecuteResponse struct {
 }
 
 // Execute 调用 TS 服务执行消息处理
-func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uuid.UUID, botName string, mechanismConfig json.RawMessage, contextMessages []ContextMessage, grantedCapabilities []string, secrets map[string]string) (*ExecuteResponse, error) {
+func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uuid.UUID, botName string, document json.RawMessage, revision int, contextMessages []ContextMessage, grantedCapabilities []string, secrets map[string]string) (*ExecuteResponse, error) {
 	req := ExecuteRequest{
 		ConversationID:      msg.ConversationID.String(),
 		BotID:               botID.String(),
@@ -71,7 +72,8 @@ func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uu
 		SenderName:          msg.SenderName,
 		Content:             msg.Content,
 		MsgType:             msg.MsgType,
-		MechanismConfig:     mechanismConfig,
+		Document:            document,
+		Revision:            revision,
 		ContextMessages:     contextMessages,
 		GrantedCapabilities: grantedCapabilities,
 		Secrets:             secrets,

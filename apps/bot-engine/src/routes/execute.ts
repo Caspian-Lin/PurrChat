@@ -10,14 +10,17 @@ export function createExecuteRoutes(executor: BotExecutor): Hono {
     try {
       const body = await c.req.json<ExecuteRequest>();
 
-      if (!body.content || !body.mechanism_config) {
-        console.log(`[BotEngine:route] /execute REJECTED missing fields content=${!!body.content} mechanism_config=${!!body.mechanism_config}`);
-        return c.json({ error: 'content and mechanism_config are required' }, 400);
+      if (!body.content || !body.document) {
+        console.log(
+          `[BotEngine:route] /execute REJECTED missing fields content=${!!body.content} document=${!!body.document}`,
+        );
+        return c.json({ error: 'content and document are required' }, 400);
       }
 
       console.log(
-        `[BotEngine:route] /execute REQUEST botID=${body.bot_id} senderID=${body.sender_id} ` +
-          `contentLen=${body.content?.length || 0} mechanisms=${body.mechanism_config?.mechanisms?.length || 0}`,
+        `[BotEngine:route] /execute REQUEST bot=${body.bot_id} sender=${body.sender_id} ` +
+          `revision=${body.revision} contentLen=${body.content?.length || 0} ` +
+          `nodes=${body.document?.spec?.nodes?.length || 0}`,
       );
 
       const result = await executor.execute(body);

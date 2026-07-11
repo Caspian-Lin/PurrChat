@@ -3,6 +3,7 @@ package botengine
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -39,6 +40,7 @@ type BotEngine struct {
 	enrollmentRepo   repository.EnrollmentRepository
 	callLogRepo      repository.BotCallLogRepository
 	installationRepo repository.BotInstallationRepository
+	workflowRepo     repository.WorkflowRepository
 	secretResolver   SecretResolver // 运行时解密 secret(仅在 secrets:use 已授予时调用)
 
 	// 工作流会话：记录活跃的工作流运行时状态
@@ -93,6 +95,11 @@ func (e *BotEngine) SetSecretResolver(resolver SecretResolver) {
 	e.secretResolver = resolver
 }
 
+// SetWorkflowRepo 设置工作流版本仓储（用于加载已发布的 WorkflowDocument）
+func (e *BotEngine) SetWorkflowRepo(repo repository.WorkflowRepository) {
+	e.workflowRepo = repo
+}
+
 // recordCallLog 记录调用日志（best-effort，失败不阻塞主流程）
 func (e *BotEngine) recordCallLog(ctx context.Context, log *models.BotCallLog) {
 	if e.callLogRepo == nil {
@@ -116,31 +123,28 @@ func (e *BotEngine) recordCallLog(ctx context.Context, log *models.BotCallLog) {
 	}
 }
 
-// resolveDiagnosticsConsent 查询 Bot 在目标会话/用户的诊断授权状态
-// 先查群聊 installation,不存在则查私聊 user installation
-func (e *BotEngine) resolveDiagnosticsConsent(ctx context.Context, botID, conversationID, senderID uuid.UUID) models.DiagnosticsConsent {
-	if inst, _ := e.installationRepo.FindByAppAndTarget(ctx, botID, models.InstallationTargetConversation, conversationID); inst != nil {
-		return inst.DiagnosticsConsent
-	}
-	if inst, _ := e.installationRepo.FindByAppAndTarget(ctx, botID, models.InstallationTargetUser, senderID); inst != nil {
-		return inst.DiagnosticsConsent
-	}
-	return models.DiagnosticsDenied
-}
-
-// resolveGrantedCapabilities 查询 Bot 在目标会话/用户授予的 capabilities
-// 先查群聊 installation,不存在则查私聊 user installation
-func (e *BotEngine) resolveGrantedCapabilities(ctx context.Context, botID, conversationID, senderID uuid.UUID) []string {
+// resolveInstallation 查询 Bot 在目标会话/用户的有效安装记录
+// 先查群聊 installation（target_type=conversation），不存在则查私聊 user installation（target_type=user）。
+// 返回 nil 表示未找到安装记录。
+func (e *BotEngine) resolveInstallation(ctx context.Context, botID, conversationID, senderID uuid.UUID) *models.BotInstallation {
 	if e.installationRepo == nil {
 		return nil
 	}
 	if inst, _ := e.installationRepo.FindByAppAndTarget(ctx, botID, models.InstallationTargetConversation, conversationID); inst != nil {
-		return inst.GrantedCapabilities
+		return inst
 	}
 	if inst, _ := e.installationRepo.FindByAppAndTarget(ctx, botID, models.InstallationTargetUser, senderID); inst != nil {
-		return inst.GrantedCapabilities
+		return inst
 	}
 	return nil
+}
+
+// resolveDiagnosticsConsent 查询 Bot 在目标会话/用户的诊断授权状态
+func (e *BotEngine) resolveDiagnosticsConsent(ctx context.Context, botID, conversationID, senderID uuid.UUID) models.DiagnosticsConsent {
+	if inst := e.resolveInstallation(ctx, botID, conversationID, senderID); inst != nil {
+		return inst.DiagnosticsConsent
+	}
+	return models.DiagnosticsDenied
 }
 
 // truncateStr 截断字符串
@@ -222,8 +226,8 @@ func (e *BotEngine) OnMessage(ctx context.Context, msg *BotMessage) {
 }
 
 // processMessage 实际处理消息
-// 当 TS 服务可用时，直接将 mechanism_config 传给 TS，由 TS 全权处理触发评估和执行。
-// 仅在 TS 不可用时回退到 Go 引擎的本地触发评估。
+// 使用已发布的 WorkflowDocument 作为权威执行输入，BotInstallation active 状态作为执行前门禁。
+// TS bot-engine 不可用时显式失败并记录结构化原因，不进入旧 Go fallback。
 func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 	// 忽略系统消息
 	if msg.SenderID == uuid.Nil {
@@ -235,7 +239,7 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 		return
 	}
 
-	// 1. 通过 enrollment 查找会话中的 Bot 成员（权威来源）
+	// 1. 通过 enrollment 查找会话中的 Bot 成员
 	botEnrollments, err := e.enrollmentRepo.FindBotEnrollmentsByConversationID(ctx, msg.ConversationID)
 	if err != nil {
 		logger.ErrorfWithCaller("[BotEngine] Failed to find bot enrollments for conversation %s: %v", msg.ConversationID, err)
@@ -259,73 +263,131 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 			continue
 		}
 
-		if e.tsClient != nil && e.tsClient.IsAvailable() {
-			// TS 路径：收集上下文，直接调 TS（TS 负责触发评估 + 执行）
-			contextMsgs := e.collectContextMessages(ctx, msg.ConversationID)
-			// 查询安装授予的 capabilities（运行时强制校验用）
-			grantedCaps := e.resolveGrantedCapabilities(ctx, bot.ID, msg.ConversationID, msg.SenderID)
-			// 仅在 secrets:use 已授予时解密注入 secret(纵深防御)
-			var secrets map[string]string
-			if e.secretResolver != nil && models.HasCapability(grantedCaps, models.CapabilitySecretsUse) {
-				if dec, err := e.secretResolver.ResolveSecrets(ctx, bot.ID); err == nil {
-					secrets = dec
-				} else {
-					logger.ErrorfWithCaller("[BotEngine] Failed to resolve secrets for bot %s: %v", bot.Name, err)
-				}
-			}
-			start := time.Now()
-			execResp, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, bot.MechanismConfig, contextMsgs, grantedCaps, secrets)
-			duration := time.Since(start)
-
-			if tsErr == nil {
-				logger.InfofWithCaller("[BotEngine] TS bot=%s triggered=%v mechanism=%s reply=%q sessionActive=%v ms=%d",
-					bot.Name, execResp.Triggered, execResp.MechanismName,
-					truncateStr(execResp.Reply, 50), execResp.SessionActive, int(duration.Milliseconds()))
-
-				// 记录调用日志
-				e.recordCallLog(ctx, &models.BotCallLog{
-					BotID:          bot.ID,
-					ConversationID: msg.ConversationID,
-					SenderID:       msg.SenderID,
-					SenderName:     msg.SenderName,
-					TriggerMessage: msg.Content,
-					ReplyContent:   truncateStr(execResp.Reply, 500),
-					MechanismID:    execResp.MechanismID,
-					MechanismName:  execResp.MechanismName,
-					ReplyType:      execResp.ReplyType,
-					ExecutionPath:  "ts",
-					Success:        true,
-					DurationMs:     int(duration.Milliseconds()),
-				})
-
-				if execResp.Reply != "" {
-					e.sendBotReply(ctx, bot, msg.ConversationID, execResp.Reply)
-				}
-			} else {
-				logger.ErrorfWithCaller("[BotEngine] TS failed bot=%s error=%v", bot.Name, tsErr)
-				e.recordCallLog(ctx, &models.BotCallLog{
-					BotID:          bot.ID,
-					ConversationID: msg.ConversationID,
-					SenderID:       msg.SenderID,
-					SenderName:     msg.SenderName,
-					TriggerMessage: msg.Content,
-					ExecutionPath:  "ts",
-					Success:        false,
-					ErrorMessage:   tsErr.Error(),
-					DurationMs:     int(duration.Milliseconds()),
-				})
-			}
+		// 3. 安装门禁：BotInstallation active 是执行前权威检查
+		inst := e.resolveInstallation(ctx, bot.ID, msg.ConversationID, msg.SenderID)
+		if inst == nil {
+			logger.InfofWithCaller("[BotEngine] Skip bot=%s: no installation found for conversation=%s sender=%s",
+				bot.Name, msg.ConversationID, msg.SenderID)
+			continue
+		}
+		if inst.Status != models.InstallationActive {
+			logger.InfofWithCaller("[BotEngine] Skip bot=%s: installation status=%s (not active)", bot.Name, inst.Status)
 			continue
 		}
 
-		// Go fallback（TS 不可用时）
-		logger.InfofWithCaller("[BotEngine] TS unavailable, using Go fallback for bot %s", bot.Name)
-		e.goFallbackProcess(ctx, msg, bot)
+		// 4. 加载已发布的 WorkflowDocument（不可变版本）
+		if bot.PublishedVersion == nil || *bot.PublishedVersion == 0 {
+			logger.InfofWithCaller("[BotEngine] Skip bot=%s: no published workflow version", bot.Name)
+			e.recordCallLog(ctx, &models.BotCallLog{
+				BotID:          bot.ID,
+				ConversationID: msg.ConversationID,
+				SenderID:       msg.SenderID,
+				SenderName:     msg.SenderName,
+				TriggerMessage: msg.Content,
+				ExecutionPath:  "ts",
+				Success:        false,
+				ErrorMessage:   "no published workflow version",
+			})
+			continue
+		}
+
+		if e.workflowRepo == nil {
+			logger.ErrorfWithCaller("[BotEngine] workflowRepo not injected; cannot load published document for bot=%s", bot.Name)
+			continue
+		}
+
+		version, err := e.workflowRepo.FindPublishedByRevision(ctx, bot.ID, *bot.PublishedVersion)
+		if err != nil {
+			logger.ErrorfWithCaller("[BotEngine] Failed to load published workflow bot=%s revision=%d: %v", bot.Name, *bot.PublishedVersion, err)
+			e.recordCallLog(ctx, &models.BotCallLog{
+				BotID:          bot.ID,
+				ConversationID: msg.ConversationID,
+				SenderID:       msg.SenderID,
+				SenderName:     msg.SenderName,
+				TriggerMessage: msg.Content,
+				ExecutionPath:  "ts",
+				Success:        false,
+				ErrorMessage:   fmt.Sprintf("failed to load published revision %d: %v", *bot.PublishedVersion, err),
+			})
+			continue
+		}
+
+		// 5. 检查 TS 服务可用性
+		if e.tsClient == nil || !e.tsClient.IsAvailable() {
+			logger.ErrorfWithCaller("[BotEngine] TS service unavailable; bot=%s will not execute (no Go fallback)", bot.Name)
+			e.recordCallLog(ctx, &models.BotCallLog{
+				BotID:          bot.ID,
+				ConversationID: msg.ConversationID,
+				SenderID:       msg.SenderID,
+				SenderName:     msg.SenderName,
+				TriggerMessage: msg.Content,
+				ExecutionPath:  "ts",
+				Success:        false,
+				ErrorMessage:   "bot-engine service unavailable",
+			})
+			continue
+		}
+
+		// 6. TS 路径：收集上下文、capabilities、secrets，执行已发布文档
+		contextMsgs := e.collectContextMessages(ctx, msg.ConversationID)
+		grantedCaps := inst.GrantedCapabilities
+		var secrets map[string]string
+		if e.secretResolver != nil && models.HasCapability(grantedCaps, models.CapabilitySecretsUse) {
+			if dec, err := e.secretResolver.ResolveSecrets(ctx, bot.ID); err == nil {
+				secrets = dec
+			} else {
+				logger.ErrorfWithCaller("[BotEngine] Failed to resolve secrets for bot %s: %v", bot.Name, err)
+			}
+		}
+
+		start := time.Now()
+		execResp, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, version.Document, version.Revision, contextMsgs, grantedCaps, secrets)
+		duration := time.Since(start)
+
+		if tsErr == nil {
+			logger.InfofWithCaller("[BotEngine] TS bot=%s triggered=%v revision=%d reply=%q sessionActive=%v ms=%d",
+				bot.Name, execResp.Triggered, version.Revision,
+				truncateStr(execResp.Reply, 50), execResp.SessionActive, int(duration.Milliseconds()))
+
+			e.recordCallLog(ctx, &models.BotCallLog{
+				BotID:          bot.ID,
+				ConversationID: msg.ConversationID,
+				SenderID:       msg.SenderID,
+				SenderName:     msg.SenderName,
+				TriggerMessage: msg.Content,
+				ReplyContent:   truncateStr(execResp.Reply, 500),
+				MechanismID:    execResp.MechanismID,
+				MechanismName:  execResp.MechanismName,
+				ReplyType:      execResp.ReplyType,
+				ExecutionPath:  "ts",
+				Success:        true,
+				DurationMs:     int(duration.Milliseconds()),
+			})
+
+			if execResp.Reply != "" {
+				e.sendBotReply(ctx, bot, msg.ConversationID, execResp.Reply)
+			}
+		} else {
+			logger.ErrorfWithCaller("[BotEngine] TS failed bot=%s error=%v", bot.Name, tsErr)
+			e.recordCallLog(ctx, &models.BotCallLog{
+				BotID:          bot.ID,
+				ConversationID: msg.ConversationID,
+				SenderID:       msg.SenderID,
+				SenderName:     msg.SenderName,
+				TriggerMessage: msg.Content,
+				ExecutionPath:  "ts",
+				Success:        false,
+				ErrorMessage:   tsErr.Error(),
+				DurationMs:     int(duration.Milliseconds()),
+			})
+		}
 	}
 }
 
 // goFallbackProcess Go 引擎 fallback 路径：本地评估触发条件并执行
 // Deprecated: 仅在 TS 微服务不可用时使用，后续将完全迁移至 TS。
+//
+//nolint:unused // 保留至 #18 删除 Go 遗留
 func (e *BotEngine) goFallbackProcess(ctx context.Context, msg *BotMessage, bot *models.Bot) {
 	// 解析机制配置
 	mechConfig, err := ParseMechanismConfig(bot.MechanismConfig)
@@ -398,6 +460,8 @@ func (e *BotEngine) isBotUser(ctx context.Context, userID uuid.UUID) bool {
 }
 
 // collectContextForMechanism 收集机制所需的上下文消息
+//
+//nolint:unused // 保留至 #18 删除 Go 遗留
 func (e *BotEngine) collectContextForMechanism(ctx context.Context, conversationID uuid.UUID, mech *Mechanism) []ContextMessage {
 	windowSize := 20
 	if mech.Reply.Type == "llm" && mech.Reply.LLM != nil && mech.Reply.LLM.ContextWindow > 0 {

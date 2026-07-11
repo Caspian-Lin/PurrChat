@@ -243,6 +243,7 @@ func main() {
 	settingsService := services.NewSettingsService(settingsRepo)
 	settingsHandler := handlers.NewSettingsHandler(settingsService)
 	workflowRepo := repository.NewWorkflowRepository()
+	botEngine.SetWorkflowRepo(workflowRepo)
 	var tsExecutor services.TSDebugExecutor
 	if tsClient := botEngine.GetTSClient(); tsClient != nil {
 		tsExecutor = tsClient

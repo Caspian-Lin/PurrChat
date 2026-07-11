@@ -1,4 +1,5 @@
-import type { MechanismConfig, DebugBotRequest } from '@purrchat/workflow-types';
+import type { WorkflowDocument } from '@purrchat/workflow-types';
+import type { DebugBotRequest } from '@purrchat/workflow-types';
 
 // ─── 执行请求/响应 ───────────────────────────────────────────
 
@@ -10,7 +11,8 @@ export interface ExecuteRequest {
   sender_name: string;
   content: string;
   msg_type: string;
-  mechanism_config: MechanismConfig;
+  document: WorkflowDocument;
+  revision: number;
   context_messages?: Array<{ role: string; content: string }>;
   /** 安装时授予的 capabilities，传给 workflow-engine 做运行时强制校验 */
   granted_capabilities?: string[];
