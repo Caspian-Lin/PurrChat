@@ -66,13 +66,13 @@ func (h *InstallationHandler) CreateInstallation(c *gin.Context) {
 // @Param iid path string true "Installation ID"
 // @Router /api/installations/{iid} [get]
 func (h *InstallationHandler) GetInstallation(c *gin.Context) {
-	inst, err := h.installationService.GetInstallation(c.Request.Context(), c.Param("iid"))
+	requesterID, ok := getUserID(c)
+	if !ok {
+		return
+	}
+	inst, err := h.installationService.GetInstallation(c.Request.Context(), requesterID, c.Param("iid"))
 	if err != nil {
-		if containsBadInput(err.Error()) {
-			c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
-		} else {
-			c.JSON(http.StatusNotFound, models.APIResponse{Success: false, Message: err.Error()})
-		}
+		respondProtectedResourceError(c, err, "Failed to get installation")
 		return
 	}
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: gin.H{"installation": inst}})

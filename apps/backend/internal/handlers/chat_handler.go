@@ -196,13 +196,14 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 		return
 	}
 
-	messages, err := h.messageService.GetMessages(c.Request.Context(), req.ConversationID, req.Limit, req.Offset)
+	requesterID, ok := getUserID(c)
+	if !ok {
+		return
+	}
+	messages, err := h.messageService.GetMessages(c.Request.Context(), requesterID, req.ConversationID, req.Limit, req.Offset)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get messages for conversation %s: %v", req.ConversationID, err)
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Message: "Failed to get messages",
-		})
+		respondProtectedResourceError(c, err, "Failed to get messages")
 		return
 	}
 
@@ -235,13 +236,14 @@ func (h *ChatHandler) ExportMessages(c *gin.Context) {
 		return
 	}
 
-	messages, err := h.messageService.ExportMessages(c.Request.Context(), conversationID)
+	requesterID, ok := getUserID(c)
+	if !ok {
+		return
+	}
+	messages, err := h.messageService.ExportMessages(c.Request.Context(), requesterID, conversationID)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to export messages for conversation %s: %v", conversationID, err)
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Message: "Failed to export messages",
-		})
+		respondProtectedResourceError(c, err, "Failed to export messages")
 		return
 	}
 
@@ -275,13 +277,14 @@ func (h *ChatHandler) GetMessagesIncremental(c *gin.Context) {
 		return
 	}
 
-	messages, err := h.messageService.GetMessagesIncremental(c.Request.Context(), req.ConversationID, req.SinceTimestamp)
+	requesterID, ok := getUserID(c)
+	if !ok {
+		return
+	}
+	messages, err := h.messageService.GetMessagesIncremental(c.Request.Context(), requesterID, req.ConversationID, req.SinceTimestamp)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get incremental messages for conversation %s: %v", req.ConversationID, err)
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Message: "Failed to get incremental messages",
-		})
+		respondProtectedResourceError(c, err, "Failed to get incremental messages")
 		return
 	}
 
@@ -851,13 +854,14 @@ func (h *ChatHandler) GetConversationMembers(c *gin.Context) {
 		return
 	}
 
-	members, err := h.conversationService.GetConversationMembers(c.Request.Context(), conversationID)
+	requesterID, ok := getUserID(c)
+	if !ok {
+		return
+	}
+	members, err := h.conversationService.GetConversationMembers(c.Request.Context(), requesterID, conversationID)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to get conversation members: %v", err)
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Message: "Failed to get conversation members",
-		})
+		respondProtectedResourceError(c, err, "Failed to get conversation members")
 		return
 	}
 

@@ -330,7 +330,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 获取会话成员
-		members, err := conversationService.GetConversationMembers(ctx, conversation.ID.String())
+		members, err := conversationService.GetConversationMembers(ctx, owner.ID.String(), conversation.ID.String())
 		if err != nil {
 			t.Fatalf("Failed to get conversation members: %v", err)
 		}
