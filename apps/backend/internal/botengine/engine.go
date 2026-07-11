@@ -147,14 +147,6 @@ func (e *BotEngine) resolveDiagnosticsConsent(ctx context.Context, botID, conver
 	return models.DiagnosticsDenied
 }
 
-// resolveGrantedCapabilities 查询 Bot 在目标会话/用户授予的 capabilities
-func (e *BotEngine) resolveGrantedCapabilities(ctx context.Context, botID, conversationID, senderID uuid.UUID) []string {
-	if inst := e.resolveInstallation(ctx, botID, conversationID, senderID); inst != nil {
-		return inst.GrantedCapabilities
-	}
-	return nil
-}
-
 // truncateStr 截断字符串
 func truncateStr(s string, maxLen int) string {
 	if len(s) > maxLen {
@@ -394,6 +386,7 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 
 // goFallbackProcess Go 引擎 fallback 路径：本地评估触发条件并执行
 // Deprecated: 仅在 TS 微服务不可用时使用，后续将完全迁移至 TS。
+//nolint:unused // 保留至 #18 删除 Go 遗留
 func (e *BotEngine) goFallbackProcess(ctx context.Context, msg *BotMessage, bot *models.Bot) {
 	// 解析机制配置
 	mechConfig, err := ParseMechanismConfig(bot.MechanismConfig)
@@ -466,6 +459,7 @@ func (e *BotEngine) isBotUser(ctx context.Context, userID uuid.UUID) bool {
 }
 
 // collectContextForMechanism 收集机制所需的上下文消息
+//nolint:unused // 保留至 #18 删除 Go 遗留
 func (e *BotEngine) collectContextForMechanism(ctx context.Context, conversationID uuid.UUID, mech *Mechanism) []ContextMessage {
 	windowSize := 20
 	if mech.Reply.Type == "llm" && mech.Reply.LLM != nil && mech.Reply.LLM.ContextWindow > 0 {

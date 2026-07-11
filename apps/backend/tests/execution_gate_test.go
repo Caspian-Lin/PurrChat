@@ -34,7 +34,7 @@ func (m *mockTSHandler) handler() http.HandlerFunc {
 			defer m.mu.Unlock()
 			if m.available {
 				w.WriteHeader(200)
-				w.Write([]byte(`{"status":"ok"}`))
+				_, _ = w.Write([]byte(`{"status":"ok"}`))
 			} else {
 				w.WriteHeader(503)
 			}
@@ -72,12 +72,6 @@ func (m *mockTSHandler) getCallCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.callCount
-}
-
-func (m *mockTSHandler) setAvailable(v bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.available = v
 }
 
 const validWorkflowDocumentJSON = `{
