@@ -502,12 +502,29 @@ func (s *BotService) GetBotDeployments(ctx context.Context, userID string) ([]*m
 
 // UpdateDeploymentStatus 更新安装状态（暂停/恢复）
 func (s *BotService) UpdateDeploymentStatus(ctx context.Context, botID, userID string, req *models.UpdateDeploymentStatusRequest) error {
-	botUUID, _ := uuid.Parse(botID)
+	botUUID, err := parseID(botID)
+	if err != nil {
+		return err
+	}
+	requesterUUID, err := parseID(userID)
+	if err != nil {
+		return err
+	}
 	convUUID := req.ConversationID
 
 	inst, err := s.installationRepo.FindByAppAndTarget(ctx, botUUID, models.InstallationTargetConversation, convUUID)
 	if err != nil {
-		return errors.New("installation not found")
+		return ErrResourceNotFound
+	}
+	if inst.InstalledBy != requesterUUID {
+		bot, botErr := s.botRepo.FindByID(ctx, botUUID)
+		enrollment, enrollmentErr := s.enrollmentRepo.FindByConversationAndUser(ctx, convUUID, requesterUUID)
+		isBotOwner := botErr == nil && bot.OwnerID == requesterUUID
+		isConversationManager := enrollmentErr == nil && enrollment != nil &&
+			(enrollment.Role == models.EnrollmentRoleOwner || enrollment.Role == models.EnrollmentRoleAdmin)
+		if !isBotOwner && !isConversationManager {
+			return ErrResourceNotFound
+		}
 	}
 
 	inst.Status = models.InstallationStatus(req.Status)
@@ -651,9 +668,16 @@ func (s *BotService) ensureUserInstallation(ctx context.Context, bot *models.Bot
 }
 
 // GetActiveBotsForConversation 获取会话中活跃的 Bot 安装列表（含 Bot 信息）
-func (s *BotService) GetActiveBotsForConversation(ctx context.Context, conversationID string) ([]*models.BotInstallation, error) {
-	convUUID, err := uuid.Parse(conversationID)
+func (s *BotService) GetActiveBotsForConversation(ctx context.Context, requesterID, conversationID string) ([]*models.BotInstallation, error) {
+	requesterUUID, err := parseID(requesterID)
 	if err != nil {
+		return nil, err
+	}
+	convUUID, err := parseID(conversationID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireConversationMember(ctx, s.enrollmentRepo, convUUID, requesterUUID); err != nil {
 		return nil, err
 	}
 

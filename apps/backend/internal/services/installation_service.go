@@ -151,16 +151,40 @@ func (s *InstallationService) CreateInstallation(ctx context.Context, installerI
 }
 
 // GetInstallation 获取单个安装详情(带 Bot 关联)
-func (s *InstallationService) GetInstallation(ctx context.Context, installationID string) (*models.BotInstallation, error) {
-	id, err := uuid.Parse(installationID)
+func (s *InstallationService) GetInstallation(ctx context.Context, requesterID, installationID string) (*models.BotInstallation, error) {
+	requesterUUID, err := parseID(requesterID)
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseID(installationID)
 	if err != nil {
 		return nil, err
 	}
 	inst, err := s.installationRepo.FindByIDWithApp(ctx, id)
 	if err != nil {
-		return nil, errInstallationNotFound
+		return nil, ErrResourceNotFound
+	}
+	if !s.canManage(ctx, inst, requesterUUID) {
+		return nil, ErrResourceNotFound
 	}
 	return inst, nil
+}
+
+// AuthorizeBotConversationRead 校验可信 Bot 身份对会话读取能力的实时授权。
+// 调用方必须先通过 Bot credential 验证 botID，不能接受客户端伪造的身份。
+func (s *InstallationService) AuthorizeBotConversationRead(ctx context.Context, botID, conversationID uuid.UUID, capability string) error {
+	bot, err := s.botRepo.FindByID(ctx, botID)
+	if err != nil || bot.Status != models.BotStatusActive {
+		return ErrResourceNotFound
+	}
+	if err := requireConversationMember(ctx, s.enrollmentRepo, conversationID, botID); err != nil {
+		return ErrResourceNotFound
+	}
+	inst, err := s.installationRepo.FindByAppAndTarget(ctx, botID, models.InstallationTargetConversation, conversationID)
+	if err != nil || inst.Status != models.InstallationActive || !models.HasCapability(inst.GrantedCapabilities, capability) {
+		return ErrResourceNotFound
+	}
+	return nil
 }
 
 // ListByApp 列出某 Bot 的所有安装(仅 Bot owner)

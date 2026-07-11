@@ -686,8 +686,11 @@ func SetupTestRouter() {
 
 	testRouter.GET("/api/conversations", handlers.AuthMiddleware(jwtSecret), chatHandler.GetConversations)
 	testRouter.POST("/api/conversations", handlers.AuthMiddleware(jwtSecret), chatHandler.CreateConversation)
+	testRouter.GET("/api/conversations/members", handlers.AuthMiddleware(jwtSecret), chatHandler.GetConversationMembers)
 
 	testRouter.GET("/api/messages", handlers.AuthMiddleware(jwtSecret), chatHandler.GetMessages)
+	testRouter.GET("/api/messages/export", handlers.AuthMiddleware(jwtSecret), chatHandler.ExportMessages)
+	testRouter.GET("/api/messages/incremental", handlers.AuthMiddleware(jwtSecret), chatHandler.GetMessagesIncremental)
 	testRouter.POST("/api/messages", handlers.AuthMiddleware(jwtSecret), chatHandler.SendMessage)
 
 	testRouter.GET("/api/friends", handlers.AuthMiddleware(jwtSecret), chatHandler.GetFriends)

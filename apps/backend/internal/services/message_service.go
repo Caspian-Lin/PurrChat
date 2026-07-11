@@ -46,34 +46,34 @@ func NewMessageService(
 }
 
 // GetMessages 获取会话的消息
-func (s *MessageService) GetMessages(ctx context.Context, conversationIDStr string, limit, offset int) ([]*models.Message, error) {
-	// 解析 conversationID
-	conversationID, err := uuid.Parse(conversationIDStr)
+func (s *MessageService) GetMessages(ctx context.Context, requesterIDStr, conversationIDStr string, limit, offset int) ([]*models.Message, error) {
+	requesterID, err := parseID(requesterIDStr)
 	if err != nil {
 		return nil, err
 	}
+	conversationID, err := parseID(conversationIDStr)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireConversationMember(ctx, s.enrollmentRepo, conversationID, requesterID); err != nil {
+		return nil, err
+	}
 
+	return s.getMessages(ctx, conversationID, limit, offset)
+}
+
+func (s *MessageService) getMessages(ctx context.Context, conversationID uuid.UUID, limit, offset int) ([]*models.Message, error) {
 	messages, err := s.conversationMessageRepo.FindMessages(ctx, conversationID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
-
-	// 为每条消息加载发送者信息
 	for _, msg := range messages {
 		s.fillSender(ctx, msg)
 	}
-
 	return messages, nil
 }
 
-// GetAllMessages 获取会话的所有消息
-func (s *MessageService) GetAllMessages(ctx context.Context, conversationIDStr string) ([]*models.Message, error) {
-	// 解析 conversationID
-	conversationID, err := uuid.Parse(conversationIDStr)
-	if err != nil {
-		return nil, err
-	}
-
+func (s *MessageService) getAllMessages(ctx context.Context, conversationID uuid.UUID) ([]*models.Message, error) {
 	messages, err := s.conversationMessageRepo.FindAllMessages(ctx, conversationID)
 	if err != nil {
 		return nil, err
@@ -88,13 +88,19 @@ func (s *MessageService) GetAllMessages(ctx context.Context, conversationIDStr s
 }
 
 // GetMessagesIncremental 增量获取会话的消息（从指定时间之后）
-func (s *MessageService) GetMessagesIncremental(ctx context.Context, conversationIDStr string, sinceTimestamp int64) ([]*models.Message, error) {
+func (s *MessageService) GetMessagesIncremental(ctx context.Context, requesterIDStr, conversationIDStr string, sinceTimestamp int64) ([]*models.Message, error) {
 	logger.InfofWithCaller("Getting incremental messages for conversation %s since %d", conversationIDStr, sinceTimestamp)
 
-	// 解析 conversationID
-	conversationID, err := uuid.Parse(conversationIDStr)
+	requesterID, err := parseID(requesterIDStr)
+	if err != nil {
+		return nil, err
+	}
+	conversationID, err := parseID(conversationIDStr)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to parse conversation ID %s: %v", conversationIDStr, err)
+		return nil, err
+	}
+	if err := requireConversationMember(ctx, s.enrollmentRepo, conversationID, requesterID); err != nil {
 		return nil, err
 	}
 
@@ -306,9 +312,20 @@ func (s *MessageService) SendPokeMessage(ctx context.Context, senderID string, c
 	return message, nil
 }
 
-// ExportMessages 导出会话的所有消息（别名，内部调用 GetAllMessages）
-func (s *MessageService) ExportMessages(ctx context.Context, conversationID string) ([]*models.Message, error) {
-	return s.GetAllMessages(ctx, conversationID)
+// ExportMessages 导出会话的所有消息
+func (s *MessageService) ExportMessages(ctx context.Context, requesterIDStr, conversationIDStr string) ([]*models.Message, error) {
+	requesterID, err := parseID(requesterIDStr)
+	if err != nil {
+		return nil, err
+	}
+	conversationID, err := parseID(conversationIDStr)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireConversationMember(ctx, s.enrollmentRepo, conversationID, requesterID); err != nil {
+		return nil, err
+	}
+	return s.getAllMessages(ctx, conversationID)
 }
 
 // fillSender 为消息填充发送者信息
