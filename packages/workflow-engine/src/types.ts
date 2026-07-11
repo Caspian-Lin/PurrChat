@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { FlowConnection, EventPort } from '@purrchat/workflow-types';
+import type { FlowConnection, EventPort, RunTrace } from '@purrchat/workflow-types';
 
 // ─── 节点定义 ────────────────────────────────────────────────
 
@@ -143,4 +143,8 @@ export interface ExecuteResult {
   sessionActive: boolean;
   /** 当前会话轮次（从 1 开始） */
   round: number;
+  /** 本次执行的运行 ID（由调用方生成） */
+  runId?: string;
+  /** 本次执行的节点 trace（一次性执行时由 TraceCollector 生成） */
+  trace?: RunTrace;
 }

@@ -1,7 +1,9 @@
 import { createActor, type ActorRefFrom, type AnyStateMachine, type Snapshot, waitFor } from 'xstate';
+import type { RunTrace, RunTraceStatus } from '@purrchat/workflow-types';
 import type { Blueprint, ExecutionContext, ActorInput, UserMessageEvent } from './types.js';
 import { ExecutionStatus, type ExecuteResult } from './types.js';
 import type { Compiler } from './compiler.js';
+import { TraceCollector } from './trace-collector.js';
 
 /** 终态状态名，需与 compiler 保持一致 */
 const ERROR_STATE = '__error';
@@ -37,6 +39,8 @@ export interface ExecuteOptions {
   secrets?: Record<string, string>;
   /** 单次执行等待超时（毫秒），默认 30000 */
   timeoutMs?: number;
+  /** 调用方生成的 run_id，透传到 ExecuteResult */
+  runId?: string;
 }
 
 export interface SendMessageOptions {
@@ -46,6 +50,8 @@ export interface SendMessageOptions {
   time?: string;
   /** 单次发送等待超时（毫秒），默认 30000 */
   timeoutMs?: number;
+  /** 调用方生成的 run_id，透传到 ExecuteResult */
+  runId?: string;
 }
 
 export interface SessionState {
@@ -58,6 +64,8 @@ export interface SessionState {
   endConditions: ResolvedEndConditions;
   /** 并发锁：同一会话同时只处理一条消息 */
   busy: boolean;
+  /** 当前轮次的 trace collector */
+  traceCollector?: TraceCollector;
 }
 
 /**
@@ -67,6 +75,18 @@ export class WorkflowTimeoutError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'WorkflowTimeoutError';
+  }
+}
+
+/**
+ * 工作流执行出错时抛出，携带 trace 供上层持久化。
+ */
+export class WorkflowExecutionError extends Error {
+  trace?: RunTrace;
+  constructor(message: string, trace?: RunTrace) {
+    super(message);
+    this.name = 'WorkflowExecutionError';
+    this.trace = trace;
   }
 }
 
@@ -86,7 +106,16 @@ export class WorkflowRuntime {
     const machine = this.compiler.compile(blueprint);
     const waitNodeIds = this.extractWaitNodeIds(blueprint);
 
+    const runId = options.runId ?? crypto.randomUUID();
+    const traceCollector = new TraceCollector({
+      runId,
+      blueprint,
+      input: options.rawInput,
+      senderName: options.senderName,
+    });
+
     const actor = createActor(machine, { input: this.buildActorInput(options) });
+    traceCollector.attach(actor);
     actor.start();
 
     try {
@@ -98,20 +127,25 @@ export class WorkflowRuntime {
       const context = (snapshot as RuntimeSnapshot).context as ExecutionContext;
 
       if (status === ExecutionStatus.Error) {
-        throw new Error(context.lastError || 'Workflow execution failed');
+        const trace = traceCollector.buildRunTrace(context, 'error', context.finalReply);
+        throw new WorkflowExecutionError(context.lastError || 'Workflow execution failed', trace);
       }
       if (status === ExecutionStatus.Waiting) {
         // 一次性执行不允许暂停在 wait 节点
         throw new Error('Workflow paused at wait node; use a session-based execution instead');
       }
 
+      const trace = traceCollector.buildRunTrace(context, 'completed', context.finalReply);
       return {
         reply: context.finalReply ?? '',
         status: ExecutionStatus.Done,
         sessionActive: false,
         round: 1,
+        runId,
+        trace,
       };
     } finally {
+      traceCollector.detach();
       actor.stop();
     }
   }
@@ -162,6 +196,16 @@ export class WorkflowRuntime {
     }
     session.busy = true;
 
+    const runId = options.runId ?? crypto.randomUUID();
+    const traceCollector = new TraceCollector({
+      runId,
+      blueprint: session.blueprint,
+      input,
+      senderName: options.senderName,
+    });
+    traceCollector.attach(session.actor);
+    session.traceCollector = traceCollector;
+
     try {
       // 会话级超时检查
       if (this.isSessionTimedOut(session)) {
@@ -171,6 +215,7 @@ export class WorkflowRuntime {
           status: ExecutionStatus.Done,
           sessionActive: false,
           round: session.round,
+          runId,
         };
       }
 
@@ -205,24 +250,35 @@ export class WorkflowRuntime {
 
       if (status === ExecutionStatus.Error) {
         // 不伪装占位回复；返回空 reply，让上层决定是否记录/通知
+        const trace = traceCollector.buildRunTrace(context, 'error', '');
         return {
           reply: '',
           status: ExecutionStatus.Error,
           sessionActive: false,
           round: session.round,
+          runId,
+          trace,
         };
       }
 
+      const traceStatus: RunTraceStatus = shouldEnd ? 'completed' : 'running';
+      const trace = traceCollector.buildRunTrace(context, traceStatus, context.finalReply);
       return {
         reply: context.finalReply ?? '',
         status: shouldEnd ? ExecutionStatus.Done : status,
         sessionActive: !shouldEnd && status === ExecutionStatus.Waiting,
         round: session.round,
+        runId,
+        trace,
       };
     } finally {
       // 会话可能已被销毁
       const s = this.sessions.get(sessionId);
-      if (s) s.busy = false;
+      if (s) {
+        s.busy = false;
+        s.traceCollector?.detach();
+        s.traceCollector = undefined;
+      }
     }
   }
 
@@ -230,6 +286,7 @@ export class WorkflowRuntime {
   destroySession(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (session) {
+      session.traceCollector?.detach();
       try {
         session.actor.stop();
       } catch {
@@ -244,6 +301,15 @@ export class WorkflowRuntime {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
     return session.actor.getSnapshot() as RuntimeSnapshot;
+  }
+
+  /** 获取当前轮次的 RunTrace（如果 traceCollector 存在） */
+  getSessionTrace(sessionId: string): RunTrace | null {
+    const session = this.sessions.get(sessionId);
+    if (!session?.traceCollector) return null;
+    const snapshot = session.actor.getSnapshot() as RuntimeSnapshot;
+    const context = (snapshot?.context as ExecutionContext) ?? {} as ExecutionContext;
+    return session.traceCollector.buildRunTrace(context, 'completed', context.finalReply);
   }
 
   hasSession(sessionId: string): boolean {

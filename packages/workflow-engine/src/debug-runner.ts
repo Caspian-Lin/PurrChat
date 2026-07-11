@@ -32,6 +32,7 @@ import type {
 import { toBlueprint } from './validator.js';
 import { resolveSecrets } from './secrets.js';
 import { resolveTemplate } from './resolver.js';
+import { sanitizePorts } from './sanitize.js';
 
 /** 外部副作用节点类型 — mock 模式下返回预设数据 */
 const EXTERNAL_NODE_TYPES = new Set(['tool', 'dify', 'n8n', 'llm']);
@@ -260,7 +261,7 @@ export class DebugRunner {
     try {
       // 解析输入端口
       const ports = this.resolveNodeInputs(node.id, session.blueprint.connections, session.context);
-      trace.input = this.sanitizePorts(ports);
+      trace.input = sanitizePorts(ports);
 
       let output: NodeOutput;
 
@@ -292,7 +293,7 @@ export class DebugRunner {
       const endTime = Date.now();
       trace.endTime = endTime;
       trace.durationMs = endTime - startTime;
-      trace.output = this.sanitizePorts(output.ports);
+      trace.output = sanitizePorts(output.ports);
       trace.status = 'success';
 
       // if 节点记录分支
@@ -456,20 +457,6 @@ export class DebugRunner {
       }
     }
     return map;
-  }
-
-  /** 脱敏端口值：截断过长内容，遮蔽 secret */
-  private sanitizePorts(ports: Record<string, string>): Record<string, string> {
-    const result: Record<string, string> = {};
-    for (const [key, value] of Object.entries(ports)) {
-      const keyLower = key.toLowerCase();
-      if (keyLower.includes('secret') || keyLower.includes('api_key') || keyLower.includes('token') || keyLower.includes('password')) {
-        result[key] = '[REDACTED]';
-      } else {
-        result[key] = value.length > 500 ? value.slice(0, 500) + '...' : value;
-      }
-    }
-    return result;
   }
 
   private buildRunTrace(session: DebugSession): RunTrace {
