@@ -386,6 +386,7 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 
 // goFallbackProcess Go 引擎 fallback 路径：本地评估触发条件并执行
 // Deprecated: 仅在 TS 微服务不可用时使用，后续将完全迁移至 TS。
+//
 //nolint:unused // 保留至 #18 删除 Go 遗留
 func (e *BotEngine) goFallbackProcess(ctx context.Context, msg *BotMessage, bot *models.Bot) {
 	// 解析机制配置
@@ -459,6 +460,7 @@ func (e *BotEngine) isBotUser(ctx context.Context, userID uuid.UUID) bool {
 }
 
 // collectContextForMechanism 收集机制所需的上下文消息
+//
 //nolint:unused // 保留至 #18 删除 Go 遗留
 func (e *BotEngine) collectContextForMechanism(ctx context.Context, conversationID uuid.UUID, mech *Mechanism) []ContextMessage {
 	windowSize := 20
