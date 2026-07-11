@@ -13,7 +13,6 @@ services:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 10s
@@ -22,11 +21,29 @@ services:
     networks:
       - purrchat-network
 
+  backend-migrate:
+    build:
+      context: ../..
+      dockerfile: apps/backend/Dockerfile
+    command: ["/app/migrate", "up"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-purrchat}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - purrchat-network
+    restart: "no"
+
   # PurrChat 后端服务
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: apps/backend/Dockerfile
     container_name: purrchat-backend
     environment:
       # 服务器配置
@@ -53,8 +70,8 @@ services:
     volumes:
       - ./logs:/app/logs
     depends_on:
-      postgres:
-        condition: service_healthy
+      backend-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s

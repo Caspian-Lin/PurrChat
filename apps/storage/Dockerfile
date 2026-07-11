@@ -2,7 +2,7 @@
 FROM golang:1.24 AS builder
 
 # 设置工作目录
-WORKDIR /app
+WORKDIR /workspace/apps/storage
 
 # 安装必要的工具
 RUN apt-get update && apt-get install -y \
@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制go mod文件
-COPY go.mod go.sum ./
+COPY apps/storage/go.mod apps/storage/go.sum ./
+COPY packages/db-migrate /workspace/packages/db-migrate
 
 # 配置代理
 ENV GOPROXY=https://goproxy.cn,direct
@@ -21,13 +22,18 @@ ENV GOPROXY=https://goproxy.cn,direct
 RUN go mod download
 
 # 复制源代码
-COPY . .
+COPY apps/storage/ .
 
 # 构建应用
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s" \
     -o /app/bin/storage \
     ./cmd/server
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-w -s" \
+    -o /app/bin/migrate \
+    ./cmd/migrate
 
 # 运行阶段
 FROM ubuntu:24.04
@@ -51,6 +57,7 @@ WORKDIR /app
 
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/bin/storage /app/storage
+COPY --from=builder /app/bin/migrate /app/migrate
 
 # 创建必要的目录
 RUN mkdir -p /app/logs /app/migrations && \
@@ -58,7 +65,7 @@ RUN mkdir -p /app/logs /app/migrations && \
     chmod -R 755 /app/logs
 
 # 复制迁移文件
-COPY migrations/ /app/migrations/
+COPY --from=builder /workspace/apps/storage/migrations/ /app/migrations/
 
 # 切换到非root用户
 USER appuser

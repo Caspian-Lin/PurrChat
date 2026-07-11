@@ -1,12 +1,9 @@
 package main
 
 import (
-	"context"
 	"os"
 	"os/signal"
 	"reflect"
-	"sort"
-	"strings"
 	"syscall"
 	"time"
 
@@ -47,96 +44,7 @@ func registerUUIDValidator(v *validator.Validate) {
 	})
 }
 
-// runMigrate 执行数据库迁移
-func runMigrate() {
-	// 初始化日志（使用默认配置，输出到控制台）
-	logger.Init()
-
-	logger.Info("Running database migrations...")
-
-	// 初始化数据库连接
-	cfg := config.Load()
-	dsn := config.GetDSN(&cfg.DB)
-	if err := database.Init(dsn); err != nil {
-		logger.Error("Failed to connect to database:", err)
-		os.Exit(1)
-	}
-	defer database.Close()
-
-	// 读取 migrations 目录下的所有 SQL 文件
-	migrationDir := "migrations"
-	entries, err := os.ReadDir(migrationDir)
-	if err != nil {
-		logger.Error("Failed to read migrations directory:", err)
-		os.Exit(1)
-	}
-
-	// 收集所有 .sql 文件
-	var migrationFiles []string
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
-			migrationFiles = append(migrationFiles, entry.Name())
-		}
-	}
-
-	// 按文件名排序（确保按数字顺序执行）
-	sort.Strings(migrationFiles)
-
-	if len(migrationFiles) == 0 {
-		logger.Info("No migration files found in", migrationDir)
-		return
-	}
-
-	logger.Info("Found", len(migrationFiles), "migration file(s)")
-
-	// 执行所有迁移SQL文件
-	for _, fileName := range migrationFiles {
-		migrationPath := migrationDir + "/" + fileName
-		logger.Info("Executing migration:", migrationPath)
-
-		content, err := os.ReadFile(migrationPath)
-		if err != nil {
-			logger.Error("Failed to read migration file:", err)
-			os.Exit(1)
-		}
-
-		// 执行SQL（使用 IF NOT EXISTS 避免重复创建错误）
-		_, err = database.GetPool().Exec(context.Background(), string(content))
-		if err != nil {
-			// 检查是否是"已存在"错误，如果是则忽略
-			if isAlreadyExistsError(err) {
-				logger.Info("Migration skipped (already exists):", migrationPath)
-				continue
-			}
-			logger.Error("Failed to execute migration:", err)
-			os.Exit(1)
-		}
-
-		logger.Info("Migration completed successfully:", migrationPath)
-	}
-
-	logger.Info("All migrations completed successfully")
-}
-
-// isAlreadyExistsError 检查是否是"已存在"错误
-func isAlreadyExistsError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	// 检查常见的"已存在"错误模式
-	return strings.Contains(errStr, "already exists") ||
-		strings.Contains(errStr, "duplicate") ||
-		strings.Contains(errStr, "42P07") // PostgreSQL 错误码：relation already exists
-}
-
 func main() {
-	// 检查是否是migrate命令
-	if len(os.Args) > 1 && os.Args[1] == "migrate" {
-		runMigrate()
-		return
-	}
-
 	// 加载配置
 	cfg := config.Load()
 	config.Validate(cfg)

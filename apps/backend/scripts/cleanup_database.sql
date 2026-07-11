@@ -113,7 +113,7 @@ BEGIN
     RAISE NOTICE '现在可以运行迁移脚本：';
     RAISE NOTICE '  make migrate';
     RAISE NOTICE '或直接运行:';
-    RAISE NOTICE '  cd apps/backend && go run cmd/server/main.go migrate';
+    RAISE NOTICE '  cd apps/backend && go run ./cmd/migrate up';
     RAISE NOTICE '========================================';
 END $$;
 
