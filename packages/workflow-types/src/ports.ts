@@ -183,6 +183,7 @@ const DEFAULT_PORTS: Record<EventType, EventPort[]> = {
       ['out_exec', 'trigger', '执行'],
       ['out_output', 'string', '响应'],
       ['out_status', 'number', '状态码'],
+      ['out_error', 'string', '错误'],
     ]
   ),
   // Dify: external workflow
@@ -217,6 +218,7 @@ const DEFAULT_PORTS: Record<EventType, EventPort[]> = {
     [
       ['out_exec', 'trigger', '执行'],
       ['out_output', 'string', '输出'],
+      ['out_error', 'string', '错误'],
     ]
   ),
   builtin: ports(

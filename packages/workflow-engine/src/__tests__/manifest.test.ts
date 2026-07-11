@@ -54,9 +54,9 @@ describe('NODE_MANIFEST', () => {
     expect(entry?.productionReady).toBe(true);
   });
 
-  it('does not claim unverified external nodes are tested', () => {
+  it('publishes verified external nodes as tested', () => {
     for (const type of ['tool', 'dify', 'n8n', 'llm'] as const) {
-      expect(NODE_MANIFEST.find((entry) => entry.type === type)?.tested).toBe(false);
+      expect(NODE_MANIFEST.find((entry) => entry.type === type)?.tested).toBe(true);
     }
   });
 

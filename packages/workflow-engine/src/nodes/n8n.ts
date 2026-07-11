@@ -10,6 +10,7 @@ const n8nConfigSchema = z.object({
   auth_header_value: z.string().optional(),
   auth_username: z.string().optional(),
   auth_password: z.string().optional(),
+  timeout: z.number().optional().default(30000),
 });
 
 export const n8nNode: NodeDefinition<z.infer<typeof n8nConfigSchema>> = {
@@ -41,7 +42,7 @@ export const n8nNode: NodeDefinition<z.infer<typeof n8nConfigSchema>> = {
       const fetchOptions: RequestInit = {
         method,
         headers,
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(cfg.timeout || 30000),
       };
 
       if (method !== 'GET' && method !== 'HEAD' && body) {

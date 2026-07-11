@@ -121,8 +121,8 @@ export class Compiler {
         }
       }
 
-      // 解析 secrets.<name> 引用，注入实际解密值
-      const resolvedConfig = resolveSecrets(node.config, context.secrets);
+      // 解析 secrets.<name> 引用，注入实际解密值；注入 __nodeId__ 供节点内部使用
+      const resolvedConfig = { ...(resolveSecrets(node.config, context.secrets) as Record<string, unknown>), __nodeId__: node.id };
 
       const nodeInput = {
         ports: this.resolveNodeInputs(node.id, blueprint.connections, context),
