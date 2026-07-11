@@ -171,7 +171,7 @@ describe('DebugRunner', () => {
 
       const condNode = trace.nodes.find((n) => n.nodeType === 'if');
       expect(condNode!.status).toBe('success');
-      expect(condNode!.branch).toBe('true');
+      expect(condNode!.branch).toBe('out_true');
 
       const r1 = trace.nodes.find((n) => n.nodeName === '回复A');
       expect(r1!.status).toBe('success');
@@ -187,7 +187,7 @@ describe('DebugRunner', () => {
       });
 
       const condNode = trace.nodes.find((n) => n.nodeType === 'if');
-      expect(condNode!.branch).toBe('false');
+      expect(condNode!.branch).toBe('out_false');
 
       const r1 = trace.nodes.find((n) => n.nodeName === '回复A');
       expect(r1!.status).toBe('skip');
@@ -195,6 +195,37 @@ describe('DebugRunner', () => {
       const r2 = trace.nodes.find((n) => n.nodeName === '回复B');
       expect(r2!.status).toBe('success');
     });
+  });
+
+  it('按顺序走 else if 分支并跳过其它条件分支', async () => {
+    const document = makeDoc(
+      [
+        { id: 't', type: 'trigger', name: '触发' },
+        {
+          id: 'cond', type: 'if', name: '条件', config: {
+            branches: [
+              { conditions: [{ left: '${input.text}', operator: 'contains', right: 'hello' }], logic: 'and' },
+              { conditions: [{ left: '${input.text}', operator: 'contains', right: 'bye' }], logic: 'and' },
+            ],
+          },
+        },
+        { id: 'r1', type: 'reply', name: '如果', config: { template: 'hello' } },
+        { id: 'r2', type: 'reply', name: '否则如果', config: { template: 'bye' } },
+        { id: 'r3', type: 'reply', name: '否则', config: { template: 'other' } },
+      ],
+      [
+        { from: { nodeId: 't', portId: 'out_exec' }, to: { nodeId: 'cond', portId: 'in_exec' } },
+        { from: { nodeId: 'cond', portId: 'out_true' }, to: { nodeId: 'r1', portId: 'in_exec' } },
+        { from: { nodeId: 'cond', portId: 'out_elif_0' }, to: { nodeId: 'r2', portId: 'in_exec' } },
+        { from: { nodeId: 'cond', portId: 'out_false' }, to: { nodeId: 'r3', portId: 'in_exec' } },
+      ],
+    );
+
+    const trace = await runner.run({ document, message: 'bye' });
+    expect(trace.nodes.find((node) => node.nodeId === 'cond')?.branch).toBe('out_elif_0');
+    expect(trace.nodes.find((node) => node.nodeId === 'r1')?.status).toBe('skip');
+    expect(trace.nodes.find((node) => node.nodeId === 'r2')?.status).toBe('success');
+    expect(trace.nodes.find((node) => node.nodeId === 'r3')?.status).toBe('skip');
   });
 
   describe('mock side effects', () => {

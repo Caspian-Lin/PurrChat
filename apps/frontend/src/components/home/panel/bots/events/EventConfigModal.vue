@@ -64,37 +64,51 @@
 
           <!-- if 配置 -->
           <template v-if="form.type === 'if'">
-            <div class="form-group">
-              <label class="form-label">条件逻辑</label>
+            <div
+              v-for="(branch, branchIndex) in ifBranches"
+              :key="branchIndex"
+              class="form-group if-branch"
+            >
+              <div class="if-branch__header">
+                <label class="form-label">{{
+                  branchIndex === 0 ? '如果' : `否则如果 ${branchIndex}`
+                }}</label>
+                <button
+                  v-if="branchIndex > 0"
+                  class="port-remove-btn"
+                  type="button"
+                  :aria-label="`删除否则如果 ${branchIndex}`"
+                  @click="ifBranches.splice(branchIndex, 1)"
+                >
+                  &times;
+                </button>
+              </div>
               <div class="logic-toggle">
                 <button
                   class="logic-toggle__btn"
-                  :class="{ 'logic-toggle__btn--active': ifLogic === 'and' }"
+                  :class="{ 'logic-toggle__btn--active': branch.logic === 'and' }"
                   type="button"
-                  @click="ifLogic = 'and'"
+                  @click="branch.logic = 'and'"
                 >
                   AND（全部满足）
                 </button>
                 <button
                   class="logic-toggle__btn"
-                  :class="{ 'logic-toggle__btn--active': ifLogic === 'or' }"
+                  :class="{ 'logic-toggle__btn--active': branch.logic === 'or' }"
                   type="button"
-                  @click="ifLogic = 'or'"
+                  @click="branch.logic = 'or'"
                 >
                   OR（任一满足）
                 </button>
               </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">条件列表</label>
               <div class="if-conditions">
-                <div v-for="(cond, idx) in ifConditions" :key="idx" class="if-condition-row">
+                <div v-for="(cond, idx) in branch.conditions" :key="idx" class="if-condition-row">
                   <span class="if-condition-row__index">{{ idx + 1 }}</span>
                   <div class="if-condition-row__input-wrap">
                     <input
                       :ref="
                         (el: any) => {
-                          if (el) ifCondRefs[`${idx}-left`] = el;
+                          if (el) ifCondRefs[`${branchIndex}-${idx}-left`] = el;
                         }
                       "
                       v-model="cond.left"
@@ -106,7 +120,10 @@
                       class="var-insert-btn var-insert-btn--small"
                       type="button"
                       title="插入变量"
-                      @click="(e: MouseEvent) => openVarPicker(e, ifCondRefs[`${idx}-left`])"
+                      @click="
+                        (e: MouseEvent) =>
+                          openVarPicker(e, ifCondRefs[`${branchIndex}-${idx}-left`])
+                      "
                     >
                       {'{ }'}
                     </button>
@@ -124,7 +141,7 @@
                     <input
                       :ref="
                         (el: any) => {
-                          if (el) ifCondRefs[`${idx}-right`] = el;
+                          if (el) ifCondRefs[`${branchIndex}-${idx}-right`] = el;
                         }
                       "
                       v-model="cond.right"
@@ -136,16 +153,19 @@
                       class="var-insert-btn var-insert-btn--small"
                       type="button"
                       title="插入变量"
-                      @click="(e: MouseEvent) => openVarPicker(e, ifCondRefs[`${idx}-right`])"
+                      @click="
+                        (e: MouseEvent) =>
+                          openVarPicker(e, ifCondRefs[`${branchIndex}-${idx}-right`])
+                      "
                     >
                       {'{ }'}
                     </button>
                   </div>
                   <button
-                    v-if="ifConditions.length > 1"
+                    v-if="branch.conditions.length > 1"
                     class="port-remove-btn"
                     type="button"
-                    @click="ifConditions.splice(idx, 1)"
+                    @click="branch.conditions.splice(idx, 1)"
                   >
                     &times;
                   </button>
@@ -154,15 +174,27 @@
               <button
                 class="add-port-btn"
                 type="button"
-                @click="ifConditions.push({ left: '', operator: '==', right: '' })"
+                @click="branch.conditions.push({ left: '', operator: '==', right: '' })"
               >
                 + 添加条件
               </button>
-              <p class="form-hint">
-                条件值支持变量引用格式 <code>{'{节点名.端口名}'}</code>，点击输入框右侧的
-                <code>{'{ }'}</code> 按钮选择。
-              </p>
             </div>
+            <button
+              class="add-port-btn"
+              type="button"
+              @click="
+                ifBranches.push({
+                  logic: 'and',
+                  conditions: [{ left: '', operator: '==', right: '' }],
+                })
+              "
+            >
+              + 添加否则如果
+            </button>
+            <p class="form-hint">
+              条件按顺序匹配，首个命中分支执行；全部不匹配时走画布中的「否则」出口。条件值支持
+              <code>{'{节点名.端口名}'}</code> 变量引用。
+            </p>
           </template>
 
           <!-- loop 配置 -->
@@ -774,7 +806,7 @@ import { reactive, computed, watch, ref, nextTick } from 'vue';
 import { BsX } from 'vue-icons-plus/bs';
 import { useAiStore } from '../../../../../stores/ai';
 import { useAuthStore } from '../../../../../stores/auth';
-import { getDefaultPorts, type EventType } from '../../../../../utils/portTypes';
+import { getDefaultPorts, getPortsForConfig, type EventType } from '../../../../../utils/portTypes';
 import {
   generateNodeKey,
   type EventPort,
@@ -814,36 +846,39 @@ aiStore.initStore(authStore.currentUser?.id);
 // 名称验证错误
 const nameValidationError = ref('');
 
-// If 条件配置 — 使用 computed 双向绑定到 form.config.conditions
+// If 条件配置 — 新格式保存有序分支，读取时兼容旧的单组 conditions。
 const ifCondRefs = reactive<Record<string, HTMLInputElement>>({});
 
-const ifConditions = computed({
+type IfCondition = { left: string; operator: string; right: string };
+type IfBranch = { logic: 'and' | 'or'; conditions: IfCondition[] };
+
+const ifBranches = computed<IfBranch[]>({
   get: () => {
-    const raw = form.config.conditions;
-    if (Array.isArray(raw) && raw.length > 0)
-      return raw as { left: string; operator: string; right: string }[];
-    // 旧格式迁移：从 operator/left_default/right_default 转换
+    const branches = form.config.branches;
+    if (Array.isArray(branches) && branches.length > 0) return branches as IfBranch[];
     return [
       {
-        left: (form.config.left_default as string) || '',
-        operator: (form.config.operator as string) || '==',
-        right: (form.config.right_default as string) || '',
+        logic: ((form.config.logic as string) || 'and').toLowerCase() as IfBranch['logic'],
+        conditions:
+          Array.isArray(form.config.conditions) && form.config.conditions.length > 0
+            ? (form.config.conditions as IfCondition[])
+            : [
+                {
+                  left: (form.config.left_default as string) || '',
+                  operator: (form.config.operator as string) || '==',
+                  right: (form.config.right_default as string) || '',
+                },
+              ],
       },
     ];
   },
   set: (val) => {
-    form.config.conditions = val;
-    // 清理旧字段
+    form.config.branches = val;
+    delete form.config.conditions;
+    delete form.config.logic;
     delete form.config.operator;
     delete form.config.left_default;
     delete form.config.right_default;
-  },
-});
-
-const ifLogic = computed({
-  get: () => ((form.config.logic as string) || 'and').toLowerCase(),
-  set: (val) => {
-    form.config.logic = val;
   },
 });
 
@@ -959,7 +994,7 @@ function selectType(type: EventType) {
   form.type = type;
   form.config = getDefaultConfig(type);
   form.ports = getDefaultPorts(type);
-  form.name = PRODUCTION_NODE_MANIFEST.find((node) => node.type === type)?.label || type;
+  form.name = nextDefaultNodeName(type);
   customPorts.length = 0;
   nameValidationError.value = '';
 }
@@ -988,7 +1023,7 @@ function extractCustomPorts(
   event: WorkflowEvent
 ): { name: string; dataType: string; direction: 'input' | 'output' }[] {
   if (!event.ports) return [];
-  const defaultPorts = getDefaultPorts(event.type);
+  const defaultPorts = getPortsForConfig(event.type, event.config);
   const defaultIds = new Set(defaultPorts.map((p) => p.id));
   return event.ports
     .filter((p) => !defaultIds.has(p.id))
@@ -1008,6 +1043,7 @@ watch(
         ports: [...(props.editingEvent.ports || getDefaultPorts(props.editingEvent.type))],
         position: props.editingEvent.position ? { ...props.editingEvent.position } : undefined,
       });
+      normalizeIfConfig();
       // 恢复自定义端口
       customPorts.length = 0;
       const extracted = extractCustomPorts(props.editingEvent);
@@ -1018,16 +1054,40 @@ watch(
         id: `evt_${Date.now()}`,
         key: undefined,
         type,
-        name: '',
+        name: nextDefaultNodeName(type),
         config: getDefaultConfig(type),
         ports: getDefaultPorts(type),
         position: undefined,
       });
+      normalizeIfConfig();
       customPorts.length = 0;
     }
     nameValidationError.value = '';
   }
 );
+
+function normalizeIfConfig() {
+  if (
+    form.type !== 'if' ||
+    (Array.isArray(form.config.branches) && form.config.branches.length > 0)
+  )
+    return;
+  const branches = ifBranches.value;
+  form.config.branches = branches;
+  delete form.config.conditions;
+  delete form.config.logic;
+  delete form.config.operator;
+  delete form.config.left_default;
+  delete form.config.right_default;
+}
+
+function nextDefaultNodeName(type: EventType): string {
+  const label = PRODUCTION_NODE_MANIFEST.find((node) => node.type === type)?.label || type;
+  const existingNames = new Set(props.existingEvents.map((event) => event.name));
+  let index = 1;
+  while (existingNames.has(`${label}_${index}`)) index++;
+  return `${label}_${index}`;
+}
 
 function handleConfirm() {
   // 验证名称
@@ -1038,7 +1098,7 @@ function handleConfirm() {
   nameValidationError.value = '';
 
   // 合并默认端口和自定义端口
-  const defaultPorts = getDefaultPorts(form.type);
+  const defaultPorts = getPortsForConfig(form.type, form.config);
   const customEventPorts: EventPort[] = customPorts
     .filter((p) => p.name.trim())
     .map((p) => ({
@@ -1297,6 +1357,17 @@ function handleConfirm() {
 }
 
 /* ── If condition list ────────────────────────────────── */
+
+.if-branch__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.if-branch__header .form-label {
+  margin-bottom: 0;
+}
 
 .logic-toggle {
   display: flex;

@@ -132,19 +132,13 @@ func TestWorkflowAPI(t *testing.T) {
 		assert.True(t, len(resp.Issues) > 0)
 	})
 
-	t.Run("validate_rejects_nodes_not_ready_for_production", func(t *testing.T) {
+	t.Run("validate_accepts_production_ready_control_flow_nodes", func(t *testing.T) {
 		unsupported := strings.Replace(validDocument, `"type": "reply"`, `"type": "loop"`, 1)
 		resp, err := wfService.ValidateWorkflow(ctx, &models.ValidateWorkflowRequest{
 			Document: json.RawMessage(unsupported),
 		})
 		require.NoError(t, err)
-		assert.False(t, resp.Valid)
-		assert.Contains(t, resp.Issues, models.ValidationResultItem{
-			Level:   "error",
-			Code:    "node_not_production_ready",
-			Message: "节点类型尚未通过生产验证: loop",
-			Path:    "spec.nodes[1].type",
-		})
+		assert.True(t, resp.Valid)
 	})
 
 	t.Run("publish_workflow", func(t *testing.T) {

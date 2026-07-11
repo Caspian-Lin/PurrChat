@@ -22,6 +22,7 @@ import type {
 import {
   NODE_MANIFEST,
   getDefaultPorts,
+  getPortsForConfig,
   isPortCompatible,
   extractVariablePaths,
   parseNodeOutputPath,
@@ -83,6 +84,7 @@ export function validateWorkflowDocument(
 
   validateNodes(document, registry, issues);
   validateConnections(document, nodeMap, issues);
+  validateControlFlow(document, nodeMap, issues);
   validateVariableRefs(document, nodeMap, issues);
   detectCycles(document, issues);
   validateSecrets(document, issues);
@@ -277,8 +279,63 @@ function validateConnections(
 }
 
 function getEffectivePorts(node: WorkflowDocumentNode): EventPort[] {
+  if (node.type === 'if' || node.type === 'switch' || node.type === 'merge') {
+    return getPortsForConfig(node.type, node.config);
+  }
   if (node.ports && node.ports.length > 0) return node.ports;
   return getDefaultPorts(node.type);
+}
+
+function validateControlFlow(
+  doc: WorkflowDocument,
+  nodeMap: Map<string, WorkflowDocumentNode>,
+  issues: ValidationIssue[],
+): void {
+  for (const node of doc.spec.nodes) {
+    if (node.type === 'switch') {
+      const cases = Array.isArray(node.config.cases) ? node.config.cases : [];
+      const values = new Set<string>();
+      for (const [index, item] of cases.entries()) {
+        const value = typeof item === 'object' && item ? (item as { value?: unknown }).value : undefined;
+        if (typeof value !== 'string' || !value.trim()) {
+          issues.push(err('switch_case_value_required', `Switch 分支 ${index + 1} 必须设置匹配值`, undefined, node.id));
+        } else if (values.has(value)) {
+          issues.push(err('switch_case_value_duplicate', `Switch 分支匹配值重复: ${value}`, undefined, node.id));
+        } else {
+          values.add(value);
+        }
+      }
+      if (!hasOutputConnection(doc, node.id, 'out_default')) {
+        issues.push(err('switch_default_missing', 'Switch 必须连接默认分支', undefined, node.id));
+      }
+    }
+
+    if (node.type === 'merge') {
+      for (const port of getEffectivePorts(node).filter((port) => port.direction === 'input')) {
+        const arrivals = doc.spec.connections.filter(
+          (connection) => connection.targetNodeId === node.id && connection.targetPortId === port.id,
+        );
+        if (arrivals.length !== 1) {
+          issues.push(err('merge_input_invalid', `Merge 输入 ${port.name} 必须恰好连接一次`, undefined, node.id));
+        }
+      }
+    }
+
+    if (node.type === 'loop') {
+      const bodyConnections = doc.spec.connections.filter(
+        (connection) => connection.sourceNodeId === node.id && connection.sourcePortId === 'out_body',
+      );
+      if (bodyConnections.length !== 1) {
+        issues.push(err('loop_body_invalid', 'Loop 循环体必须恰好连接一次', undefined, node.id));
+      }
+    }
+  }
+}
+
+function hasOutputConnection(doc: WorkflowDocument, nodeId: string, portId: string): boolean {
+  return doc.spec.connections.some(
+    (connection) => connection.sourceNodeId === nodeId && connection.sourcePortId === portId,
+  );
 }
 
 // ─── 环路检测（DFS） ───────────────────────────────────────────
@@ -287,6 +344,7 @@ function detectCycles(doc: WorkflowDocument, issues: ValidationIssue[]): void {
   const adj = new Map<string, string[]>();
   for (const node of doc.spec.nodes) adj.set(node.id, []);
   for (const conn of doc.spec.connections) {
+    if (isLegalLoopBackEdge(doc, conn)) continue;
     const neighbors = adj.get(conn.sourceNodeId);
     if (neighbors) neighbors.push(conn.targetNodeId);
   }
@@ -303,6 +361,34 @@ function detectCycles(doc: WorkflowDocument, issues: ValidationIssue[]): void {
       }
     }
   }
+}
+
+/** Only a path originating at Loop.out_body may close a Loop.in_exec cycle. */
+function isLegalLoopBackEdge(doc: WorkflowDocument, candidate: FlowConnection): boolean {
+  const target = doc.spec.nodes.find((node) => node.id === candidate.targetNodeId);
+  if (target?.type !== 'loop' || candidate.targetPortId !== 'in_exec' || candidate.sourceNodeId === target.id) {
+    return false;
+  }
+
+  const bodyTargets = doc.spec.connections
+    .filter((connection) => connection.sourceNodeId === target.id && connection.sourcePortId === 'out_body')
+    .map((connection) => connection.targetNodeId);
+  const visited = new Set<string>();
+  const queue = [...bodyTargets];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current === candidate.sourceNodeId) return true;
+    if (current === target.id || visited.has(current)) continue;
+    visited.add(current);
+    for (const connection of doc.spec.connections) {
+      if (connection.id !== candidate.id && connection.sourceNodeId === current) {
+        queue.push(connection.targetNodeId);
+      }
+    }
+  }
+
+  return false;
 }
 
 function dfsVisit(

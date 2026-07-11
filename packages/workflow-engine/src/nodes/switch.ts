@@ -30,8 +30,7 @@ export const switchNode: NodeDefinition<z.infer<typeof switchConfigSchema>> = {
 
     // 返回分支标记，由编译器处理跳转
     const ports: Record<string, string> = {
-      out_exec: 'true',
-      __switch_match__: matchedIndex >= 0 ? String(matchedIndex) : 'default',
+      __branch__: matchedIndex >= 0 ? `out_case_${matchedIndex}` : 'out_default',
     };
 
     // 生成每个 case 的输出端口
