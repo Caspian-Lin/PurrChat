@@ -173,7 +173,10 @@ func (c *Client) readPump() {
 	defer func() {
 		c.close(CloseNormal, "connection closed")
 		if c.hub != nil {
-			c.hub.unregister <- c
+			select {
+			case c.hub.unregister <- c:
+			default:
+			}
 		}
 	}()
 

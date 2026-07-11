@@ -142,7 +142,7 @@ func NewHub(cfg HubConfig) *Hub {
 		userClients:       make(map[uuid.UUID][]*Client),
 		userDeviceClients: make(map[uuid.UUID]map[DeviceType][]*Client),
 		register:          make(chan *Client, 64),
-		unregister:        make(chan *Client, 256),
+		unregister:        make(chan *Client, 512),
 		broadcast:         make(chan []byte, 256),
 		privateMessage:    make(chan *PrivateMessage, 256),
 		config:            cfg,
