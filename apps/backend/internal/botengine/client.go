@@ -52,14 +52,15 @@ type ExecuteRequest struct {
 
 // ExecuteResponse 执行响应
 type ExecuteResponse struct {
-	Reply         string `json:"reply"`
-	SessionActive bool   `json:"session_active"`
-	SessionID     string `json:"session_id,omitempty"`
-	Triggered     bool   `json:"triggered"`
-	MechanismID   string `json:"mechanism_id,omitempty"`
-	MechanismName string `json:"mechanism_name,omitempty"`
-	ReplyType     string `json:"reply_type,omitempty"`
-	ExecutionMs   int    `json:"execution_ms,omitempty"`
+	RunID         string          `json:"run_id"`
+	Reply         string          `json:"reply"`
+	SessionActive bool            `json:"session_active"`
+	SessionID     string          `json:"session_id,omitempty"`
+	Triggered     bool            `json:"triggered"`
+	ExecutionMs   int             `json:"execution_ms,omitempty"`
+	Revision      int             `json:"revision,omitempty"`
+	Status        string          `json:"status"`
+	Trace         json.RawMessage `json:"trace,omitempty"`
 }
 
 // Execute 调用 TS 服务执行消息处理

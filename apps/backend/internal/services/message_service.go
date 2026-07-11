@@ -219,6 +219,7 @@ func (s *MessageService) SendMessage(ctx context.Context, senderID string, req *
 			Content:        req.Content,
 			MsgType:        req.MsgType,
 			CreatedAt:      message.CreatedAt,
+			MessageID:      message.ID,
 		})
 	}
 
