@@ -3,7 +3,7 @@
 
 export { NodeRegistry } from './registry.js';
 export { Compiler } from './compiler.js';
-export { WorkflowRuntime } from './runtime.js';
+export { WorkflowRuntime, WorkflowTimeoutError, WorkflowExecutionError } from './runtime.js';
 export { resolveInputPorts, replaceVariables, evaluateCondition } from './ports.js';
 export type { VariableResolveContext } from './ports.js';
 export { resolveTemplate } from './resolver.js';
@@ -18,6 +18,8 @@ export type { ValidationResult, ValidationIssue, ValidationLevel } from './valid
 
 // Debug Runner
 export { DebugRunner } from './debug-runner.js';
+export { sanitizePorts } from './sanitize.js';
+export { TraceCollector } from './trace-collector.js';
 
 // YAML / JSON 往返
 export {

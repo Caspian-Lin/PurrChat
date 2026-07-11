@@ -1,4 +1,4 @@
-import type { WorkflowDocument } from '@purrchat/workflow-types';
+import type { WorkflowDocument, RunTrace, RunTraceStatus } from '@purrchat/workflow-types';
 import type { DebugBotRequest } from '@purrchat/workflow-types';
 
 // ─── 执行请求/响应 ───────────────────────────────────────────
@@ -21,14 +21,15 @@ export interface ExecuteRequest {
 }
 
 export interface ExecuteResponse {
+  run_id: string;
   reply: string;
   session_active: boolean;
   session_id?: string;
   triggered: boolean;
-  mechanism_id?: string;
-  mechanism_name?: string;
-  reply_type?: string;
   execution_ms?: number;
+  revision?: number;
+  status: RunTraceStatus;
+  trace?: RunTrace;
 }
 
 // ─── 调试请求/响应 ───────────────────────────────────────────

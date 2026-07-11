@@ -69,6 +69,7 @@ func SetupTestDB(t *testing.T) {
 // CreateTestTables 创建测试表
 func CreateTestTables(t *testing.T, ctx context.Context) {
 	tables := []string{
+		"bot_call_logs",
 		"workflow_versions",
 		"bot_app_secrets",
 		"bot_deployments",
@@ -311,6 +312,45 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create workflow_versions table: %v", err)
+	}
+
+	// 创建 bot_call_logs 表(见 migration 004 + 011)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_call_logs (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+			sender_id UUID NOT NULL,
+			sender_name VARCHAR(40) NOT NULL DEFAULT '',
+			trigger_message TEXT NOT NULL,
+			reply_content TEXT,
+			mechanism_id VARCHAR(100) NOT NULL DEFAULT '',
+			mechanism_name VARCHAR(100) NOT NULL DEFAULT '',
+			reply_type VARCHAR(20) NOT NULL DEFAULT '',
+			execution_path VARCHAR(10) NOT NULL DEFAULT 'ts',
+			success BOOLEAN NOT NULL DEFAULT TRUE,
+			error_message TEXT,
+			duration_ms INTEGER NOT NULL DEFAULT 0,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			run_id VARCHAR(64) NOT NULL DEFAULT '',
+			trigger_message_id UUID,
+			reply_message_id UUID,
+			workflow_revision INTEGER,
+			run_status VARCHAR(20) NOT NULL DEFAULT '',
+			error_type VARCHAR(60) NOT NULL DEFAULT '',
+			trace JSONB
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_call_logs table: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_bot_call_logs_bot_id ON bot_call_logs (bot_id, created_at DESC)`)
+	if err != nil {
+		t.Logf("Warning: Failed to create bot_call_logs index: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_bot_call_logs_bot_conv ON bot_call_logs (bot_id, conversation_id, created_at DESC)`)
+	if err != nil {
+		t.Logf("Warning: Failed to create bot_call_logs conv index: %v", err)
 	}
 
 	// 创建user_settings表
@@ -683,6 +723,7 @@ func CleanupTestTables(t *testing.T) {
 	}
 
 	tables := []string{
+		"bot_call_logs",
 		"workflow_versions",
 		"bot_app_secrets",
 		"bot_deployments",

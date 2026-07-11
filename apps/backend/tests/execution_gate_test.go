@@ -51,9 +51,24 @@ func (m *mockTSHandler) handler() http.HandlerFunc {
 
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
+				"run_id":         "test-run-id-12345",
 				"reply":          m.replyText,
 				"triggered":      true,
 				"session_active": false,
+				"status":         "completed",
+				"execution_ms":   42,
+				"revision":       1,
+				"trace": map[string]any{
+					"runId":  "test-run-id-12345",
+					"status": "completed",
+					"nodes": []map[string]any{
+						{"nodeId": "n1", "nodeType": "trigger", "status": "success"},
+						{"nodeId": "n2", "nodeType": "reply", "status": "success"},
+						{"nodeId": "n3", "nodeType": "end", "status": "success"},
+					},
+					"startedAt":   1700000000000,
+					"completedAt": 1700000000042,
+				},
 			})
 			return
 		}
@@ -178,9 +193,11 @@ func TestExecutionGate_ActiveInstallation_ExecutesWithPublishedDocument(t *testi
 	tsServer := httptest.NewServer(http.HandlerFunc(mock.handler()))
 	defer tsServer.Close()
 
+	callLogRepo := repository.NewBotCallLogRepository()
 	engine := botengine.NewBotEngine(nil, env.botRepo, env.msgRepo, env.enrollRepo, tsServer.URL)
 	engine.SetWorkflowRepo(env.wfRepo)
 	engine.SetInstallationRepo(env.instRepo)
+	engine.SetCallLogRepo(callLogRepo)
 
 	require.NoError(t, env.instRepo.Create(ctx, &models.BotInstallation{
 		AppID:               env.botID,
@@ -189,8 +206,10 @@ func TestExecutionGate_ActiveInstallation_ExecutesWithPublishedDocument(t *testi
 		TargetID:            env.senderID,
 		Status:              models.InstallationActive,
 		GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
+		DiagnosticsConsent:  models.DiagnosticsGranted,
 	}))
 
+	triggerMsgID := uuid.New()
 	engine.OnMessage(ctx, &botengine.BotMessage{
 		ConversationID: env.conversationID,
 		SenderID:       env.senderID,
@@ -198,6 +217,7 @@ func TestExecutionGate_ActiveInstallation_ExecutesWithPublishedDocument(t *testi
 		Content:        "hello",
 		MsgType:        "text",
 		CreatedAt:      time.Now(),
+		MessageID:      triggerMsgID,
 	})
 
 	time.Sleep(500 * time.Millisecond)
@@ -211,14 +231,34 @@ func TestExecutionGate_ActiveInstallation_ExecutesWithPublishedDocument(t *testi
 
 	msgs, err := env.msgRepo.FindMessages(ctx, env.conversationID, 10, 0)
 	require.NoError(t, err)
+	var replyMsgID *uuid.UUID
 	found := false
 	for _, m := range msgs {
 		if m.BotID != nil && *m.BotID == env.botID {
 			assert.Equal(t, "bot-reply", m.Content)
 			found = true
+			id := m.ID
+			replyMsgID = &id
 		}
 	}
 	assert.True(t, found, "bot reply should be persisted")
+
+	logs, err := callLogRepo.FindAllByBotID(ctx, env.botID, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, logs, 1, "should have exactly one call log")
+
+	log := logs[0]
+	assert.Equal(t, "test-run-id-12345", log.RunID, "call log should have run_id from TS response")
+	require.NotNil(t, log.TriggerMessageID, "call log should have trigger_message_id")
+	assert.Equal(t, triggerMsgID, *log.TriggerMessageID, "call log trigger_message_id should match")
+	if replyMsgID != nil {
+		require.NotNil(t, log.ReplyMessageID, "call log should have reply_message_id")
+		assert.Equal(t, *replyMsgID, *log.ReplyMessageID, "call log reply_message_id should match persisted message ID")
+	}
+	assert.Equal(t, "completed", log.RunStatus, "call log should have completed status")
+	require.NotNil(t, log.WorkflowRevision, "call log should have workflow revision")
+	assert.Equal(t, 1, *log.WorkflowRevision, "call log should have workflow revision 1")
+	assert.NotNil(t, log.Trace, "call log should have trace data")
 }
 
 func TestExecutionGate_PausedInstallation_DoesNotExecute(t *testing.T) {
@@ -428,4 +468,135 @@ func TestExecutionGate_DraftModificationDoesNotAffectExecution(t *testing.T) {
 	metadata := doc["metadata"].(map[string]any)
 	assert.EqualValues(t, 1, metadata["revision"], "should use published revision 1, not draft revision 99")
 	assert.EqualValues(t, 1, req["revision"])
+}
+
+func TestExecutionGate_TSUnavailable_LogsErrorType(t *testing.T) {
+	env := setupExecutionTestEnv(t)
+	defer CleanupTestDB(t)
+
+	ctx := context.Background()
+
+	mock := &mockTSHandler{replyText: "bot-reply", available: false}
+	tsServer := httptest.NewServer(http.HandlerFunc(mock.handler()))
+	defer tsServer.Close()
+
+	callLogRepo := repository.NewBotCallLogRepository()
+	engine := botengine.NewBotEngine(nil, env.botRepo, env.msgRepo, env.enrollRepo, tsServer.URL)
+	engine.SetWorkflowRepo(env.wfRepo)
+	engine.SetInstallationRepo(env.instRepo)
+	engine.SetCallLogRepo(callLogRepo)
+
+	require.NoError(t, env.instRepo.Create(ctx, &models.BotInstallation{
+		AppID:               env.botID,
+		InstalledBy:         env.senderID,
+		TargetType:          models.InstallationTargetUser,
+		TargetID:            env.senderID,
+		Status:              models.InstallationActive,
+		GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
+	}))
+
+	engine.OnMessage(ctx, &botengine.BotMessage{
+		ConversationID: env.conversationID,
+		SenderID:       env.senderID,
+		Content:        "hello",
+		MsgType:        "text",
+		CreatedAt:      time.Now(),
+	})
+
+	time.Sleep(500 * time.Millisecond)
+
+	logs, err := callLogRepo.FindAllByBotID(ctx, env.botID, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, logs, 1)
+	assert.Equal(t, models.RunStatusError, logs[0].RunStatus)
+	assert.Equal(t, "ts_unavailable", logs[0].ErrorType)
+	assert.False(t, logs[0].Success)
+}
+
+func TestExecutionGate_NoPublishedVersion_LogsErrorType(t *testing.T) {
+	env := setupExecutionTestEnv(t)
+	defer CleanupTestDB(t)
+
+	ctx := context.Background()
+
+	_, err := database.GetPool().Exec(ctx, "UPDATE bots SET published_version = NULL WHERE id = $1", env.botID)
+	require.NoError(t, err)
+
+	mock := &mockTSHandler{replyText: "bot-reply", available: true}
+	tsServer := httptest.NewServer(http.HandlerFunc(mock.handler()))
+	defer tsServer.Close()
+
+	callLogRepo := repository.NewBotCallLogRepository()
+	engine := botengine.NewBotEngine(nil, env.botRepo, env.msgRepo, env.enrollRepo, tsServer.URL)
+	engine.SetWorkflowRepo(env.wfRepo)
+	engine.SetInstallationRepo(env.instRepo)
+	engine.SetCallLogRepo(callLogRepo)
+
+	require.NoError(t, env.instRepo.Create(ctx, &models.BotInstallation{
+		AppID:               env.botID,
+		InstalledBy:         env.senderID,
+		TargetType:          models.InstallationTargetUser,
+		TargetID:            env.senderID,
+		Status:              models.InstallationActive,
+		GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
+	}))
+
+	engine.OnMessage(ctx, &botengine.BotMessage{
+		ConversationID: env.conversationID,
+		SenderID:       env.senderID,
+		Content:        "hello",
+		MsgType:        "text",
+		CreatedAt:      time.Now(),
+	})
+
+	time.Sleep(500 * time.Millisecond)
+
+	logs, err := callLogRepo.FindAllByBotID(ctx, env.botID, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, logs, 1)
+	assert.Equal(t, models.RunStatusError, logs[0].RunStatus)
+	assert.Equal(t, "no_published_version", logs[0].ErrorType)
+}
+
+func TestExecutionGate_DiagnosticsDenied_ClearsTraceAndTrigger(t *testing.T) {
+	env := setupExecutionTestEnv(t)
+	defer CleanupTestDB(t)
+
+	ctx := context.Background()
+
+	mock := &mockTSHandler{replyText: "bot-reply", available: true}
+	tsServer := httptest.NewServer(http.HandlerFunc(mock.handler()))
+	defer tsServer.Close()
+
+	callLogRepo := repository.NewBotCallLogRepository()
+	engine := botengine.NewBotEngine(nil, env.botRepo, env.msgRepo, env.enrollRepo, tsServer.URL)
+	engine.SetWorkflowRepo(env.wfRepo)
+	engine.SetInstallationRepo(env.instRepo)
+	engine.SetCallLogRepo(callLogRepo)
+
+	require.NoError(t, env.instRepo.Create(ctx, &models.BotInstallation{
+		AppID:               env.botID,
+		InstalledBy:         env.senderID,
+		TargetType:          models.InstallationTargetUser,
+		TargetID:            env.senderID,
+		Status:              models.InstallationActive,
+		GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
+		DiagnosticsConsent:  models.DiagnosticsDenied,
+	}))
+
+	engine.OnMessage(ctx, &botengine.BotMessage{
+		ConversationID: env.conversationID,
+		SenderID:       env.senderID,
+		Content:        "sensitive content",
+		MsgType:        "text",
+		CreatedAt:      time.Now(),
+	})
+
+	time.Sleep(500 * time.Millisecond)
+
+	logs, err := callLogRepo.FindAllByBotID(ctx, env.botID, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, logs, 1)
+	assert.Empty(t, logs[0].TriggerMessage, "trigger_message should be empty when consent denied")
+	assert.Nil(t, logs[0].Trace, "trace should be nil when consent denied")
 }

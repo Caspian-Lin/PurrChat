@@ -109,12 +109,13 @@ func (e *BotEngine) recordCallLog(ctx context.Context, log *models.BotCallLog) {
 	log.CreatedAt = time.Now().UTC()
 
 	// 按 diagnostics_consent 决定是否记录消息内容
-	// denied(默认):清空 trigger_message,只记执行元数据
-	// granted:记录触发消息原文
+	// denied(默认):清空 trigger_message 和 trace 正文,只记执行元数据
+	// granted:记录触发消息原文和完整 trace
 	if e.installationRepo != nil {
 		consent := e.resolveDiagnosticsConsent(ctx, log.BotID, log.ConversationID, log.SenderID)
 		if consent != models.DiagnosticsGranted {
 			log.TriggerMessage = ""
+			log.Trace = nil
 		}
 	}
 
@@ -208,6 +209,7 @@ type BotMessage struct {
 	Content        string
 	MsgType        string
 	CreatedAt      time.Time
+	MessageID      uuid.UUID
 }
 
 // OnMessage 处理入站消息，异步评估并触发 Bot 回复
@@ -287,6 +289,8 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 				ExecutionPath:  "ts",
 				Success:        false,
 				ErrorMessage:   "no published workflow version",
+				RunStatus:      models.RunStatusError,
+				ErrorType:      "no_published_version",
 			})
 			continue
 		}
@@ -308,6 +312,8 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 				ExecutionPath:  "ts",
 				Success:        false,
 				ErrorMessage:   fmt.Sprintf("failed to load published revision %d: %v", *bot.PublishedVersion, err),
+				RunStatus:      models.RunStatusError,
+				ErrorType:      "version_load_failed",
 			})
 			continue
 		}
@@ -324,6 +330,8 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 				ExecutionPath:  "ts",
 				Success:        false,
 				ErrorMessage:   "bot-engine service unavailable",
+				RunStatus:      models.RunStatusError,
+				ErrorType:      "ts_unavailable",
 			})
 			continue
 		}
@@ -344,41 +352,69 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 		execResp, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, version.Document, version.Revision, contextMsgs, grantedCaps, secrets)
 		duration := time.Since(start)
 
+		// 准备触发消息 ID
+		var triggerMsgID *uuid.UUID
+		if msg.MessageID != uuid.Nil {
+			id := msg.MessageID
+			triggerMsgID = &id
+		}
+
 		if tsErr == nil {
-			logger.InfofWithCaller("[BotEngine] TS bot=%s triggered=%v revision=%d reply=%q sessionActive=%v ms=%d",
-				bot.Name, execResp.Triggered, version.Revision,
+			logger.InfofWithCaller("[BotEngine] TS bot=%s runId=%s triggered=%v revision=%d reply=%q sessionActive=%v ms=%d",
+				bot.Name, execResp.RunID, execResp.Triggered, version.Revision,
 				truncateStr(execResp.Reply, 50), execResp.SessionActive, int(duration.Milliseconds()))
 
-			e.recordCallLog(ctx, &models.BotCallLog{
-				BotID:          bot.ID,
-				ConversationID: msg.ConversationID,
-				SenderID:       msg.SenderID,
-				SenderName:     msg.SenderName,
-				TriggerMessage: msg.Content,
-				ReplyContent:   truncateStr(execResp.Reply, 500),
-				MechanismID:    execResp.MechanismID,
-				MechanismName:  execResp.MechanismName,
-				ReplyType:      execResp.ReplyType,
-				ExecutionPath:  "ts",
-				Success:        true,
-				DurationMs:     int(duration.Milliseconds()),
-			})
-
-			if execResp.Reply != "" {
-				e.sendBotReply(ctx, bot, msg.ConversationID, execResp.Reply)
+			runStatus := models.RunStatusCompleted
+			if execResp.Status == "error" {
+				runStatus = models.RunStatusError
 			}
+
+			// 1. 先持久化 Bot 回复获得 message ID
+			var replyMsgID *uuid.UUID
+			if execResp.Reply != "" {
+				replyMsg := e.persistBotReply(ctx, bot, msg.ConversationID, execResp.Reply)
+				if replyMsg != nil {
+					id := replyMsg.ID
+					replyMsgID = &id
+					// 2. 用同一 ID 广播 WebSocket（携带 run_id）
+					e.broadcastBotReply(ctx, bot, msg.ConversationID, replyMsg, execResp.RunID)
+				}
+			}
+
+			// 3. 补全运行记录（带 run_id、trigger/reply message ID、trace）
+			e.recordCallLog(ctx, &models.BotCallLog{
+				BotID:            bot.ID,
+				ConversationID:   msg.ConversationID,
+				SenderID:         msg.SenderID,
+				SenderName:       msg.SenderName,
+				TriggerMessage:   msg.Content,
+				ReplyContent:     truncateStr(execResp.Reply, 500),
+				ExecutionPath:    "ts",
+				Success:          execResp.Status != "error",
+				DurationMs:       int(duration.Milliseconds()),
+				RunID:            execResp.RunID,
+				TriggerMessageID: triggerMsgID,
+				ReplyMessageID:   replyMsgID,
+				WorkflowRevision: &version.Revision,
+				RunStatus:        runStatus,
+				Trace:            execResp.Trace,
+			})
 		} else {
 			logger.ErrorfWithCaller("[BotEngine] TS failed bot=%s error=%v", bot.Name, tsErr)
 			e.recordCallLog(ctx, &models.BotCallLog{
-				BotID:          bot.ID,
-				ConversationID: msg.ConversationID,
-				SenderID:       msg.SenderID,
-				SenderName:     msg.SenderName,
-				TriggerMessage: msg.Content,
-				ExecutionPath:  "ts",
-				Success:        false,
-				ErrorMessage:   tsErr.Error(),
-				DurationMs:     int(duration.Milliseconds()),
+				BotID:            bot.ID,
+				ConversationID:   msg.ConversationID,
+				SenderID:         msg.SenderID,
+				SenderName:       msg.SenderName,
+				TriggerMessage:   msg.Content,
+				ExecutionPath:    "ts",
+				Success:          false,
+				ErrorMessage:     tsErr.Error(),
+				DurationMs:       int(duration.Milliseconds()),
+				TriggerMessageID: triggerMsgID,
+				WorkflowRevision: &version.Revision,
+				RunStatus:        models.RunStatusError,
+				ErrorType:        "ts_execution_error",
 			})
 		}
 	}
@@ -515,15 +551,14 @@ func (e *BotEngine) collectContextMessages(ctx context.Context, conversationID u
 	return contextMessages
 }
 
-// sendBotReply 发送 Bot 回复到会话
-func (e *BotEngine) sendBotReply(ctx context.Context, bot *models.Bot, conversationID uuid.UUID, content string) {
-	// Bot 现在是真实用户，sender_id 使用 bot.ID（等于 users 表中的 id）
+// persistBotReply 持久化 Bot 回复消息到数据库，返回创建的 Message
+func (e *BotEngine) persistBotReply(ctx context.Context, bot *models.Bot, conversationID uuid.UUID, content string) *models.Message {
 	botID := bot.ID
 	botName := bot.Name
 	message := &models.Message{
 		ID:             uuid.New(),
 		ConversationID: conversationID,
-		SenderID:       bot.ID, // Bot 的 user_id
+		SenderID:       bot.ID,
 		Content:        content,
 		MsgType:        models.MsgTypeText,
 		CreatedAt:      time.Now().UTC(),
@@ -531,41 +566,57 @@ func (e *BotEngine) sendBotReply(ctx context.Context, bot *models.Bot, conversat
 		BotName:        &botName,
 	}
 
-	// 插入消息
 	err := e.messageRepo.InsertMessage(ctx, conversationID, message)
 	if err != nil {
 		logger.ErrorfWithCaller("[BotEngine] Failed to insert bot message: %v", err)
+		return nil
+	}
+	return message
+}
+
+// broadcastBotReply 通过 WebSocket 通知会话成员
+func (e *BotEngine) broadcastBotReply(ctx context.Context, bot *models.Bot, conversationID uuid.UUID, message *models.Message, runID string) {
+	if websocket.GlobalHub == nil {
 		return
 	}
+	members, err := e.enrollmentRepo.FindByConversationID(ctx, conversationID)
+	if err != nil {
+		logger.ErrorfWithCaller("[BotEngine] Failed to find conversation members for broadcast: %v", err)
+		return
+	}
+	for _, m := range members {
+		websocket.GlobalHub.SendToUser(m.UserID, "new_message", map[string]any{
+			"id":              message.ID.String(),
+			"conversation_id": conversationID.String(),
+			"sender_id":       message.SenderID.String(),
+			"content":         message.Content,
+			"msg_type":        "text",
+			"created_at":      formatMessageCreatedAt(message.CreatedAt),
+			"sender": map[string]any{
+				"id":         bot.ID.String(),
+				"username":   bot.Name,
+				"avatar_url": bot.AvatarURL,
+				"is_bot":     true,
+			},
+			"bot_id":   bot.ID.String(),
+			"bot_name": bot.Name,
+			"run_id":   runID,
+		})
+	}
 
-	// 通过 WebSocket 通知所有会话成员
-	if websocket.GlobalHub != nil {
-		members, err := e.enrollmentRepo.FindByConversationID(ctx, conversationID)
-		if err == nil {
-			for _, m := range members {
-				websocket.GlobalHub.SendToUser(m.UserID, "new_message", map[string]any{
-					"id":              message.ID.String(),
-					"conversation_id": conversationID.String(),
-					"sender_id":       message.SenderID.String(),
-					"content":         content,
-					"msg_type":        "text",
-					"created_at":      formatMessageCreatedAt(message.CreatedAt),
-					"sender": map[string]any{
-						"id":         bot.ID.String(),
-						"username":   bot.Name,
-						"avatar_url": bot.AvatarURL,
-						"is_bot":     true,
-					},
-					"bot_id":   bot.ID.String(),
-					"bot_name": bot.Name,
-				})
-			}
-		}
+	previewContent := message.Content
+	if len(previewContent) > 50 {
+		previewContent = previewContent[:50] + "..."
+	}
+	logger.InfofWithCaller("[BotEngine] Bot %s replied to conversation %s: %s", bot.Name, conversationID, previewContent)
+}
 
-		previewContent := content
-		if len(previewContent) > 50 {
-			previewContent = previewContent[:50] + "..."
-		}
-		logger.InfofWithCaller("[BotEngine] Bot %s replied to conversation %s: %s", bot.Name, conversationID, previewContent)
+// sendBotReply 持久化并广播 Bot 回复（向后兼容旧调用方）
+//
+//nolint:unused // 保留至 #18 删除 Go 遗留
+func (e *BotEngine) sendBotReply(ctx context.Context, bot *models.Bot, conversationID uuid.UUID, content string) {
+	msg := e.persistBotReply(ctx, bot, conversationID, content)
+	if msg != nil {
+		e.broadcastBotReply(ctx, bot, conversationID, msg, "")
 	}
 }
