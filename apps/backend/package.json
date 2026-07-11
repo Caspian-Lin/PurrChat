@@ -11,8 +11,8 @@
     "lint": "which golangci-lint && golangci-lint run --timeout=5m || go vet ./...",
     "type-check": "go vet ./...",
     "clean": "rm -rf bin coverage.out coverage.html logs/*.log",
-    "migrate:up": "go run cmd/migrate/main.go up",
-    "migrate:down": "go run cmd/migrate/main.go down"
+    "migrate:up": "go run ./cmd/migrate up",
+    "migrate:baseline": "go run ./cmd/migrate baseline"
   },
   "devDependencies": {},
   "engines": {

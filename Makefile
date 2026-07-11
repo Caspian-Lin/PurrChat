@@ -1,4 +1,4 @@
-.PHONY: help install dev build test lint lint-fix clean format type-check docker-up docker-down docker-logs docker-build migrate db-clean db-clean-yes db-reset db-reset-yes \
+.PHONY: help install dev build test lint lint-fix clean format type-check docker-up docker-down docker-logs docker-build migrate migrate-backend migrate-storage migrate-baseline db-clean db-clean-yes db-reset db-reset-yes \
         android-dev android-build-debug android-build-release android-build-apk android-keystore android-clean
 
 # 日志目录
@@ -36,7 +36,8 @@ help:
 	@echo "  make clean        - 清理构建产物和依赖"
 	@echo ""
 	@echo "数据库迁移:"
-	@echo "  make migrate      - 执行所有数据库迁移"
+	@echo "  make migrate      - 执行 backend 与 storage 的待应用迁移"
+	@echo "  make migrate-baseline - 显式登记已有数据库的迁移基线"
 	@echo "  make db-clean     - 删除并重建数据库（保留确认提示）"
 	@echo "  make db-reset     - 删除并重建数据库后执行迁移"
 	@echo "  make db-reset-yes - 跳过确认，删除并重建数据库后执行迁移"
@@ -168,12 +169,19 @@ type-check:
 clean:
 	pnpm run clean
 
-# 数据库迁移（同时执行后端和存储服务的 migration）
-migrate:
-	@echo "执行数据库迁移..."
-	@ln -sf ../../storage/migrations/002_file_metadata.sql apps/backend/migrations/003_storage_file_metadata.sql
-	cd apps/backend && go run cmd/server/main.go migrate
-	@rm -f apps/backend/migrations/003_storage_file_metadata.sql
+# 数据库迁移。两个服务共享数据库，但拥有独立的版本命名空间与执行入口。
+migrate: migrate-backend migrate-storage
+
+migrate-backend:
+	cd apps/backend && go run ./cmd/migrate up
+
+migrate-storage:
+	cd apps/storage && go run ./cmd/migrate up
+
+# 仅用于已由旧迁移机制创建的数据库；该命令不执行 SQL。
+migrate-baseline:
+	cd apps/backend && go run ./cmd/migrate baseline
+	cd apps/storage && go run ./cmd/migrate baseline
 
 # 删除并重建数据库。管理员连接参数使用 DB_ADMIN_*，应用库参数使用 APP_DB_*。
 db-clean:

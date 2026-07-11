@@ -11,7 +11,6 @@ services:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./apps/backend/migrations:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 10s
@@ -21,11 +20,47 @@ services:
       - purrchat-network
     restart: unless-stopped
 
+  backend-migrate:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    command: ["/app/migrate", "up"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-purrchat}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - purrchat-network
+    restart: "no"
+
+  storage-migrate:
+    build:
+      context: .
+      dockerfile: apps/storage/Dockerfile
+    command: ["/app/migrate", "up"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-purrchat}
+    depends_on:
+      backend-migrate:
+        condition: service_completed_successfully
+    networks:
+      - purrchat-network
+    restart: "no"
+
   # PurrChat 后端服务
   backend:
     build:
-      context: ./apps/backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/backend/Dockerfile
     container_name: purrchat-backend
     environment:
       # 服务器配置
@@ -50,8 +85,8 @@ services:
     volumes:
       - ./apps/backend/logs:/app/logs
     depends_on:
-      postgres:
-        condition: service_healthy
+      backend-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
@@ -65,8 +100,8 @@ services:
   # PurrChat 存储服务
   storage:
     build:
-      context: ./apps/storage
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/storage/Dockerfile
     container_name: purrchat-storage
     environment:
       # 服务器配置
@@ -107,8 +142,8 @@ services:
     volumes:
       - ./apps/storage/logs:/app/logs
     depends_on:
-      postgres:
-        condition: service_healthy
+      storage-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
       interval: 30s
