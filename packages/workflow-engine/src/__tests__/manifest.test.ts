@@ -45,7 +45,7 @@ describe('NODE_MANIFEST', () => {
   });
 
   it('does not include removed python node type', () => {
-    expect(NODE_MANIFEST.find((entry) => entry.type === 'python')).toBeUndefined();
+    expect(NODE_MANIFEST.find((entry) => (entry.type as string) === 'python')).toBeUndefined();
   });
 
   it.each(['loop', 'switch', 'merge'] as const)('publishes verified %s control flow', (type) => {
