@@ -126,7 +126,7 @@ jobs:
           go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
   test-workflow-engine:
-    name: Test Workflow Engine
+    name: Test Workflow Engine & Bot Engine
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -150,5 +150,10 @@ jobs:
           pnpm -F @purrchat/workflow-engine run typecheck
           pnpm -F bot-engine run type-check
 
+      - name: Lint bot-engine
+        run: pnpm -F bot-engine run lint
+
       - name: Run tests
-        run: pnpm -F @purrchat/workflow-engine test
+        run: |
+          pnpm -F @purrchat/workflow-engine test
+          pnpm -F bot-engine test

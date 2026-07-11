@@ -23,16 +23,12 @@ type SecretResolver interface {
 
 // BotEngine Bot 处理引擎
 //
-// 当前职责（保留）：
-//   - 消息路由入口：接收消息、查找 bot enrollment、调 TS/Go fallback
+// 职责：
+//   - 消息路由入口：接收消息、查找 bot enrollment、调 TS bot-engine
 //   - TS 微服务客户端：通过 client.go 调用 TS bot-engine
-//   - Bot 回复发送：sendBotReply、sendSystemMessage
+//   - Bot 回复发送：persistBotReply、broadcastBotReply、sendSystemMessage
 //   - 调用日志记录：recordCallLog（持久化到数据库）
-//
-// Deprecated（待迁移）：
-//   - Go fallback 路径：goFallbackProcess 中的触发评估和回复生成
-//   - 工作流会话管理：workflowSessions sync.Map
-//   - 调试会话管理：debugSessions sync.Map → 迁移至 TS /debug
+//   - 工作流部署状态管理：ActivateWorkflow/DeactivateWorkflow
 type BotEngine struct {
 	deployRepo       repository.BotDeploymentRepository
 	botRepo          repository.BotRepository
@@ -43,13 +39,10 @@ type BotEngine struct {
 	workflowRepo     repository.WorkflowRepository
 	secretResolver   SecretResolver // 运行时解密 secret(仅在 secrets:use 已授予时调用)
 
-	// 工作流会话：记录活跃的工作流运行时状态
-	workflowSessions sync.Map // map[string]*SpecialModeSession — "conversationID:botID" -> session
+	// 工作流会话：记录活跃的工作流部署状态
+	workflowSessions sync.Map // map[string]*WorkflowSession — "conversationID:botID" -> session
 
-	// 调试会话：记录调试运行时状态
-	debugSessions sync.Map // map[string]*DebugSession — sessionID -> session
-
-	// TS 微服务客户端（可选，用于调用 XState 版 Bot 引擎）
+	// TS 微服务客户端（用于调用 XState 版 Bot 引擎）
 	tsClient *BotEngineClient
 }
 
@@ -71,7 +64,6 @@ func NewBotEngine(
 		e.tsClient = NewBotEngineClient(tsServiceURL)
 		logger.InfofWithCaller("[BotEngine] TS service client initialized: %s", tsServiceURL)
 	}
-	e.startDebugSessionCleanup()
 	return e
 }
 
@@ -420,116 +412,13 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 	}
 }
 
-// goFallbackProcess Go 引擎 fallback 路径：本地评估触发条件并执行
-// Deprecated: 仅在 TS 微服务不可用时使用，后续将完全迁移至 TS。
-//
-//nolint:unused // 保留至 #18 删除 Go 遗留
-func (e *BotEngine) goFallbackProcess(ctx context.Context, msg *BotMessage, bot *models.Bot) {
-	// 解析机制配置
-	mechConfig, err := ParseMechanismConfig(bot.MechanismConfig)
-	if err != nil {
-		logger.ErrorfWithCaller("[BotEngine] Failed to parse mechanism config for bot %s: %v", bot.ID, err)
-		return
-	}
-
-	// 遍历机制列表（从上到下，首个匹配即响应）
-	for i := range mechConfig.Mechanisms {
-		mech := &mechConfig.Mechanisms[i]
-		if !mech.Enabled {
-			continue
-		}
-
-		// 评估触发条件
-		matched := mech.Trigger.Evaluate(msg.Content)
-		if !matched {
-			continue
-		}
-
-		logger.InfofWithCaller("[BotEngine] Bot %s: mechanism[%d] trigger matched (Go fallback)", bot.Name, i)
-
-		// 触发匹配成功（Go 引擎路径）
-		switch mech.Reply.Type {
-		case "workflow":
-			// Deprecated: workflow handled by TS microservice
-			e.sendBotReply(ctx, bot, msg.ConversationID, "...")
-
-		case "predefined", "llm":
-			// 编译为简单工作流执行（统一执行路径）
-			compiled := CompileSimpleMechanism(mech)
-			if compiled != nil {
-				contextMsgs := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
-				reply, err := e.ExecuteSimpleFlow(ctx, compiled, msg, bot, contextMsgs)
-				if err != nil {
-					logger.ErrorfWithCaller("[BotEngine] Simple flow execution failed for bot %s: %v", bot.ID, err)
-					reply = "..."
-				}
-				e.sendBotReply(ctx, bot, msg.ConversationID, reply)
-			} else {
-				// 编译失败，回退到原始路径
-				contextMessages := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
-				contextVars := map[string]string{"time": time.Now().Format("15:04")}
-				reply, err := mech.Reply.GenerateReply(msg.Content, contextVars, contextMessages, msg.SenderName)
-				if err != nil {
-					reply = "..."
-				}
-				e.sendBotReply(ctx, bot, msg.ConversationID, reply)
-			}
-
-		default:
-			// 未知类型，使用原始回复路径
-			contextMessages := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
-			contextVars := map[string]string{"time": time.Now().Format("15:04")}
-			reply, err := mech.Reply.GenerateReply(msg.Content, contextVars, contextMessages, msg.SenderName)
-			if err != nil {
-				reply = "..."
-			}
-			e.sendBotReply(ctx, bot, msg.ConversationID, reply)
-		}
-		break // 首个匹配机制响应后，跳过后续机制
-	}
-}
-
 // isBotUser 检查用户是否是 Bot（通过 bots 表判断）
 func (e *BotEngine) isBotUser(ctx context.Context, userID uuid.UUID) bool {
 	_, err := e.botRepo.FindByID(ctx, userID)
 	return err == nil
 }
 
-// collectContextForMechanism 收集机制所需的上下文消息
-//
-//nolint:unused // 保留至 #18 删除 Go 遗留
-func (e *BotEngine) collectContextForMechanism(ctx context.Context, conversationID uuid.UUID, mech *Mechanism) []ContextMessage {
-	windowSize := 20
-	if mech.Reply.Type == "llm" && mech.Reply.LLM != nil && mech.Reply.LLM.ContextWindow > 0 {
-		windowSize = mech.Reply.LLM.ContextWindow
-	}
-
-	// 获取最近的消息
-	messages, err := e.messageRepo.FindMessages(ctx, conversationID, windowSize, 0)
-	if err != nil {
-		return nil
-	}
-
-	var contextMessages []ContextMessage
-	for _, msg := range messages {
-		// 只包含文本消息
-		if msg.MsgType == models.MsgTypeText {
-			contextMessages = append(contextMessages, ContextMessage{
-				Role:    "user",
-				Content: msg.Content,
-			})
-		}
-	}
-
-	// 按 CreatedAt 正序排列（FindMessages 是 DESC）
-	for i, j := 0, len(contextMessages)-1; i < j; i, j = i+1, j-1 {
-		contextMessages[i], contextMessages[j] = contextMessages[j], contextMessages[i]
-	}
-
-	return contextMessages
-}
-
-// collectContextMessages 收集会话的上下文消息（TS 路径使用，不需要 mechanism 参数）
+// collectContextMessages 收集会话的上下文消息（TS 路径使用）
 func (e *BotEngine) collectContextMessages(ctx context.Context, conversationID uuid.UUID) []ContextMessage {
 	messages, err := e.messageRepo.FindMessages(ctx, conversationID, 20, 0)
 	if err != nil {
@@ -609,14 +498,4 @@ func (e *BotEngine) broadcastBotReply(ctx context.Context, bot *models.Bot, conv
 		previewContent = previewContent[:50] + "..."
 	}
 	logger.InfofWithCaller("[BotEngine] Bot %s replied to conversation %s: %s", bot.Name, conversationID, previewContent)
-}
-
-// sendBotReply 持久化并广播 Bot 回复（向后兼容旧调用方）
-//
-//nolint:unused // 保留至 #18 删除 Go 遗留
-func (e *BotEngine) sendBotReply(ctx context.Context, bot *models.Bot, conversationID uuid.UUID, content string) {
-	msg := e.persistBotReply(ctx, bot, conversationID, content)
-	if msg != nil {
-		e.broadcastBotReply(ctx, bot, conversationID, msg, "")
-	}
 }

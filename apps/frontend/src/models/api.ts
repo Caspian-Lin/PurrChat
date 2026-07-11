@@ -35,10 +35,6 @@ import type {
   BotDeployment,
   PaginatedSearchResult,
   DeployableConversation,
-  DebugBotRequest,
-  DebugStepRequest,
-  DebugResetRequest,
-  DebugTraceResult,
   BotCallLogListResponse,
   WorkflowDocumentResponse,
   WorkflowValidationResponse,
@@ -392,34 +388,6 @@ export const api = {
   // 创建与 Bot 的私聊会话
   createBotConversation: (botId: string): Promise<ApiResponse<Conversation>> => {
     return apiClient.post(`/api/bots/${botId}/conversation`).then((res) => res.data);
-  },
-
-  // 激活 Bot 特殊模式
-  activateSpecialMode: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
-    return apiClient
-      .post(`/api/bots/${botId}/special-mode/activate`, { conversation_id: conversationId })
-      .then((res) => res.data);
-  },
-
-  // 停用 Bot 特殊模式
-  deactivateSpecialMode: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
-    return apiClient
-      .post(`/api/bots/${botId}/special-mode/deactivate`, { conversation_id: conversationId })
-      .then((res) => res.data);
-  },
-
-  // ─── 调试 API ───
-
-  debugBot: (botId: string, data: DebugBotRequest): Promise<ApiResponse<DebugTraceResult>> => {
-    return apiClient.post(`/api/bots/${botId}/debug`, data).then((res) => res.data);
-  },
-
-  debugStep: (botId: string, data: DebugStepRequest): Promise<ApiResponse<DebugTraceResult>> => {
-    return apiClient.post(`/api/bots/${botId}/debug/step`, data).then((res) => res.data);
-  },
-
-  debugReset: (botId: string, data: DebugResetRequest): Promise<ApiResponse<void>> => {
-    return apiClient.post(`/api/bots/${botId}/debug/reset`, data).then((res) => res.data);
   },
 
   getBotCallLogs: (
