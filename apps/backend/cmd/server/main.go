@@ -142,6 +142,9 @@ func main() {
 	secretRepo := repository.NewBotAppSecretRepository()
 	secretService := services.NewSecretService(secretRepo, botRepo)
 	secretHandler := handlers.NewSecretHandler(secretService)
+	credentialRepo := repository.NewBotAPICredentialRepository()
+	credentialService := services.NewBotAPICredentialService(credentialRepo, botRepo, services.NoopCredentialConnectionCloser{})
+	credentialHandler := handlers.NewBotAPICredentialHandler(credentialService)
 	botEngine.SetSecretResolver(secretService)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret, cfg.Port == "443" || os.Getenv("FORCE_SECURE_COOKIES") == "true", &cfg.Turnstile)
 	chatHandler := handlers.NewChatHandler(authService, userService, conversationService, messageService, friendService, memberService)
@@ -302,6 +305,11 @@ func main() {
 		bots.GET("/:id/secrets", secretHandler.ListSecrets)
 		bots.PUT("/:id/secrets/:key", sensitiveRateLimit, secretHandler.SetSecret)
 		bots.DELETE("/:id/secrets/:key", sensitiveRateLimit, secretHandler.DeleteSecret)
+		// External Bot credentials: owner JWT management; plaintext is returned only on create/rotate.
+		bots.POST("/:id/credentials", sensitiveRateLimit, credentialHandler.Create)
+		bots.GET("/:id/credentials", credentialHandler.List)
+		bots.POST("/:id/credentials/:credential_id/rotate", sensitiveRateLimit, credentialHandler.Rotate)
+		bots.DELETE("/:id/credentials/:credential_id", sensitiveRateLimit, credentialHandler.Revoke)
 	}
 
 	// Bot 安装路由(per-User 限流)
