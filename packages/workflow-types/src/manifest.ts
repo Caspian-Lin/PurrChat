@@ -42,8 +42,7 @@ const NODE_MANIFEST_STATUS = [
   {
     type: 'if',
     defaultConfig: {
-      logic: 'and',
-      conditions: [{ left: '', operator: '==', right: '' }],
+      branches: [{ logic: 'and', conditions: [{ left: '', operator: '==', right: '' }] }],
     },
     implemented: true,
     tested: true,
@@ -53,8 +52,8 @@ const NODE_MANIFEST_STATUS = [
     type: 'loop',
     defaultConfig: { max_iterations: 10, condition: '' },
     implemented: true,
-    tested: false,
-    productionReady: false,
+    tested: true,
+    productionReady: true,
   },
   {
     type: 'switch',
@@ -65,15 +64,15 @@ const NODE_MANIFEST_STATUS = [
       ],
     },
     implemented: true,
-    tested: false,
-    productionReady: false,
+    tested: true,
+    productionReady: true,
   },
   {
     type: 'merge',
     defaultConfig: { input_count: 2 },
     implemented: true,
-    tested: false,
-    productionReady: false,
+    tested: true,
+    productionReady: true,
   },
   {
     type: 'tool',

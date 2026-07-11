@@ -105,6 +105,40 @@ describe('validateWorkflowDocument', () => {
     expect(result.issues.some((i) => i.code === 'cycle_detected')).toBe(true);
   });
 
+  it('允许 Loop 循环体唯一回边', () => {
+    const doc = createEmptyDocument('loop');
+    doc.spec.nodes = [
+      { id: 't', type: 'trigger', name: '触发', config: {} },
+      { id: 'l', type: 'loop', name: '循环', config: { condition: 'true', max_iterations: 2 } },
+      { id: 'b', type: 'template', name: '循环体', config: { template: 'body' } },
+      { id: 'r', type: 'reply', name: '完成', config: { template: 'done' } },
+    ];
+    doc.spec.connections = [
+      { id: 'c1', sourceNodeId: 't', sourcePortId: 'out_exec', targetNodeId: 'l', targetPortId: 'in_exec' },
+      { id: 'c2', sourceNodeId: 'l', sourcePortId: 'out_body', targetNodeId: 'b', targetPortId: 'in_exec' },
+      { id: 'c3', sourceNodeId: 'b', sourcePortId: 'out_exec', targetNodeId: 'l', targetPortId: 'in_exec' },
+      { id: 'c4', sourceNodeId: 'l', sourcePortId: 'out_done', targetNodeId: 'r', targetPortId: 'in_exec' },
+    ];
+
+    expect(validateWorkflowDocument(doc, registry).valid).toBe(true);
+  });
+
+  it('拒绝重复 Switch case 值并要求默认分支', () => {
+    const doc = createEmptyDocument('switch');
+    doc.spec.nodes = [
+      { id: 't', type: 'trigger', name: '触发', config: {} },
+      { id: 's', type: 'switch', name: '分支', config: { cases: [{ value: 'same' }, { value: 'same' }] } },
+    ];
+    doc.spec.connections = [
+      { id: 'c1', sourceNodeId: 't', sourcePortId: 'out_exec', targetNodeId: 's', targetPortId: 'in_exec' },
+      { id: 'c2', sourceNodeId: 't', sourcePortId: 'out_input', targetNodeId: 's', targetPortId: 'in_value' },
+    ];
+
+    const result = validateWorkflowDocument(doc, registry);
+    expect(result.issues.some((issue) => issue.code === 'switch_case_value_duplicate')).toBe(true);
+    expect(result.issues.some((issue) => issue.code === 'switch_default_missing')).toBe(true);
+  });
+
   it('configSchema 校验非法字段', () => {
     const doc = validDoc();
     doc.spec.nodes[1].config = { template: 12345 };

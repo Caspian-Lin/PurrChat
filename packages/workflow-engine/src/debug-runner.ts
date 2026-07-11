@@ -33,6 +33,7 @@ import { toBlueprint } from './validator.js';
 import { resolveSecrets } from './secrets.js';
 import { resolveTemplate } from './resolver.js';
 import { sanitizePorts } from './sanitize.js';
+import { resolveControlFlowRoute } from './control-flow.js';
 
 /** 外部副作用节点类型 — mock 模式下返回预设数据 */
 const EXTERNAL_NODE_TYPES = new Set(['tool', 'dify', 'n8n', 'llm']);
@@ -290,14 +291,21 @@ export class DebugRunner {
         output = await def.execute(nodeInput, resolvedConfig as Record<string, any>, this.buildNodeContext(session, node));
       }
 
+      const route = resolveControlFlowRoute(node, output.ports, session.context.session);
+      if (route) {
+        session.context.session = route.session;
+        output = {
+          ports: { ...output.ports, __branch__: route.portId, [route.portId]: 'true' },
+        };
+      }
+
       const endTime = Date.now();
       trace.endTime = endTime;
       trace.durationMs = endTime - startTime;
       trace.output = sanitizePorts(output.ports);
       trace.status = 'success';
 
-      // if 节点记录分支
-      if (node.type === 'if' && output.ports['__branch__']) {
+      if (output.ports['__branch__']) {
         trace.branch = output.ports['__branch__'];
       }
 
@@ -339,29 +347,18 @@ export class DebugRunner {
 
   /**
    * 将节点的后继加入执行队列。
-   * 对 if 节点，只入队匹配分支的后继；另一分支的节点在 buildRunTrace 时标记为 skip。
+   * 控制流节点只入队当前路由的后继；另一分支的节点在 buildRunTrace 时标记为 skip。
    */
   private enqueueNext(session: DebugSession, node: BlueprintNode): void {
-    if (node.type === 'if') {
-      const branch = session.context.nodeOutputs[node.id]?.['__branch__'] ?? 'true';
-      const branchPort = branch === 'true' ? 'out_true' : 'out_false';
+    if (['if', 'switch', 'loop', 'merge'].includes(node.type)) {
+      const branchPort = session.context.nodeOutputs[node.id]?.['__branch__'];
 
       // 只入队活跃分支的目标
       const activeConns = session.blueprint.connections.filter(
         (c) => c.sourceNodeId === node.id && c.sourcePortId === branchPort,
       );
       for (const conn of activeConns) {
-        if (!session.completed.has(conn.targetNodeId) && !session.skipped.has(conn.targetNodeId)) {
-          session.queue.push(conn.targetNodeId);
-        }
-      }
-
-      // 也处理 out_exec 连接（if 节点同时有 out_exec）
-      const execConns = session.blueprint.connections.filter(
-        (c) => c.sourceNodeId === node.id && c.sourcePortId === 'out_exec',
-      );
-      for (const conn of execConns) {
-        if (!session.completed.has(conn.targetNodeId) && !session.skipped.has(conn.targetNodeId)) {
+        if (this.canEnqueue(session, conn.targetNodeId)) {
           session.queue.push(conn.targetNodeId);
         }
       }
@@ -371,7 +368,7 @@ export class DebugRunner {
         (c) => c.sourceNodeId === node.id,
       );
       for (const conn of outConns) {
-        if (!session.completed.has(conn.targetNodeId) && !session.skipped.has(conn.targetNodeId)) {
+        if (this.canEnqueue(session, conn.targetNodeId)) {
           session.queue.push(conn.targetNodeId);
         }
       }
@@ -386,16 +383,20 @@ export class DebugRunner {
     while (session.queue.length > 0 && !session.cancelled) {
       const nodeId = session.queue.shift()!;
 
-      if (session.completed.has(nodeId) || session.skipped.has(nodeId)) continue;
-
       const node = session.blueprint.nodes.find((n) => n.id === nodeId);
       if (!node) continue;
+      if ((session.completed.has(nodeId) && node.type !== 'loop') || session.skipped.has(nodeId)) continue;
 
       await this.executeNode(session, node);
       this.enqueueNext(session, node);
     }
 
     return this.buildRunTrace(session);
+  }
+
+  private canEnqueue(session: DebugSession, nodeId: string): boolean {
+    const target = session.blueprint.nodes.find((node) => node.id === nodeId);
+    return !!target && !session.skipped.has(nodeId) && (target.type === 'loop' || !session.completed.has(nodeId));
   }
 
   // ─── 工具方法 ──────────────────────────────────────────────

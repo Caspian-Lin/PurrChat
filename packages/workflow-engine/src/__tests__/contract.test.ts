@@ -274,6 +274,95 @@ describe('if 条件分支', () => {
     });
     expect(result.status).toBe(ExecutionStatus.Done);
   });
+
+  it('按顺序匹配 if / else if / else 分支', async () => {
+    const { runtime } = makeRuntime();
+    const blueprint = bp(
+      [
+        node('t', 'trigger', '触发'),
+        node('cond', 'if', '条件', {
+          branches: [
+            { conditions: [{ left: '{触发.用户消息}', operator: 'contains', right: 'hello' }], logic: 'and' },
+            { conditions: [{ left: '{触发.用户消息}', operator: 'contains', right: 'bye' }], logic: 'and' },
+          ],
+        }),
+        node('r1', 'reply', '如果', { template: 'hello' }),
+        node('r2', 'reply', '否则如果', { template: 'bye' }),
+        node('r3', 'reply', '否则', { template: 'other' }),
+      ],
+      [
+        conn('c1', 't', 'out_exec', 'cond', 'in_exec'),
+        conn('c2', 'cond', 'out_true', 'r1', 'in_exec'),
+        conn('c3', 'cond', 'out_elif_0', 'r2', 'in_exec'),
+        conn('c4', 'cond', 'out_false', 'r3', 'in_exec'),
+      ],
+    );
+
+    await expect(runtime.execute(blueprint, { rawInput: 'bye', timeoutMs: 3000 })).resolves.toMatchObject({ reply: 'bye' });
+    await expect(runtime.execute(blueprint, { rawInput: 'unknown', timeoutMs: 3000 })).resolves.toMatchObject({ reply: 'other' });
+  });
+});
+
+describe('控制流节点', () => {
+  it('Switch 选择唯一 case，并在不匹配时走 default', async () => {
+    const { runtime } = makeRuntime();
+    const blueprint = bp(
+      [
+        node('t', 'trigger', '触发'),
+        node('s', 'switch', '分支', { cases: [{ value: 'one' }, { value: 'two' }] }),
+        node('r1', 'reply', '一', { template: 'one' }),
+        node('r2', 'reply', '二', { template: 'two' }),
+        node('rd', 'reply', '默认', { template: 'default' }),
+      ],
+      [
+        conn('c1', 't', 'out_exec', 's', 'in_exec'),
+        conn('c2', 't', 'out_input', 's', 'in_value'),
+        conn('c3', 's', 'out_case_0', 'r1', 'in_exec'),
+        conn('c4', 's', 'out_case_1', 'r2', 'in_exec'),
+        conn('c5', 's', 'out_default', 'rd', 'in_exec'),
+      ],
+    );
+
+    await expect(runtime.execute(blueprint, { rawInput: 'two', timeoutMs: 3000 })).resolves.toMatchObject({ reply: 'two' });
+    await expect(runtime.execute(blueprint, { rawInput: 'three', timeoutMs: 3000 })).resolves.toMatchObject({ reply: 'default' });
+  });
+
+  it('Loop 在上限后退出循环体并进入完成分支', async () => {
+    const { runtime } = makeRuntime();
+    const blueprint = bp(
+      [
+        node('t', 'trigger', '触发'),
+        node('l', 'loop', '循环', { condition: 'true', max_iterations: 2 }),
+        node('body', 'template', '循环体', { template: 'body' }),
+        node('done', 'reply', '完成', { template: 'done' }),
+      ],
+      [
+        conn('c1', 't', 'out_exec', 'l', 'in_exec'),
+        conn('c2', 'l', 'out_body', 'body', 'in_exec'),
+        conn('c3', 'body', 'out_exec', 'l', 'in_exec'),
+        conn('c4', 'l', 'out_done', 'done', 'in_exec'),
+      ],
+    );
+
+    await expect(runtime.execute(blueprint, { rawInput: 'go', timeoutMs: 3000 })).resolves.toMatchObject({ reply: 'done' });
+  });
+
+  it('Merge 以任一输入的首次到达继续执行', async () => {
+    const { runtime } = makeRuntime();
+    const blueprint = bp(
+      [
+        node('t', 'trigger', '触发'),
+        node('m', 'merge', '汇聚', { input_count: 2 }),
+        node('r', 'reply', '回复', { template: 'merged' }),
+      ],
+      [
+        conn('c1', 't', 'out_exec', 'm', 'in_exec_0'),
+        conn('c2', 'm', 'out_exec', 'r', 'in_exec'),
+      ],
+    );
+
+    await expect(runtime.execute(blueprint, { rawInput: 'go', timeoutMs: 3000 })).resolves.toMatchObject({ reply: 'merged' });
+  });
 });
 
 // ─── AC3: 首条消息只执行一次 + wait 多轮会话 ─────────────────

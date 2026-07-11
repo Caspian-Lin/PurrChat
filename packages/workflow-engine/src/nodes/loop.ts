@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
+import { resolveTemplate } from '../resolver.js';
 
 const loopConfigSchema = z.object({
-  max_iterations: z.number().optional().default(10),
+  max_iterations: z.number().int().min(1).max(100).optional().default(10),
   condition: z.string().optional(),
 });
 
@@ -14,12 +15,10 @@ export const loopNode: NodeDefinition<z.infer<typeof loopConfigSchema>> = {
   configSchema: loopConfigSchema,
   async execute(input, config, ctx) {
     const maxIterations = (config as any).max_iterations || 10;
-    const condition = (config as any).condition || '';
+    const condition = input.ports.in_condition ?? resolveTemplate((config as any).condition || '', ctx);
 
-    // 返回循环元数据，由编译器处理循环逻辑
     return {
       ports: {
-        out_exec: 'true',
         __loop_max__: String(maxIterations),
         __loop_condition__: condition,
       },

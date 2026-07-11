@@ -17,13 +17,13 @@ import {
 } from '../utils/workflowDocument';
 
 describe('生产工作流节点', () => {
-  it('只暴露 manifest 中可生产使用的节点并隐藏四类节点', () => {
+  it('只暴露 manifest 中可生产使用的节点并隐藏未实现节点', () => {
     const types = PRODUCTION_NODE_MANIFEST.map((node) => node.type);
 
     expect(types).not.toContain('python');
-    expect(types).not.toContain('loop');
-    expect(types).not.toContain('switch');
-    expect(types).not.toContain('merge');
+    expect(types).toContain('loop');
+    expect(types).toContain('switch');
+    expect(types).toContain('merge');
     expect(
       PRODUCTION_NODE_MANIFEST.every(
         (node) => node.implemented && node.tested && node.productionReady

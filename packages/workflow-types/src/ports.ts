@@ -265,6 +265,57 @@ export function getDefaultPorts(eventType: EventType): EventPort[] {
   return DEFAULT_PORTS[eventType];
 }
 
+/** Build control-flow ports from persisted configuration. */
+export function getPortsForConfig(
+  eventType: EventType,
+  config: Record<string, unknown> = {},
+): EventPort[] {
+  if (eventType === 'if') {
+    const branches = Array.isArray(config.branches) ? config.branches : [];
+    const elifPorts = branches.slice(1).map((_, index): EventPort => ({
+      id: `out_elif_${index}`,
+      name: `否则如果 ${index + 1}`,
+      dataType: 'trigger',
+      direction: 'output',
+    }));
+    return [
+      ...DEFAULT_PORTS.if.filter((port) => port.id === 'in_exec' || port.id === 'out_true'),
+      ...elifPorts,
+      ...DEFAULT_PORTS.if.filter((port) => port.id === 'out_false'),
+    ];
+  }
+
+  if (eventType === 'switch') {
+    const cases = Array.isArray(config.cases) ? config.cases : [];
+    const inputs = DEFAULT_PORTS.switch.filter((port) => port.direction === 'input');
+    const outputs = cases.map((item, index): EventPort => ({
+      id: `out_case_${index}`,
+      name: typeof item === 'object' && item && typeof (item as { label?: unknown }).label === 'string'
+        ? (item as { label: string }).label || `分支 ${index + 1}`
+        : `分支 ${index + 1}`,
+      dataType: 'trigger',
+      direction: 'output',
+    }));
+    return [...inputs, ...outputs, { id: 'out_default', name: '默认', dataType: 'trigger', direction: 'output' }];
+  }
+
+  if (eventType === 'merge') {
+    const configured = typeof config.input_count === 'number' ? config.input_count : 2;
+    const inputCount = Math.max(2, Math.min(10, Math.trunc(configured)));
+    return [
+      ...Array.from({ length: inputCount }, (_, index): EventPort => ({
+        id: `in_exec_${index}`,
+        name: `输入 ${index + 1}`,
+        dataType: 'trigger',
+        direction: 'input',
+      })),
+      { id: 'out_exec', name: '执行', dataType: 'trigger', direction: 'output' },
+    ];
+  }
+
+  return getDefaultPorts(eventType);
+}
+
 // ─── 连线校验 ────────────────────────────────────────────────
 
 export function canConnect(sourcePort: EventPort, targetPort: EventPort): boolean {
