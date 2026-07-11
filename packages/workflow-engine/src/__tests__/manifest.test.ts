@@ -44,8 +44,8 @@ describe('NODE_MANIFEST', () => {
     }
   });
 
-  it('keeps only unimplemented Python hidden from production', () => {
-    expect(NODE_MANIFEST.find((entry) => entry.type === 'python')?.productionReady).toBe(false);
+  it('does not include removed python node type', () => {
+    expect(NODE_MANIFEST.find((entry) => entry.type === 'python')).toBeUndefined();
   });
 
   it.each(['loop', 'switch', 'merge'] as const)('publishes verified %s control flow', (type) => {

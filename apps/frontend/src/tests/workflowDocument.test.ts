@@ -17,7 +17,7 @@ import {
 } from '../utils/workflowDocument';
 
 describe('生产工作流节点', () => {
-  it('只暴露 manifest 中可生产使用的节点并隐藏未实现节点', () => {
+  it('只暴露 manifest 中可生产使用的节点', () => {
     const types = PRODUCTION_NODE_MANIFEST.map((node) => node.type);
 
     expect(types).not.toContain('python');

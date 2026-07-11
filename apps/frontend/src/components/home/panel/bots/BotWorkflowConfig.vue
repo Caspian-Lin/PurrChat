@@ -100,7 +100,6 @@ import DifyNode from './events/DifyNode.vue';
 import N8nNode from './events/N8nNode.vue';
 import LlmNode from './events/LlmNode.vue';
 import BuiltinNode from './events/BuiltinNode.vue';
-import PythonNode from './events/PythonNode.vue';
 import TemplateNode from './events/TemplateNode.vue';
 import ReplyNode from './events/ReplyNode.vue';
 import HistoryNode from './events/HistoryNode.vue';
@@ -158,7 +157,6 @@ const customNodeTypes: Record<string, any> = {
   n8n: markRaw(N8nNode),
   llm: markRaw(LlmNode),
   builtin: markRaw(BuiltinNode),
-  python: markRaw(PythonNode),
   template: markRaw(TemplateNode),
   reply: markRaw(ReplyNode),
   history: markRaw(HistoryNode),

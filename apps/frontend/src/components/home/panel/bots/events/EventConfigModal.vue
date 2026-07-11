@@ -653,31 +653,6 @@
             </div>
           </template>
 
-          <!-- Python 事件配置 -->
-          <template v-if="form.type === 'python'">
-            <div class="form-group">
-              <label class="form-label">Python 代码</label>
-              <textarea
-                v-model="form.config.code"
-                class="form-textarea form-textarea--code"
-                rows="8"
-                placeholder="def run(context, input_data):&#10;    # 处理输入&#10;    result = input_data.get('input', '')&#10;    return {'result': result}"
-                spellcheck="false"
-              />
-            </div>
-            <div class="form-group">
-              <label class="form-label">超时 (ms)</label>
-              <input
-                v-model.number="form.config.timeout_ms"
-                type="number"
-                min="1000"
-                max="30000"
-                step="1000"
-                class="form-input"
-              />
-            </div>
-          </template>
-
           <!-- template 配置 -->
           <template v-if="form.type === 'template'">
             <div class="form-group">
@@ -964,18 +939,9 @@ const nodeTypeGroups = (['control', 'process', 'output'] as const)
 
 // 是否为支持自定义端口的节点类型
 const supportsCustomPorts = computed(() =>
-  [
-    'llm',
-    'builtin',
-    'python',
-    'template',
-    'if',
-    'wait',
-    'reply',
-    'history',
-    'dify',
-    'n8n',
-  ].includes(form.type)
+  ['llm', 'builtin', 'template', 'if', 'wait', 'reply', 'history', 'dify', 'n8n'].includes(
+    form.type
+  )
 );
 
 const builtinTypes = [

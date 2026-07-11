@@ -474,7 +474,6 @@ const customNodeTypes: Record<string, any> = {
   n8n: markRaw(N8nNode),
   llm: markRaw(LlmNode),
   builtin: markRaw(BuiltinNode),
-  python: markRaw(BuiltinNode),
   template: markRaw(TemplateNode),
   reply: markRaw(ReplyNode),
   history: markRaw(HistoryNode),

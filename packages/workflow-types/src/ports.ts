@@ -22,7 +22,6 @@ export type EventType =
   | 'n8n'
   | 'llm'
   | 'builtin'
-  | 'python'
   | 'reply'
   | 'template'
   | 'history';
@@ -76,7 +75,6 @@ export const NODE_TYPE_META: Record<EventType, NodeTypeMeta> = {
   n8n: { label: 'n8n', icon: '⚡', category: 'process', description: '调用 n8n Webhook' },
   llm: { label: 'LLM', icon: '🧠', category: 'process', description: 'LLM 调用' },
   builtin: { label: '内置', icon: '⚙', category: 'process', description: '内置事件' },
-  python: { label: 'Python', icon: '🐍', category: 'process', description: 'Python 脚本' },
   template: { label: '模板', icon: '📋', category: 'process', description: '模板渲染' },
   reply: { label: '回复', icon: '💬', category: 'output', description: '发送回复' },
   history: { label: '历史消息', icon: '📜', category: 'process', description: '获取历史消息记录' },
@@ -222,16 +220,6 @@ const DEFAULT_PORTS: Record<EventType, EventPort[]> = {
     ]
   ),
   builtin: ports(
-    [
-      ['in_exec', 'trigger', '执行'],
-      ['in_input', 'string', '输入'],
-    ],
-    [
-      ['out_exec', 'trigger', '执行'],
-      ['out_output', 'string', '输出'],
-    ]
-  ),
-  python: ports(
     [
       ['in_exec', 'trigger', '执行'],
       ['in_input', 'string', '输入'],

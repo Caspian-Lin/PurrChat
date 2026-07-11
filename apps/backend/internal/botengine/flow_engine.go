@@ -108,7 +108,7 @@ func (ctx *ExecutionContext) followControlFlow(engineCtx context.Context, engine
 		*finalReply = contentStr
 		return nil
 
-	case "llm", "builtin", "python":
+	case "llm", "builtin":
 		// 处理节点：读取输入端口，执行，写入输出端口
 		prompt := ctx.getPortValue(event.ID, "in_prompt")
 		inputStr, _ := prompt.(string)
