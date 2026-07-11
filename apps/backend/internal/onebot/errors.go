@@ -11,6 +11,7 @@ const (
 	RetCodeInvalidParams      RetCode = 10002
 	RetCodeUnknownAction      RetCode = 10003
 	RetCodeUnsupportedSegment RetCode = 10004
+	RetCodeUnsupportedAction  RetCode = 10005
 
 	RetCodeUnauthenticated      RetCode = 20001
 	RetCodeCredentialRevoked    RetCode = 20002

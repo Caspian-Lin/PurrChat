@@ -14,6 +14,7 @@ import (
 	"purr-chat-server/pkg/logger"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // BotService Bot 业务逻辑服务
@@ -26,7 +27,16 @@ type BotService struct {
 	enrollmentRepo   repository.EnrollmentRepository
 	messageRepo      repository.ConversationMessageRepository
 	callLogRepo      repository.BotCallLogRepository
+	connections      BotConnectionCloser
 }
+
+type BotConnectionCloser interface {
+	DisconnectBot(context.Context, uuid.UUID) error
+}
+
+type NoopBotConnectionCloser struct{}
+
+func (NoopBotConnectionCloser) DisconnectBot(context.Context, uuid.UUID) error { return nil }
 
 // NewBotService 创建 Bot 服务
 func NewBotService(
@@ -48,7 +58,26 @@ func NewBotService(
 		enrollmentRepo:   enrollmentRepo,
 		messageRepo:      messageRepo,
 		callLogRepo:      callLogRepo,
+		connections:      NoopBotConnectionCloser{},
 	}
+}
+
+func (s *BotService) SetConnectionCloser(closer BotConnectionCloser) {
+	if closer == nil {
+		closer = NoopBotConnectionCloser{}
+	}
+	s.connections = closer
+}
+
+func (s *BotService) OwnsBot(ctx context.Context, ownerID, botID uuid.UUID) (bool, error) {
+	bot, err := s.botRepo.FindByID(ctx, botID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return bot.OwnerID == ownerID, nil
 }
 
 // deriveDiagnosticsConsent 根据 requested_capabilities 推导 diagnostics_consent
@@ -294,6 +323,9 @@ func (s *BotService) UpdateBot(ctx context.Context, botID string, userID string,
 	if err != nil {
 		return nil, err
 	}
+	if bot.Status == models.BotStatusDisabled {
+		_ = s.connections.DisconnectBot(ctx, bot.ID)
+	}
 
 	return bot, nil
 }
@@ -315,7 +347,11 @@ func (s *BotService) DeleteBot(ctx context.Context, botID string, userID string)
 		return errors.New("not the bot owner")
 	}
 
-	return s.botRepo.Delete(ctx, id)
+	if err := s.botRepo.Delete(ctx, id); err != nil {
+		return err
+	}
+	_ = s.connections.DisconnectBot(ctx, id)
+	return nil
 }
 
 // DeployBot 将 Bot 部署到会话
