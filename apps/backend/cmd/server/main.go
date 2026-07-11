@@ -11,6 +11,7 @@ import (
 	"purr-chat-server/internal/botengine"
 	"purr-chat-server/internal/botws"
 	"purr-chat-server/internal/handlers"
+	"purr-chat-server/internal/messaging"
 	"purr-chat-server/internal/repository"
 	"purr-chat-server/internal/services"
 	"purr-chat-server/internal/websocket"
@@ -135,7 +136,11 @@ func main() {
 	botEngine.SetInstallationRepo(installationRepo)
 	conversationService := services.NewConversationService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, friendshipRepo)
 	conversationService.SetBotRepo(botRepo)
-	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, botRepo, botEngine)
+
+	// 消息事件发布器：fan-out 到用户 WS、Workflow Bot、External Bot
+	publisher := messaging.NewPublisher(30 * time.Second)
+	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, botRepo, installationRepo, publisher)
+	botEngine.SetMessageSender(messageService)
 	friendService := services.NewFriendService(userRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
 	memberService := services.NewMemberService(userRepo, conversationRepo, enrollmentRepo)
 	userService := services.NewUserService(userRepo)
@@ -151,6 +156,12 @@ func main() {
 	credentialHandler := handlers.NewBotAPICredentialHandler(credentialService)
 	botWSHandler := botws.NewHandler(botWSManager, credentialService, botService)
 	botEngine.SetSecretResolver(secretService)
+
+	// 注册消息事件 sink
+	publisher.RegisterSink("user_ws", services.NewUserWebSocketSink())
+	publisher.RegisterSink("workflow", botEngine)
+	externalBotSink := services.NewExternalBotSink(installationRepo, botRepo, botWSManager)
+	publisher.RegisterSink("external_bot", externalBotSink)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret, cfg.Port == "443" || os.Getenv("FORCE_SECURE_COOKIES") == "true", &cfg.Turnstile)
 	chatHandler := handlers.NewChatHandler(authService, userService, conversationService, messageService, friendService, memberService)
 	botHandler := handlers.NewBotHandler(botService, botEngine)

@@ -15,6 +15,7 @@ import (
 // EnrollmentRepository 会话成员仓储接口
 type EnrollmentRepository interface {
 	Create(ctx context.Context, enrollment *models.Enrollment) error
+	CreateTx(ctx context.Context, tx pgx.Tx, enrollment *models.Enrollment) error
 	FindByID(ctx context.Context, id uuid.UUID) (*models.Enrollment, error)
 	FindByConversationID(ctx context.Context, conversationID uuid.UUID) ([]*models.Enrollment, error)
 	FindBotEnrollmentsByConversationID(ctx context.Context, conversationID uuid.UUID) ([]*models.Enrollment, error)
@@ -69,7 +70,38 @@ func (r *enrollmentRepository) Create(ctx context.Context, enrollment *models.En
 	return err
 }
 
-// FindByID 根据ID查找会话成员
+// CreateTx 在给定事务中创建会话成员
+func (r *enrollmentRepository) CreateTx(ctx context.Context, tx pgx.Tx, enrollment *models.Enrollment) error {
+	logger.InfofWithCaller("Creating enrollment (tx) for user %s in conversation %s", enrollment.UserID, enrollment.ConversationID)
+
+	enrollment.ID = uuid.New()
+	enrollment.JoinedAt = time.Now().UTC()
+
+	query := `
+        INSERT INTO enrollments (id, conversation_id, user_id, role, joined_at, last_read_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (conversation_id, user_id) DO UPDATE
+        SET role = EXCLUDED.role, joined_at = EXCLUDED.joined_at
+        RETURNING id, joined_at
+    `
+
+	err := tx.QueryRow(ctx, query,
+		enrollment.ID,
+		enrollment.ConversationID,
+		enrollment.UserID,
+		enrollment.Role,
+		enrollment.JoinedAt,
+		enrollment.LastReadAt,
+	).Scan(&enrollment.ID, &enrollment.JoinedAt)
+
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to create enrollment (tx): %v", err)
+		return err
+	}
+
+	logger.InfofWithCaller("Enrollment created successfully (tx): ID=%s", enrollment.ID)
+	return nil
+}
 func (r *enrollmentRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Enrollment, error) {
 	query := `
         SELECT id, conversation_id, user_id, role, joined_at, last_read_at

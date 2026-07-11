@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"purr-chat-server/internal/messaging"
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/repository"
 	"purr-chat-server/internal/services"
@@ -38,6 +39,7 @@ func TestNewConversation(t *testing.T) {
 		conversationMessageRepo,
 		nil,
 		nil,
+		messaging.NewPublisher(0),
 	)
 	memberService := services.NewMemberService(
 		userRepo,

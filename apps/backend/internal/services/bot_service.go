@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"purr-chat-server/internal/botengine"
@@ -124,27 +125,29 @@ func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.
 		MechanismConfig: botengine.DefaultMechanismConfig(),
 	}
 
-	err = s.botRepo.Create(ctx, bot)
-	if err != nil {
-		return nil, err
-	}
+	// 在共享事务中创建 Bot、会话、enrollment 和 installation，防止半安装状态。
+	err = pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
+		if err := s.botRepo.CreateTx(ctx, tx, bot); err != nil {
+			return fmt.Errorf("create bot: %w", err)
+		}
 
-	// 自动创建 owner ↔ bot 的私聊会话(Bot 作为 enrollment member 加入,消息路由仍依赖 enrollment)
-	conversation := &models.Conversation{
-		ConversationType: models.ConversationTypeDirect,
-		CreatedBy:        &ownerUUID,
-	}
-	if err := s.conversationRepo.Create(ctx, conversation); err != nil {
-		logger.ErrorfWithCaller("[BotService] Failed to create bot direct conversation: %v", err)
-	} else {
+		// 自动创建 owner ↔ bot 的私聊会话
+		conversation := &models.Conversation{
+			ConversationType: models.ConversationTypeDirect,
+			CreatedBy:        &ownerUUID,
+		}
+		if err := s.conversationRepo.CreateTx(ctx, tx, conversation); err != nil {
+			return fmt.Errorf("create conversation: %w", err)
+		}
+
 		ownerEnrollment := &models.Enrollment{
 			ConversationID: conversation.ID,
 			UserID:         ownerUUID,
 			Role:           models.EnrollmentRoleOwner,
 			JoinedAt:       time.Now().UTC(),
 		}
-		if err := s.enrollmentRepo.Create(ctx, ownerEnrollment); err != nil {
-			logger.ErrorfWithCaller("[BotService] Failed to enroll owner in bot conversation: %v", err)
+		if err := s.enrollmentRepo.CreateTx(ctx, tx, ownerEnrollment); err != nil {
+			return fmt.Errorf("create owner enrollment: %w", err)
 		}
 
 		botEnrollment := &models.Enrollment{
@@ -153,23 +156,29 @@ func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.
 			Role:           models.EnrollmentRoleMember,
 			JoinedAt:       time.Now().UTC(),
 		}
-		if err := s.enrollmentRepo.Create(ctx, botEnrollment); err != nil {
-			logger.ErrorfWithCaller("[BotService] Failed to enroll bot in conversation: %v", err)
+		if err := s.enrollmentRepo.CreateTx(ctx, tx, botEnrollment); err != nil {
+			return fmt.Errorf("create bot enrollment: %w", err)
 		}
-	}
 
-	// 自动为 owner 创建 user 安装(替代旧的 friendship;新 Bot 不再创建任何 friendship)
-	installation := &models.BotInstallation{
-		AppID:               bot.ID,
-		InstalledBy:         ownerUUID,
-		TargetType:          models.InstallationTargetUser,
-		TargetID:            ownerUUID,
-		GrantedCapabilities: bot.RequestedCapabilities,
-		DiagnosticsConsent:  models.DiagnosticsGranted, // owner 自己的 Bot,默认可见诊断
-		Status:              models.InstallationActive,
-	}
-	if err := s.installationRepo.Create(ctx, installation); err != nil {
-		logger.ErrorfWithCaller("[BotService] Failed to create owner installation: %v", err)
+		// 自动为 owner 创建 user 安装
+		installation := &models.BotInstallation{
+			AppID:               bot.ID,
+			InstalledBy:         ownerUUID,
+			TargetType:          models.InstallationTargetUser,
+			TargetID:            ownerUUID,
+			GrantedCapabilities: bot.RequestedCapabilities,
+			DiagnosticsConsent:  models.DiagnosticsGranted,
+			Status:              models.InstallationActive,
+		}
+		if err := s.installationRepo.CreateTx(ctx, tx, installation); err != nil {
+			return fmt.Errorf("create owner installation: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		logger.ErrorfWithCaller("[BotService] Failed to create bot conversation/installation (transaction rolled back): %v", err)
+		return nil, err
 	}
 
 	return bot, nil
@@ -393,18 +402,7 @@ func (s *BotService) DeployBot(ctx context.Context, botID, userID string, req *m
 		return nil, errors.New("bot is already a member of this conversation")
 	}
 
-	// 创建 enrollment（role=member）
-	botEnrollment := &models.Enrollment{
-		ConversationID: req.ConversationID,
-		UserID:         botUUID,
-		Role:           models.EnrollmentRoleMember,
-		JoinedAt:       time.Now().UTC(),
-	}
-	if err := s.enrollmentRepo.Create(ctx, botEnrollment); err != nil {
-		return nil, err
-	}
-
-	// 创建 installation 记录(替代 deployment)
+	// 在共享事务中创建 enrollment 和 installation
 	installation := &models.BotInstallation{
 		AppID:               botUUID,
 		InstalledBy:         userUUID,
@@ -414,8 +412,25 @@ func (s *BotService) DeployBot(ctx context.Context, botID, userID string, req *m
 		DiagnosticsConsent:  deriveDiagnosticsConsent(bot.RequestedCapabilities),
 		Status:              models.InstallationActive,
 	}
-	if err := s.installationRepo.Create(ctx, installation); err != nil {
-		logger.ErrorfWithCaller("[BotService] Failed to create installation record: %v", err)
+
+	botEnrollment := &models.Enrollment{
+		ConversationID: req.ConversationID,
+		UserID:         botUUID,
+		Role:           models.EnrollmentRoleMember,
+		JoinedAt:       time.Now().UTC(),
+	}
+
+	err = pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
+		if err := s.enrollmentRepo.CreateTx(ctx, tx, botEnrollment); err != nil {
+			return fmt.Errorf("create bot enrollment: %w", err)
+		}
+		if err := s.installationRepo.CreateTx(ctx, tx, installation); err != nil {
+			return fmt.Errorf("create installation: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to deploy bot (transaction rolled back): %w", err)
 	}
 
 	// 插入系统消息：Bot 已加入对话（sender_id = bot 的 user_id）
@@ -647,48 +662,68 @@ func (s *BotService) CreateBotConversation(ctx context.Context, botID, userID st
 	existingConv, err := s.conversationRepo.FindByUsers(ctx, userUUID, botUUID)
 	if err == nil {
 		// 确保 installation 存在(幂等)
-		s.ensureUserInstallation(ctx, bot, userUUID)
+		if err := s.ensureUserInstallation(ctx, bot, userUUID); err != nil {
+			return nil, err
+		}
 		return existingConv, nil
 	}
 
-	// 不存在则创建新的私聊会话（Bot 作为真实用户参与）
+	// 不存在则创建新的私聊会话（在共享事务中创建会话、enrollment 和 installation）
 	conversation := &models.Conversation{
 		ConversationType: models.ConversationTypeDirect,
 		CreatedBy:        &userUUID,
 	}
 
-	if err := s.conversationRepo.Create(ctx, conversation); err != nil {
-		return nil, err
+	installation := &models.BotInstallation{
+		AppID:               bot.ID,
+		InstalledBy:         userUUID,
+		TargetType:          models.InstallationTargetUser,
+		TargetID:            userUUID,
+		GrantedCapabilities: bot.RequestedCapabilities,
+		DiagnosticsConsent:  deriveDiagnosticsConsent(bot.RequestedCapabilities),
+		Status:              models.InstallationActive,
 	}
 
-	ownerEnrollment := &models.Enrollment{
-		ConversationID: conversation.ID,
-		UserID:         userUUID,
-		Role:           models.EnrollmentRoleOwner,
-		JoinedAt:       time.Now().UTC(),
-	}
-	if err := s.enrollmentRepo.Create(ctx, ownerEnrollment); err != nil {
-		return nil, err
-	}
+	err = pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
+		if err := s.conversationRepo.CreateTx(ctx, tx, conversation); err != nil {
+			return fmt.Errorf("create conversation: %w", err)
+		}
 
-	botEnrollment := &models.Enrollment{
-		ConversationID: conversation.ID,
-		UserID:         botUUID,
-		Role:           models.EnrollmentRoleMember,
-		JoinedAt:       time.Now().UTC(),
-	}
-	if err := s.enrollmentRepo.Create(ctx, botEnrollment); err != nil {
-		return nil, err
-	}
+		ownerEnrollment := &models.Enrollment{
+			ConversationID: conversation.ID,
+			UserID:         userUUID,
+			Role:           models.EnrollmentRoleOwner,
+			JoinedAt:       time.Now().UTC(),
+		}
+		if err := s.enrollmentRepo.CreateTx(ctx, tx, ownerEnrollment); err != nil {
+			return fmt.Errorf("create owner enrollment: %w", err)
+		}
 
-	// 创建 installation 记录(替代 deployment)
-	s.ensureUserInstallation(ctx, bot, userUUID)
+		botEnrollment := &models.Enrollment{
+			ConversationID: conversation.ID,
+			UserID:         botUUID,
+			Role:           models.EnrollmentRoleMember,
+			JoinedAt:       time.Now().UTC(),
+		}
+		if err := s.enrollmentRepo.CreateTx(ctx, tx, botEnrollment); err != nil {
+			return fmt.Errorf("create bot enrollment: %w", err)
+		}
+
+		if err := s.installationRepo.CreateTx(ctx, tx, installation); err != nil {
+			return fmt.Errorf("create user installation: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create bot conversation (transaction rolled back): %w", err)
+	}
 
 	return conversation, nil
 }
 
-// ensureUserInstallation 幂等创建 user 安装(ON CONFLICT DO NOTHING)
-func (s *BotService) ensureUserInstallation(ctx context.Context, bot *models.Bot, userID uuid.UUID) {
+// ensureUserInstallation 幂等创建并验证 user 安装。
+func (s *BotService) ensureUserInstallation(ctx context.Context, bot *models.Bot, userID uuid.UUID) error {
 	installation := &models.BotInstallation{
 		AppID:               bot.ID,
 		InstalledBy:         userID,
@@ -699,8 +734,12 @@ func (s *BotService) ensureUserInstallation(ctx context.Context, bot *models.Bot
 		Status:              models.InstallationActive,
 	}
 	if err := s.installationRepo.Create(ctx, installation); err != nil {
-		logger.ErrorfWithCaller("[BotService] Failed to create user installation: %v", err)
+		return fmt.Errorf("create user installation: %w", err)
 	}
+	if installation.Status != models.InstallationActive {
+		return errors.New("bot installation is not active")
+	}
+	return nil
 }
 
 // GetActiveBotsForConversation 获取会话中活跃的 Bot 安装列表（含 Bot 信息）
