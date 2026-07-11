@@ -37,7 +37,7 @@ Bot Studio is the core creative surface in PurrChat. The DAG editor lets users c
 
 - **Event-driven workflows**: Trigger -> condition branch -> action.
 - **Built-in actions**: reply, delayed message, group nickname updates, user tag matching, and more.
-- **Python sandbox**: embed custom Python logic inside event chains.
+- **External integrations**: LLM, HTTP tools, Dify, n8n.
 - **Debug panel**: trace event execution and inspect variables in real time.
 - **Bot discovery**: search and deploy community-created bots.
 
@@ -160,7 +160,7 @@ PurrChat/
 - Bot CRUD: create, edit, enable, and disable bots.
 - Deploy bots to direct messages or group chats.
 - Trigger and reply system with keywords, regular expressions, and user tags.
-- Workflow mode with event chains and Python sandbox support.
+- Workflow mode with event chains and external integrations (LLM, Dify, n8n).
 - Visual DAG editor for drag-and-drop orchestration.
 - Debug panel for event-chain tracing.
 - Bot discovery and sharing.

@@ -413,7 +413,6 @@ function getEventColor(type: string): string {
   const colors: Record<string, string> = {
     llm: 'var(--theme-primary, #5A8F4E)',
     builtin: 'var(--color-info, #2563eb)',
-    python: '#E6A23C',
     reply: 'var(--color-success, #16a34a)',
   };
   return colors[type] || 'var(--text-quaternary-color, #a8a29e)';

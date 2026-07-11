@@ -588,7 +588,7 @@ export interface SpecialModeSession {
 
 export interface EventTrace {
   event_id: string;
-  event_type: 'llm' | 'builtin' | 'python' | 'reply';
+  event_type: 'llm' | 'builtin' | 'reply';
   event_name: string;
   status: 'pending' | 'running' | 'success' | 'error';
   input: string;

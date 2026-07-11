@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"purr-chat-server/internal/botengine/sandbox"
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/websocket"
 	"purr-chat-server/pkg/logger"
@@ -45,7 +44,7 @@ type Position struct {
 // WorkflowEvent 事件链中的单个事件
 type WorkflowEvent struct {
 	ID       string         `json:"id"`
-	Type     string         `json:"type"` // "llm" | "builtin" | "python" | "reply" | "trigger" | "if" | "loop" | "wait" | "end"
+	Type     string         `json:"type"` // "llm" | "builtin" | "reply" | "trigger" | "if" | "loop" | "wait" | "end"
 	Name     string         `json:"name"`
 	Config   map[string]any `json:"config"`
 	Ports    []EventPort    `json:"ports,omitempty"`    // 端口定义（流程引擎）
@@ -288,8 +287,6 @@ func (e *BotEngine) executeEvent(ctx context.Context, session *WorkflowSession, 
 		return e.executeLLMEvent(ctx, session, event, input)
 	case "builtin":
 		return e.executeBuiltinEvent(ctx, session, event, input)
-	case "python":
-		return e.executePythonEvent(ctx, session, event, input)
 	case "reply":
 		return e.executeReplyEvent(ctx, session, event, input)
 	default:
@@ -367,11 +364,6 @@ func (e *BotEngine) executeReplyEvent(_ context.Context, session *WorkflowSessio
 // executeBuiltinEvent 执行内置事件
 func (e *BotEngine) executeBuiltinEvent(_ context.Context, session *WorkflowSession, event *WorkflowEvent, input string) (string, error) {
 	return executeBuiltinHandler(event.Config, input, session.Variables)
-}
-
-// executePythonEvent 执行 Python 事件
-func (e *BotEngine) executePythonEvent(ctx context.Context, _ *WorkflowSession, event *WorkflowEvent, input string) (string, error) {
-	return sandbox.ExecutePythonEvent(ctx, event.Config, input)
 }
 
 // collectEventContext 根据 context_scope 收集事件所需的上下文

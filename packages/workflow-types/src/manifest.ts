@@ -140,13 +140,6 @@ const NODE_MANIFEST_STATUS = [
     productionReady: true,
   },
   {
-    type: 'python',
-    defaultConfig: { code: '', timeout_ms: 5000 },
-    implemented: false,
-    tested: false,
-    productionReady: false,
-  },
-  {
     type: 'reply',
     defaultConfig: { template: '' },
     implemented: true,

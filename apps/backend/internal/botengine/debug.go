@@ -175,12 +175,12 @@ func (e *BotEngine) debugRunAll(ctx context.Context, session *DebugSession, work
 		// 在全量调试模式下直接走完整的 flow engine
 		// 但为调试目的，我们对处理节点逐个执行并记录 trace
 		input := ""
-		if event.Type == "llm" || event.Type == "builtin" || event.Type == "python" || event.Type == "reply" {
+		if event.Type == "llm" || event.Type == "builtin" || event.Type == "reply" {
 			// 从 session.EventOutputs 获取前一个节点的输出作为输入
 			input = workflowSession.EventOutputs["__last_output__"]
 		}
 
-		if event.Type == "llm" || event.Type == "builtin" || event.Type == "python" || event.Type == "reply" {
+		if event.Type == "llm" || event.Type == "builtin" || event.Type == "reply" {
 			trace := e.executeEventWithTrace(ctx, workflowSession, event, input)
 			traces = append(traces, trace)
 

@@ -105,7 +105,7 @@ const activeTrace = computed(() => {
 });
 
 function typeIcon(type: string): string {
-  const icons: Record<string, string> = { llm: '🧠', builtin: '⚙', python: '🐍', reply: '💬' };
+  const icons: Record<string, string> = { llm: '🧠', builtin: '⚙', reply: '💬' };
   return icons[type] || '?';
 }
 
