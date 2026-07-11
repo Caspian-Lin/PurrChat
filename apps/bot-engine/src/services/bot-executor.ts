@@ -1,4 +1,4 @@
-import type { WorkflowDocument } from '@purrchat/workflow-types';
+import type { WorkflowDocument, RunTrace, RunTraceStatus } from '@purrchat/workflow-types';
 import {
   WorkflowRuntime,
   Compiler,
@@ -6,6 +6,7 @@ import {
   allNodes,
   validateWorkflowDocument,
   toBlueprint,
+  WorkflowExecutionError,
 } from '@purrchat/workflow-engine';
 import type { Blueprint } from '@purrchat/workflow-engine';
 import type { ExecuteRequest, ExecuteResponse } from '../types.js';
@@ -24,12 +25,26 @@ export class BotExecutor {
 
   async execute(req: ExecuteRequest): Promise<ExecuteResponse> {
     const startTime = Date.now();
-    const noMatch: ExecuteResponse = {
-      reply: '',
-      session_active: false,
-      triggered: false,
-      execution_ms: 0,
-    };
+    const runId = crypto.randomUUID();
+
+    const buildResponse = (
+      reply: string,
+      triggered: boolean,
+      sessionActive: boolean,
+      status: RunTraceStatus,
+      trace?: RunTrace,
+      sessionId?: string,
+    ): ExecuteResponse => ({
+      run_id: runId,
+      reply,
+      session_active: sessionActive,
+      session_id: sessionId,
+      triggered,
+      execution_ms: Date.now() - startTime,
+      revision: req.revision,
+      status,
+      trace,
+    });
 
     // 1. 校验文档
     const validationResult = validateWorkflowDocument(req.document, this.registry);
@@ -39,14 +54,11 @@ export class BotExecutor {
         .map((i) => `${i.code}: ${i.message}`)
         .join('; ');
       console.error(`[BotExecutor] Document validation failed bot=${req.bot_id} revision=${req.revision}: ${errors}`);
-      return {
-        ...noMatch,
-        execution_ms: Date.now() - startTime,
-      };
+      return buildResponse('', false, false, 'error');
     }
 
     console.log(
-      `[BotExecutor] START bot=${req.bot_id} revision=${req.revision} sender=${req.sender_name} ` +
+      `[BotExecutor] START bot=${req.bot_id} runId=${runId} revision=${req.revision} sender=${req.sender_name} ` +
         `contentLen=${req.content?.length || 0} nodes=${req.document.spec.nodes.length}`,
     );
 
@@ -66,25 +78,21 @@ export class BotExecutor {
     };
 
     try {
-      // 如果已有活跃会话，通过 sendMessage 推进；否则创建新会话或一次性执行
+      // 如果已有活跃会话，通过 sendMessage 推进
       if (this.runtime.hasSession(sessionId)) {
         console.log(`[BotExecutor]   session EXISTS sessionId=${sessionId}`);
-        const result = await this.runtime.sendMessage(sessionId, req.content, senderInfo);
-        if (!result.sessionActive) {
-          // 会话已结束
-        }
+        const result = await this.runtime.sendMessage(sessionId, req.content, {
+          ...senderInfo,
+          runId,
+        });
+
         const totalMs = Date.now() - startTime;
+        const status: RunTraceStatus = result.status === 'error' ? 'error' : 'completed';
         console.log(
-          `[BotExecutor] DONE bot=${req.bot_id} replyLen=${result.reply?.length || 0} ` +
+          `[BotExecutor] DONE bot=${req.bot_id} runId=${runId} replyLen=${result.reply?.length || 0} ` +
             `sessionActive=${result.sessionActive} ms=${totalMs}`,
         );
-        return {
-          reply: result.reply,
-          session_active: result.sessionActive,
-          session_id: sessionId,
-          triggered: true,
-          execution_ms: totalMs,
-        };
+        return buildResponse(result.reply, true, result.sessionActive, status, result.trace, sessionId);
       }
 
       // 检查是否有 wait 节点（需要多轮会话）
@@ -102,19 +110,18 @@ export class BotExecutor {
           secrets: req.secrets,
         });
 
-        const result = await this.runtime.sendMessage(sessionId, req.content, senderInfo);
+        const result = await this.runtime.sendMessage(sessionId, req.content, {
+          ...senderInfo,
+          runId,
+        });
+
         const totalMs = Date.now() - startTime;
+        const status: RunTraceStatus = result.status === 'error' ? 'error' : 'completed';
         console.log(
-          `[BotExecutor] DONE bot=${req.bot_id} replyLen=${result.reply?.length || 0} ` +
+          `[BotExecutor] DONE bot=${req.bot_id} runId=${runId} replyLen=${result.reply?.length || 0} ` +
             `sessionActive=${result.sessionActive} ms=${totalMs}`,
         );
-        return {
-          reply: result.reply,
-          session_active: result.sessionActive,
-          session_id: sessionId,
-          triggered: true,
-          execution_ms: totalMs,
-        };
+        return buildResponse(result.reply, true, result.sessionActive, status, result.trace, sessionId);
       }
 
       // 无 wait 节点：一次性执行
@@ -126,29 +133,20 @@ export class BotExecutor {
         contextBuffer: req.context_messages,
         grantedCapabilities: req.granted_capabilities,
         secrets: req.secrets,
+        runId,
       });
 
       const totalMs = Date.now() - startTime;
       console.log(
-        `[BotExecutor] DONE bot=${req.bot_id} replyLen=${result.reply?.length || 0} ms=${totalMs}`,
+        `[BotExecutor] DONE bot=${req.bot_id} runId=${runId} replyLen=${result.reply?.length || 0} ms=${totalMs}`,
       );
 
-      return {
-        reply: result.reply,
-        session_active: false,
-        triggered: true,
-        execution_ms: totalMs,
-      };
+      return buildResponse(result.reply, true, false, 'completed', result.trace);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[BotExecutor] EXECUTION_ERROR bot=${req.bot_id}:`, message);
-      const totalMs = Date.now() - startTime;
-      return {
-        reply: '',
-        session_active: false,
-        triggered: true,
-        execution_ms: totalMs,
-      };
+      const trace = err instanceof WorkflowExecutionError ? err.trace : undefined;
+      console.error(`[BotExecutor] EXECUTION_ERROR bot=${req.bot_id} runId=${runId}:`, message);
+      return buildResponse('', true, false, 'error', trace);
     }
   }
 
