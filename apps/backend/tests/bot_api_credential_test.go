@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"purr-chat-server/internal/botws"
 	"purr-chat-server/internal/handlers"
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/repository"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,6 +29,46 @@ type credentialDisconnectSpy struct{ ids []uuid.UUID }
 func (s *credentialDisconnectSpy) DisconnectCredential(_ context.Context, id uuid.UUID) error {
 	s.ids = append(s.ids, id)
 	return nil
+}
+
+func TestBotUniversalWebSocketCredentialIntegration(t *testing.T) {
+	SetupTestDB(t)
+	t.Cleanup(func() { CleanupTestDB(t) })
+	botRepo := repository.NewBotRepository()
+	manager := botws.NewManager(botws.DefaultConfig(), nil)
+	service := services.NewBotAPICredentialService(repository.NewBotAPICredentialRepository(), botRepo, manager)
+	owner := CreateTestUser(t, "ws_cred_owner", "ws_cred_owner@test.com", "pass")
+	bot := createExternalBot(t, botRepo, owner.ID, "Credential WS Bot")
+	secret, err := service.Create(context.Background(), owner.ID, bot.ID, "websocket", nil)
+	require.NoError(t, err)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := botws.NewHandler(manager, service, nil)
+	router.GET("/api/bot/v1/ws", handlers.BotCredentialAuthMiddleware(service), handler.Connect)
+	server := httptest.NewServer(router)
+	defer server.Close()
+	endpoint := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/bot/v1/ws"
+
+	_, response, err := websocket.DefaultDialer.Dial(endpoint, nil)
+	require.Error(t, err)
+	require.Equal(t, http.StatusUnauthorized, response.StatusCode)
+	header := http.Header{"Authorization": []string{"Bearer " + secret.Token}}
+	conn, response, err := websocket.DefaultDialer.Dial(endpoint, header)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusSwitchingProtocols, response.StatusCode)
+	defer conn.Close()
+	_, lifecycle, err := conn.ReadMessage()
+	require.NoError(t, err)
+	assert.Contains(t, string(lifecycle), `"detail_type":"lifecycle"`)
+	assert.Equal(t, 1, manager.Status(bot.ID).Connections)
+
+	_, err = service.Rotate(context.Background(), owner.ID, bot.ID, secret.Credential.ID)
+	require.NoError(t, err)
+	_, _, err = conn.ReadMessage()
+	var closeErr *websocket.CloseError
+	require.ErrorAs(t, err, &closeErr)
+	assert.Equal(t, botws.CloseCredentialInvalid, closeErr.Code)
 }
 
 func setupCredentialService(t *testing.T) (*services.BotAPICredentialService, repository.BotAPICredentialRepository, repository.BotRepository, *credentialDisconnectSpy) {

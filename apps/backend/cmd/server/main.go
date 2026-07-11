@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"reflect"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"purr-chat-server/internal/botengine"
+	"purr-chat-server/internal/botws"
 	"purr-chat-server/internal/handlers"
 	"purr-chat-server/internal/repository"
 	"purr-chat-server/internal/services"
@@ -138,13 +140,16 @@ func main() {
 	memberService := services.NewMemberService(userRepo, conversationRepo, enrollmentRepo)
 	userService := services.NewUserService(userRepo)
 	botService := services.NewBotService(botRepo, installationRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, callLogRepo)
+	botWSManager := botws.NewManager(botws.DefaultConfig(), nil)
+	botService.SetConnectionCloser(botWSManager)
 	installationService := services.NewInstallationService(installationRepo, botRepo, enrollmentRepo, conversationMessageRepo)
 	secretRepo := repository.NewBotAppSecretRepository()
 	secretService := services.NewSecretService(secretRepo, botRepo)
 	secretHandler := handlers.NewSecretHandler(secretService)
 	credentialRepo := repository.NewBotAPICredentialRepository()
-	credentialService := services.NewBotAPICredentialService(credentialRepo, botRepo, services.NoopCredentialConnectionCloser{})
+	credentialService := services.NewBotAPICredentialService(credentialRepo, botRepo, botWSManager)
 	credentialHandler := handlers.NewBotAPICredentialHandler(credentialService)
+	botWSHandler := botws.NewHandler(botWSManager, credentialService, botService)
 	botEngine.SetSecretResolver(secretService)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret, cfg.Port == "443" || os.Getenv("FORCE_SECURE_COOKIES") == "true", &cfg.Turnstile)
 	chatHandler := handlers.NewChatHandler(authService, userService, conversationService, messageService, friendService, memberService)
@@ -266,6 +271,8 @@ func main() {
 
 	// WebSocket路由（通过 Cookie/子协议/query 传递 token，不使用 AuthMiddleware）
 	r.GET("/api/ws", websocket.HandleWebSocket)
+	// Bot Universal WebSocket uses the strict Bot credential middleware and never accepts query credentials.
+	r.GET("/api/bot/v1/ws", handlers.BotCredentialAuthMiddleware(credentialService), botWSHandler.Connect)
 
 	// Bot 路由（per-User 限流）
 	bots := r.Group("/api/bots")
@@ -310,6 +317,7 @@ func main() {
 		bots.GET("/:id/credentials", credentialHandler.List)
 		bots.POST("/:id/credentials/:credential_id/rotate", sensitiveRateLimit, credentialHandler.Rotate)
 		bots.DELETE("/:id/credentials/:credential_id", sensitiveRateLimit, credentialHandler.Revoke)
+		bots.GET("/:id/ws-status", botWSHandler.Status)
 	}
 
 	// Bot 安装路由(per-User 限流)
@@ -348,4 +356,9 @@ func main() {
 	<-quit
 
 	logger.Info("Shutting down server...")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := botWSManager.Shutdown(shutdownCtx); err != nil {
+		logger.Error("Failed to shut down Bot WebSocket manager:", err)
+	}
 }
