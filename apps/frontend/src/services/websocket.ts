@@ -59,11 +59,13 @@ export interface ConversationMemberRemovedData {
 class WebSocketService {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 3000;
+  private maxReconnectAttempts = 10;
+  private baseReconnectDelay = 1000;
+  private maxReconnectDelay = 30000;
   // eslint-disable-next-line no-unused-vars
   private messageHandlers = new Map<string, Array<(data: any) => void>>();
   private isManualClose = false;
+  private shouldReconnect = true;
 
   // 连接状态
   public connected = ref(false);
@@ -89,7 +91,7 @@ class WebSocketService {
   }
 
   // 连接WebSocket（token 通过 Cookie 或子协议传递，不再通过 URL query）
-  connect(userId: string) {
+  connect() {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       logger.log('WebSocket already connected');
       return;
@@ -98,8 +100,9 @@ class WebSocketService {
     this.connecting.value = true;
     this.connectionStore.setConnecting(true);
     this.isManualClose = false;
+    this.shouldReconnect = true;
 
-    const wsUrl = getWebSocketUrl(userId);
+    const wsUrl = getWebSocketUrl();
     logger.info('Connecting to WebSocket', { url: wsUrl });
 
     try {
@@ -225,12 +228,24 @@ class WebSocketService {
     this.connectionStore.setConnected(false);
     this.connectionStore.setConnecting(false);
 
-    if (!this.isManualClose) {
+    // 1008 = Policy Violation (auth failure) — don't reconnect
+    if (event.code === 1008) {
+      this.shouldReconnect = false;
+      logger.error('WebSocket auth failure, not reconnecting');
+      return;
+    }
+
+    // 1000 = Normal closure — don't reconnect if manual close
+    if (event.code === 1000 && this.isManualClose) {
+      return;
+    }
+
+    if (this.shouldReconnect && !this.isManualClose) {
       this.scheduleReconnect();
     }
   }
 
-  // 安排重连
+  // 安排重连 — 指数退避 + jitter
   private scheduleReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       logger.error('Max reconnection attempts reached');
@@ -239,7 +254,15 @@ class WebSocketService {
 
     this.reconnectAttempts++;
     this.connectionStore.setReconnectAttempts(this.reconnectAttempts);
-    const delay = this.reconnectDelay * this.reconnectAttempts;
+
+    // 指数退避: base * 2^(attempt-1)，上限 maxReconnectDelay
+    const exponentialDelay = Math.min(
+      this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+      this.maxReconnectDelay
+    );
+    // jitter: ±25% of the delay
+    const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1);
+    const delay = Math.round(exponentialDelay + jitter);
 
     logger.log(
       `Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`
@@ -248,7 +271,7 @@ class WebSocketService {
     setTimeout(() => {
       const auth = useAuthStore();
       if (auth.isAuthenticated && auth.user) {
-        this.connect(auth.user.id);
+        this.connect();
       }
     }, delay);
   }
@@ -317,7 +340,7 @@ export function useWebSocket() {
   const connect = () => {
     const auth = useAuthStore();
     if (auth.isAuthenticated && auth.user) {
-      websocketService.connect(auth.user.id);
+      websocketService.connect();
     }
   };
 

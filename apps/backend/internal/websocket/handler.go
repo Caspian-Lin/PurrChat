@@ -15,27 +15,22 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	Subprotocols:    []string{"bearer"},
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
-
-// Hub 全局WebSocket Hub实例
+// GlobalHub 全局WebSocket Hub实例
 var GlobalHub *Hub
 
-// JWT secret 用于验证WebSocket连接
+// jwtSecret 用于验证WebSocket连接
 var jwtSecret string
 
-// InitHubWithConfig 使用配置初始化全局Hub
-func InitHubWithConfig(maxConnections, maxUserConnections int) {
-	GlobalHub = NewHub(maxConnections, maxUserConnections)
+// hubConfig 保存当前配置（用于 upgrader CheckOrigin）
+var hubConfig HubConfig
+
+// InitHub 使用配置初始化全局Hub
+func InitHub(cfg HubConfig) {
+	GlobalHub = NewHub(cfg)
+	hubConfig = cfg
 	go GlobalHub.Run()
-	logger.Infof("WebSocket Hub initialized with maxConnections=%d, maxUserConnections=%d",
-		maxConnections, maxUserConnections)
+	logger.Infof("WebSocket Hub initialized: maxConnections=%d, maxUserConnections=%d, allowedOrigins=%v, allowQueryToken=%v",
+		cfg.MaxConnections, cfg.MaxUserConnections, cfg.AllowedOrigins, cfg.AllowQueryToken)
 }
 
 // InitJWTSecret 初始化JWT secret
@@ -48,187 +43,203 @@ func InitJWTSecret(secret string) {
 func detectDeviceType(userAgent string) DeviceType {
 	userAgent = strings.ToLower(userAgent)
 
-	// 检测平板设备（优先检测，因为iPad的UA中可能包含mobile）
 	if strings.Contains(userAgent, "ipad") || strings.Contains(userAgent, "tablet") {
 		return DeviceTypeTablet
 	}
 
-	// 检测移动设备
 	if strings.Contains(userAgent, "mobile") || strings.Contains(userAgent, "android") ||
 		strings.Contains(userAgent, "iphone") {
 		return DeviceTypeMobile
 	}
 
-	// 检测桌面浏览器
 	if strings.Contains(userAgent, "mozilla") || strings.Contains(userAgent, "chrome") ||
 		strings.Contains(userAgent, "safari") || strings.Contains(userAgent, "firefox") ||
 		strings.Contains(userAgent, "edge") {
 		return DeviceTypeWeb
 	}
 
-	// 默认返回未知设备类型
 	return DeviceTypeUnknown
 }
 
-// HandleWebSocket 处理WebSocket连接
-// Token 获取优先级: Cookie → Sec-WebSocket-Protocol → URL query (向后兼容)
-func HandleWebSocket(c *gin.Context) {
-	var token string
+// upgrader 返回配置化的 WebSocket Upgrader
+func newUpgrader() websocket.Upgrader {
+	return websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		Subprotocols:    []string{"bearer"},
+		CheckOrigin: func(r *http.Request) bool {
+			if GlobalHub != nil {
+				return GlobalHub.checkOrigin(r)
+			}
+			return true
+		},
+	}
+}
 
-	// 1. 优先从 Cookie 中获取 token（浏览器 WebSocket 自动携带）
-	if t, ok := cookie.GetTokenFromCookie(c.Request); ok {
-		token = t
+// extractToken 按优先级提取 token，防止身份降级
+// 优先级: Cookie → Sec-WebSocket-Protocol → query（仅当显式开启）
+func extractToken(r *http.Request, allowQueryToken bool) (string, string) {
+	if t, ok := cookie.GetTokenFromCookie(r); ok {
+		return t, "cookie"
 	}
 
-	// 2. 回退: 从 Sec-WebSocket-Protocol 子协议中提取 token
-	//    格式: Sec-WebSocket-Protocol: bearer,<token>
-	//    兼容 Tauri 等可能不自动发 Cookie 的客户端
-	if token == "" {
-		for _, proto := range c.Request.Header["Sec-Websocket-Protocol"] {
-			if strings.HasPrefix(proto, "bearer,") {
-				token = strings.TrimPrefix(proto, "bearer,")
-				break
-			}
+	for _, proto := range r.Header["Sec-Websocket-Protocol"] {
+		if strings.HasPrefix(proto, "bearer,") {
+			return strings.TrimPrefix(proto, "bearer,"), "subprotocol"
 		}
 	}
 
-	// 3. 最终回退: 从 query 参数获取（向后兼容旧客户端）
-	if token == "" {
-		token = c.Query("token")
+	if allowQueryToken {
+		if t := r.URL.Query().Get("token"); t != "" {
+			logger.InfofWithCaller("WebSocket token passed via query parameter (deprecated, will be removed)")
+			return t, "query"
+		}
 	}
 
+	return "", ""
+}
+
+// HandleWebSocket 处理WebSocket连接
+func HandleWebSocket(c *gin.Context) {
+	token, source := extractToken(c.Request, hubConfig.AllowQueryToken)
+
 	if token == "" {
+		if GlobalHub != nil {
+			GlobalHub.metrics.AuthFailures.Add(1)
+		}
 		logger.ErrorfWithCaller("WebSocket connection rejected: missing token")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 		return
 	}
 
-	// 验证JWT token并获取用户ID
 	userIDStr, err := jwt.ExtractUserID(token, jwtSecret)
 	if err != nil {
+		if GlobalHub != nil {
+			GlobalHub.metrics.AuthFailures.Add(1)
+		}
 		logger.ErrorfWithCaller("WebSocket connection rejected: invalid token: %v", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
 
-	// 解析用户ID
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
+		if GlobalHub != nil {
+			GlobalHub.metrics.AuthFailures.Add(1)
+		}
 		logger.ErrorfWithCaller("WebSocket connection rejected: invalid user_id: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
 		return
 	}
 
-	// 升级HTTP连接到WebSocket
+	hub := GlobalHub
+	upgrader := newUpgrader()
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to upgrade to WebSocket: %v", err)
 		return
 	}
 
-	// 获取User-Agent并检测设备类型
 	userAgent := c.Request.Header.Get("User-Agent")
 	deviceType := detectDeviceType(userAgent)
 
-	// 创建客户端
 	client := &Client{
 		ID:          uuid.New(),
 		UserID:      userID,
 		Conn:        conn,
-		Send:        make(chan []byte, 256),
+		Send:        make(chan []byte, hub.config.SendQueueSize),
 		DeviceType:  deviceType,
 		ConnectedAt: time.Now(),
 		UserAgent:   userAgent,
+		done:        make(chan struct{}),
+		hub:         hub,
 	}
 
-	// 注册客户端
-	err = GlobalHub.RegisterClient(client)
-	if err != nil {
-		// 如果注册失败（例如超过最大连接数），关闭连接
-		conn.Close()
+	if err := hub.RegisterClient(client); err != nil {
+		client.close(CloseConnectionLimit, err.Error())
 		logger.InfofWithCaller("Failed to register client: %v", err)
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 启动读写协程
+	logger.InfofWithCaller("WebSocket connected: ClientID=%s, UserID=%s, DeviceType=%s, TokenSource=%s",
+		client.ID, client.UserID, client.DeviceType, source)
+
 	go client.writePump()
-	go client.readPump()
+	client.readPump()
 }
 
 // readPump 从WebSocket连接读取消息
 func (c *Client) readPump() {
 	defer func() {
-		GlobalHub.unregister <- c
-		c.Conn.Close()
+		c.close(CloseNormal, "connection closed")
+		if c.hub != nil {
+			select {
+			case c.hub.unregister <- c:
+			default:
+			}
+		}
 	}()
 
-	c.Conn.SetReadLimit(512)
-	_ = c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	cfg := c.hub.config
+	c.Conn.SetReadLimit(cfg.ReadLimit)
+	_ = c.Conn.SetReadDeadline(time.Now().Add(cfg.ReadTimeout))
 	c.Conn.SetPongHandler(func(string) error {
-		_ = c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_ = c.Conn.SetReadDeadline(time.Now().Add(cfg.ReadTimeout))
 		return nil
 	})
 
 	for {
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			if websocket.IsCloseError(err, websocket.CloseMessageTooBig) {
+				if c.hub != nil {
+					c.hub.metrics.ProtocolErrors.Add(1)
+				}
+				c.close(CloseMessageTooBig, "message too big")
+				return
+			}
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure, websocket.CloseAbnormalClosure) {
 				logger.ErrorfWithCaller("WebSocket read error: %v", err)
 			}
-			break
+			return
 		}
 
-		// 处理接收到的消息
 		c.handleMessage(message)
 	}
 }
 
 // writePump 向WebSocket连接写入消息
+// 每个逻辑事件写入独立 text frame，不合并多个 JSON
 func (c *Client) writePump() {
-	ticker := time.NewTicker(54 * time.Second)
+	cfg := c.hub.config
+	ticker := time.NewTicker(cfg.PingInterval)
 	defer func() {
 		ticker.Stop()
-		c.Conn.Close()
+		_ = c.Conn.Close()
 	}()
 
 	for {
 		select {
+		case <-c.done:
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(cfg.WriteTimeout))
+			_ = c.Conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(c.closeCode, c.closeReason))
+			return
 		case message, ok := <-c.Send:
-			_ = c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(cfg.WriteTimeout))
 			if !ok {
-				// Hub关闭了通道
-				_ = c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-
-			w, err := c.Conn.NextWriter(websocket.TextMessage)
-			if err != nil {
+			if err := c.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				logger.ErrorfWithCaller("WebSocket write error: %v", err)
 				return
 			}
-			if _, err := w.Write(message); err != nil {
-				logger.ErrorfWithCaller("WebSocket write message error: %v", err)
-				return
-			}
-
-			// 排队队列中的消息
-			n := len(c.Send)
-			for i := 0; i < n; i++ {
-				if _, err := w.Write(<-c.Send); err != nil {
-					logger.ErrorfWithCaller("WebSocket write queued message error: %v", err)
-					return
-				}
-			}
-
-			if err := w.Close(); err != nil {
-				logger.ErrorfWithCaller("WebSocket close error: %v", err)
-				return
-			}
-
 		case <-ticker.C:
-			_ = c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(cfg.WriteTimeout))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				if c.hub != nil {
+					c.hub.metrics.PingTimeouts.Add(1)
+				}
 				logger.ErrorfWithCaller("WebSocket ping error: %v", err)
 				return
 			}
@@ -240,20 +251,24 @@ func (c *Client) writePump() {
 func (c *Client) handleMessage(message []byte) {
 	var msg map[string]interface{}
 	if err := json.Unmarshal(message, &msg); err != nil {
+		if c.hub != nil {
+			c.hub.metrics.ProtocolErrors.Add(1)
+		}
 		logger.ErrorfWithCaller("Failed to unmarshal message: %v", err)
 		return
 	}
 
-	// 根据消息类型处理
 	msgType, ok := msg["type"].(string)
 	if !ok {
+		if c.hub != nil {
+			c.hub.metrics.ProtocolErrors.Add(1)
+		}
 		logger.ErrorfWithCaller("Message missing type field")
 		return
 	}
 
 	switch msgType {
 	case "ping":
-		// 响应ping消息
 		pongMsg := map[string]interface{}{
 			"type": "pong",
 		}
@@ -261,11 +276,10 @@ func (c *Client) handleMessage(message []byte) {
 		select {
 		case c.Send <- data:
 		default:
-			logger.ErrorfWithCaller("Failed to send pong to client %s", c.ID)
+			logger.ErrorfWithCaller("Failed to send pong to client %s (queue full)", c.ID)
 		}
 
 	case "typing":
-		// 处理输入状态
 		// TODO: 实现输入状态广播
 
 	default:

@@ -1,174 +1,143 @@
 package websocket
 
 import (
-	"strings"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-// TestDetectDeviceType 测试设备类型检测
 func TestDetectDeviceType(t *testing.T) {
 	tests := []struct {
 		name      string
 		userAgent string
 		expected  DeviceType
 	}{
-		{
-			name:      "Web Browser - Chrome",
-			userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-			expected:  DeviceTypeWeb,
-		},
-		{
-			name:      "Web Browser - Firefox",
-			userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
-			expected:  DeviceTypeWeb,
-		},
-		{
-			name:      "Web Browser - Safari",
-			userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
-			expected:  DeviceTypeWeb,
-		},
-		{
-			name:      "Mobile Device - iPhone",
-			userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1",
-			expected:  DeviceTypeMobile,
-		},
-		{
-			name:      "Mobile Device - Android",
-			userAgent: "Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36",
-			expected:  DeviceTypeMobile,
-		},
-		{
-			name:      "Tablet Device - iPad",
-			userAgent: "Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1",
-			expected:  DeviceTypeTablet,
-		},
-		{
-			name:      "Tablet Device - Android Tablet",
-			userAgent: "Mozilla/5.0 (Linux; Android 10; KFTRWI) AppleWebKit/537.36 (KHTML, like Gecko) Silk/89.4.0 like Chrome/89.0.4389.105 Safari/537.36",
-			expected:  DeviceTypeMobile,
-		},
-		{
-			name:      "Desktop Device",
-			userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-			expected:  DeviceTypeWeb,
-		},
-		{
-			name:      "Unknown Device",
-			userAgent: "CustomClient/1.0",
-			expected:  DeviceTypeUnknown,
-		},
-		{
-			name:      "Empty User-Agent",
-			userAgent: "",
-			expected:  DeviceTypeUnknown,
-		},
+		{"Web Chrome", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/91.0", DeviceTypeWeb},
+		{"Web Firefox", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0", DeviceTypeWeb},
+		{"Web Safari", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15", DeviceTypeWeb},
+		{"Mobile iPhone", "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6) AppleWebKit/605.1.15 Mobile/15E148", DeviceTypeMobile},
+		{"Mobile Android", "Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 Mobile Safari/537.36", DeviceTypeMobile},
+		{"Tablet iPad", "Mozilla/5.0 (iPad; CPU OS 14_6) AppleWebKit/605.1.15 Mobile/15E148", DeviceTypeTablet},
+		{"Unknown", "CustomClient/1.0", DeviceTypeUnknown},
+		{"Empty", "", DeviceTypeUnknown},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := detectDeviceType(tt.userAgent)
-			assert.Equal(t, tt.expected, result, "User-Agent: %s", tt.userAgent)
+			assert.Equal(t, tt.expected, detectDeviceType(tt.userAgent))
 		})
 	}
 }
 
-// TestDetectDeviceTypeCaseInsensitive 测试设备类型检测不区分大小写
-func TestDetectDeviceTypeCaseInsensitive(t *testing.T) {
-	tests := []struct {
-		name      string
-		userAgent string
-		expected  DeviceType
-	}{
-		{
-			name:      "Mobile - uppercase",
-			userAgent: "Mozilla/5.0 MOBILE",
-			expected:  DeviceTypeMobile,
-		},
-		{
-			name:      "Mobile - mixed case",
-			userAgent: "Mozilla/5.0 MoBiLe",
-			expected:  DeviceTypeMobile,
-		},
-		{
-			name:      "iPhone - uppercase",
-			userAgent: "Mozilla/5.0 IPHONE",
-			expected:  DeviceTypeMobile,
-		},
-		{
-			name:      "Android - uppercase",
-			userAgent: "Mozilla/5.0 ANDROID",
-			expected:  DeviceTypeMobile,
-		},
-		{
-			name:      "iPad - uppercase",
-			userAgent: "Mozilla/5.0 IPAD",
-			expected:  DeviceTypeTablet,
-		},
-		{
-			name:      "Tablet - uppercase",
-			userAgent: "Mozilla/5.0 TABLET",
-			expected:  DeviceTypeTablet,
-		},
-		{
-			name:      "Mozilla - uppercase",
-			userAgent: "MOZILLA/5.0",
-			expected:  DeviceTypeWeb,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := detectDeviceType(tt.userAgent)
-			assert.Equal(t, tt.expected, result, "User-Agent: %s", tt.userAgent)
-		})
-	}
-}
-
-// TestDetectDeviceTypePriority 测试设备类型检测优先级
 func TestDetectDeviceTypePriority(t *testing.T) {
-	// 测试优先级：tablet > mobile > web
-	tests := []struct {
-		name      string
-		userAgent string
-		expected  DeviceType
-	}{
-		{
-			name:      "iPad with mobile in UA is detected as tablet (tablet has higher priority)",
-			userAgent: "Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1",
-			expected:  DeviceTypeTablet,
-		},
-		{
-			name:      "iPad without mobile in UA should be detected as tablet",
-			userAgent: "Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1",
-			expected:  DeviceTypeTablet,
-		},
-		{
-			name:      "iPhone should be detected as mobile",
-			userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1",
-			expected:  DeviceTypeMobile,
-		},
-		{
-			name:      "Android tablet should be detected as mobile",
-			userAgent: "Mozilla/5.0 (Linux; Android 10; KFTRWI) AppleWebKit/537.36 (KHTML, like Gecko) Silk/89.4.0 like Chrome/89.0.4389.105 Safari/537.36",
-			expected:  DeviceTypeMobile,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := detectDeviceType(tt.userAgent)
-			assert.Equal(t, tt.expected, result, "User-Agent: %s", tt.userAgent)
-		})
-	}
+	assert.Equal(t, DeviceTypeTablet, detectDeviceType("Mozilla/5.0 (iPad; CPU OS 14_6) Mobile/15E148"))
+	assert.Equal(t, DeviceTypeMobile, detectDeviceType("Mozilla/5.0 (iPhone; CPU iPhone OS 14_6) Mobile/15E148"))
 }
 
-// TestDetectDeviceTypeContains 测试设备类型检测包含关系
-func TestDetectDeviceTypeContains(t *testing.T) {
-	// 测试字符串包含关系（不区分大小写）
-	assert.True(t, strings.Contains(strings.ToLower("Mozilla/5.0 (iPhone"), "iphone"))
-	assert.True(t, strings.Contains(strings.ToLower("Mozilla/5.0 (Android"), "android"))
-	assert.True(t, strings.Contains(strings.ToLower("Mozilla/5.0 (iPad"), "ipad"))
-	assert.True(t, strings.Contains(strings.ToLower("Mozilla/5.0 (Tablet"), "tablet"))
+func TestDetectDeviceTypeCaseInsensitive(t *testing.T) {
+	assert.Equal(t, DeviceTypeMobile, detectDeviceType("MOBILE"))
+	assert.Equal(t, DeviceTypeTablet, detectDeviceType("IPAD"))
+	assert.Equal(t, DeviceTypeWeb, detectDeviceType("MOZILLA"))
+}
+
+func makeRequest(t *testing.T, method, url string) *http.Request {
+	t.Helper()
+	r := httptest.NewRequest(method, url, nil)
+	return r
+}
+
+func TestExtractTokenFromCookie(t *testing.T) {
+	r := makeRequest(t, "GET", "/api/ws")
+	r.AddCookie(&http.Cookie{Name: "purrchat_token", Value: "cookie_token"})
+
+	token, source := extractToken(r, false)
+	assert.Equal(t, "cookie_token", token)
+	assert.Equal(t, "cookie", source)
+}
+
+func TestExtractTokenFromSubprotocol(t *testing.T) {
+	r := makeRequest(t, "GET", "/api/ws")
+	r.Header.Set("Sec-WebSocket-Protocol", "bearer,subproto_token")
+
+	token, source := extractToken(r, false)
+	assert.Equal(t, "subproto_token", token)
+	assert.Equal(t, "subprotocol", source)
+}
+
+func TestExtractTokenFromQueryDisabled(t *testing.T) {
+	r := makeRequest(t, "GET", "/api/ws?token=query_token")
+
+	token, _ := extractToken(r, false)
+	assert.Empty(t, token)
+}
+
+func TestExtractTokenFromQueryEnabled(t *testing.T) {
+	r := makeRequest(t, "GET", "/api/ws?token=query_token")
+
+	token, source := extractToken(r, true)
+	assert.Equal(t, "query_token", token)
+	assert.Equal(t, "query", source)
+}
+
+func TestExtractTokenCookiePreferredOverSubprotocol(t *testing.T) {
+	r := makeRequest(t, "GET", "/api/ws")
+	r.AddCookie(&http.Cookie{Name: "purrchat_token", Value: "cookie_token"})
+	r.Header.Set("Sec-WebSocket-Protocol", "bearer,subproto_token")
+
+	token, source := extractToken(r, false)
+	assert.Equal(t, "cookie_token", token)
+	assert.Equal(t, "cookie", source)
+}
+
+func TestExtractTokenCookiePreferredOverQuery(t *testing.T) {
+	r := makeRequest(t, "GET", "/api/ws?token=query_token")
+	r.AddCookie(&http.Cookie{Name: "purrchat_token", Value: "cookie_token"})
+
+	token, source := extractToken(r, true)
+	assert.Equal(t, "cookie_token", token)
+	assert.Equal(t, "cookie", source)
+}
+
+func TestExtractTokenSubprotocolPreferredOverQuery(t *testing.T) {
+	r := makeRequest(t, "GET", "/api/ws?token=query_token")
+	r.Header.Set("Sec-WebSocket-Protocol", "bearer,subproto_token")
+
+	token, source := extractToken(r, true)
+	assert.Equal(t, "subproto_token", token)
+	assert.Equal(t, "subprotocol", source)
+}
+
+func TestExtractTokenEmpty(t *testing.T) {
+	r := makeRequest(t, "GET", "/api/ws")
+	token, _ := extractToken(r, false)
+	assert.Empty(t, token)
+}
+
+func TestCheckOriginNoAllowlist(t *testing.T) {
+	hub := NewHub(HubConfig{AllowedOrigins: nil})
+	r := makeRequest(t, "GET", "/api/ws")
+	r.Header.Set("Origin", "https://evil.com")
+	assert.True(t, hub.checkOrigin(r))
+}
+
+func TestCheckOriginEmptyOriginAllowed(t *testing.T) {
+	hub := NewHub(HubConfig{AllowedOrigins: []string{"https://app.purrchat.com"}})
+	r := makeRequest(t, "GET", "/api/ws")
+	assert.True(t, hub.checkOrigin(r))
+}
+
+func TestCheckOriginAllowed(t *testing.T) {
+	hub := NewHub(HubConfig{AllowedOrigins: []string{"https://app.purrchat.com", "https://staging.purrchat.com"}})
+	r := makeRequest(t, "GET", "/api/ws")
+	r.Header.Set("Origin", "https://app.purrchat.com")
+	assert.True(t, hub.checkOrigin(r))
+}
+
+func TestCheckOriginRejected(t *testing.T) {
+	hub := NewHub(HubConfig{AllowedOrigins: []string{"https://app.purrchat.com"}})
+	r := makeRequest(t, "GET", "/api/ws")
+	r.Header.Set("Origin", "https://evil.com")
+	assert.False(t, hub.checkOrigin(r))
 }

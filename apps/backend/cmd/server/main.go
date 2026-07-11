@@ -168,7 +168,20 @@ func main() {
 	workflowHandler := handlers.NewWorkflowHandler(workflowService)
 
 	// 初始化WebSocket hub
-	websocket.InitHubWithConfig(cfg.WebSocket.MaxConnections, cfg.WebSocket.MaxUserConnections)
+	writeTimeout, _ := time.ParseDuration(cfg.WebSocket.WriteTimeout)
+	readTimeout, _ := time.ParseDuration(cfg.WebSocket.ReadTimeout)
+	pingInterval, _ := time.ParseDuration(cfg.WebSocket.PingInterval)
+	websocket.InitHub(websocket.HubConfig{
+		MaxConnections:     cfg.WebSocket.MaxConnections,
+		MaxUserConnections: cfg.WebSocket.MaxUserConnections,
+		SendQueueSize:      cfg.WebSocket.SendQueueSize,
+		ReadLimit:          cfg.WebSocket.ReadLimit,
+		WriteTimeout:       writeTimeout,
+		ReadTimeout:        readTimeout,
+		PingInterval:       pingInterval,
+		AllowedOrigins:     cfg.WebSocket.AllowedOrigins,
+		AllowQueryToken:    cfg.WebSocket.AllowQueryToken,
+	})
 	websocket.InitJWTSecret(cfg.JWT.Secret)
 
 	// 认证端点 per-IP 速率限制 — 防止暴力破解和批量注册
@@ -361,4 +374,5 @@ func main() {
 	if err := botWSManager.Shutdown(shutdownCtx); err != nil {
 		logger.Error("Failed to shut down Bot WebSocket manager:", err)
 	}
+	websocket.GlobalHub.Shutdown()
 }
