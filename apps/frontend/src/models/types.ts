@@ -728,6 +728,7 @@ export interface WorkflowDocumentResponse {
 export interface WorkflowVersion {
   id: string;
   bot_id: string;
+  mechanism_id: string;
   revision: number;
   document: import('@purrchat/workflow-types').WorkflowDocument;
   capabilities: string[];
