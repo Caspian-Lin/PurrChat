@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"purr-chat-server/internal/botaction"
 	"purr-chat-server/internal/botengine"
 	"purr-chat-server/internal/botws"
 	"purr-chat-server/internal/handlers"
@@ -145,7 +146,8 @@ func main() {
 	memberService := services.NewMemberService(userRepo, conversationRepo, enrollmentRepo)
 	userService := services.NewUserService(userRepo)
 	botService := services.NewBotService(botRepo, installationRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, callLogRepo)
-	botWSManager := botws.NewManager(botws.DefaultConfig(), nil)
+	actionDispatcher := botaction.NewDispatcher(messageService, botRepo, userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, installationRepo)
+	botWSManager := botws.NewManager(botws.DefaultConfig(), actionDispatcher)
 	botService.SetConnectionCloser(botWSManager)
 	installationService := services.NewInstallationService(installationRepo, botRepo, enrollmentRepo, conversationMessageRepo)
 	secretRepo := repository.NewBotAppSecretRepository()
@@ -155,6 +157,7 @@ func main() {
 	credentialService := services.NewBotAPICredentialService(credentialRepo, botRepo, botWSManager)
 	credentialHandler := handlers.NewBotAPICredentialHandler(credentialService)
 	botWSHandler := botws.NewHandler(botWSManager, credentialService, botService)
+	botActionHandler := handlers.NewBotActionHandler(actionDispatcher)
 	botEngine.SetSecretResolver(secretService)
 
 	// 注册消息事件 sink
@@ -297,6 +300,8 @@ func main() {
 	r.GET("/api/ws", websocket.HandleWebSocket)
 	// Bot Universal WebSocket uses the strict Bot credential middleware and never accepts query credentials.
 	r.GET("/api/bot/v1/ws", handlers.BotCredentialAuthMiddleware(credentialService), botWSHandler.Connect)
+	// Bot HTTP Action endpoint shares the same dispatcher as Universal WS.
+	r.POST("/api/bot/v1/actions/:action", handlers.BotCredentialAuthMiddleware(credentialService), botActionHandler.HandleAction)
 
 	// Bot 路由（per-User 限流）
 	bots := r.Group("/api/bots")

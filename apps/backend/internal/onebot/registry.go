@@ -70,11 +70,15 @@ var profile = ProfileDefinition{
 }
 
 var actionDefinitions = []ActionDefinition{
-	{Name: "send_message", Aliases: []string{"send_msg", "send_private_msg", "send_group_msg"}, Category: "message", Status: StatusPlanned, Transports: allTransports(), RequiredCapability: models.CapabilitySend, Version: ProfileVersion, CompatibilityNote: "conversation_id is the routing key; private/group aliases do not imply numeric QQ IDs"},
-	{Name: "get_message_history", Aliases: []string{"get_group_msg_history"}, Category: "message", Status: StatusPlanned, Transports: allTransports(), RequiredCapability: models.CapabilityReadHistory, Version: ProfileVersion},
-	{Name: "get_conversation_info", Aliases: []string{"get_group_info"}, Category: "conversation", Status: StatusPlanned, Transports: allTransports(), Version: ProfileVersion},
-	{Name: "get_conversation_member_list", Aliases: []string{"get_group_member_list"}, Category: "member", Status: StatusPlanned, Transports: allTransports(), RequiredCapability: models.CapabilityMembersRead, Version: ProfileVersion},
-	{Name: "get_login_info", Category: "bot", Status: StatusPlanned, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "returns the authenticated PurrChat Bot identity"},
+	{Name: "send_message", Aliases: []string{"send_msg", "send_private_msg", "send_group_msg"}, Category: "message", Status: StatusStable, Transports: allTransports(), RequiredCapability: models.CapabilitySend, Version: ProfileVersion, CompatibilityNote: "conversation_id is the routing key; private/group aliases do not imply numeric QQ IDs"},
+	{Name: "get_message_history", Aliases: []string{"get_group_msg_history"}, Category: "message", Status: StatusStable, Transports: allTransports(), RequiredCapability: models.CapabilityReadHistory, Version: ProfileVersion, CompatibilityNote: "message_seq is not supported; pagination uses offset/limit on opaque UUID message_id"},
+	{Name: "get_conversation_info", Aliases: []string{"get_group_info"}, Category: "conversation", Status: StatusStable, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "requires active installation; no separate capability beyond membership"},
+	{Name: "get_conversation_list", Aliases: []string{"get_group_list"}, Category: "conversation", Status: StatusStable, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "returns conversations where the bot has an active installation"},
+	{Name: "get_conversation_member_list", Aliases: []string{"get_group_member_list"}, Category: "member", Status: StatusStable, Transports: allTransports(), RequiredCapability: models.CapabilityMembersRead, Version: ProfileVersion},
+	{Name: "get_conversation_member_info", Aliases: []string{"get_group_member_info"}, Category: "member", Status: StatusStable, Transports: allTransports(), RequiredCapability: models.CapabilityMembersRead, Version: ProfileVersion},
+	{Name: "get_login_info", Category: "bot", Status: StatusStable, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "returns the authenticated PurrChat Bot identity"},
+	{Name: "get_status", Category: "bot", Status: StatusStable, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "always returns online=true for authenticated external bots"},
+	{Name: "get_version_info", Category: "bot", Status: StatusStable, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "reports the PurrChat OneBot profile version"},
 	{Name: "get_cookies", Category: "credential", Status: StatusRejected, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "PurrChat never exposes account cookies"},
 	{Name: "get_csrf_token", Category: "credential", Status: StatusRejected, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "PurrChat never exposes CSRF credentials"},
 	{Name: "get_credentials", Category: "credential", Status: StatusRejected, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "PurrChat never exposes credentials"},
