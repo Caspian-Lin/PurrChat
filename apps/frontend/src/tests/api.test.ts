@@ -35,6 +35,14 @@ describe('API Client', () => {
     mockedAxios.create.mockReturnValue(mockedAxios as any);
   });
 
+  it('gets the Bot API capability catalog from the Registry endpoint', async () => {
+    const catalog = { profile: {}, actions: [], events: [], segments: [] };
+    mockedAxios.get.mockResolvedValueOnce({ data: catalog } as any);
+
+    await expect(api.getBotApiCapabilities()).resolves.toEqual(catalog);
+    expect(mockedAxios.get).toHaveBeenCalledWith('/api/bot/v1/capabilities');
+  });
+
   describe('register', () => {
     it('should register a new user', async () => {
       const mockUser: User = {

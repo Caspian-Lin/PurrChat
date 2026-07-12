@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"purr-chat-server/internal/models"
+	"purr-chat-server/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,6 +23,17 @@ func getUserID(c *gin.Context) (string, bool) {
 		return "", false
 	}
 	return id, true
+}
+
+func respondProtectedResourceError(c *gin.Context, err error, internalMessage string) {
+	switch {
+	case errors.Is(err, services.ErrInvalidID):
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid ID"})
+	case errors.Is(err, services.ErrResourceNotFound):
+		c.JSON(http.StatusNotFound, models.APIResponse{Success: false, Message: "Resource not found"})
+	default:
+		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: internalMessage})
+	}
 }
 
 // dereferenceSlice 将 []*T 转为 []T

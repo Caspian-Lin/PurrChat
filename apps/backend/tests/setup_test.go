@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"purr-chat-server/internal/handlers"
+	"purr-chat-server/internal/messaging"
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/repository"
 	"purr-chat-server/internal/services"
@@ -69,6 +70,11 @@ func SetupTestDB(t *testing.T) {
 // CreateTestTables 创建测试表
 func CreateTestTables(t *testing.T, ctx context.Context) {
 	tables := []string{
+		"bot_api_credential_audit_logs",
+		"bot_api_credentials",
+		"bot_event_ack_state",
+		"bot_event_outbox",
+		"bot_event_seq_counter",
 		"bot_call_logs",
 		"workflow_versions",
 		"bot_app_secrets",
@@ -278,6 +284,41 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		t.Fatalf("Failed to create bot_app_secrets table: %v", err)
 	}
 
+	// 创建 external Bot API credential 与无敏感正文审计表(见 migration 012)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_api_credentials (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			name VARCHAR(64) NOT NULL,
+			token_hash BYTEA NOT NULL UNIQUE,
+			token_prefix VARCHAR(20) NOT NULL,
+			last_used_at TIMESTAMP,
+			expires_at TIMESTAMP,
+			revoked_at TIMESTAMP,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT check_bot_api_credential_name CHECK (char_length(trim(name)) > 0)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_api_credentials table: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_api_credential_audit_logs (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			credential_id UUID NOT NULL REFERENCES bot_api_credentials(id) ON DELETE CASCADE,
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+			event_type VARCHAR(32) NOT NULL,
+			metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT check_bot_api_credential_audit_event CHECK (event_type IN ('created', 'rotated', 'revoked', 'connected', 'invoked'))
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_api_credential_audit_logs table: %v", err)
+	}
+
 	// 创建 bot_deployments 表(legacy,用于迁移测试)
 	_, err = database.GetPool().Exec(ctx, `
 		CREATE TABLE bot_deployments (
@@ -363,6 +404,59 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create user_settings table: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `CREATE SEQUENCE IF NOT EXISTS bot_event_seq_counter_seq START WITH 1`)
+	if err != nil {
+		t.Logf("Warning: Failed to create bot_event_seq_counter_seq: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_event_seq_counter (
+			bot_id   UUID PRIMARY KEY REFERENCES bots(id) ON DELETE CASCADE,
+			next_seq BIGINT NOT NULL DEFAULT 1
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_event_seq_counter table: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_event_outbox (
+			id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			bot_id     UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			event_id   TEXT NOT NULL,
+			seq        BIGINT NOT NULL,
+			payload    JSONB NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			acked_at   TIMESTAMP,
+			CONSTRAINT uq_bot_event_outbox_bot_seq UNIQUE (bot_id, seq),
+			CONSTRAINT uq_bot_event_outbox_bot_event UNIQUE (bot_id, event_id)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_event_outbox table: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_bot_event_outbox_resume ON bot_event_outbox (bot_id, seq)`)
+	if err != nil {
+		t.Logf("Warning: Failed to create outbox resume index: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_bot_event_outbox_created ON bot_event_outbox (created_at)`)
+	if err != nil {
+		t.Logf("Warning: Failed to create outbox created index: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_event_ack_state (
+			credential_id  UUID NOT NULL REFERENCES bot_api_credentials(id) ON DELETE CASCADE,
+			bot_id         UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			last_acked_seq BIGINT NOT NULL DEFAULT 0,
+			updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (credential_id, bot_id)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_event_ack_state table: %v", err)
 	}
 
 	// 创建更新时间触发器函数
@@ -668,7 +762,7 @@ func SetupTestRouter() {
 
 	authService := services.NewAuthService(userRepo, repository.NewBotRepository(), jwtSecret)
 	conversationService := services.NewConversationService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, friendshipRepo)
-	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, nil, nil)
+	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, nil, nil, messaging.NewPublisher(0))
 	friendService := services.NewFriendService(userRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
 	memberService := services.NewMemberService(userRepo, conversationRepo, enrollmentRepo)
 	userService := services.NewUserService(userRepo)
@@ -686,8 +780,11 @@ func SetupTestRouter() {
 
 	testRouter.GET("/api/conversations", handlers.AuthMiddleware(jwtSecret), chatHandler.GetConversations)
 	testRouter.POST("/api/conversations", handlers.AuthMiddleware(jwtSecret), chatHandler.CreateConversation)
+	testRouter.GET("/api/conversations/members", handlers.AuthMiddleware(jwtSecret), chatHandler.GetConversationMembers)
 
 	testRouter.GET("/api/messages", handlers.AuthMiddleware(jwtSecret), chatHandler.GetMessages)
+	testRouter.GET("/api/messages/export", handlers.AuthMiddleware(jwtSecret), chatHandler.ExportMessages)
+	testRouter.GET("/api/messages/incremental", handlers.AuthMiddleware(jwtSecret), chatHandler.GetMessagesIncremental)
 	testRouter.POST("/api/messages", handlers.AuthMiddleware(jwtSecret), chatHandler.SendMessage)
 
 	testRouter.GET("/api/friends", handlers.AuthMiddleware(jwtSecret), chatHandler.GetFriends)
@@ -723,6 +820,11 @@ func CleanupTestTables(t *testing.T) {
 	}
 
 	tables := []string{
+		"bot_api_credential_audit_logs",
+		"bot_api_credentials",
+		"bot_event_ack_state",
+		"bot_event_outbox",
+		"bot_event_seq_counter",
 		"bot_call_logs",
 		"workflow_versions",
 		"bot_app_secrets",

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"purr-chat-server/internal/botengine/sandbox"
+	"purr-chat-server/internal/messaging"
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/websocket"
 	"purr-chat-server/pkg/logger"
@@ -278,7 +279,17 @@ func (e *BotEngine) HandleWorkflow(ctx context.Context, msg *BotMessage, bot *mo
 	})
 
 	// 发送回复
-	e.sendBotReply(ctx, bot, msg.ConversationID, reply)
+	if e.messageSender != nil {
+		if _, err := e.messageSender.SendBotMessage(ctx, &messaging.BotSendRequest{
+			BotID:          bot.ID,
+			ConversationID: msg.ConversationID,
+			Content:        reply,
+			MsgType:        "text",
+			Source:         messaging.SourceWorkflow,
+		}); err != nil {
+			logger.ErrorfWithCaller("[BotEngine] Failed to send workflow reply: %v", err)
+		}
+	}
 }
 
 // executeEvent 执行单个事件

@@ -16,6 +16,7 @@ import (
 // BotInstallationRepository Bot 安装数据访问接口
 type BotInstallationRepository interface {
 	Create(ctx context.Context, inst *models.BotInstallation) error
+	CreateTx(ctx context.Context, tx pgx.Tx, inst *models.BotInstallation) error
 	FindByID(ctx context.Context, id uuid.UUID) (*models.BotInstallation, error)
 	FindByIDWithApp(ctx context.Context, id uuid.UUID) (*models.BotInstallation, error)
 	FindByApp(ctx context.Context, appID uuid.UUID) ([]*models.BotInstallation, error)
@@ -30,12 +31,27 @@ type BotInstallationRepository interface {
 
 type botInstallationRepository struct{}
 
+type installationQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 // NewBotInstallationRepository 创建 Bot 安装仓储
 func NewBotInstallationRepository() BotInstallationRepository {
 	return &botInstallationRepository{}
 }
 
 func (r *botInstallationRepository) Create(ctx context.Context, inst *models.BotInstallation) error {
+	prepareInstallation(inst)
+	return createInstallation(ctx, database.GetPool(), inst)
+}
+
+// CreateTx 在给定事务中创建安装记录
+func (r *botInstallationRepository) CreateTx(ctx context.Context, tx pgx.Tx, inst *models.BotInstallation) error {
+	prepareInstallation(inst)
+	return createInstallation(ctx, tx, inst)
+}
+
+func prepareInstallation(inst *models.BotInstallation) {
 	inst.ID = uuid.New()
 	now := time.Now().UTC()
 	inst.InstalledAt = now
@@ -54,19 +70,24 @@ func (r *botInstallationRepository) Create(ctx context.Context, inst *models.Bot
 		inst.Status = models.InstallationActive
 	}
 
+}
+
+func createInstallation(ctx context.Context, db installationQuerier, inst *models.BotInstallation) error {
 	query := `
         INSERT INTO bot_installations (id, app_id, installed_by, target_type, target_id,
                                        granted_capabilities, diagnostics_consent, status, config,
                                        installed_at, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        ON CONFLICT (target_type, target_id, app_id) DO NOTHING
+        ON CONFLICT (target_type, target_id, app_id) DO UPDATE
+        SET updated_at = bot_installations.updated_at
+        RETURNING id, granted_capabilities, diagnostics_consent, status, config, installed_at, updated_at
     `
-	_, err := database.GetPool().Exec(ctx, query,
+	return db.QueryRow(ctx, query,
 		inst.ID, inst.AppID, inst.InstalledBy, inst.TargetType, inst.TargetID,
 		inst.GrantedCapabilities, inst.DiagnosticsConsent, inst.Status, inst.Config,
 		inst.InstalledAt, inst.UpdatedAt,
-	)
-	return err
+	).Scan(&inst.ID, &inst.GrantedCapabilities, &inst.DiagnosticsConsent, &inst.Status,
+		&inst.Config, &inst.InstalledAt, &inst.UpdatedAt)
 }
 
 const installationColumns = `id, app_id, installed_by, target_type, target_id,

@@ -1,9 +1,12 @@
 package services
 
 import (
+	"context"
 	"errors"
+	"fmt"
 
 	"purr-chat-server/internal/models"
+	"purr-chat-server/internal/repository"
 
 	"github.com/google/uuid"
 )
@@ -29,6 +32,8 @@ func sanitizePublicProfile(u *models.User) {
 
 // 服务层共享错误
 var (
+	ErrInvalidID            = errors.New("invalid id")
+	ErrResourceNotFound     = errors.New("resource not found")
 	errNotParticipant       = errors.New("not a participant in this conversation")
 	errConversationNotFound = errors.New("conversation not found")
 	errNotAuthorized        = errors.New("not authorized")
@@ -37,3 +42,19 @@ var (
 	errCannotSelfChat       = errors.New("cannot create conversation with yourself")
 	errTargetNotFound       = errors.New("target user not found")
 )
+
+func parseID(value string) (uuid.UUID, error) {
+	id, err := uuid.Parse(value)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("%w: %v", ErrInvalidID, err)
+	}
+	return id, nil
+}
+
+func requireConversationMember(ctx context.Context, enrollmentRepo repository.EnrollmentRepository, conversationID, requesterID uuid.UUID) error {
+	enrollment, err := enrollmentRepo.FindByConversationAndUser(ctx, conversationID, requesterID)
+	if err != nil || enrollment == nil {
+		return ErrResourceNotFound
+	}
+	return nil
+}

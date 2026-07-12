@@ -322,6 +322,77 @@ const isOnline = getUserOnlineStatus(userId);
 
 ## 后端要求
 
+### WebSocket 安全配置
+
+后端通过环境变量配置 WebSocket 安全策略：
+
+| 环境变量 | 默认值 | 说明 |
+|---------|--------|------|
+| `WS_ALLOWED_ORIGINS` | 空（允许所有） | 逗号分隔的允许 Origin 列表，生产环境必须配置 |
+| `WS_ALLOW_QUERY_TOKEN` | `false` | 是否允许通过 URL query 传递 token（已弃用，仅兼容旧客户端） |
+| `WS_READ_LIMIT` | `1048576` (1MB) | 单条消息最大字节数 |
+| `WS_WRITE_TIMEOUT` | `10s` | 写入超时 |
+| `WS_READ_TIMEOUT` | `60s` | 读取超时（Pong 后重置） |
+| `WS_PING_INTERVAL` | `54s` | Ping 间隔 |
+| `WS_SEND_QUEUE_SIZE` | `256` | 每连接发送队列大小 |
+
+### Token 认证优先级
+
+1. **Cookie**（`purrchat_token`）— 浏览器自动携带，优先级最高
+2. **Sec-WebSocket-Protocol 子协议**（`bearer,<token>`）— Tauri 等原生客户端
+3. **URL query**（`?token=...`）— 仅当 `WS_ALLOW_QUERY_TOKEN=true` 时启用，记录弃用告警
+
+**禁止**同时使用多种 token 来源。第一个命中的来源即为最终 token，不存在降级。
+
+### Origin 校验
+
+- `CheckOrigin` 使用配置化 allowlist（`WS_ALLOWED_ORIGINS`）
+- 空 Origin（非浏览器客户端）默认放行
+- 未配置 allowlist 时放行所有 Origin（仅开发环境）
+- 生产环境必须配置 allowlist
+
+### 帧边界
+
+每个逻辑事件写入独立 text frame，不合并多个 JSON 到同一 frame。
+
+### 慢消费者与队列溢出
+
+- 每连接有界发送队列（`WS_SEND_QUEUE_SIZE`）
+- 队列满时断开连接（close code 1013 Try Again Later），不阻塞 Hub
+- 广播时发现队列满的客户端会被收集后统一断开，不修改共享 map
+
+### 关闭码
+
+| Code | 含义 |
+|------|------|
+| 1000 | 正常关闭 |
+| 1001 | 服务端关闭 / Going Away |
+| 1008 | 鉴权失败（Policy Violation） |
+| 1009 | 消息过大 |
+| 1013 | 队列溢出 / 连接数超限（Try Again Later） |
+
+### 指标
+
+通过 `Hub.GetConnectionStats()` 获取：
+
+- 当前连接数、用户数、设备分布
+- 累计指标：总连接数、鉴权失败、Origin 拒绝、队列溢出、协议错误、Ping 超时
+
+### 反向代理部署要求
+
+- **Upgrade 头**：Nginx/HAProxy 必须正确传递 `Upgrade` 和 `Connection` 头
+- **Origin**：反向代理应传递原始 `Origin` 头，不覆盖
+- **超时**：代理读写超时应大于后端 `WS_READ_TIMEOUT` + `WS_PING_INTERVAL`
+- **日志脱敏**：如果启用 `WS_ALLOW_QUERY_TOKEN`，代理访问日志必须脱敏 `token` 参数
+- **TLS**：生产环境必须使用 `wss://`，Cookie 需设置 `Secure` 和 `HttpOnly`
+
+### 前端重连策略
+
+- 指数退避 + ±25% jitter，上限 30 秒
+- 鉴权失败（close code 1008）不重连
+- 正常关闭（close code 1000）仅在手动关闭时不重连
+- 最大重连次数 10 次
+
 ### WebSocket 事件格式
 
 后端需要发送以下类型的 WebSocket 事件：

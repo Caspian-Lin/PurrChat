@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"reflect"
 	"syscall"
 	"time"
 
+	"purr-chat-server/internal/botaction"
 	"purr-chat-server/internal/botengine"
+	"purr-chat-server/internal/botws"
 	"purr-chat-server/internal/handlers"
+	"purr-chat-server/internal/messaging"
 	"purr-chat-server/internal/repository"
 	"purr-chat-server/internal/services"
 	"purr-chat-server/internal/websocket"
@@ -127,22 +131,51 @@ func main() {
 	botDeployRepo := repository.NewBotDeploymentRepository()
 	installationRepo := repository.NewBotInstallationRepository()
 	callLogRepo := repository.NewBotCallLogRepository()
+	outboxRepo := repository.NewBotEventOutboxRepository()
 	authService := services.NewAuthService(userRepo, botRepo, cfg.JWT.Secret)
 	botEngine := botengine.NewBotEngine(botDeployRepo, botRepo, conversationMessageRepo, enrollmentRepo, os.Getenv("BOT_ENGINE_URL"))
 	botEngine.SetCallLogRepo(callLogRepo)
 	botEngine.SetInstallationRepo(installationRepo)
 	conversationService := services.NewConversationService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, friendshipRepo)
 	conversationService.SetBotRepo(botRepo)
-	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, botRepo, botEngine)
+
+	// 消息事件发布器：fan-out 到用户 WS、Workflow Bot、External Bot
+	publisher := messaging.NewPublisher(30 * time.Second)
+	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, botRepo, installationRepo, publisher)
+	botEngine.SetMessageSender(messageService)
 	friendService := services.NewFriendService(userRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
 	memberService := services.NewMemberService(userRepo, conversationRepo, enrollmentRepo)
 	userService := services.NewUserService(userRepo)
 	botService := services.NewBotService(botRepo, installationRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, callLogRepo)
+	actionDispatcher := botaction.NewDispatcher(messageService, botRepo, userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, installationRepo, outboxRepo)
+	botWSManager := botws.NewManager(botws.DefaultConfig(), actionDispatcher)
+	botWSManager.SetReplayer(services.NewOutboxReplayer(outboxRepo))
+	botService.SetConnectionCloser(botWSManager)
+	reliablePublisher := services.NewReliableEventPublisher(outboxRepo, botWSManager)
+	noticeEmitter := services.NewBotNoticeEmitter(installationRepo, botRepo, reliablePublisher)
 	installationService := services.NewInstallationService(installationRepo, botRepo, enrollmentRepo, conversationMessageRepo)
+	installationService.SetBotNoticeEmitter(noticeEmitter)
+	memberService.SetBotNoticeEmitter(noticeEmitter)
 	secretRepo := repository.NewBotAppSecretRepository()
 	secretService := services.NewSecretService(secretRepo, botRepo)
 	secretHandler := handlers.NewSecretHandler(secretService)
+	credentialRepo := repository.NewBotAPICredentialRepository()
+	credentialService := services.NewBotAPICredentialService(credentialRepo, botRepo, botWSManager)
+	credentialHandler := handlers.NewBotAPICredentialHandler(credentialService)
+	botWSHandler := botws.NewHandler(botWSManager, credentialService, botService)
+	botActionHandler := handlers.NewBotActionHandler(actionDispatcher)
+	botCapabilityHandler := handlers.NewBotCapabilityHandler()
 	botEngine.SetSecretResolver(secretService)
+
+	// 注册消息事件 sink
+	publisher.RegisterSink("user_ws", services.NewUserWebSocketSink())
+	publisher.RegisterSink("workflow", botEngine)
+	externalBotSink := services.NewExternalBotSink(installationRepo, botRepo, reliablePublisher)
+	publisher.RegisterSink("external_bot", externalBotSink)
+
+	eventRelay := services.NewBotEventRelay(outboxRepo)
+	eventRelayCtx, stopEventRelay := context.WithCancel(context.Background())
+	go eventRelay.Start(eventRelayCtx)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret, cfg.Port == "443" || os.Getenv("FORCE_SECURE_COOKIES") == "true", &cfg.Turnstile)
 	chatHandler := handlers.NewChatHandler(authService, userService, conversationService, messageService, friendService, memberService)
 	botHandler := handlers.NewBotHandler(botService, botEngine)
@@ -160,7 +193,20 @@ func main() {
 	workflowHandler := handlers.NewWorkflowHandler(workflowService)
 
 	// 初始化WebSocket hub
-	websocket.InitHubWithConfig(cfg.WebSocket.MaxConnections, cfg.WebSocket.MaxUserConnections)
+	writeTimeout, _ := time.ParseDuration(cfg.WebSocket.WriteTimeout)
+	readTimeout, _ := time.ParseDuration(cfg.WebSocket.ReadTimeout)
+	pingInterval, _ := time.ParseDuration(cfg.WebSocket.PingInterval)
+	websocket.InitHub(websocket.HubConfig{
+		MaxConnections:     cfg.WebSocket.MaxConnections,
+		MaxUserConnections: cfg.WebSocket.MaxUserConnections,
+		SendQueueSize:      cfg.WebSocket.SendQueueSize,
+		ReadLimit:          cfg.WebSocket.ReadLimit,
+		WriteTimeout:       writeTimeout,
+		ReadTimeout:        readTimeout,
+		PingInterval:       pingInterval,
+		AllowedOrigins:     cfg.WebSocket.AllowedOrigins,
+		AllowQueryToken:    cfg.WebSocket.AllowQueryToken,
+	})
 	websocket.InitJWTSecret(cfg.JWT.Secret)
 
 	// 认证端点 per-IP 速率限制 — 防止暴力破解和批量注册
@@ -263,6 +309,12 @@ func main() {
 
 	// WebSocket路由（通过 Cookie/子协议/query 传递 token，不使用 AuthMiddleware）
 	r.GET("/api/ws", websocket.HandleWebSocket)
+	// Bot Universal WebSocket uses the strict Bot credential middleware and never accepts query credentials.
+	r.GET("/api/bot/v1/ws", handlers.BotCredentialAuthMiddleware(credentialService), botWSHandler.Connect)
+	r.GET("/api/bot/v1/capabilities", botCapabilityHandler.Get)
+	r.GET("/api/bot/v1/health", botWSHandler.Health)
+	// Bot HTTP Action endpoint shares the same dispatcher as Universal WS.
+	r.POST("/api/bot/v1/actions/:action", handlers.BotCredentialAuthMiddleware(credentialService), botActionHandler.HandleAction)
 
 	// Bot 路由（per-User 限流）
 	bots := r.Group("/api/bots")
@@ -302,6 +354,12 @@ func main() {
 		bots.GET("/:id/secrets", secretHandler.ListSecrets)
 		bots.PUT("/:id/secrets/:key", sensitiveRateLimit, secretHandler.SetSecret)
 		bots.DELETE("/:id/secrets/:key", sensitiveRateLimit, secretHandler.DeleteSecret)
+		// External Bot credentials: owner JWT management; plaintext is returned only on create/rotate.
+		bots.POST("/:id/credentials", sensitiveRateLimit, credentialHandler.Create)
+		bots.GET("/:id/credentials", credentialHandler.List)
+		bots.POST("/:id/credentials/:credential_id/rotate", sensitiveRateLimit, credentialHandler.Rotate)
+		bots.DELETE("/:id/credentials/:credential_id", sensitiveRateLimit, credentialHandler.Revoke)
+		bots.GET("/:id/ws-status", botWSHandler.Status)
 	}
 
 	// Bot 安装路由(per-User 限流)
@@ -340,4 +398,11 @@ func main() {
 	<-quit
 
 	logger.Info("Shutting down server...")
+	stopEventRelay()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := botWSManager.Shutdown(shutdownCtx); err != nil {
+		logger.Error("Failed to shut down Bot WebSocket manager:", err)
+	}
+	websocket.GlobalHub.Shutdown()
 }

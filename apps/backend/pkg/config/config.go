@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -60,6 +61,13 @@ type JWTConfig struct {
 type WebSocketConfig struct {
 	MaxConnections     int
 	MaxUserConnections int
+	AllowedOrigins     []string
+	AllowQueryToken    bool
+	ReadLimit          int64
+	WriteTimeout       string
+	ReadTimeout        string
+	PingInterval       string
+	SendQueueSize      int
 }
 
 func Load() *Config {
@@ -85,6 +93,13 @@ func Load() *Config {
 		WebSocket: WebSocketConfig{
 			MaxConnections:     getEnvInt("MAX_CONNECTIONS", 20000),
 			MaxUserConnections: getEnvInt("MAX_USER_CONNECTIONS", 3),
+			AllowedOrigins:     getEnvSlice("WS_ALLOWED_ORIGINS"),
+			AllowQueryToken:    getEnv("WS_ALLOW_QUERY_TOKEN", "false") == "true",
+			ReadLimit:          int64(getEnvInt("WS_READ_LIMIT", 1<<20)),
+			WriteTimeout:       getEnv("WS_WRITE_TIMEOUT", "10s"),
+			ReadTimeout:        getEnv("WS_READ_TIMEOUT", "60s"),
+			PingInterval:       getEnv("WS_PING_INTERVAL", "54s"),
+			SendQueueSize:      getEnvInt("WS_SEND_QUEUE_SIZE", 256),
 		},
 		RateLimit: RateLimitConfig{
 			GlobalRatePerSec:    getEnvFloat("RATE_LIMIT_GLOBAL_RPS", 2),      // 2 req/s, ~120 req/min
@@ -136,6 +151,22 @@ func getEnv(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+func getEnvSlice(key string) []string {
+	value := os.Getenv(key)
+	if value == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }
 
 func GetDSN(cfg *DBConfig) string {
