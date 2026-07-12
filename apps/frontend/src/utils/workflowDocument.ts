@@ -42,10 +42,9 @@ export function evaluateWorkflowGate(
   result: Pick<ValidationResult, 'issues'>,
   confirmWarnings: (_message: string) => boolean
 ): WorkflowGateResult {
-  const errors = result.issues
-    .filter((issue) => issue.level === 'error')
-    .map((issue) => issue.message);
-  const warnings = result.issues
+  const issues = result.issues ?? [];
+  const errors = issues.filter((issue) => issue.level === 'error').map((issue) => issue.message);
+  const warnings = issues
     .filter((issue) => issue.level === 'warning')
     .map((issue) => issue.message);
 

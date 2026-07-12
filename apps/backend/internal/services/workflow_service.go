@@ -112,6 +112,9 @@ func (s *WorkflowService) UpdateWorkflow(ctx context.Context, botID string, requ
 
 func (s *WorkflowService) ValidateWorkflow(ctx context.Context, req *models.ValidateWorkflowRequest) (*models.ValidateWorkflowResponse, error) {
 	issues := validateDocumentStructure(req.Document)
+	if issues == nil {
+		issues = []models.ValidationResultItem{}
+	}
 	resp := &models.ValidateWorkflowResponse{
 		Valid:  !hasValidationErrors(issues),
 		Issues: issues,

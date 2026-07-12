@@ -614,7 +614,7 @@ async function passValidationGate(action: string): Promise<boolean> {
 
   const serverResult = await api.validateWorkflow(botId, workflowDocument.value);
   const serverGate = evaluateWorkflowGate(
-    { issues: serverResult.issues.map((issue) => ({ ...issue, nodeId: issue.node_id })) },
+    { issues: (serverResult.issues || []).map((issue) => ({ ...issue, nodeId: issue.node_id })) },
     (message) => window.confirm(message)
   );
   if (!serverGate.allowed) {
