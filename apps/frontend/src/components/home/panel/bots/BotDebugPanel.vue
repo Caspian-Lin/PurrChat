@@ -154,6 +154,7 @@ import {
 
 interface Props {
   botId: string;
+  mechanismId: string;
   events: WorkflowEvent[];
   connections: FlowConnection[];
   endConditions: WorkflowEndCondition[];
@@ -199,7 +200,7 @@ async function handleRunAll() {
   stepMode.value = false;
 
   try {
-    const result = await api.testRunWorkflow(props.botId, {
+    const result = await api.testRunWorkflow(props.botId, props.mechanismId, {
       message: inputMessage.value.trim(),
       document: buildDocument(),
       side_effects: sideEffectPolicy.value,
@@ -231,7 +232,7 @@ async function handleStepMode() {
   stepMode.value = true;
 
   try {
-    const result = await api.testRunWorkflow(props.botId, {
+    const result = await api.testRunWorkflow(props.botId, props.mechanismId, {
       message: inputMessage.value.trim(),
       document: buildDocument(),
       side_effects: sideEffectPolicy.value,
@@ -262,7 +263,7 @@ async function handleNextStep() {
   isRunning.value = true;
 
   try {
-    const result = await api.testRunStep(props.botId, sessionId.value);
+    const result = await api.testRunStep(props.botId, props.mechanismId, sessionId.value);
     trace.value = result as RunTrace;
   } catch (err: any) {
     const errorMsg = err.response?.data?.error || '逐步执行失败';
@@ -278,7 +279,7 @@ async function handleNextStep() {
 async function handleReset() {
   if (!sessionId.value) return;
   try {
-    await api.testRunWorkflow(props.botId, {
+    await api.testRunWorkflow(props.botId, props.mechanismId, {
       message: '',
       document: buildDocument(),
     });

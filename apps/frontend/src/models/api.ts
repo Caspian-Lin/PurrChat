@@ -426,51 +426,69 @@ export const api = {
       .then((res) => res.data);
   },
 
-  // ─── Workflow Document API (#13) ───
+  // ─── Workflow Document API（mechanism 级, #87/#88）───
 
-  getWorkflow: (botId: string): Promise<WorkflowDocumentResponse> => {
-    return apiClient.get(`/api/bots/${botId}/workflow`).then((res) => res.data);
+  getWorkflow: (botId: string, mechanismId: string): Promise<WorkflowDocumentResponse> => {
+    return apiClient
+      .get(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow`)
+      .then((res) => res.data);
   },
 
   updateWorkflow: (
     botId: string,
+    mechanismId: string,
     data: { revision: number; document: unknown }
   ): Promise<WorkflowDocumentResponse> => {
     return apiClient
-      .put(`/api/bots/${botId}/workflow`, data, {
+      .put(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow`, data, {
         headers: { 'If-Match': String(data.revision) },
       })
       .then((res) => res.data);
   },
 
-  validateWorkflow: (botId: string, document: unknown): Promise<WorkflowValidationResponse> => {
+  validateWorkflow: (
+    botId: string,
+    mechanismId: string,
+    document: unknown
+  ): Promise<WorkflowValidationResponse> => {
     return apiClient
-      .post(`/api/bots/${botId}/workflow/validate`, { document })
+      .post(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow/validate`, { document })
       .then((res) => res.data);
   },
 
-  publishWorkflow: (botId: string, revision: number): Promise<WorkflowVersion> => {
+  publishWorkflow: (
+    botId: string,
+    mechanismId: string,
+    revision: number
+  ): Promise<WorkflowVersion> => {
     return apiClient
       .post(
-        `/api/bots/${botId}/workflow/publish`,
+        `/api/bots/${botId}/mechanisms/${mechanismId}/workflow/publish`,
         { revision },
         { headers: { 'If-Match': String(revision) } }
       )
       .then((res) => res.data);
   },
 
-  listWorkflowVersions: (botId: string): Promise<WorkflowVersion[]> => {
-    return apiClient.get(`/api/bots/${botId}/workflow/versions`).then((res) => res.data);
+  listWorkflowVersions: (botId: string, mechanismId: string): Promise<WorkflowVersion[]> => {
+    return apiClient
+      .get(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow/versions`)
+      .then((res) => res.data);
   },
 
-  rollbackWorkflow: (botId: string, revision: number): Promise<WorkflowDocumentResponse> => {
+  rollbackWorkflow: (
+    botId: string,
+    mechanismId: string,
+    revision: number
+  ): Promise<WorkflowDocumentResponse> => {
     return apiClient
-      .post(`/api/bots/${botId}/workflow/versions/${revision}/rollback`)
+      .post(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow/versions/${revision}/rollback`)
       .then((res) => res.data);
   },
 
   testRunWorkflow: (
     botId: string,
+    mechanismId: string,
     data: {
       message: string;
       document?: unknown;
@@ -480,12 +498,16 @@ export const api = {
       session_id?: string;
     }
   ): Promise<unknown> => {
-    return apiClient.post(`/api/bots/${botId}/workflow/test-runs`, data).then((res) => res.data);
+    return apiClient
+      .post(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow/test-runs`, data)
+      .then((res) => res.data);
   },
 
-  testRunStep: (botId: string, sessionId: string): Promise<unknown> => {
+  testRunStep: (botId: string, mechanismId: string, sessionId: string): Promise<unknown> => {
     return apiClient
-      .post(`/api/bots/${botId}/workflow/test-runs/step`, { session_id: sessionId })
+      .post(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow/test-runs/step`, {
+        session_id: sessionId,
+      })
       .then((res) => res.data);
   },
 };
