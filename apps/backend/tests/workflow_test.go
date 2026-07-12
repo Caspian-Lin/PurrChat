@@ -15,6 +15,7 @@ import (
 	"purr-chat-server/internal/services"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,6 +46,22 @@ func TestWorkflowAPI(t *testing.T) {
 		Discoverability: models.DiscoverabilityUnlisted,
 	})
 	require.NoError(t, err)
+
+	ownerInstallation, err := installationRepo.FindByAppAndTarget(
+		ctx, bot.ID, models.InstallationTargetUser, owner.ID,
+	)
+	require.NoError(t, err)
+	require.Empty(t, ownerInstallation.GrantedCapabilities, "首次发布前 owner 安装尚无工作流权限")
+
+	groupID := uuid.New()
+	require.NoError(t, installationRepo.Create(ctx, &models.BotInstallation{
+		AppID:               bot.ID,
+		InstalledBy:         owner.ID,
+		TargetType:          models.InstallationTargetConversation,
+		TargetID:            groupID,
+		GrantedCapabilities: nil,
+		Status:              models.InstallationActive,
+	}))
 
 	validDocument := `{
 		"apiVersion": "purrchat.ai/v1alpha1",
@@ -154,6 +171,18 @@ func TestWorkflowAPI(t *testing.T) {
 		assert.Contains(t, updatedBot.RequestedCapabilities, "messages:read_trigger")
 		assert.NotNil(t, updatedBot.PublishedVersion)
 		assert.Equal(t, 1, *updatedBot.PublishedVersion)
+
+		for _, target := range []struct {
+			targetType models.InstallationTargetType
+			targetID   uuid.UUID
+		}{
+			{models.InstallationTargetUser, owner.ID},
+			{models.InstallationTargetConversation, groupID},
+		} {
+			inst, findErr := installationRepo.FindByAppAndTarget(ctx, bot.ID, target.targetType, target.targetID)
+			require.NoError(t, findErr)
+			assert.ElementsMatch(t, version.Capabilities, inst.GrantedCapabilities)
+		}
 	})
 
 	t.Run("publish_same_revision_is_idempotent_and_immutable", func(t *testing.T) {
