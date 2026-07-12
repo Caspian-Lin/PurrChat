@@ -2,8 +2,6 @@ package botengine
 
 import (
 	"context"
-	"encoding/json"
-	"sync"
 	"time"
 
 	"purr-chat-server/internal/messaging"
@@ -37,9 +35,6 @@ type BotEngine struct {
 	workflowRepo     repository.WorkflowRepository
 	secretResolver   SecretResolver
 	messageSender    messaging.BotMessageSender
-
-	// 工作流会话：记录活跃的工作流部署状态
-	workflowSessions sync.Map // map[string]*WorkflowSession — "conversationID:botID" -> session
 
 	// TS 微服务客户端（用于调用 TS bot-engine）
 	tsClient *BotEngineClient
@@ -400,28 +395,4 @@ func (e *BotEngine) collectContextMessages(ctx context.Context, conversationID u
 		contextMessages[i], contextMessages[j] = contextMessages[j], contextMessages[i]
 	}
 	return contextMessages
-}
-
-// sendSystemMessage 发送系统消息到会话（直接持久化，用于 BotEngine 内部系统消息）
-func (e *BotEngine) sendSystemMessage(ctx context.Context, conversationID uuid.UUID, content *models.SystemMessageContent) {
-	contentJSON, err := json.Marshal(content)
-	if err != nil {
-		logger.ErrorfWithCaller("[BotEngine] Failed to marshal system message content: %v", err)
-		return
-	}
-
-	message := &models.Message{
-		SenderID:  uuid.Nil,
-		Content:   string(contentJSON),
-		MsgType:   models.MsgTypeSystem,
-		CreatedAt: time.Now().UTC(),
-	}
-
-	err = e.messageRepo.InsertMessage(ctx, conversationID, message)
-	if err != nil {
-		logger.ErrorfWithCaller("[BotEngine] Failed to insert system message: %v", err)
-		return
-	}
-
-	logger.InfofWithCaller("[BotEngine] System message sent to conversation %s: type=%s", conversationID, content.Type)
 }

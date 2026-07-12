@@ -332,8 +332,6 @@ func main() {
 		bots.DELETE("/:id/deploy", botHandler.UndeployBot)
 		bots.PUT("/:id/deploy/status", botHandler.UpdateDeploymentStatus)
 		bots.POST("/:id/conversation", botHandler.CreateBotConversation)
-		bots.POST("/:id/workflow/activate", botHandler.ActivateWorkflow)
-		bots.POST("/:id/workflow/deactivate", botHandler.DeactivateWorkflow)
 		bots.GET("/:id/deployable-conversations", botHandler.GetDeployableConversations)
 		bots.GET("/:id/call-logs", botHandler.GetBotCallLogs)
 		bots.POST("/:id/installations", installationHandler.CreateInstallation)

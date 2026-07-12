@@ -216,16 +216,13 @@ func (s *BotService) SearchPublicBotsPaginated(ctx context.Context, query string
 		return nil, err
 	}
 
-	// 填充 trigger_summary 和 reply_type（从 mechanism_config 中提取）
+	// 填充 trigger_summary（从 mechanism_config 中提取）
 	for _, bot := range bots {
 		mc, err := botengine.ParseMechanismConfig(bot.MechanismConfig)
 		if err == nil && len(mc.Mechanisms) > 0 {
-			// 使用第一个启用的机制生成摘要
 			for _, mech := range mc.Mechanisms {
 				if mech.Enabled {
-					triggerSummary, replySummary := botengine.GetMechanismSummary(mech)
-					bot.TriggerSummary = triggerSummary
-					bot.ReplyType = replySummary
+					bot.TriggerSummary = botengine.GetMechanismTriggerSummary(mech)
 					break
 				}
 			}
@@ -667,58 +664,6 @@ func (s *BotService) UpdateDeploymentStatus(ctx context.Context, botID, userID s
 
 	inst.Status = models.InstallationStatus(req.Status)
 	return s.installationRepo.Update(ctx, inst)
-}
-
-// ActivateWorkflow 激活工作流
-func (s *BotService) ActivateWorkflow(ctx context.Context, botID, userID string, conversationID uuid.UUID) error {
-	userUUID, _ := uuid.Parse(userID)
-
-	// 验证安装存在
-	inst, err := s.installationRepo.FindByAppAndTarget(ctx, uuid.MustParse(botID), models.InstallationTargetConversation, conversationID)
-	if err != nil {
-		return errors.New("bot not installed to this conversation")
-	}
-
-	// 验证权限：安装者或 Bot owner 可以激活
-	if inst.InstalledBy != userUUID {
-		bot, err := s.botRepo.FindByID(ctx, uuid.MustParse(botID))
-		if err != nil || bot.OwnerID != userUUID {
-			return errors.New("not authorized")
-		}
-	}
-
-	// 检查该会话是否已有其他 Bot 的工作流活跃
-	installations, err := s.installationRepo.FindActiveByConversation(ctx, conversationID)
-	if err == nil {
-		for _, i := range installations {
-			if i.Status == models.InstallationActive && i.AppID.String() != botID {
-				return errors.New("another bot's workflow is already active in this conversation")
-			}
-		}
-	}
-
-	return nil // 实际激活由 BotEngine 处理
-}
-
-// DeactivateWorkflow 停用工作流
-func (s *BotService) DeactivateWorkflow(ctx context.Context, botID, userID string, conversationID uuid.UUID) error {
-	userUUID, _ := uuid.Parse(userID)
-
-	// 验证安装存在
-	inst, err := s.installationRepo.FindByAppAndTarget(ctx, uuid.MustParse(botID), models.InstallationTargetConversation, conversationID)
-	if err != nil {
-		return errors.New("bot not installed to this conversation")
-	}
-
-	// 验证权限
-	if inst.InstalledBy != userUUID {
-		bot, err := s.botRepo.FindByID(ctx, uuid.MustParse(botID))
-		if err != nil || bot.OwnerID != userUUID {
-			return errors.New("not authorized")
-		}
-	}
-
-	return nil // 实际停用由 BotEngine 处理
 }
 
 // CreateBotConversation 创建与 Bot 的私聊会话(幂等)

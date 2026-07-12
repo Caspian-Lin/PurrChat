@@ -76,18 +76,12 @@ type UpdateDeploymentStatusRequest struct {
 	Status         string    `json:"status" binding:"required,oneof=active paused"`
 }
 
-// ActivateWorkflowRequest 激活/停用工作流请求
-type ActivateWorkflowRequest struct {
-	ConversationID uuid.UUID `json:"conversation_id" binding:"required,uuid"`
-}
-
 // PublicBotDetail 公开 Bot 详情（含统计数据）
 type PublicBotDetail struct {
 	Bot
 	DeploymentCount int    `json:"deployment_count"`
 	OwnerName       string `json:"owner_name"`
 	TriggerSummary  string `json:"trigger_summary"`
-	ReplyType       string `json:"reply_type"`
 }
 
 // PaginatedSearchResult 分页搜索结果
