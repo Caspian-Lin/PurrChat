@@ -275,6 +275,7 @@ func (h *harness) startBackend() {
 		"RATE_LIMIT_USER_BURST":      "1000",
 		"RATE_LIMIT_SENSITIVE_RPS":   "1000",
 		"RATE_LIMIT_SENSITIVE_BURST": "1000",
+		"WS_ALLOW_QUERY_TOKEN":       "true",
 	})
 	waitForHealth(h.t, h.baseURL+"/health")
 }

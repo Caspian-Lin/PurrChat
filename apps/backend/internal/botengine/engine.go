@@ -361,12 +361,6 @@ func (e *BotEngine) processMessage(ctx context.Context, event *messaging.Message
 	}
 }
 
-// isBotUser 检查用户是否是 Bot（通过 bots 表判断）
-func (e *BotEngine) isBotUser(ctx context.Context, userID uuid.UUID) bool {
-	_, err := e.botRepo.FindByID(ctx, userID)
-	return err == nil
-}
-
 // BotMessage Bot 处理的入站消息（供 TS 客户端使用）
 type BotMessage struct {
 	ConversationID uuid.UUID
