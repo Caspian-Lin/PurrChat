@@ -1,4 +1,4 @@
-.PHONY: help install dev build test lint lint-fix clean format type-check docker-up docker-down docker-logs docker-build migrate migrate-backend migrate-storage migrate-baseline db-clean db-clean-yes db-reset db-reset-yes \
+.PHONY: help install dev build test test-bot-e2e lint lint-fix clean format type-check docker-up docker-down docker-logs docker-build migrate migrate-backend migrate-storage migrate-baseline db-clean db-clean-yes db-reset db-reset-yes \
         android-dev android-build-debug android-build-release android-build-apk android-keystore android-clean
 
 # 日志目录
@@ -13,6 +13,7 @@ help:
 	@echo "  make dev          - 启动开发模式"
 	@echo "  make build        - 构建所有应用"
 	@echo "  make test         - 运行所有测试"
+	@echo "  make test-bot-e2e - 运行真实后端、Bot Engine、PostgreSQL 与 WebSocket 黑盒测试"
 	@echo "  make lint         - 运行代码检查"
 	@echo "  make lint-fix     - 自动修复代码问题"
 	@echo "  make format       - 格式化代码"
@@ -121,6 +122,10 @@ test:
 	echo "======================================" | tee -a $$LOG_FILE; \
 	echo "" | tee -a $$LOG_FILE; \
 	echo "日志文件: $$LOG_FILE" | tee -a $$LOG_FILE
+
+# Bot 全栈黑盒测试；需要可用的 PostgreSQL 测试库环境变量。
+test-bot-e2e:
+	apps/backend/scripts/run_bot_e2e.sh
 
 # 代码检查
 lint:
