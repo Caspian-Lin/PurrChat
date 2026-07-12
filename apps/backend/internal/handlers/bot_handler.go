@@ -594,7 +594,7 @@ func (h *BotHandler) DeactivateWorkflow(c *gin.Context) {
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Workflow deactivated"})
 }
 
-// GetDeployableConversations 获取可部署 Bot 的会话列表
+// GetDeployableConversations 获取可部署 Bot 的群聊列表
 // @Summary 获取可部署 Bot 的群聊列表
 // @Tags Bot
 // @Produce json

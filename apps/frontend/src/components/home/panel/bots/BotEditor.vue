@@ -175,66 +175,6 @@
           </div>
         </section>
 
-        <!-- 安装部署 -->
-        <section>
-          <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
-            <BsBoxArrowUpRight :size="16" class="text-text-tertiary" />
-            安装到会话
-            <span v-if="botDeployments.length > 0" class="text-xs font-normal text-text-quaternary">
-              已安装到 {{ botDeployments.length }} 个会话
-            </span>
-          </h3>
-
-          <!-- 已部署列表 -->
-          <div v-if="botDeployments.length > 0" class="space-y-2 mb-3">
-            <div
-              v-for="dep in botDeployments"
-              :key="dep.id"
-              class="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-sm,8px)] bg-bg-secondary border border-border-subtle"
-            >
-              <div class="flex-1 min-w-0">
-                <div class="text-sm text-text-primary truncate">
-                  {{ dep.target_name || dep.target_id }}
-                </div>
-                <div class="text-xs text-text-tertiary">
-                  <span v-if="dep.target_conversation_type === 'direct'">好友私聊</span>
-                  <span v-else-if="dep.target_conversation_type === 'group'">群聊</span>
-                  <span
-                    class="ml-2"
-                    :class="dep.status === 'active' ? 'text-green-600' : 'text-text-quaternary'"
-                  >
-                    {{ dep.status === 'active' ? '运行中' : '已暂停' }}
-                  </span>
-                </div>
-              </div>
-              <button
-                class="p-1.5 rounded-lg hover:bg-hover-bg text-text-tertiary hover:text-text-primary transition-colors"
-                :title="dep.status === 'active' ? '暂停' : '恢复'"
-                @click="toggleDeploymentStatus(dep)"
-              >
-                <BsPauseFill v-if="dep.status === 'active'" :size="14" />
-                <BsPlayFill v-else :size="14" />
-              </button>
-              <button
-                class="p-1.5 rounded-lg hover:bg-hover-bg text-text-tertiary hover:text-red-500 transition-colors"
-                title="卸载"
-                @click="handleUndeploy(dep.target_id)"
-              >
-                <BsTrash :size="14" />
-              </button>
-            </div>
-          </div>
-          <p v-else class="text-xs text-text-quaternary mb-3">尚未安装到任何会话</p>
-
-          <button
-            class="flex items-center gap-1.5 px-3 py-1.5 text-xs text-text-tertiary hover:text-text-primary rounded-[var(--radius-sm,8px)] hover:bg-hover-bg transition-colors"
-            @click="showDeployModal = true"
-          >
-            <BsPlus :size="12" />
-            安装到会话
-          </button>
-        </section>
-
         <!-- 调用记录 -->
         <section class="mt-6">
           <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
@@ -260,14 +200,11 @@
       </Transition>
       <SaveButton :is-dirty="isDirty" :is-saving="saving" @save="handleSave" />
     </div>
-
-    <!-- 安装模态框 -->
-    <DeployToGroupModal v-if="showDeployModal" :bot-id="bot.id" @close="showDeployModal = false" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, computed, watch, onMounted } from 'vue';
+import { reactive, ref, computed, watch } from 'vue';
 import {
   BsArrowLeft,
   BsInfoCircle,
@@ -277,10 +214,6 @@ import {
   BsPlus,
   BsClockHistory,
   BsArrowCounterclockwise,
-  BsBoxArrowUpRight,
-  BsPauseFill,
-  BsPlayFill,
-  BsTrash,
 } from 'vue-icons-plus/bs';
 import type {
   Bot,
@@ -289,14 +222,10 @@ import type {
   Mechanism,
   MechanismConfig,
   TriggerSpec,
-  BotDeployment,
 } from '../../../../models/types';
 import MechanismCard from './MechanismCard.vue';
 import BotCallLogs from './BotCallLogs.vue';
-import DeployToGroupModal from './DeployToGroupModal.vue';
 import SaveButton from '../settings/SaveButton.vue';
-import { useBots } from '../../../../composables/useBots';
-import { useBotStore } from '../../../../stores/bot';
 
 interface Props {
   bot: Bot;
@@ -310,32 +239,6 @@ const emit = defineEmits<{
 }>();
 
 const saving = ref(false);
-
-// ─── 安装部署 ──────────────────────────────────────────────
-const { undeployBot, updateDeploymentStatus } = useBots();
-const botStore = useBotStore();
-const showDeployModal = ref(false);
-
-const botDeployments = computed(() =>
-  botStore.deployments.filter((d) => d.app_id === props.bot.id)
-);
-
-onMounted(() => {
-  botStore.loadDeployments();
-});
-
-async function handleUndeploy(conversationId: string) {
-  if (!confirm('确定从这个会话卸载 Bot？')) return;
-  await undeployBot(props.bot.id, conversationId);
-}
-
-async function toggleDeploymentStatus(dep: BotDeployment) {
-  const newStatus = dep.status === 'active' ? 'paused' : 'active';
-  await updateDeploymentStatus(props.bot.id, {
-    conversation_id: dep.target_id,
-    status: newStatus as 'active' | 'paused',
-  });
-}
 
 const visibilityOptions = [
   { value: 'private' as BotVisibility, label: '私有' },

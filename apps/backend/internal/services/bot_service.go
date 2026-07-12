@@ -252,12 +252,14 @@ func (s *BotService) GetDeployableConversations(ctx context.Context, userID stri
 		return nil, err
 	}
 
-	// 查询用户所在的会话（群聊 + 好友私聊），排除 Bot 已部署的
+	// 查询用户所在的群聊，排除 Bot 已部署的。私聊不需要安装
+	// （创建/添加 Bot 时自动建立 user installation），只有群聊需要显式安装。
 	query := `
         SELECT c.id, c.name, c.conversation_type, c.avatar_url, COUNT(e.id) AS member_count
         FROM conversations c
         JOIN enrollments e ON e.conversation_id = c.id
         WHERE e.user_id = $1
+          AND c.conversation_type = 'group'
           AND c.id NOT IN (
               SELECT target_id FROM bot_installations WHERE target_type = 'conversation' AND app_id = $2
           )
