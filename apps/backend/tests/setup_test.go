@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"purr-chat-server/internal/handlers"
+	"purr-chat-server/internal/messaging"
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/repository"
 	"purr-chat-server/internal/services"
@@ -705,7 +706,7 @@ func SetupTestRouter() {
 
 	authService := services.NewAuthService(userRepo, repository.NewBotRepository(), jwtSecret)
 	conversationService := services.NewConversationService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, friendshipRepo)
-	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, nil, nil)
+	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, nil, nil, messaging.NewPublisher(0))
 	friendService := services.NewFriendService(userRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
 	memberService := services.NewMemberService(userRepo, conversationRepo, enrollmentRepo)
 	userService := services.NewUserService(userRepo)

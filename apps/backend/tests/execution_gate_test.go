@@ -10,14 +10,44 @@ import (
 	"time"
 
 	"purr-chat-server/internal/botengine"
+	"purr-chat-server/internal/messaging"
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/repository"
+	"purr-chat-server/internal/services"
 	"purr-chat-server/pkg/database"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// makeMessageEvent 构建测试用 MessageCreatedEvent
+func makeMessageEvent(conversationID, senderID uuid.UUID, content string) *messaging.MessageCreatedEvent {
+	return &messaging.MessageCreatedEvent{
+		Message: &models.Message{
+			ID:             uuid.New(),
+			ConversationID: conversationID,
+			SenderID:       senderID,
+			Content:        content,
+			MsgType:        models.MsgTypeText,
+			CreatedAt:      time.Now().UTC(),
+		},
+		ActorType:  messaging.ActorUser,
+		Source:     messaging.SourceUser,
+		SenderName: "sender",
+	}
+}
+
+// setupMessageSender 创建 MessageService 并设置为 engine 的 messageSender
+func setupMessageSender(t *testing.T, env *execTestEnv) *services.MessageService {
+	t.Helper()
+	userRepo := repository.NewUserRepository()
+	ms := services.NewMessageService(
+		userRepo, env.convRepo, env.enrollRepo, env.msgRepo,
+		env.botRepo, env.instRepo, messaging.NewPublisher(0),
+	)
+	return ms
+}
 
 type mockTSHandler struct {
 	mu          sync.Mutex
@@ -117,6 +147,7 @@ type execTestEnv struct {
 	instRepo       repository.BotInstallationRepository
 	enrollRepo     repository.EnrollmentRepository
 	msgRepo        repository.ConversationMessageRepository
+	convRepo       repository.ConversationRepository
 }
 
 func setupExecutionTestEnv(t *testing.T) *execTestEnv {
@@ -180,6 +211,7 @@ func setupExecutionTestEnv(t *testing.T) *execTestEnv {
 		instRepo:       instRepo,
 		enrollRepo:     enrollRepo,
 		msgRepo:        msgRepo,
+		convRepo:       convRepo,
 	}
 }
 
@@ -198,6 +230,7 @@ func TestExecutionGate_ActiveInstallation_ExecutesWithPublishedDocument(t *testi
 	engine.SetWorkflowRepo(env.wfRepo)
 	engine.SetInstallationRepo(env.instRepo)
 	engine.SetCallLogRepo(callLogRepo)
+	engine.SetMessageSender(setupMessageSender(t, env))
 
 	require.NoError(t, env.instRepo.Create(ctx, &models.BotInstallation{
 		AppID:               env.botID,
@@ -210,15 +243,9 @@ func TestExecutionGate_ActiveInstallation_ExecutesWithPublishedDocument(t *testi
 	}))
 
 	triggerMsgID := uuid.New()
-	engine.OnMessage(ctx, &botengine.BotMessage{
-		ConversationID: env.conversationID,
-		SenderID:       env.senderID,
-		SenderName:     "sender",
-		Content:        "hello",
-		MsgType:        "text",
-		CreatedAt:      time.Now(),
-		MessageID:      triggerMsgID,
-	})
+	event := makeMessageEvent(env.conversationID, env.senderID, "hello")
+	event.Message.ID = triggerMsgID
+	require.NoError(t, engine.OnMessageCreated(ctx, event))
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -284,17 +311,37 @@ func TestExecutionGate_PausedInstallation_DoesNotExecute(t *testing.T) {
 		GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
 	}))
 
-	engine.OnMessage(ctx, &botengine.BotMessage{
-		ConversationID: env.conversationID,
-		SenderID:       env.senderID,
-		Content:        "hello",
-		MsgType:        "text",
-		CreatedAt:      time.Now(),
-	})
+	require.NoError(t, engine.OnMessageCreated(ctx, makeMessageEvent(env.conversationID, env.senderID, "hello")))
 
 	time.Sleep(500 * time.Millisecond)
 
 	assert.Equal(t, 0, mock.getCallCount(), "TS should not be called for paused installation")
+}
+
+func TestExecutionGate_MissingReadTriggerCapability_DoesNotExecute(t *testing.T) {
+	env := setupExecutionTestEnv(t)
+	defer CleanupTestDB(t)
+
+	ctx := context.Background()
+	mock := &mockTSHandler{replyText: "bot-reply", available: true}
+	tsServer := httptest.NewServer(http.HandlerFunc(mock.handler()))
+	defer tsServer.Close()
+
+	engine := botengine.NewBotEngine(nil, env.botRepo, env.msgRepo, env.enrollRepo, tsServer.URL)
+	engine.SetWorkflowRepo(env.wfRepo)
+	engine.SetInstallationRepo(env.instRepo)
+
+	require.NoError(t, env.instRepo.Create(ctx, &models.BotInstallation{
+		AppID:               env.botID,
+		InstalledBy:         env.senderID,
+		TargetType:          models.InstallationTargetUser,
+		TargetID:            env.senderID,
+		Status:              models.InstallationActive,
+		GrantedCapabilities: []string{models.CapabilitySend},
+	}))
+
+	require.NoError(t, engine.OnMessageCreated(ctx, makeMessageEvent(env.conversationID, env.senderID, "hello")))
+	assert.Equal(t, 0, mock.getCallCount(), "TS should not be called without messages:read_trigger")
 }
 
 func TestExecutionGate_NoInstallation_DoesNotExecute(t *testing.T) {
@@ -310,13 +357,7 @@ func TestExecutionGate_NoInstallation_DoesNotExecute(t *testing.T) {
 	engine.SetWorkflowRepo(env.wfRepo)
 	engine.SetInstallationRepo(repository.NewBotInstallationRepository())
 
-	engine.OnMessage(ctx, &botengine.BotMessage{
-		ConversationID: env.conversationID,
-		SenderID:       env.senderID,
-		Content:        "hello",
-		MsgType:        "text",
-		CreatedAt:      time.Now(),
-	})
+	require.NoError(t, engine.OnMessageCreated(ctx, makeMessageEvent(env.conversationID, env.senderID, "hello")))
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -349,13 +390,7 @@ func TestExecutionGate_NoPublishedVersion_DoesNotExecute(t *testing.T) {
 		GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
 	}))
 
-	engine.OnMessage(ctx, &botengine.BotMessage{
-		ConversationID: env.conversationID,
-		SenderID:       env.senderID,
-		Content:        "hello",
-		MsgType:        "text",
-		CreatedAt:      time.Now(),
-	})
+	require.NoError(t, engine.OnMessageCreated(ctx, makeMessageEvent(env.conversationID, env.senderID, "hello")))
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -385,13 +420,7 @@ func TestExecutionGate_TSUnavailable_DoesNotFallbackToGo(t *testing.T) {
 		GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
 	}))
 
-	engine.OnMessage(ctx, &botengine.BotMessage{
-		ConversationID: env.conversationID,
-		SenderID:       env.senderID,
-		Content:        "hello",
-		MsgType:        "text",
-		CreatedAt:      time.Now(),
-	})
+	require.NoError(t, engine.OnMessageCreated(ctx, makeMessageEvent(env.conversationID, env.senderID, "hello")))
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -450,13 +479,7 @@ func TestExecutionGate_DraftModificationDoesNotAffectExecution(t *testing.T) {
 		GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
 	}))
 
-	engine.OnMessage(ctx, &botengine.BotMessage{
-		ConversationID: env.conversationID,
-		SenderID:       env.senderID,
-		Content:        "hello",
-		MsgType:        "text",
-		CreatedAt:      time.Now(),
-	})
+	require.NoError(t, engine.OnMessageCreated(ctx, makeMessageEvent(env.conversationID, env.senderID, "hello")))
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -495,13 +518,7 @@ func TestExecutionGate_TSUnavailable_LogsErrorType(t *testing.T) {
 		GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
 	}))
 
-	engine.OnMessage(ctx, &botengine.BotMessage{
-		ConversationID: env.conversationID,
-		SenderID:       env.senderID,
-		Content:        "hello",
-		MsgType:        "text",
-		CreatedAt:      time.Now(),
-	})
+	require.NoError(t, engine.OnMessageCreated(ctx, makeMessageEvent(env.conversationID, env.senderID, "hello")))
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -541,13 +558,7 @@ func TestExecutionGate_NoPublishedVersion_LogsErrorType(t *testing.T) {
 		GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
 	}))
 
-	engine.OnMessage(ctx, &botengine.BotMessage{
-		ConversationID: env.conversationID,
-		SenderID:       env.senderID,
-		Content:        "hello",
-		MsgType:        "text",
-		CreatedAt:      time.Now(),
-	})
+	require.NoError(t, engine.OnMessageCreated(ctx, makeMessageEvent(env.conversationID, env.senderID, "hello")))
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -584,13 +595,7 @@ func TestExecutionGate_DiagnosticsDenied_ClearsTraceAndTrigger(t *testing.T) {
 		DiagnosticsConsent:  models.DiagnosticsDenied,
 	}))
 
-	engine.OnMessage(ctx, &botengine.BotMessage{
-		ConversationID: env.conversationID,
-		SenderID:       env.senderID,
-		Content:        "sensitive content",
-		MsgType:        "text",
-		CreatedAt:      time.Now(),
-	})
+	require.NoError(t, engine.OnMessageCreated(ctx, makeMessageEvent(env.conversationID, env.senderID, "sensitive content")))
 
 	time.Sleep(500 * time.Millisecond)
 
