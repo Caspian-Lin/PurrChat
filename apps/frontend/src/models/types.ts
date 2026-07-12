@@ -349,6 +349,67 @@ export interface Bot {
   updated_at: string;
 }
 
+export type BotApiStatus =
+  | 'stable'
+  | 'beta'
+  | 'partial'
+  | 'planned'
+  | 'blocked'
+  | 'not_applicable'
+  | 'rejected';
+
+export interface BotApiProfile {
+  version: string;
+  id_format: string;
+  conversation_key: string;
+  message_format: string;
+  cq_code_core_format: boolean;
+}
+
+export interface BotApiActionCapability {
+  name: string;
+  aliases?: string[];
+  category: string;
+  status: BotApiStatus;
+  transports: ('universal_websocket' | 'http')[];
+  required_capability?: string;
+  version: string;
+  compatibility_note?: string;
+  source: string;
+  request_example?: Record<string, unknown>;
+  response_example?: Record<string, unknown>;
+  references?: string[];
+}
+
+export interface BotApiEventCapability {
+  post_type: string;
+  detail_type: string;
+  sub_types?: string[];
+  category: string;
+  status: BotApiStatus;
+  transports: ('universal_websocket' | 'http')[];
+  required_capability?: string;
+  version: string;
+  compatibility_note?: string;
+  source: string;
+  event_example?: Record<string, unknown>;
+  references?: string[];
+}
+
+export interface BotApiSegmentCapability {
+  type: string;
+  status: BotApiStatus;
+  compatibility_note?: string;
+  fields: { name: string; type: string; required: boolean }[];
+}
+
+export interface BotApiCapabilities {
+  profile: BotApiProfile;
+  actions: BotApiActionCapability[];
+  events: BotApiEventCapability[];
+  segments: BotApiSegmentCapability[];
+}
+
 // Bot 部署
 export interface BotDeployment {
   id: string;

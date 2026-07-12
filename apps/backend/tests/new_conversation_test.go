@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"purr-chat-server/internal/messaging"
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/repository"
 	"purr-chat-server/internal/services"
@@ -38,6 +39,7 @@ func TestNewConversation(t *testing.T) {
 		conversationMessageRepo,
 		nil,
 		nil,
+		messaging.NewPublisher(0),
 	)
 	memberService := services.NewMemberService(
 		userRepo,
@@ -330,7 +332,7 @@ func TestNewConversation(t *testing.T) {
 		}
 
 		// 获取会话成员
-		members, err := conversationService.GetConversationMembers(ctx, conversation.ID.String())
+		members, err := conversationService.GetConversationMembers(ctx, owner.ID.String(), conversation.ID.String())
 		if err != nil {
 			t.Fatalf("Failed to get conversation members: %v", err)
 		}

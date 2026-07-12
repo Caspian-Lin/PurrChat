@@ -17,6 +17,7 @@ import (
 // BotRepository Bot 数据访问接口
 type BotRepository interface {
 	Create(ctx context.Context, bot *models.Bot) error
+	CreateTx(ctx context.Context, tx pgx.Tx, bot *models.Bot) error
 	FindByID(ctx context.Context, id uuid.UUID) (*models.Bot, error)
 	FindByOwner(ctx context.Context, ownerID uuid.UUID) ([]*models.Bot, error)
 	FindPublic(ctx context.Context, query string, limit, offset int) ([]*models.Bot, error)
@@ -48,6 +49,28 @@ func NewBotRepository() BotRepository {
 }
 
 func (r *botRepository) Create(ctx context.Context, bot *models.Bot) error {
+	prepareBot(bot)
+
+	err := pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
+		return createBotTx(ctx, tx, bot)
+	})
+
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to create bot: %v", err)
+	} else {
+		logger.InfofWithCaller("Bot created successfully: ID=%s, Name=%s", bot.ID, bot.Name)
+	}
+
+	return err
+}
+
+// CreateTx 在给定事务中创建 Bot 主记录及其身份投影。
+func (r *botRepository) CreateTx(ctx context.Context, tx pgx.Tx, bot *models.Bot) error {
+	prepareBot(bot)
+	return createBotTx(ctx, tx, bot)
+}
+
+func prepareBot(bot *models.Bot) {
 	bot.ID = uuid.New()
 	bot.CreatedAt = time.Now().UTC()
 	bot.UpdatedAt = time.Now().UTC()
@@ -71,51 +94,43 @@ func (r *botRepository) Create(ctx context.Context, bot *models.Bot) error {
 		bot.AllowedEndpoints = []string{}
 	}
 
-	// 在事务中同时创建 user 记录、bot 记录和 bot_identity 投影,共用同一 ID
-	err := pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
-		// 1. 创建 Bot 对应的 user 记录(系统身份投影行)
-		_, err := tx.Exec(ctx, `
+}
+
+func createBotTx(ctx context.Context, tx pgx.Tx, bot *models.Bot) error {
+	// 1. 创建 Bot 对应的 user 记录(系统身份投影行)
+	_, err := tx.Exec(ctx, `
 			INSERT INTO users (id, username, password_hash, salt, avatar_url, is_bot, created_at)
 			VALUES ($1, $2, '', '', $3, TRUE, $4)
 		`, bot.ID, bot.Name, bot.AvatarURL, bot.CreatedAt)
-		if err != nil {
-			return fmt.Errorf("failed to create bot user record: %w", err)
-		}
+	if err != nil {
+		return fmt.Errorf("failed to create bot user record: %w", err)
+	}
 
-		// 2. 创建 bot 记录(含 App 化字段)
-		_, err = tx.Exec(ctx, `
+	// 2. 创建 bot 记录(含 App 化字段)
+	_, err = tx.Exec(ctx, `
 			INSERT INTO bots (id, owner_id, name, avatar_url, description, status, visibility, mechanism_config,
 			                  bot_type, discoverability, is_system, published_version, requested_capabilities, allowed_endpoints,
 			                  created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		`,
-			bot.ID, bot.OwnerID, bot.Name, bot.AvatarURL, bot.Description,
-			bot.Status, bot.Visibility, bot.MechanismConfig,
-			bot.BotType, bot.Discoverability, bot.IsSystem, bot.PublishedVersion, bot.RequestedCapabilities, bot.AllowedEndpoints,
-			bot.CreatedAt, bot.UpdatedAt,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to create bot record: %w", err)
-		}
+		bot.ID, bot.OwnerID, bot.Name, bot.AvatarURL, bot.Description,
+		bot.Status, bot.Visibility, bot.MechanismConfig,
+		bot.BotType, bot.Discoverability, bot.IsSystem, bot.PublishedVersion, bot.RequestedCapabilities, bot.AllowedEndpoints,
+		bot.CreatedAt, bot.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create bot record: %w", err)
+	}
 
-		// 3. 创建 bot_identity 投影(不可登录、不可好友的系统身份)
-		_, err = tx.Exec(ctx, `
+	// 3. 创建 bot_identity 投影(不可登录、不可好友的系统身份)
+	_, err = tx.Exec(ctx, `
 			INSERT INTO bot_identities (app_id, user_id, display_name, avatar_url, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6)
 		`, bot.ID, bot.ID, bot.Name, bot.AvatarURL, bot.CreatedAt, bot.UpdatedAt)
-		if err != nil {
-			return fmt.Errorf("failed to create bot_identity: %w", err)
-		}
-		return nil
-	})
-
 	if err != nil {
-		logger.ErrorfWithCaller("Failed to create bot: %v", err)
-	} else {
-		logger.InfofWithCaller("Bot created successfully: ID=%s, Name=%s", bot.ID, bot.Name)
+		return fmt.Errorf("failed to create bot_identity: %w", err)
 	}
-
-	return err
+	return nil
 }
 
 func (r *botRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Bot, error) {

@@ -20,6 +20,13 @@
           </button>
           <button
             class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+            title="开发者 API"
+            @click="router.push('/bot-studio/developer/api')"
+          >
+            API
+          </button>
+          <button
+            class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
             title="搜索公开 Bot"
             @click="showSearch = !showSearch"
           >

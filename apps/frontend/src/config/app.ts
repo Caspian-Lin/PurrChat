@@ -76,8 +76,8 @@ export const getBotEngineUrl = (): string => {
   return getEnvVar('VITE_BOT_ENGINE_URL', '');
 };
 
-// 获取 WebSocket URL（不再传递 token，通过 Cookie/子协议认证）
-export const getWebSocketUrl = (userId: string): string => {
+// 获取 WebSocket URL（通过 Cookie/子协议认证，不传递 token 或 user_id）
+export const getWebSocketUrl = (): string => {
   const baseUrl = appConfig.apiBaseUrl;
   let wsUrl: string;
 
@@ -85,12 +85,12 @@ export const getWebSocketUrl = (userId: string): string => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const basePath = baseUrl === '/' ? '' : baseUrl;
-    wsUrl = `${protocol}//${host}${basePath}/api/ws?user_id=${userId}`;
+    wsUrl = `${protocol}//${host}${basePath}/api/ws`;
   } else {
     const url = new URL(baseUrl);
     const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = url.host;
-    wsUrl = `${protocol}//${host}/api/ws?user_id=${userId}`;
+    wsUrl = `${protocol}//${host}/api/ws`;
   }
 
   return wsUrl;

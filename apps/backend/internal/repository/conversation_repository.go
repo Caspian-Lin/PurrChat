@@ -15,6 +15,7 @@ import (
 // ConversationRepository 会话仓储接口
 type ConversationRepository interface {
 	Create(ctx context.Context, conversation *models.Conversation) error
+	CreateTx(ctx context.Context, tx pgx.Tx, conversation *models.Conversation) error
 	FindByID(ctx context.Context, id uuid.UUID) (*models.Conversation, error)
 	FindByUsers(ctx context.Context, user1ID, user2ID uuid.UUID) (*models.Conversation, error)
 	FindByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Conversation, error)
@@ -78,7 +79,44 @@ func (r *conversationRepository) Create(ctx context.Context, conversation *model
 	return err
 }
 
-// FindByID 根据ID查找会话
+// CreateTx 在给定事务中创建会话
+func (r *conversationRepository) CreateTx(ctx context.Context, tx pgx.Tx, conversation *models.Conversation) error {
+	logger.InfofWithCaller("Creating conversation (tx): %s", conversation.Name)
+
+	conversation.ID = uuid.New()
+	conversation.CreatedAt = time.Now().UTC()
+	conversation.UpdatedAt = time.Now().UTC()
+
+	query := `
+            INSERT INTO conversations (id, conversation_type, name, avatar_url, created_by, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id, created_at, updated_at
+        `
+
+	err := tx.QueryRow(ctx, query,
+		conversation.ID,
+		conversation.ConversationType,
+		conversation.Name,
+		conversation.AvatarURL,
+		conversation.CreatedBy,
+		conversation.CreatedAt,
+		conversation.UpdatedAt,
+	).Scan(&conversation.ID, &conversation.CreatedAt, &conversation.UpdatedAt)
+
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to create conversation (tx): %v", err)
+		return err
+	}
+
+	_, err = tx.Exec(ctx, "SELECT create_conversation_message_table($1)", conversation.ID)
+	if err != nil {
+		logger.ErrorfWithCaller("Failed to create conversation message table (tx): %v", err)
+		return err
+	}
+
+	logger.InfofWithCaller("Conversation created successfully (tx): ID=%s", conversation.ID)
+	return nil
+}
 func (r *conversationRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Conversation, error) {
 	query := `
         SELECT id, conversation_type, name, avatar_url, created_by, created_at, updated_at

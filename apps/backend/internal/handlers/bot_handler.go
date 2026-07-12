@@ -449,10 +449,7 @@ func (h *BotHandler) UpdateDeploymentStatus(c *gin.Context) {
 	err := h.botService.UpdateDeploymentStatus(c.Request.Context(), botID, userIDStr, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to update deployment status: %v", err)
-		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Message: err.Error(),
-		})
+		respondProtectedResourceError(c, err, "Failed to update deployment status")
 		return
 	}
 
@@ -635,9 +632,13 @@ func (h *BotHandler) GetConversationBots(c *gin.Context) {
 		return
 	}
 
-	deployments, err := h.botService.GetActiveBotsForConversation(c.Request.Context(), conversationID)
+	requesterID, ok := getUserID(c)
+	if !ok {
+		return
+	}
+	deployments, err := h.botService.GetActiveBotsForConversation(c.Request.Context(), requesterID, conversationID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Failed to get conversation bots"})
+		respondProtectedResourceError(c, err, "Failed to get conversation bots")
 		return
 	}
 
