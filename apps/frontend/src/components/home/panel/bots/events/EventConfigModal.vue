@@ -797,7 +797,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch, ref, nextTick } from 'vue';
+import { reactive, computed, watch, ref, nextTick, toRaw } from 'vue';
 import { BsX } from 'vue-icons-plus/bs';
 import { useAiStore } from '../../../../../stores/ai';
 import { useAuthStore } from '../../../../../stores/auth';
@@ -1042,7 +1042,7 @@ watch(
         key: props.editingEvent.key,
         type: props.editingEvent.type,
         name: props.editingEvent.name,
-        config: structuredClone(props.editingEvent.config),
+        config: structuredClone(toRaw(props.editingEvent.config)),
         ports: [...(props.editingEvent.ports || getDefaultPorts(props.editingEvent.type))],
         position: props.editingEvent.position ? { ...props.editingEvent.position } : undefined,
       });
