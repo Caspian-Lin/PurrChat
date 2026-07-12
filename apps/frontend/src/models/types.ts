@@ -331,6 +331,9 @@ export type BotStatus = 'active' | 'disabled';
 // Bot 可见性
 export type BotVisibility = 'private' | 'public' | 'global';
 
+// Bot 类型
+export type BotType = 'builtin' | 'workflow' | 'external';
+
 // Bot 模型
 export interface Bot {
   id: string;
@@ -339,15 +342,12 @@ export interface Bot {
   avatar_url: string;
   description: string;
   status: BotStatus;
+  bot_type: BotType;
   visibility: BotVisibility;
   discoverability?: 'unlisted' | 'listed' | 'featured';
   published_version?: number;
   requested_capabilities?: string[];
   mechanism_config?: MechanismConfig;
-  /** @deprecated 使用 mechanism_config */
-  trigger_config?: TriggerConfig;
-  /** @deprecated 使用 mechanism_config */
-  reply_config?: ReplyConfig;
   created_at: string;
   updated_at: string;
 }
@@ -459,6 +459,7 @@ export interface CreateBotRequest {
   name: string;
   avatar_url?: string;
   description?: string;
+  bot_type?: BotType;
   visibility?: BotVisibility;
 }
 
@@ -782,4 +783,28 @@ export interface RunTrace {
   senderName?: string;
   waitingForStep?: boolean;
   session_id?: string;
+}
+
+// ===== Bot API Credential =====
+
+export interface BotAPICredential {
+  id: string;
+  bot_id: string;
+  name: string;
+  token_prefix: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BotAPICredentialSecret {
+  credential: BotAPICredential;
+  token: string;
+}
+
+export interface CreateBotAPICredentialRequest {
+  name: string;
+  expires_at?: string | null;
 }
