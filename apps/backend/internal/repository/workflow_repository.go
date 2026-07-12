@@ -14,12 +14,14 @@ import (
 )
 
 type WorkflowRepository interface {
-	GetDocument(ctx context.Context, botID uuid.UUID) (json.RawMessage, int, error)
-	UpdateDocument(ctx context.Context, botID uuid.UUID, doc json.RawMessage, revision int) (int, error)
-	FindPublishedByBotID(ctx context.Context, botID uuid.UUID) ([]*models.WorkflowVersion, error)
-	FindPublishedByRevision(ctx context.Context, botID uuid.UUID, revision int) (*models.WorkflowVersion, error)
-	FindLatestPublished(ctx context.Context, botID uuid.UUID) (*models.WorkflowVersion, error)
-	Publish(ctx context.Context, botID uuid.UUID, revision int, doc json.RawMessage, capabilities []string, publishedBy uuid.UUID) (*models.WorkflowVersion, error)
+	GetDocument(ctx context.Context, botID uuid.UUID, mechanismID string) (json.RawMessage, int, error)
+	UpdateDocument(ctx context.Context, botID uuid.UUID, mechanismID string, doc json.RawMessage, expectedRevision int) (int, error)
+	FindPublishedByBotAndMechanism(ctx context.Context, botID uuid.UUID, mechanismID string) ([]*models.WorkflowVersion, error)
+	FindPublishedByRevision(ctx context.Context, botID uuid.UUID, mechanismID string, revision int) (*models.WorkflowVersion, error)
+	FindLatestPublished(ctx context.Context, botID uuid.UUID, mechanismID string) (*models.WorkflowVersion, error)
+	// FindLatestPublishedByBotID 返回该 Bot 每个 mechanism 的最新发布版本，供运行时执行遍历。
+	FindLatestPublishedByBotID(ctx context.Context, botID uuid.UUID) ([]*models.WorkflowVersion, error)
+	Publish(ctx context.Context, botID uuid.UUID, mechanismID string, revision int, doc json.RawMessage, capabilities []string, publishedBy uuid.UUID) (*models.WorkflowVersion, error)
 }
 
 type workflowRepository struct{}
@@ -28,27 +30,44 @@ func NewWorkflowRepository() WorkflowRepository {
 	return &workflowRepository{}
 }
 
-func (r *workflowRepository) GetDocument(ctx context.Context, botID uuid.UUID) (json.RawMessage, int, error) {
+func (r *workflowRepository) GetDocument(ctx context.Context, botID uuid.UUID, mechanismID string) (json.RawMessage, int, error) {
 	var doc json.RawMessage
 	var revision int
 	err := database.GetPool().QueryRow(ctx,
-		`SELECT workflow_document, workflow_revision FROM bots WHERE id = $1`,
-		botID,
+		`SELECT document, revision FROM bot_workflow_documents WHERE bot_id = $1 AND mechanism_id = $2`,
+		botID, mechanismID,
 	).Scan(&doc, &revision)
+	if err == pgx.ErrNoRows {
+		// 首次访问该 mechanism 草稿：返回空文档 + revision 0
+		return nil, 0, nil
+	}
 	if err != nil {
 		return nil, 0, err
 	}
 	return doc, revision, nil
 }
 
-func (r *workflowRepository) UpdateDocument(ctx context.Context, botID uuid.UUID, doc json.RawMessage, expectedRevision int) (int, error) {
+func (r *workflowRepository) UpdateDocument(ctx context.Context, botID uuid.UUID, mechanismID string, doc json.RawMessage, expectedRevision int) (int, error) {
 	var newRevision int
 	err := pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
 		var currentRev int
 		err := tx.QueryRow(ctx,
-			`SELECT workflow_revision FROM bots WHERE id = $1 FOR UPDATE`,
-			botID,
+			`SELECT revision FROM bot_workflow_documents WHERE bot_id = $1 AND mechanism_id = $2 FOR UPDATE`,
+			botID, mechanismID,
 		).Scan(&currentRev)
+		if err == pgx.ErrNoRows {
+			if expectedRevision != 0 {
+				return fmt.Errorf("revision mismatch: expected %d, current 0", expectedRevision)
+			}
+			newRevision = 1
+			_, err = tx.Exec(ctx,
+				`INSERT INTO bot_workflow_documents (bot_id, mechanism_id, document, revision, updated_at)
+				 VALUES ($1, $2, $3, $4, NOW())
+				 ON CONFLICT (bot_id, mechanism_id) DO UPDATE SET document = EXCLUDED.document, revision = EXCLUDED.revision, updated_at = NOW()`,
+				botID, mechanismID, doc, newRevision,
+			)
+			return err
+		}
 		if err != nil {
 			return err
 		}
@@ -57,8 +76,8 @@ func (r *workflowRepository) UpdateDocument(ctx context.Context, botID uuid.UUID
 		}
 		newRevision = currentRev + 1
 		_, err = tx.Exec(ctx,
-			`UPDATE bots SET workflow_document = $1, workflow_revision = $2, updated_at = NOW() WHERE id = $3`,
-			doc, newRevision, botID,
+			`UPDATE bot_workflow_documents SET document = $1, revision = $2, updated_at = NOW() WHERE bot_id = $3 AND mechanism_id = $4`,
+			doc, newRevision, botID, mechanismID,
 		)
 		return err
 	})
@@ -68,29 +87,60 @@ func (r *workflowRepository) UpdateDocument(ctx context.Context, botID uuid.UUID
 	return newRevision, nil
 }
 
-func (r *workflowRepository) FindLatestPublished(ctx context.Context, botID uuid.UUID) (*models.WorkflowVersion, error) {
+const workflowVersionColumns = `id, bot_id, mechanism_id, revision, document, capabilities, published_by, published_at`
+
+func scanWorkflowVersion(scanner interface{ Scan(...any) error }) (*models.WorkflowVersion, error) {
 	v := &models.WorkflowVersion{}
-	err := database.GetPool().QueryRow(ctx, `
-		SELECT id, bot_id, revision, document, capabilities, published_by, published_at
-		FROM workflow_versions
-		WHERE bot_id = $1
-		ORDER BY revision DESC
-		LIMIT 1
-	`, botID).Scan(
-		&v.ID, &v.BotID, &v.Revision, &v.Document, &v.Capabilities, &v.PublishedBy, &v.PublishedAt,
-	)
+	err := scanner.Scan(&v.ID, &v.BotID, &v.MechanismID, &v.Revision, &v.Document, &v.Capabilities, &v.PublishedBy, &v.PublishedAt)
 	if err != nil {
 		return nil, err
 	}
 	return v, nil
 }
 
-func (r *workflowRepository) FindPublishedByBotID(ctx context.Context, botID uuid.UUID) ([]*models.WorkflowVersion, error) {
+func (r *workflowRepository) FindLatestPublished(ctx context.Context, botID uuid.UUID, mechanismID string) (*models.WorkflowVersion, error) {
+	return scanWorkflowVersion(database.GetPool().QueryRow(ctx, `
+		SELECT `+workflowVersionColumns+` FROM workflow_versions
+		WHERE bot_id = $1 AND mechanism_id = $2
+		ORDER BY revision DESC LIMIT 1
+	`, botID, mechanismID))
+}
+
+func (r *workflowRepository) FindPublishedByBotAndMechanism(ctx context.Context, botID uuid.UUID, mechanismID string) ([]*models.WorkflowVersion, error) {
 	rows, err := database.GetPool().Query(ctx, `
-		SELECT id, bot_id, revision, document, capabilities, published_by, published_at
-		FROM workflow_versions
-		WHERE bot_id = $1
+		SELECT `+workflowVersionColumns+` FROM workflow_versions
+		WHERE bot_id = $1 AND mechanism_id = $2
 		ORDER BY revision DESC
+	`, botID, mechanismID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	versions := make([]*models.WorkflowVersion, 0)
+	for rows.Next() {
+		v, err := scanWorkflowVersion(rows)
+		if err != nil {
+			return nil, err
+		}
+		versions = append(versions, v)
+	}
+	return versions, nil
+}
+
+func (r *workflowRepository) FindPublishedByRevision(ctx context.Context, botID uuid.UUID, mechanismID string, revision int) (*models.WorkflowVersion, error) {
+	return scanWorkflowVersion(database.GetPool().QueryRow(ctx, `
+		SELECT `+workflowVersionColumns+` FROM workflow_versions
+		WHERE bot_id = $1 AND mechanism_id = $2 AND revision = $3
+	`, botID, mechanismID, revision))
+}
+
+// FindLatestPublishedByBotID 返回该 Bot 每个 mechanism 的最新发布版本（运行时执行遍历用）。
+func (r *workflowRepository) FindLatestPublishedByBotID(ctx context.Context, botID uuid.UUID) ([]*models.WorkflowVersion, error) {
+	rows, err := database.GetPool().Query(ctx, `
+		SELECT DISTINCT ON (mechanism_id) `+workflowVersionColumns+` FROM workflow_versions
+		WHERE bot_id = $1
+		ORDER BY mechanism_id, revision DESC
 	`, botID)
 	if err != nil {
 		return nil, err
@@ -99,10 +149,8 @@ func (r *workflowRepository) FindPublishedByBotID(ctx context.Context, botID uui
 
 	versions := make([]*models.WorkflowVersion, 0)
 	for rows.Next() {
-		v := &models.WorkflowVersion{}
-		if err := rows.Scan(
-			&v.ID, &v.BotID, &v.Revision, &v.Document, &v.Capabilities, &v.PublishedBy, &v.PublishedAt,
-		); err != nil {
+		v, err := scanWorkflowVersion(rows)
+		if err != nil {
 			return nil, err
 		}
 		versions = append(versions, v)
@@ -110,67 +158,55 @@ func (r *workflowRepository) FindPublishedByBotID(ctx context.Context, botID uui
 	return versions, nil
 }
 
-func (r *workflowRepository) FindPublishedByRevision(ctx context.Context, botID uuid.UUID, revision int) (*models.WorkflowVersion, error) {
-	v := &models.WorkflowVersion{}
-	err := database.GetPool().QueryRow(ctx, `
-		SELECT id, bot_id, revision, document, capabilities, published_by, published_at
-		FROM workflow_versions
-		WHERE bot_id = $1 AND revision = $2
-	`, botID, revision).Scan(
-		&v.ID, &v.BotID, &v.Revision, &v.Document, &v.Capabilities, &v.PublishedBy, &v.PublishedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return v, nil
-}
-
-func (r *workflowRepository) Publish(ctx context.Context, botID uuid.UUID, revision int, doc json.RawMessage, capabilities []string, publishedBy uuid.UUID) (*models.WorkflowVersion, error) {
+func (r *workflowRepository) Publish(ctx context.Context, botID uuid.UUID, mechanismID string, revision int, doc json.RawMessage, capabilities []string, publishedBy uuid.UUID) (*models.WorkflowVersion, error) {
 	if capabilities == nil {
 		capabilities = []string{}
 	}
 	var version *models.WorkflowVersion
 	err := pgx.BeginTxFunc(ctx, database.GetPool(), pgx.TxOptions{}, func(tx pgx.Tx) error {
-		v := &models.WorkflowVersion{}
-		err := tx.QueryRow(ctx, `
-			INSERT INTO workflow_versions (bot_id, revision, document, capabilities, published_by)
-			VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (bot_id, revision) DO NOTHING
-			RETURNING id, bot_id, revision, document, capabilities, published_by, published_at
-		`, botID, revision, doc, capabilities, publishedBy).Scan(
-			&v.ID, &v.BotID, &v.Revision, &v.Document, &v.Capabilities, &v.PublishedBy, &v.PublishedAt,
-		)
+		v, err := scanWorkflowVersion(tx.QueryRow(ctx, `
+			INSERT INTO workflow_versions (bot_id, mechanism_id, revision, document, capabilities, published_by)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (bot_id, mechanism_id, revision) DO NOTHING
+			RETURNING `+workflowVersionColumns+`
+		`, botID, mechanismID, revision, doc, capabilities, publishedBy))
 		if err == pgx.ErrNoRows {
-			err = tx.QueryRow(ctx, `
-				SELECT id, bot_id, revision, document, capabilities, published_by, published_at
-				FROM workflow_versions
-				WHERE bot_id = $1 AND revision = $2
-			`, botID, revision).Scan(
-				&v.ID, &v.BotID, &v.Revision, &v.Document, &v.Capabilities, &v.PublishedBy, &v.PublishedAt,
-			)
-			if err != nil {
-				return err
+			// 同 (bot, mechanism, revision) 已存在，校验不可变性
+			existing, findErr := scanWorkflowVersion(tx.QueryRow(ctx, `
+				SELECT `+workflowVersionColumns+` FROM workflow_versions
+				WHERE bot_id = $1 AND mechanism_id = $2 AND revision = $3
+			`, botID, mechanismID, revision))
+			if findErr != nil {
+				return findErr
 			}
-			if !jsonDocumentsEqual(v.Document, doc) || !stringSetsEqual(v.Capabilities, capabilities) {
+			if !jsonDocumentsEqual(existing.Document, doc) || !stringSetsEqual(existing.Capabilities, capabilities) {
 				return fmt.Errorf("published revision conflict: revision %d is immutable", revision)
 			}
-			version = v
+			version = existing
 			return nil
 		}
 		if err != nil {
 			return err
 		}
 
+		// 重新汇总 Bot 整体 requested_capabilities：所有已发布 mechanism 的能力并集
+		var aggregated []string
+		aggErr := tx.QueryRow(ctx, `
+			SELECT COALESCE(array_agg(DISTINCT cap), '{}'::text[]) FROM workflow_versions, unnest(capabilities) AS cap WHERE bot_id = $1
+		`, botID).Scan(&aggregated)
+		if aggErr != nil {
+			return aggErr
+		}
 		if _, err = tx.Exec(ctx,
-			`UPDATE bots SET requested_capabilities = $1, published_version = $2, updated_at = NOW() WHERE id = $3`,
-			capabilities, revision, botID,
+			`UPDATE bots SET requested_capabilities = $1, updated_at = NOW() WHERE id = $2`,
+			aggregated, botID,
 		); err != nil {
 			return err
 		}
 
-		// Bot 创建者的私聊与群聊安装可能早于首次工作流发布，此时安装记录的
-		// granted_capabilities 为空。发布时同步创建者本人安装的授权，确保新声明
-		// 立即可用于真实消息；其他用户的安装不自动扩权，仍需由安装者重新授权。
+		// Bot 创建者的安装可能早于首次工作流发布，此时 granted_capabilities 为空。
+		// 发布时同步创建者本人安装的授权，确保新声明立即可用于真实消息；
+		// 其他用户的安装不自动扩权，仍需由安装者重新授权。
 		if _, err = tx.Exec(ctx, `
 			UPDATE bot_installations
 			SET granted_capabilities = $1,
@@ -180,7 +216,7 @@ func (r *workflowRepository) Publish(ctx context.Context, botID uuid.UUID, revis
 				END,
 				updated_at = NOW()
 			WHERE app_id = $2 AND installed_by = $3
-		`, capabilities, botID, publishedBy); err != nil {
+		`, aggregated, botID, publishedBy); err != nil {
 			return err
 		}
 		version = v

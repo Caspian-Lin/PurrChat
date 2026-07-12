@@ -22,12 +22,13 @@ type WorkflowService struct {
 }
 
 type WorkflowRepo interface {
-	GetDocument(ctx context.Context, botID uuid.UUID) (json.RawMessage, int, error)
-	UpdateDocument(ctx context.Context, botID uuid.UUID, doc json.RawMessage, expectedRevision int) (int, error)
-	FindPublishedByBotID(ctx context.Context, botID uuid.UUID) ([]*models.WorkflowVersion, error)
-	FindPublishedByRevision(ctx context.Context, botID uuid.UUID, revision int) (*models.WorkflowVersion, error)
-	FindLatestPublished(ctx context.Context, botID uuid.UUID) (*models.WorkflowVersion, error)
-	Publish(ctx context.Context, botID uuid.UUID, revision int, doc json.RawMessage, capabilities []string, publishedBy uuid.UUID) (*models.WorkflowVersion, error)
+	GetDocument(ctx context.Context, botID uuid.UUID, mechanismID string) (json.RawMessage, int, error)
+	UpdateDocument(ctx context.Context, botID uuid.UUID, mechanismID string, doc json.RawMessage, expectedRevision int) (int, error)
+	FindPublishedByBotAndMechanism(ctx context.Context, botID uuid.UUID, mechanismID string) ([]*models.WorkflowVersion, error)
+	FindPublishedByRevision(ctx context.Context, botID uuid.UUID, mechanismID string, revision int) (*models.WorkflowVersion, error)
+	FindLatestPublished(ctx context.Context, botID uuid.UUID, mechanismID string) (*models.WorkflowVersion, error)
+	FindLatestPublishedByBotID(ctx context.Context, botID uuid.UUID) ([]*models.WorkflowVersion, error)
+	Publish(ctx context.Context, botID uuid.UUID, mechanismID string, revision int, doc json.RawMessage, capabilities []string, publishedBy uuid.UUID) (*models.WorkflowVersion, error)
 }
 
 type BotOwnerChecker interface {
@@ -44,13 +45,16 @@ func NewWorkflowService(wfRepo WorkflowRepo, botRepo BotOwnerChecker, tsClient T
 	return &WorkflowService{workflowRepo: wfRepo, botRepo: botRepo, tsClient: tsClient}
 }
 
-func (s *WorkflowService) GetWorkflow(ctx context.Context, botID string, requesterID string) (*models.WorkflowDocumentResponse, error) {
-	id, _, err := s.requireOwner(ctx, botID, requesterID, "view workflow")
+func (s *WorkflowService) GetWorkflow(ctx context.Context, botID string, mechanismID string, requesterID string) (*models.WorkflowDocumentResponse, error) {
+	bot, _, err := s.requireOwner(ctx, botID, requesterID, "view workflow")
 	if err != nil {
 		return nil, err
 	}
+	if err := validateMechanismBelongsToBot(bot, mechanismID); err != nil {
+		return nil, err
+	}
 
-	doc, revision, err := s.workflowRepo.GetDocument(ctx, id)
+	doc, revision, err := s.workflowRepo.GetDocument(ctx, bot.ID, mechanismID)
 	if err != nil {
 		return nil, err
 	}
@@ -61,30 +65,20 @@ func (s *WorkflowService) GetWorkflow(ctx context.Context, botID string, request
 		ETag:     fmt.Sprintf(`"%d"`, revision),
 	}
 
-	pub, err := s.workflowRepo.FindLatestPublished(ctx, id)
-	if err == nil && pub != nil {
+	if pub, err := s.workflowRepo.FindLatestPublished(ctx, bot.ID, mechanismID); err == nil && pub != nil {
 		resp.PublishedRev = &pub.Revision
 	}
 
 	return resp, nil
 }
 
-func (s *WorkflowService) UpdateWorkflow(ctx context.Context, botID string, requesterID string, req *models.UpdateWorkflowRequest) (*models.WorkflowDocumentResponse, error) {
-	id, err := uuid.Parse(botID)
+func (s *WorkflowService) UpdateWorkflow(ctx context.Context, botID string, mechanismID string, requesterID string, req *models.UpdateWorkflowRequest) (*models.WorkflowDocumentResponse, error) {
+	bot, _, err := s.requireOwner(ctx, botID, requesterID, "update workflow")
 	if err != nil {
 		return nil, err
 	}
-	requesterUUID, err := uuid.Parse(requesterID)
-	if err != nil {
+	if err := validateMechanismBelongsToBot(bot, mechanismID); err != nil {
 		return nil, err
-	}
-
-	bot, err := s.botRepo.FindByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if bot.OwnerID != requesterUUID {
-		return nil, errors.New("not authorized: only the bot owner can update workflow")
 	}
 
 	document, err := setWorkflowDocumentRevision(req.Document, req.Revision+1)
@@ -96,12 +90,12 @@ func (s *WorkflowService) UpdateWorkflow(ctx context.Context, botID string, requ
 		return nil, fmt.Errorf("invalid workflow document: %s", formatIssues(issues))
 	}
 
-	newRevision, err := s.workflowRepo.UpdateDocument(ctx, id, document, req.Revision)
+	newRevision, err := s.workflowRepo.UpdateDocument(ctx, bot.ID, mechanismID, document, req.Revision)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.InfofWithCaller("[WorkflowService] Bot %s workflow updated: rev %d → %d", botID, req.Revision, newRevision)
+	logger.InfofWithCaller("[WorkflowService] Bot %s mechanism %s workflow updated: rev %d → %d", botID, mechanismID, req.Revision, newRevision)
 
 	return &models.WorkflowDocumentResponse{
 		Document: document,
@@ -119,14 +113,17 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, req *models.Vali
 	return resp, nil
 }
 
-func (s *WorkflowService) PublishWorkflow(ctx context.Context, botID string, requesterID string, req *models.PublishWorkflowRequest) (*models.WorkflowVersion, error) {
-	id, requesterUUID, err := s.requireOwner(ctx, botID, requesterID, "publish workflow")
+func (s *WorkflowService) PublishWorkflow(ctx context.Context, botID string, mechanismID string, requesterID string, req *models.PublishWorkflowRequest) (*models.WorkflowVersion, error) {
+	bot, requesterUUID, err := s.requireOwner(ctx, botID, requesterID, "publish workflow")
 	if err != nil {
+		return nil, err
+	}
+	if err := validateMechanismBelongsToBot(bot, mechanismID); err != nil {
 		return nil, err
 	}
 
 	if req.Revision != 0 {
-		existing, findErr := s.workflowRepo.FindPublishedByRevision(ctx, id, req.Revision)
+		existing, findErr := s.workflowRepo.FindPublishedByRevision(ctx, bot.ID, mechanismID, req.Revision)
 		if findErr == nil {
 			return existing, nil
 		}
@@ -135,7 +132,7 @@ func (s *WorkflowService) PublishWorkflow(ctx context.Context, botID string, req
 		}
 	}
 
-	doc, revision, err := s.workflowRepo.GetDocument(ctx, id)
+	doc, revision, err := s.workflowRepo.GetDocument(ctx, bot.ID, mechanismID)
 	if err != nil {
 		return nil, err
 	}
@@ -151,34 +148,40 @@ func (s *WorkflowService) PublishWorkflow(ctx context.Context, botID string, req
 
 	capabilities := deriveCapabilitiesFromDoc(doc)
 
-	version, err := s.workflowRepo.Publish(ctx, id, revision, doc, capabilities, requesterUUID)
+	version, err := s.workflowRepo.Publish(ctx, bot.ID, mechanismID, revision, doc, capabilities, requesterUUID)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.InfofWithCaller("[WorkflowService] Bot %s workflow published: rev %d, capabilities=%v", botID, revision, capabilities)
+	logger.InfofWithCaller("[WorkflowService] Bot %s mechanism %s workflow published: rev %d, capabilities=%v", botID, mechanismID, revision, capabilities)
 
 	return version, nil
 }
 
-func (s *WorkflowService) ListPublishedVersions(ctx context.Context, botID string, requesterID string) ([]*models.WorkflowVersion, error) {
-	id, _, err := s.requireOwner(ctx, botID, requesterID, "view workflow versions")
+func (s *WorkflowService) ListPublishedVersions(ctx context.Context, botID string, mechanismID string, requesterID string) ([]*models.WorkflowVersion, error) {
+	bot, _, err := s.requireOwner(ctx, botID, requesterID, "view workflow versions")
 	if err != nil {
 		return nil, err
 	}
-	return s.workflowRepo.FindPublishedByBotID(ctx, id)
+	if err := validateMechanismBelongsToBot(bot, mechanismID); err != nil {
+		return nil, err
+	}
+	return s.workflowRepo.FindPublishedByBotAndMechanism(ctx, bot.ID, mechanismID)
 }
 
-func (s *WorkflowService) RollbackWorkflow(ctx context.Context, botID string, requesterID string, revision int) (*models.WorkflowDocumentResponse, error) {
-	id, _, err := s.requireOwner(ctx, botID, requesterID, "rollback workflow")
+func (s *WorkflowService) RollbackWorkflow(ctx context.Context, botID string, mechanismID string, requesterID string, revision int) (*models.WorkflowDocumentResponse, error) {
+	bot, _, err := s.requireOwner(ctx, botID, requesterID, "rollback workflow")
 	if err != nil {
 		return nil, err
 	}
-	version, err := s.workflowRepo.FindPublishedByRevision(ctx, id, revision)
+	if err := validateMechanismBelongsToBot(bot, mechanismID); err != nil {
+		return nil, err
+	}
+	version, err := s.workflowRepo.FindPublishedByRevision(ctx, bot.ID, mechanismID, revision)
 	if err != nil {
 		return nil, err
 	}
-	_, currentRevision, err := s.workflowRepo.GetDocument(ctx, id)
+	_, currentRevision, err := s.workflowRepo.GetDocument(ctx, bot.ID, mechanismID)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +189,7 @@ func (s *WorkflowService) RollbackWorkflow(ctx context.Context, botID string, re
 	if err != nil {
 		return nil, err
 	}
-	newRevision, err := s.workflowRepo.UpdateDocument(ctx, id, document, currentRevision)
+	newRevision, err := s.workflowRepo.UpdateDocument(ctx, bot.ID, mechanismID, document, currentRevision)
 	if err != nil {
 		return nil, err
 	}
@@ -215,22 +218,22 @@ func setWorkflowDocumentRevision(raw json.RawMessage, revision int) (json.RawMes
 	return normalized, nil
 }
 
-func (s *WorkflowService) TestRunWorkflow(ctx context.Context, botID string, requesterID string, req *models.TestRunWorkflowRequest) (*botengine.TestRunResponse, error) {
-	if _, _, err := s.requireOwner(ctx, botID, requesterID, "test workflow"); err != nil {
+func (s *WorkflowService) TestRunWorkflow(ctx context.Context, botID string, mechanismID string, requesterID string, req *models.TestRunWorkflowRequest) (*botengine.TestRunResponse, error) {
+	bot, _, err := s.requireOwner(ctx, botID, requesterID, "test workflow")
+	if err != nil {
+		return nil, err
+	}
+	if err := validateMechanismBelongsToBot(bot, mechanismID); err != nil {
 		return nil, err
 	}
 	if s.tsClient == nil || !s.tsClient.IsAvailable() {
 		return nil, errors.New("test-run requires bot-engine service to be available")
 	}
 
-	// 如果请求未携带 document，从数据库加载最新草稿
+	// 如果请求未携带 document，从数据库加载该 mechanism 的最新草稿
 	document := req.Document
 	if len(document) == 0 {
-		id, err := uuid.Parse(botID)
-		if err != nil {
-			return nil, fmt.Errorf("invalid bot ID: %w", err)
-		}
-		doc, _, err := s.workflowRepo.GetDocument(ctx, id)
+		doc, _, err := s.workflowRepo.GetDocument(ctx, bot.ID, mechanismID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load workflow document: %w", err)
 		}
@@ -243,7 +246,7 @@ func (s *WorkflowService) TestRunWorkflow(ctx context.Context, botID string, req
 		SideEffects: "mock",
 	}
 
-	logger.InfofWithCaller("[WorkflowService] TestRun bot=%s msgLen=%d", botID, len(req.Message))
+	logger.InfofWithCaller("[WorkflowService] TestRun bot=%s mechanism=%s msgLen=%d", botID, mechanismID, len(req.Message))
 
 	result, err := s.tsClient.TestRun(ctx, tsReq)
 	if err != nil {
@@ -264,23 +267,37 @@ func (s *WorkflowService) TestRunStep(ctx context.Context, botID string, request
 	return s.tsClient.TestRunStep(ctx, sessionID)
 }
 
-func (s *WorkflowService) requireOwner(ctx context.Context, botID string, requesterID string, action string) (uuid.UUID, uuid.UUID, error) {
+func (s *WorkflowService) requireOwner(ctx context.Context, botID string, requesterID string, action string) (*models.Bot, uuid.UUID, error) {
 	id, err := uuid.Parse(botID)
 	if err != nil {
-		return uuid.Nil, uuid.Nil, err
+		return nil, uuid.Nil, err
 	}
 	requesterUUID, err := uuid.Parse(requesterID)
 	if err != nil {
-		return uuid.Nil, uuid.Nil, err
+		return nil, uuid.Nil, err
 	}
 	bot, err := s.botRepo.FindByID(ctx, id)
 	if err != nil {
-		return uuid.Nil, uuid.Nil, err
+		return nil, uuid.Nil, err
 	}
 	if bot.OwnerID != requesterUUID {
-		return uuid.Nil, uuid.Nil, fmt.Errorf("not authorized: only the bot owner can %s", action)
+		return nil, uuid.Nil, fmt.Errorf("not authorized: only the bot owner can %s", action)
 	}
-	return id, requesterUUID, nil
+	return bot, requesterUUID, nil
+}
+
+// validateMechanismBelongsToBot 确认 mechanismID 对应该 Bot 的 mechanism_config 中的真实机制。
+func validateMechanismBelongsToBot(bot *models.Bot, mechanismID string) error {
+	mechConfig, err := botengine.ParseMechanismConfig(bot.MechanismConfig)
+	if err != nil {
+		return fmt.Errorf("invalid mechanism config: %w", err)
+	}
+	for _, m := range mechConfig.Mechanisms {
+		if m.ID == mechanismID {
+			return nil
+		}
+	}
+	return fmt.Errorf("mechanism %q not found in bot", mechanismID)
 }
 
 // ─── Go 端基础结构校验 ─────────────────────────────────────────

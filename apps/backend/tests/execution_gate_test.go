@@ -195,11 +195,7 @@ func setupExecutionTestEnv(t *testing.T) *execTestEnv {
 
 	require.NoError(t, msgRepo.CreateMessageTable(ctx, conv.ID))
 
-	_, err := wfRepo.Publish(ctx, bot.ID, 1, json.RawMessage(validWorkflowDocumentJSON), []string{"messages:read_trigger", "messages:send"}, owner.ID)
-	require.NoError(t, err)
-
-	pv := 1
-	_, err = database.GetPool().Exec(ctx, "UPDATE bots SET published_version = $1 WHERE id = $2", pv, bot.ID)
+	_, err := wfRepo.Publish(ctx, bot.ID, "mech_exec", 1, json.RawMessage(validWorkflowDocumentJSON), []string{"messages:read_trigger", "messages:send"}, owner.ID)
 	require.NoError(t, err)
 
 	return &execTestEnv{
@@ -383,7 +379,7 @@ func TestExecutionGate_NoPublishedVersion_DoesNotExecute(t *testing.T) {
 
 	ctx := context.Background()
 
-	_, err := database.GetPool().Exec(ctx, "UPDATE bots SET published_version = NULL WHERE id = $1", env.botID)
+	_, err := database.GetPool().Exec(ctx, "DELETE FROM workflow_versions WHERE bot_id = $1", env.botID)
 	require.NoError(t, err)
 
 	mock := &mockTSHandler{replyText: "bot-reply", available: true}
@@ -472,7 +468,7 @@ func TestExecutionGate_DraftModificationDoesNotAffectExecution(t *testing.T) {
 			"endConditions": [{ "type": "max_rounds", "value": 5 }]
 		}
 	}`
-	_, err := env.wfRepo.UpdateDocument(ctx, env.botID, json.RawMessage(draftDoc), 0)
+	_, err := env.wfRepo.UpdateDocument(ctx, env.botID, "mech_exec", json.RawMessage(draftDoc), 0)
 	require.NoError(t, err)
 
 	mock := &mockTSHandler{replyText: "prod-reply", available: true}
@@ -554,7 +550,7 @@ func TestExecutionGate_NoPublishedVersion_LogsErrorType(t *testing.T) {
 
 	ctx := context.Background()
 
-	_, err := database.GetPool().Exec(ctx, "UPDATE bots SET published_version = NULL WHERE id = $1", env.botID)
+	_, err := database.GetPool().Exec(ctx, "DELETE FROM workflow_versions WHERE bot_id = $1", env.botID)
 	require.NoError(t, err)
 
 	mock := &mockTSHandler{replyText: "bot-reply", available: true}
