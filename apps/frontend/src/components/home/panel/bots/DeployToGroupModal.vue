@@ -149,7 +149,7 @@ const deployed = ref<string | null>(null);
 const uninstalling = ref<string | null>(null);
 
 const installedGroups = computed(() =>
-  botStore.deployments.filter((d) => d.app_id === props.botId)
+  botStore.deployments.filter((d) => d.app_id === props.botId && d.target_type === 'conversation')
 );
 
 onMounted(async () => {

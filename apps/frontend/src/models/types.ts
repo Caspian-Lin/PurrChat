@@ -422,6 +422,8 @@ export interface BotDeployment {
   installed_at: string;
   updated_at: string;
   app?: Bot;
+  target_name?: string;
+  target_conversation_type?: string;
 }
 
 // 公开 Bot 详情（含统计信息）

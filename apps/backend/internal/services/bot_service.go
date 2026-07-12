@@ -583,6 +583,35 @@ func (s *BotService) GetBotDeployments(ctx context.Context, userID string) ([]*m
 		}
 	}
 
+	// 批量补充 Bot 信息（供前端区分自己创建的 vs 已安装的公开 Bot）
+	appIDSet := make(map[uuid.UUID]bool, len(installations))
+	for _, inst := range installations {
+		appIDSet[inst.AppID] = true
+	}
+	if len(appIDSet) > 0 {
+		appIDs := make([]uuid.UUID, 0, len(appIDSet))
+		for id := range appIDSet {
+			appIDs = append(appIDs, id)
+		}
+		botRows, bErr := database.GetPool().Query(ctx,
+			`SELECT id, owner_id, name, avatar_url, description, status, visibility FROM bot_apps WHERE id = ANY($1)`, appIDs)
+		if bErr == nil {
+			botMap := make(map[uuid.UUID]*models.Bot, len(appIDs))
+			for botRows.Next() {
+				var b models.Bot
+				if sErr := botRows.Scan(&b.ID, &b.OwnerID, &b.Name, &b.AvatarURL, &b.Description, &b.Status, &b.Visibility); sErr == nil {
+					botMap[b.ID] = &b
+				}
+			}
+			botRows.Close()
+			for _, inst := range installations {
+				if b, ok := botMap[inst.AppID]; ok {
+					inst.App = b
+				}
+			}
+		}
+	}
+
 	return installations, nil
 }
 

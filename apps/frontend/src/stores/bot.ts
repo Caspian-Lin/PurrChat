@@ -25,7 +25,14 @@ export const useBotStore = defineStore('bot', () => {
   const callLogsLoading = ref(false);
 
   // 计算属性
-  const activeBot = computed(() => bots.value.find((b) => b.id === activeBotId.value) ?? null);
+  const activeBot = computed(() => {
+    const own = bots.value.find((b) => b.id === activeBotId.value);
+    if (own) return own;
+    for (const dep of deployments.value) {
+      if (dep.app && dep.app.id === activeBotId.value) return dep.app;
+    }
+    return null;
+  });
   const activeBots = computed(() => bots.value.filter((b) => b.status === 'active'));
   const callLogsHasMore = computed(
     () => callLogsOffset.value + callLogs.value.length < callLogsTotal.value

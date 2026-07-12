@@ -48,11 +48,12 @@
         <!-- Bot 列表 -->
         <div class="flex-1 min-h-0">
           <BotList
-            :bots="searchQuery ? botStore.searchResults : botStore.bots"
+            :bots="displayBots"
             :active-bot-id="botStore.activeBotId"
             :loading="botStore.loading || botStore.searchLoading"
             :is-search="!!searchQuery"
             :has-more="botStore.searchHasMore"
+            :current-user-id="currentUserId"
             @select="handleSelectBot"
             @delete="handleDeleteBot"
             @create-conversation="handleCreateConversation"
@@ -68,8 +69,11 @@
       v-if="botStore.activeBot"
       :key="botStore.activeBotId ?? undefined"
       :bot="botStore.activeBot"
+      :is-owned="botStore.activeBot.owner_id === currentUserId"
       @update="handleUpdateBot"
       @back="botStore.setActiveBot(null)"
+      @create-conversation="handleCreateConversation"
+      @deploy="handleDeploy"
     />
 
     <!-- 空状态 -->
@@ -108,7 +112,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { BsPlusLg, BsSearch, BsCpu } from 'vue-icons-plus/bs';
 import BasePanel from './BasePanel.vue';
 import BotList from './bots/BotList.vue';
@@ -117,10 +121,13 @@ import CreateBotModal from './bots/CreateBotModal.vue';
 import DeployToGroupModal from './bots/DeployToGroupModal.vue';
 import { useBotStore } from '../../../stores/bot';
 import { useBots } from '../../../composables/useBots';
+import { useAuthController } from '../../../controllers/authController';
 import { useRouter } from 'vue-router';
+import type { Bot } from '../../../models/types';
 
 const botStore = useBotStore();
 const { createBot, deleteBot, updateBot, createBotConversation } = useBots();
+const auth = useAuthController();
 const router = useRouter();
 
 const showCreateModal = ref(false);
@@ -129,8 +136,25 @@ const searchQuery = ref('');
 const showDeployModal = ref(false);
 const deployBotId = ref<string | null>(null);
 
+const currentUserId = computed(() => auth.currentUser?.id ?? '');
+
+// 合并：我的 Bot + 已安装的公开 Bot
+const displayBots = computed<Bot[]>(() => {
+  if (searchQuery.value) return botStore.searchResults;
+  const myBots = botStore.bots;
+  const seen = new Set(myBots.map((b) => b.id));
+  const installed: Bot[] = [];
+  for (const dep of botStore.deployments) {
+    if (dep.app && !seen.has(dep.app.id) && dep.app.owner_id !== currentUserId.value) {
+      installed.push(dep.app);
+      seen.add(dep.app.id);
+    }
+  }
+  return [...myBots, ...installed];
+});
+
 onMounted(async () => {
-  await botStore.loadBots();
+  await Promise.all([botStore.loadBots(), botStore.loadDeployments()]);
 });
 
 async function handleCreateBot(data: { name: string; description?: string }) {
@@ -164,7 +188,7 @@ function handleDeploy(botId: string) {
 async function handleCreateConversation(botId: string) {
   const conversation = await createBotConversation(botId);
   if (conversation) {
-    router.push('/chat');
+    router.push({ path: '/chat', query: { conversationId: conversation.id } });
   }
 }
 
