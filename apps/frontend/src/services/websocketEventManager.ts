@@ -66,6 +66,13 @@ export interface UserOnlineStatusEventData {
   last_seen?: string;
 }
 
+export interface BotDeployedEventData {
+  bot_id: string;
+  bot_name: string;
+  conversation_id: string;
+  deployed_by: string;
+}
+
 // 回调函数类型定义
 export type ConversationUpdateCallback = (_conversation: Conversation) => void;
 export type MessageUpdateCallback = (_conversationId: string, _message: Message) => void;
@@ -129,6 +136,10 @@ class WebSocketEventManager {
     // Bot 工作流事件
     websocketService.on('bot_workflow_started', this.handleWorkflowStarted.bind(this));
     websocketService.on('bot_workflow_ended', this.handleWorkflowEnded.bind(this));
+
+    // Bot 安装/卸载事件
+    websocketService.on('bot_deployed', this.handleBotDeployed.bind(this));
+    websocketService.on('bot_undeployed', this.handleBotUndeployed.bind(this));
   }
 
   /**
@@ -493,6 +504,30 @@ class WebSocketEventManager {
   private handleWorkflowEnded(data: { bot_id: string; bot_name: string; conversation_id: string }) {
     console.log('[WebSocketEventManager] Bot 工作流结束:', data);
     this.workflowCallbacks.forEach((callback) => callback('ended', data));
+  }
+
+  private handleBotDeployed(data: BotDeployedEventData) {
+    console.log('[WebSocketEventManager] Bot 安装事件:', data);
+    this.conversationUpdateCallbacks.forEach((callback) => {
+      callback({
+        id: data.conversation_id,
+        conversation_type: 'group',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    });
+  }
+
+  private handleBotUndeployed(data: BotDeployedEventData) {
+    console.log('[WebSocketEventManager] Bot 卸载事件:', data);
+    this.conversationUpdateCallbacks.forEach((callback) => {
+      callback({
+        id: data.conversation_id,
+        conversation_type: 'group',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    });
   }
 
   /**

@@ -181,7 +181,7 @@ export const useBots = () => {
     }
   }
 
-  // 获取可部署 Bot 的群聊列表
+  // 获取可部署会话列表（好友 + 群聊）
   async function getDeployableConversations(botId: string): Promise<DeployableConversation[]> {
     try {
       const response = await api.getDeployableConversations(botId);

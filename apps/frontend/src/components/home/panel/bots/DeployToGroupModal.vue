@@ -9,7 +9,7 @@
     >
       <!-- 头部 -->
       <div class="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
-        <h2 class="text-base font-semibold text-text-primary">部署到群聊</h2>
+        <h2 class="text-base font-semibold text-text-primary">安装到会话</h2>
         <button
           class="p-1.5 rounded-lg hover:bg-hover-bg text-text-tertiary hover:text-text-primary transition-colors"
           @click="$emit('close')"
@@ -27,7 +27,7 @@
           />
         </div>
 
-        <!-- 群聊列表 -->
+        <!-- 会话列表 -->
         <div v-else-if="conversations.length > 0" class="space-y-1 max-h-[300px] overflow-y-auto">
           <button
             v-for="conv in conversations"
@@ -44,7 +44,10 @@
             </div>
             <div class="flex-1 min-w-0">
               <div class="text-sm text-text-primary truncate">{{ conv.name }}</div>
-              <div class="text-xs text-text-tertiary">{{ conv.member_count }} 位成员</div>
+              <div class="text-xs text-text-tertiary">
+                <span v-if="conv.conversation_type === 'direct'">好友私聊</span>
+                <span v-else>{{ conv.member_count }} 位成员</span>
+              </div>
             </div>
             <div
               v-if="deploying === conv.id"
@@ -61,9 +64,9 @@
         <!-- 空状态 -->
         <div v-else class="text-center py-8">
           <BsPeopleFill :size="32" class="mx-auto text-text-quaternary mb-3" />
-          <p class="text-sm text-text-tertiary">没有可部署的群聊</p>
+          <p class="text-sm text-text-tertiary">没有可安装的会话</p>
           <p class="text-xs text-text-quaternary mt-1">
-            Bot 已部署到所有你的群聊，或你还未加入群聊
+            Bot 已安装到所有你的会话，或你还没有任何会话
           </p>
         </div>
       </div>
@@ -115,7 +118,6 @@ async function handleDeploy(conversationId: string) {
   const success = await deployBot(props.botId, conversationId);
   if (success) {
     deployed.value = conversationId;
-    // 从列表中移除已部署的群聊
     conversations.value = conversations.value.filter((c) => c.id !== conversationId);
     emit('deployed', conversationId);
   }

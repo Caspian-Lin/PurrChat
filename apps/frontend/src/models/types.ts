@@ -410,16 +410,18 @@ export interface BotApiCapabilities {
   segments: BotApiSegmentCapability[];
 }
 
-// Bot 部署
+// Bot 部署（对齐后端 BotInstallation）
 export interface BotDeployment {
   id: string;
-  bot_id: string;
-  conversation_id: string;
-  deployed_by: string;
-  status: 'active' | 'paused';
-  deployed_at: string;
-  bot?: Bot;
-  conversation?: Conversation;
+  app_id: string;
+  installed_by: string;
+  target_type: 'user' | 'conversation';
+  target_id: string;
+  granted_capabilities?: string[];
+  status: string;
+  installed_at: string;
+  updated_at: string;
+  app?: Bot;
 }
 
 // 公开 Bot 详情（含统计信息）
@@ -442,6 +444,8 @@ export interface PaginatedSearchResult {
 export interface DeployableConversation {
   id: string;
   name: string;
+  conversation_type: 'group' | 'direct';
+  avatar_url?: string;
   member_count: number;
 }
 
