@@ -66,3 +66,8 @@ type: project
 - Go flow/debug fallback 未删除（audit P2）。
 - 服务集成测试（Go→TS /execute）、全栈 E2E（audit P0 第 5 项）。
 
+## 创建者私聊/群聊固定回复不触发（2026-07-13）
+
+- 根因：Bot 创建及首次发布前的群聊安装会把当时为空的 `requested_capabilities` 固化为 installation 的空 `granted_capabilities`；发布只更新 Bot，没有同步创建者安装。消息在 `messages:read_trigger` 门禁被静默跳过。
+- 修复：发布事务同步 `installed_by = owner` 的私聊与群聊安装能力；第三方安装不自动扩权。迁移 `014_sync_owner_installation_capabilities.sql` 回填存量 owner 安装。
+- 可诊断性：缺少 `messages:read_trigger` 时写入 `capability_not_granted` 调用记录，不再只有服务端日志。

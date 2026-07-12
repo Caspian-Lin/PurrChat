@@ -90,6 +90,48 @@ func deriveDiagnosticsConsent(requestedCapabilities []string) models.Diagnostics
 	return models.DiagnosticsDenied
 }
 
+// deriveCapabilitiesFromMechanismConfig 为仍使用 BotEditor mechanism_config 的 Bot
+// 推导运行权限。发布版 Workflow Document 有独立的发布期推导逻辑。
+func deriveCapabilitiesFromMechanismConfig(raw json.RawMessage) ([]string, error) {
+	config, err := botengine.ParseMechanismConfig(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	derived := make(map[string]bool)
+	for _, mechanism := range config.Mechanisms {
+		if !mechanism.Enabled {
+			continue
+		}
+		derived[models.CapabilityReadTrigger] = true
+		switch mechanism.Reply.Type {
+		case "predefined":
+			derived[models.CapabilitySend] = true
+		case "llm":
+			derived[models.CapabilityReadHistory] = true
+			derived[models.CapabilityNetworkExternal] = true
+			derived[models.CapabilitySend] = true
+		case "workflow":
+			if mechanism.Reply.Workflow == nil {
+				continue
+			}
+			for _, event := range mechanism.Reply.Workflow.Events {
+				for _, capability := range models.GetNodeCapabilities(event.Type) {
+					derived[capability] = true
+				}
+			}
+		}
+	}
+
+	capabilities := make([]string, 0, len(derived))
+	for _, capability := range models.AllCapabilities {
+		if derived[capability] {
+			capabilities = append(capabilities, capability)
+		}
+	}
+	return capabilities, nil
+}
+
 // CreateBot 创建 Bot
 func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.CreateBotRequest) (*models.Bot, error) {
 	ownerUUID, err := uuid.Parse(ownerID)
@@ -252,9 +294,10 @@ func (s *BotService) GetDeployableConversations(ctx context.Context, userID stri
 		return nil, err
 	}
 
-	// 查询用户所在的群聊，排除 Bot 已部署的
+	// 查询用户所在的群聊，排除 Bot 已部署的。私聊不需要安装
+	// （创建/添加 Bot 时自动建立 user installation），只有群聊需要显式安装。
 	query := `
-        SELECT c.id, c.name, COUNT(e.id) AS member_count
+        SELECT c.id, c.name, c.conversation_type, c.avatar_url, COUNT(e.id) AS member_count
         FROM conversations c
         JOIN enrollments e ON e.conversation_id = c.id
         WHERE e.user_id = $1
@@ -262,7 +305,7 @@ func (s *BotService) GetDeployableConversations(ctx context.Context, userID stri
           AND c.id NOT IN (
               SELECT target_id FROM bot_installations WHERE target_type = 'conversation' AND app_id = $2
           )
-        GROUP BY c.id, c.name
+        GROUP BY c.id, c.name, c.conversation_type, c.avatar_url
         ORDER BY c.updated_at DESC
     `
 
@@ -275,7 +318,7 @@ func (s *BotService) GetDeployableConversations(ctx context.Context, userID stri
 	var results []*models.DeployableConversation
 	for rows.Next() {
 		dc := &models.DeployableConversation{}
-		if err := rows.Scan(&dc.ID, &dc.Name, &dc.MemberCount); err != nil {
+		if err := rows.Scan(&dc.ID, &dc.Name, &dc.ConversationType, &dc.AvatarURL, &dc.MemberCount); err != nil {
 			return nil, err
 		}
 		results = append(results, dc)
@@ -318,11 +361,21 @@ func (s *BotService) UpdateBot(ctx context.Context, botID string, userID string,
 	if req.Visibility != "" {
 		bot.Visibility = req.Visibility
 	}
+	capabilitiesChanged := false
 	if req.MechanismConfig != nil {
 		bot.MechanismConfig = req.MechanismConfig
+		if req.RequestedCapabilities == nil {
+			capabilities, deriveErr := deriveCapabilitiesFromMechanismConfig(req.MechanismConfig)
+			if deriveErr != nil {
+				return nil, fmt.Errorf("derive mechanism capabilities: %w", deriveErr)
+			}
+			bot.RequestedCapabilities = capabilities
+			capabilitiesChanged = true
+		}
 	}
 	if req.RequestedCapabilities != nil {
 		bot.RequestedCapabilities = req.RequestedCapabilities
+		capabilitiesChanged = true
 	}
 	if req.AllowedEndpoints != nil {
 		bot.AllowedEndpoints = req.AllowedEndpoints
@@ -331,6 +384,20 @@ func (s *BotService) UpdateBot(ctx context.Context, botID string, userID string,
 	err = s.botRepo.Update(ctx, bot)
 	if err != nil {
 		return nil, err
+	}
+	if capabilitiesChanged {
+		if _, syncErr := database.GetPool().Exec(ctx, `
+			UPDATE bot_installations
+			SET granted_capabilities = $1,
+				diagnostics_consent = CASE
+					WHEN $1::text[] @> ARRAY['network:external']::text[] THEN 'granted'
+					ELSE diagnostics_consent
+				END,
+				updated_at = NOW()
+			WHERE app_id = $2 AND installed_by = $3
+		`, bot.RequestedCapabilities, bot.ID, userUUID); syncErr != nil {
+			return nil, fmt.Errorf("sync owner installation capabilities: %w", syncErr)
+		}
 	}
 	if bot.Status == models.BotStatusDisabled {
 		_ = s.connections.DisconnectBot(ctx, bot.ID)
@@ -548,7 +615,78 @@ func (s *BotService) GetBotDeployments(ctx context.Context, userID string) ([]*m
 		return nil, err
 	}
 
-	return s.installationRepo.FindByInstaller(ctx, id)
+	installations, err := s.installationRepo.FindByInstaller(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// 批量补充目标会话名与类型（仅 conversation 类型）
+	convIDs := make([]uuid.UUID, 0, len(installations))
+	for _, inst := range installations {
+		if inst.TargetType == models.InstallationTargetConversation {
+			convIDs = append(convIDs, inst.TargetID)
+		}
+	}
+	if len(convIDs) > 0 {
+		rows, qErr := database.GetPool().Query(ctx,
+			`SELECT id, name, conversation_type FROM conversations WHERE id = ANY($1)`, convIDs)
+		if qErr == nil {
+			defer rows.Close()
+			convInfo := make(map[uuid.UUID]struct{ name, convType string }, len(convIDs))
+			for rows.Next() {
+				var cID uuid.UUID
+				var cName, cType string
+				if sErr := rows.Scan(&cID, &cName, &cType); sErr == nil {
+					convInfo[cID] = struct{ name, convType string }{cName, cType}
+				}
+			}
+			for _, inst := range installations {
+				if info, ok := convInfo[inst.TargetID]; ok {
+					inst.TargetName = info.name
+					inst.TargetConvType = info.convType
+				}
+			}
+		}
+	}
+
+	// 批量补充 Bot 信息（供前端区分自己创建的 vs 已安装的公开 Bot）
+	appIDSet := make(map[uuid.UUID]bool, len(installations))
+	for _, inst := range installations {
+		appIDSet[inst.AppID] = true
+	}
+	if len(appIDSet) > 0 {
+		appIDs := make([]uuid.UUID, 0, len(appIDSet))
+		for id := range appIDSet {
+			appIDs = append(appIDs, id)
+		}
+		botRows, bErr := database.GetPool().Query(ctx, `
+			SELECT id, owner_id, name, avatar_url, description, status, visibility, mechanism_config,
+			       bot_type, discoverability, is_system, published_version, requested_capabilities,
+			       allowed_endpoints, created_at, updated_at
+			FROM bots WHERE id = ANY($1)
+		`, appIDs)
+		if bErr == nil {
+			botMap := make(map[uuid.UUID]*models.Bot, len(appIDs))
+			for botRows.Next() {
+				var b models.Bot
+				if sErr := botRows.Scan(
+					&b.ID, &b.OwnerID, &b.Name, &b.AvatarURL, &b.Description, &b.Status, &b.Visibility,
+					&b.MechanismConfig, &b.BotType, &b.Discoverability, &b.IsSystem, &b.PublishedVersion,
+					&b.RequestedCapabilities, &b.AllowedEndpoints, &b.CreatedAt, &b.UpdatedAt,
+				); sErr == nil {
+					botMap[b.ID] = &b
+				}
+			}
+			botRows.Close()
+			for _, inst := range installations {
+				if b, ok := botMap[inst.AppID]; ok {
+					inst.App = b
+				}
+			}
+		}
+	}
+
+	return installations, nil
 }
 
 // UpdateDeploymentStatus 更新安装状态（暂停/恢复）

@@ -28,8 +28,9 @@
       >
         {{ form.status === 'active' ? '活跃' : '已禁用' }}
       </span>
-      <!-- 导出/导入按钮 -->
+      <!-- 导出/导入按钮（仅 owner） -->
       <button
+        v-if="isOwned"
         class="p-1.5 rounded-lg hover:bg-hover-bg text-text-tertiary hover:text-text-primary transition-colors"
         aria-label="导入配置"
         title="导入配置"
@@ -47,8 +48,58 @@
       </button>
     </div>
 
-    <!-- 编辑器内容 -->
-    <div class="flex-1 overflow-y-auto">
+    <!-- 非 owner：只读信息 + 操作 -->
+    <div v-if="!isOwned" class="flex-1 overflow-y-auto">
+      <div class="mx-auto max-w-2xl p-6 space-y-6">
+        <!-- Bot 头像与名称 -->
+        <div class="flex items-start gap-4">
+          <div
+            class="w-16 h-16 rounded-[var(--radius-lg,16px)] flex items-center justify-center flex-shrink-0 text-white font-bold"
+            style="background: var(--theme-primary)"
+          >
+            <BsCpu v-if="!bot.avatar_url" :size="28" />
+            <img
+              v-else
+              :src="bot.avatar_url"
+              :alt="bot.name"
+              class="w-full h-full rounded-[var(--radius-lg,16px)] object-cover"
+              referrerpolicy="no-referrer"
+            />
+          </div>
+          <div class="flex-1 min-w-0">
+            <h2 class="text-lg font-semibold text-text-primary">{{ bot.name }}</h2>
+            <p class="text-sm text-text-tertiary mt-1">{{ bot.description || '无描述' }}</p>
+            <span
+              class="inline-block mt-2 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]"
+            >
+              公开 Bot
+            </span>
+          </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="flex gap-3">
+          <button
+            class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-sm,8px)] text-white transition-colors"
+            style="background: var(--theme-primary)"
+            @click="$emit('create-conversation', bot.id)"
+          >
+            <BsChatDots :size="16" />
+            开始对话
+          </button>
+          <button
+            class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-secondary hover:bg-hover-bg transition-colors"
+            @click="$emit('deploy', bot.id)"
+          >
+            <BsBoxArrowUpRight :size="16" />
+            安装到群聊
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- owner：完整编辑器 -->
+    <div v-else class="flex-1 overflow-y-auto">
       <div class="mx-auto max-w-3xl p-6 space-y-8">
         <!-- 基本信息 -->
         <section>
@@ -186,8 +237,8 @@
       </div>
     </div>
 
-    <!-- 浮动保存按钮 -->
-    <div class="fixed bottom-12 right-12 z-40 flex items-center gap-2">
+    <!-- 浮动保存按钮（仅 owner） -->
+    <div v-if="isOwned" class="fixed bottom-12 right-12 z-40 flex items-center gap-2">
       <Transition name="reset-btn">
         <button
           v-if="isDirty && !saving"
@@ -214,6 +265,9 @@ import {
   BsPlus,
   BsClockHistory,
   BsArrowCounterclockwise,
+  BsCpu,
+  BsChatDots,
+  BsBoxArrowUpRight,
 } from 'vue-icons-plus/bs';
 import type {
   Bot,
@@ -229,13 +283,18 @@ import SaveButton from '../settings/SaveButton.vue';
 
 interface Props {
   bot: Bot;
+  isOwned?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  isOwned: true,
+});
 
 const emit = defineEmits<{
   update: [botId: string, data: UpdateBotRequest];
   back: [];
+  'create-conversation': [botId: string];
+  deploy: [botId: string];
 }>();
 
 const saving = ref(false);

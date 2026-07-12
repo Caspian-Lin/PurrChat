@@ -167,6 +167,22 @@ func (r *workflowRepository) Publish(ctx context.Context, botID uuid.UUID, revis
 		); err != nil {
 			return err
 		}
+
+		// Bot 创建者的私聊与群聊安装可能早于首次工作流发布，此时安装记录的
+		// granted_capabilities 为空。发布时同步创建者本人安装的授权，确保新声明
+		// 立即可用于真实消息；其他用户的安装不自动扩权，仍需由安装者重新授权。
+		if _, err = tx.Exec(ctx, `
+			UPDATE bot_installations
+			SET granted_capabilities = $1,
+				diagnostics_consent = CASE
+					WHEN $1::text[] @> ARRAY['network:external']::text[] THEN 'granted'
+					ELSE diagnostics_consent
+				END,
+				updated_at = NOW()
+			WHERE app_id = $2 AND installed_by = $3
+		`, capabilities, botID, publishedBy); err != nil {
+			return err
+		}
 		version = v
 		return nil
 	})

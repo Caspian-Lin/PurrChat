@@ -204,6 +204,19 @@ func (e *BotEngine) processMessage(ctx context.Context, event *messaging.Message
 		}
 		if !models.HasCapability(inst.GrantedCapabilities, models.CapabilityReadTrigger) {
 			logger.InfofWithCaller("[BotEngine] Skip bot=%s: messages:read_trigger capability not granted", bot.Name)
+			e.recordCallLog(ctx, &models.BotCallLog{
+				BotID:            bot.ID,
+				ConversationID:   msg.ConversationID,
+				SenderID:         msg.SenderID,
+				SenderName:       event.SenderName,
+				TriggerMessage:   msg.Content,
+				ExecutionPath:    "gate",
+				Success:          false,
+				ErrorMessage:     "messages:read_trigger capability not granted",
+				RunStatus:        models.RunStatusError,
+				ErrorType:        "capability_not_granted",
+				TriggerMessageID: triggerMsgID,
+			})
 			continue
 		}
 

@@ -34,6 +34,13 @@
             >
               已禁用
             </span>
+            <!-- 来源标记 -->
+            <span
+              v-if="!isSearch && !isOwned(bot)"
+              class="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--theme-primary)]/10 text-[var(--theme-primary)] flex-shrink-0"
+            >
+              已安装
+            </span>
           </div>
 
           <!-- 描述 -->
@@ -82,8 +89,8 @@
                 <BsChatDots :size="14" />
               </button>
             </template>
-            <template v-else>
-              <!-- 我的 Bot：对话 + 删除 -->
+            <template v-else-if="isOwned(bot)">
+              <!-- 我的 Bot：对话、安装到群聊、删除 -->
               <button
                 class="p-1.5 rounded-lg hover:bg-bg-quaternary text-text-tertiary hover:text-text-primary transition-colors"
                 title="开始对话"
@@ -93,12 +100,39 @@
                 <BsChatDots :size="14" />
               </button>
               <button
+                class="p-1.5 rounded-lg hover:bg-bg-quaternary text-text-tertiary hover:text-text-primary transition-colors"
+                title="安装到群聊"
+                aria-label="安装到群聊"
+                @click.stop="$emit('deploy', bot.id)"
+              >
+                <BsBoxArrowUpRight :size="14" />
+              </button>
+              <button
                 class="p-1.5 rounded-lg hover:bg-red-500/10 text-text-tertiary hover:text-red-500 transition-colors"
                 title="删除"
                 aria-label="删除 Bot"
                 @click.stop="$emit('delete', bot.id)"
               >
                 <BsTrash :size="14" />
+              </button>
+            </template>
+            <template v-else>
+              <!-- 已安装的公开 Bot：对话、安装到群聊 -->
+              <button
+                class="p-1.5 rounded-lg hover:bg-bg-quaternary text-text-tertiary hover:text-text-primary transition-colors"
+                title="开始对话"
+                aria-label="开始对话"
+                @click.stop="$emit('create-conversation', bot.id)"
+              >
+                <BsChatDots :size="14" />
+              </button>
+              <button
+                class="p-1.5 rounded-lg hover:bg-bg-quaternary text-text-tertiary hover:text-text-primary transition-colors"
+                title="安装到群聊"
+                aria-label="安装到群聊"
+                @click.stop="$emit('deploy', bot.id)"
+              >
+                <BsBoxArrowUpRight :size="14" />
               </button>
             </template>
           </template>
@@ -140,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { BsCpu, BsChatDots, BsTrash } from 'vue-icons-plus/bs';
+import { BsCpu, BsChatDots, BsTrash, BsBoxArrowUpRight } from 'vue-icons-plus/bs';
 import BaseListItem from '../../../common/BaseListItem.vue';
 import type { Bot, PublicBotDetail } from '../../../../models/types';
 
@@ -150,16 +184,22 @@ interface Props {
   loading?: boolean;
   isSearch?: boolean;
   hasMore?: boolean;
+  currentUserId?: string;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
 defineEmits<{
   select: [botId: string];
   delete: [botId: string];
   'create-conversation': [botId: string];
+  deploy: [botId: string];
   'load-more': [];
 }>();
+
+function isOwned(bot: Bot): boolean {
+  return bot.owner_id === props.currentUserId;
+}
 
 function isPublicBotDetail(bot: Bot): bot is PublicBotDetail {
   return 'deployment_count' in bot && 'trigger_summary' in bot;

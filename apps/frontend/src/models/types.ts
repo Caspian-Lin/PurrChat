@@ -340,6 +340,9 @@ export interface Bot {
   description: string;
   status: BotStatus;
   visibility: BotVisibility;
+  discoverability?: 'unlisted' | 'listed' | 'featured';
+  published_version?: number;
+  requested_capabilities?: string[];
   mechanism_config?: MechanismConfig;
   /** @deprecated 使用 mechanism_config */
   trigger_config?: TriggerConfig;
@@ -410,16 +413,21 @@ export interface BotApiCapabilities {
   segments: BotApiSegmentCapability[];
 }
 
-// Bot 部署
+// Bot 部署（对齐后端 BotInstallation）
 export interface BotDeployment {
   id: string;
-  bot_id: string;
-  conversation_id: string;
-  deployed_by: string;
-  status: 'active' | 'paused';
-  deployed_at: string;
-  bot?: Bot;
-  conversation?: Conversation;
+  app_id: string;
+  installed_by: string;
+  target_type: 'user' | 'conversation';
+  target_id: string;
+  granted_capabilities: string[];
+  diagnostics_consent?: 'denied' | 'granted';
+  status: 'active' | 'paused' | 'disabled';
+  installed_at: string;
+  updated_at: string;
+  app?: Bot;
+  target_name?: string;
+  target_conversation_type?: string;
 }
 
 // 公开 Bot 详情（含统计信息）
@@ -442,6 +450,8 @@ export interface PaginatedSearchResult {
 export interface DeployableConversation {
   id: string;
   name: string;
+  conversation_type: 'group' | 'direct';
+  avatar_url?: string;
   member_count: number;
 }
 
@@ -470,6 +480,19 @@ export interface UpdateBotRequest {
 // 部署 Bot 请求
 export interface DeployBotRequest {
   conversation_id: string;
+}
+
+export interface CreateBotInstallationRequest {
+  target_type: 'user' | 'conversation';
+  target_id: string;
+  granted_capabilities: string[];
+  diagnostics_consent?: 'denied' | 'granted';
+}
+
+export interface UpdateBotInstallationRequest {
+  status?: 'active' | 'paused' | 'disabled';
+  granted_capabilities?: string[];
+  diagnostics_consent?: 'denied' | 'granted';
 }
 
 // 更新部署状态请求
@@ -686,7 +709,8 @@ export interface BotCallLog {
 
 // Bot 调用记录列表响应
 export interface BotCallLogListResponse {
-  logs: BotCallLog[];
+  // Older backend versions can encode an empty Go slice as null.
+  logs: BotCallLog[] | null;
   total: number;
   limit: number;
   offset: number;

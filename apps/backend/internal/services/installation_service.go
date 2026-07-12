@@ -113,12 +113,12 @@ func (s *InstallationService) CreateInstallation(ctx context.Context, installerI
 		return nil, errGrantedExceedsReq
 	}
 
-	// 5. diagnostics_consent:外发 Bot 强制 granted(数据已必然到达 owner 经第三方)
+	// 5. diagnostics_consent:实际授予外发能力时强制 granted
 	diag := req.DiagnosticsConsent
 	if diag == "" {
 		diag = models.DiagnosticsDenied
 	}
-	if models.HasCapability(bot.RequestedCapabilities, models.CapabilityNetworkExternal) {
+	if models.HasCapability(granted, models.CapabilityNetworkExternal) {
 		diag = models.DiagnosticsGranted
 	}
 
@@ -135,7 +135,7 @@ func (s *InstallationService) CreateInstallation(ctx context.Context, installerI
 		}
 
 		// 声明 network:external 的 Bot 安装到群聊后,强制向全体成员发系统消息告知外发
-		if models.HasCapability(bot.RequestedCapabilities, models.CapabilityNetworkExternal) {
+		if models.HasCapability(granted, models.CapabilityNetworkExternal) {
 			s.notifyExternalBotInstalled(ctx, bot, req.TargetID, installerUUID)
 		}
 	}
@@ -275,12 +275,6 @@ func (s *InstallationService) UpdateInstallation(ctx context.Context, requesterI
 		return nil, errNotAuthorized
 	}
 
-	// 外发 Bot 的 diagnostics 不可降级为 denied
-	if req.DiagnosticsConsent == models.DiagnosticsDenied && inst.App != nil &&
-		models.HasCapability(inst.App.RequestedCapabilities, models.CapabilityNetworkExternal) {
-		req.DiagnosticsConsent = models.DiagnosticsGranted
-	}
-
 	oldStatus := inst.Status
 	oldCaps := inst.GrantedCapabilities
 	statusChanged := false
@@ -291,11 +285,21 @@ func (s *InstallationService) UpdateInstallation(ctx context.Context, requesterI
 		statusChanged = true
 	}
 	if req.GrantedCapabilities != nil {
+		if inst.App == nil {
+			return nil, errBotNotFound
+		}
+		if violations := models.IsGrantedSubsetOfRequested(req.GrantedCapabilities, inst.App.RequestedCapabilities); len(violations) > 0 {
+			return nil, errGrantedExceedsReq
+		}
 		inst.GrantedCapabilities = req.GrantedCapabilities
 		capsChanged = true
 	}
 	if req.DiagnosticsConsent != "" {
 		inst.DiagnosticsConsent = req.DiagnosticsConsent
+	}
+	// 实际授予外发能力后，诊断授权不可关闭；未授予时保留安装者选择。
+	if models.HasCapability(inst.GrantedCapabilities, models.CapabilityNetworkExternal) {
+		inst.DiagnosticsConsent = models.DiagnosticsGranted
 	}
 
 	if err := s.installationRepo.Update(ctx, inst); err != nil {

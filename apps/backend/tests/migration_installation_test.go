@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"purr-chat-server/internal/models"
@@ -13,6 +14,55 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestBackfillMechanismCapabilitiesMigration(t *testing.T) {
+	SetupTestDB(t)
+	defer CleanupTestDB(t)
+
+	ctx := context.Background()
+	botRepo := repository.NewBotRepository()
+	installationRepo := repository.NewBotInstallationRepository()
+	botService := services.NewBotService(
+		botRepo,
+		installationRepo,
+		repository.NewUserRepository(),
+		repository.NewFriendshipRepository(),
+		repository.NewConversationRepository(),
+		repository.NewEnrollmentRepository(),
+		repository.NewConversationMessageRepository(),
+		repository.NewBotCallLogRepository(),
+	)
+	owner := CreateTestUser(t, "cap_migration_owner", "cap_migration@test.com", "pass")
+	bot, err := botService.CreateBot(ctx, owner.ID.String(), &models.CreateBotRequest{Name: "LegacyFixedBot"})
+	require.NoError(t, err)
+
+	_, err = database.GetPool().Exec(ctx, `
+		UPDATE bots
+		SET mechanism_config = $1, requested_capabilities = '{}'
+		WHERE id = $2
+	`, `{"mechanisms":[{"id":"fixed","name":"固定回复","enabled":true,"trigger":{"type":"rule","rules":[]},"reply":{"type":"predefined","predefined":{"mode":"fixed","replies":["你好"]}}}]}`, bot.ID)
+	require.NoError(t, err)
+	_, err = database.GetPool().Exec(ctx,
+		`UPDATE bot_installations SET granted_capabilities = '{}' WHERE app_id = $1`, bot.ID)
+	require.NoError(t, err)
+
+	migrationSQL, err := os.ReadFile("../migrations/015_backfill_mechanism_capabilities.sql")
+	require.NoError(t, err)
+	_, err = database.GetPool().Exec(ctx, string(migrationSQL))
+	require.NoError(t, err)
+
+	updatedBot, err := botRepo.FindByID(ctx, bot.ID)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{
+		models.CapabilityReadTrigger,
+		models.CapabilitySend,
+	}, updatedBot.RequestedCapabilities)
+	installation, err := installationRepo.FindByAppAndTarget(
+		ctx, bot.ID, models.InstallationTargetUser, owner.ID,
+	)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, updatedBot.RequestedCapabilities, installation.GrantedCapabilities)
+}
 
 // migration009SQL 是 migration 009 的内容(内联以避免工作目录依赖)
 const migration009SQL = `

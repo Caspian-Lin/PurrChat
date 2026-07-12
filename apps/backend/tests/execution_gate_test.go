@@ -330,6 +330,8 @@ func TestExecutionGate_MissingReadTriggerCapability_DoesNotExecute(t *testing.T)
 	engine := botengine.NewBotEngine(nil, env.botRepo, env.msgRepo, env.enrollRepo, tsServer.URL)
 	engine.SetWorkflowRepo(env.wfRepo)
 	engine.SetInstallationRepo(env.instRepo)
+	callLogRepo := repository.NewBotCallLogRepository()
+	engine.SetCallLogRepo(callLogRepo)
 
 	require.NoError(t, env.instRepo.Create(ctx, &models.BotInstallation{
 		AppID:               env.botID,
@@ -340,8 +342,19 @@ func TestExecutionGate_MissingReadTriggerCapability_DoesNotExecute(t *testing.T)
 		GrantedCapabilities: []string{models.CapabilitySend},
 	}))
 
-	require.NoError(t, engine.OnMessageCreated(ctx, makeMessageEvent(env.conversationID, env.senderID, "hello")))
+	triggerMessageID := uuid.New()
+	event := makeMessageEvent(env.conversationID, env.senderID, "hello")
+	event.Message.ID = triggerMessageID
+	require.NoError(t, engine.OnMessageCreated(ctx, event))
 	assert.Equal(t, 0, mock.getCallCount(), "TS should not be called without messages:read_trigger")
+
+	logs, err := callLogRepo.FindAllByBotID(ctx, env.botID, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, logs, 1)
+	assert.Equal(t, "capability_not_granted", logs[0].ErrorType)
+	assert.Equal(t, models.RunStatusError, logs[0].RunStatus)
+	require.NotNil(t, logs[0].TriggerMessageID)
+	assert.Equal(t, triggerMessageID, *logs[0].TriggerMessageID)
 }
 
 func TestExecutionGate_NoInstallation_DoesNotExecute(t *testing.T) {

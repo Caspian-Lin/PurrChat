@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -183,6 +184,36 @@ func TestBotAppInstallation(t *testing.T) {
 	})
 
 	// capability:granted 必须是 requested 的子集
+	t.Run("mechanism_config_derives_capabilities_and_syncs_owner_installation", func(t *testing.T) {
+		bot, err := botService.CreateBot(ctx, owner.ID.String(), &models.CreateBotRequest{Name: "FixedReplyBot"})
+		require.NoError(t, err)
+
+		_, err = botService.UpdateBot(ctx, bot.ID.String(), owner.ID.String(), &models.UpdateBotRequest{
+			MechanismConfig: json.RawMessage(`{
+				"mechanisms": [{
+					"id": "fixed",
+					"name": "固定回复",
+					"enabled": true,
+					"trigger": {"type": "rule", "rules": []},
+					"reply": {"type": "predefined", "predefined": {"mode": "fixed", "replies": ["你好"]}}
+				}]
+			}`),
+		})
+		require.NoError(t, err)
+
+		updatedBot, err := botService.GetBot(ctx, bot.ID.String())
+		require.NoError(t, err)
+		assert.ElementsMatch(t, []string{
+			models.CapabilityReadTrigger,
+			models.CapabilitySend,
+		}, updatedBot.RequestedCapabilities)
+
+		installation, err := installationRepo.FindByAppAndTarget(ctx, bot.ID, models.InstallationTargetUser, owner.ID)
+		require.NoError(t, err)
+		assert.ElementsMatch(t, updatedBot.RequestedCapabilities, installation.GrantedCapabilities)
+	})
+
+	// capability:granted 必须是 requested 的子集
 	t.Run("capability_granted_subset_requested", func(t *testing.T) {
 		otherUser := CreateTestUser(t, "capuser", "cap@test.com", "pass")
 
@@ -203,8 +234,38 @@ func TestBotAppInstallation(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, inst.GrantedCapabilities, 2)
 
-		// 声明 network:external 的 Bot → diagnostics 强制 granted(基于 requested,与 granted 缩减无关)
-		assert.Equal(t, models.DiagnosticsGranted, inst.DiagnosticsConsent)
+		// 未授予 network:external 时不会共享外部诊断数据
+		assert.Equal(t, models.DiagnosticsDenied, inst.DiagnosticsConsent)
+
+		// 重新授权仍必须满足 granted ⊆ requested
+		_, err = installationService.UpdateInstallation(ctx, otherUser.ID.String(), inst.ID.String(), &models.UpdateInstallationRequest{
+			GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySecretsUse},
+		})
+		assert.Error(t, err)
+
+		updated, err := installationService.UpdateInstallation(ctx, otherUser.ID.String(), inst.ID.String(), &models.UpdateInstallationRequest{
+			GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend, models.CapabilityNetworkExternal},
+			DiagnosticsConsent:  models.DiagnosticsDenied,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, models.DiagnosticsGranted, updated.DiagnosticsConsent)
+
+		// 安装列表必须携带完整 Bot 权限声明，供前端再次授权时展示。
+		deployments, err := botService.GetBotDeployments(ctx, otherUser.ID.String())
+		require.NoError(t, err)
+		var installedBot *models.Bot
+		for _, deployment := range deployments {
+			if deployment.AppID == botA.ID {
+				installedBot = deployment.App
+				break
+			}
+		}
+		require.NotNil(t, installedBot)
+		assert.ElementsMatch(t, []string{
+			models.CapabilityReadTrigger,
+			models.CapabilitySend,
+			models.CapabilityNetworkExternal,
+		}, installedBot.RequestedCapabilities)
 
 		// Bot B 只声明 [read_trigger, send](不含 network:external)
 		botB, err := botService.CreateBot(ctx, owner.ID.String(), &models.CreateBotRequest{Name: "CapBotB", Visibility: models.BotVisibilityPublic})
