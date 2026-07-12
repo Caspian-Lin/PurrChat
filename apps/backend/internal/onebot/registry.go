@@ -96,6 +96,26 @@ var segmentDefinitions = []SegmentDefinition{
 	{Type: "reply", Status: StatusPartial, CompatibilityNote: "schema reserved; reply persistence is not implemented", Fields: []SegmentField{{Name: "message_id", Type: "opaque_string", Required: true}}, Validate: validateReply},
 }
 
+type EventDefinition struct {
+	PostType           string               `json:"post_type"`
+	DetailType         string               `json:"detail_type"`
+	SubTypes           []string             `json:"sub_types,omitempty"`
+	Category           string               `json:"category"`
+	Status             ImplementationStatus `json:"status"`
+	RequiredCapability string               `json:"required_capability,omitempty"`
+	Version            string               `json:"version"`
+	CompatibilityNote  string               `json:"compatibility_note,omitempty"`
+}
+
+var eventDefinitions = []EventDefinition{
+	{PostType: PostTypeMessage, DetailType: DetailTypePrivate, Category: "message", Status: StatusStable, RequiredCapability: models.CapabilityReadTrigger, Version: ProfileVersion, CompatibilityNote: "pushed only to active installations with messages:read_trigger; bot-sent and system messages are excluded"},
+	{PostType: PostTypeMessage, DetailType: DetailTypeGroup, Category: "message", Status: StatusStable, RequiredCapability: models.CapabilityReadTrigger, Version: ProfileVersion, CompatibilityNote: "pushed only to active installations with messages:read_trigger; bot-sent and system messages are excluded"},
+	{PostType: PostTypeNotice, DetailType: NoticeGroupMemberIncrease, Category: "notice", Status: StatusStable, RequiredCapability: models.CapabilityMembersRead, Version: ProfileVersion},
+	{PostType: PostTypeNotice, DetailType: NoticeGroupMemberDecrease, Category: "notice", Status: StatusStable, RequiredCapability: models.CapabilityMembersRead, Version: ProfileVersion},
+	{PostType: PostTypeNotice, DetailType: NoticeGroupMemberRoleChanged, Category: "notice", Status: StatusStable, RequiredCapability: models.CapabilityMembersRead, Version: ProfileVersion},
+	{PostType: PostTypeNotice, DetailType: NoticeInstallationChanged, SubTypes: []string{SubTypeInstalled, SubTypeSuspended, SubTypeResumed, SubTypeUninstalled, SubTypeCapabilityChanged}, Category: "notice", Status: StatusStable, Version: ProfileVersion, CompatibilityNote: "PurrChat extension; delivered to the affected bot's own connections without capability gating"},
+}
+
 var (
 	actionsByName  = mustBuildActionIndex(actionDefinitions)
 	segmentsByType = mustBuildSegmentIndex(segmentDefinitions)
@@ -133,6 +153,14 @@ func Segments() []SegmentDefinition {
 	result := make([]SegmentDefinition, len(segmentDefinitions))
 	for i, definition := range segmentDefinitions {
 		result[i] = cloneSegmentDefinition(definition)
+	}
+	return result
+}
+
+func Events() []EventDefinition {
+	result := make([]EventDefinition, len(eventDefinitions))
+	for i, definition := range eventDefinitions {
+		result[i] = cloneEventDefinition(definition)
 	}
 	return result
 }
@@ -184,6 +212,11 @@ func cloneActionDefinition(definition ActionDefinition) ActionDefinition {
 
 func cloneSegmentDefinition(definition SegmentDefinition) SegmentDefinition {
 	definition.Fields = slices.Clone(definition.Fields)
+	return definition
+}
+
+func cloneEventDefinition(definition EventDefinition) EventDefinition {
+	definition.SubTypes = slices.Clone(definition.SubTypes)
 	return definition
 }
 
