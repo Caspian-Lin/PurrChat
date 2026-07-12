@@ -183,7 +183,12 @@ func TestManagerBroadcastDisconnectOverflowMetricsAndShutdown(t *testing.T) {
 	require.NoError(t, manager.register(c))
 	require.Equal(t, 1, manager.PublishBotEvent(botID, map[string]string{"type": "one"}))
 	require.Equal(t, 0, manager.PublishBotEvent(botID, map[string]string{"type": "two"}))
-	require.Equal(t, uint64(1), manager.Metrics().QueueOverflows)
+	metrics := manager.Metrics()
+	require.Equal(t, uint64(2), metrics.EventsPublished)
+	require.Equal(t, uint64(1), metrics.EventsDelivered)
+	require.Equal(t, uint64(1), metrics.EventsDropped)
+	require.Equal(t, int64(1), metrics.QueueDepth)
+	require.Equal(t, uint64(1), metrics.QueueOverflows)
 	require.Equal(t, "send queue overflow", manager.Status(botID).LastError)
 	manager.unregister(c)
 
@@ -242,6 +247,10 @@ func TestUniversalWebSocketActionTimeoutKeepsConnectionUsable(t *testing.T) {
 	response := readResponse(t, conn)
 	require.Equal(t, onebot.RetCodeInternal, response.RetCode)
 	require.Equal(t, "action timeout", response.Message)
+	require.Eventually(t, func() bool {
+		metrics := manager.Metrics()
+		return metrics.ActionFailed == 1 && metrics.ActionCompleted == 1 && metrics.ActionLatencyNanoseconds > 0
+	}, time.Second, time.Millisecond)
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, []byte(`{"action":"next","params":{"delay":0},"echo":2}`)))
 	require.Equal(t, onebot.RetCodeOK, readResponse(t, conn).RetCode)
 }

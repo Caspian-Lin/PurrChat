@@ -25,21 +25,27 @@ type EventReplayer interface {
 }
 
 type MetricsSnapshot struct {
-	Accepted        uint64 `json:"accepted"`
-	Active          int64  `json:"active"`
-	Rejected        uint64 `json:"rejected"`
-	MessagesRead    uint64 `json:"messages_read"`
-	MessagesWritten uint64 `json:"messages_written"`
-	ActionStarted   uint64 `json:"action_started"`
-	ActionCompleted uint64 `json:"action_completed"`
-	ActionRejected  uint64 `json:"action_rejected"`
-	QueueOverflows  uint64 `json:"queue_overflows"`
-	ProtocolErrors  uint64 `json:"protocol_errors"`
+	Accepted                 uint64 `json:"accepted"`
+	Active                   int64  `json:"active"`
+	Rejected                 uint64 `json:"rejected"`
+	MessagesRead             uint64 `json:"messages_read"`
+	MessagesWritten          uint64 `json:"messages_written"`
+	EventsPublished          uint64 `json:"events_published"`
+	EventsDelivered          uint64 `json:"events_delivered"`
+	EventsDropped            uint64 `json:"events_dropped"`
+	ActionStarted            uint64 `json:"action_started"`
+	ActionCompleted          uint64 `json:"action_completed"`
+	ActionFailed             uint64 `json:"action_failed"`
+	ActionRejected           uint64 `json:"action_rejected"`
+	ActionLatencyNanoseconds uint64 `json:"action_latency_nanoseconds"`
+	QueueDepth               int64  `json:"queue_depth"`
+	QueueOverflows           uint64 `json:"queue_overflows"`
+	ProtocolErrors           uint64 `json:"protocol_errors"`
 }
 
 type metrics struct {
-	accepted, rejected, read, written, actionStarted, actionCompleted, actionRejected, queueOverflows, protocolErrors atomic.Uint64
-	active                                                                                                            atomic.Int64
+	accepted, rejected, read, written, eventsPublished, eventsDelivered, eventsDropped, actionStarted, actionCompleted, actionFailed, actionRejected, actionLatencyNanos, queueOverflows, protocolErrors atomic.Uint64
+	active                                                                                                                                                                                               atomic.Int64
 }
 
 type BotStatus struct {
@@ -156,6 +162,7 @@ func (m *Manager) PublishBotEvent(botID uuid.UUID, event any) int {
 	if err != nil {
 		return 0
 	}
+	m.metrics.eventsPublished.Add(1)
 	m.mu.RLock()
 	items := make([]*connection, 0, len(m.connections[botID]))
 	for c := range m.connections[botID] {
@@ -166,6 +173,9 @@ func (m *Manager) PublishBotEvent(botID uuid.UUID, event any) int {
 	for _, c := range items {
 		if c.enqueue(payload) {
 			delivered++
+			m.metrics.eventsDelivered.Add(1)
+		} else {
+			m.metrics.eventsDropped.Add(1)
 		}
 	}
 	return delivered
@@ -257,7 +267,33 @@ func (m *Manager) recordError(botID uuid.UUID, message string) {
 }
 
 func (m *Manager) Metrics() MetricsSnapshot {
-	return MetricsSnapshot{m.metrics.accepted.Load(), m.metrics.active.Load(), m.metrics.rejected.Load(), m.metrics.read.Load(), m.metrics.written.Load(), m.metrics.actionStarted.Load(), m.metrics.actionCompleted.Load(), m.metrics.actionRejected.Load(), m.metrics.queueOverflows.Load(), m.metrics.protocolErrors.Load()}
+	m.mu.RLock()
+	queueDepth := int64(0)
+	for _, connections := range m.connections {
+		for c := range connections {
+			queueDepth += int64(len(c.send))
+		}
+	}
+	m.mu.RUnlock()
+
+	return MetricsSnapshot{
+		Accepted:                 m.metrics.accepted.Load(),
+		Active:                   m.metrics.active.Load(),
+		Rejected:                 m.metrics.rejected.Load(),
+		MessagesRead:             m.metrics.read.Load(),
+		MessagesWritten:          m.metrics.written.Load(),
+		EventsPublished:          m.metrics.eventsPublished.Load(),
+		EventsDelivered:          m.metrics.eventsDelivered.Load(),
+		EventsDropped:            m.metrics.eventsDropped.Load(),
+		ActionStarted:            m.metrics.actionStarted.Load(),
+		ActionCompleted:          m.metrics.actionCompleted.Load(),
+		ActionFailed:             m.metrics.actionFailed.Load(),
+		ActionRejected:           m.metrics.actionRejected.Load(),
+		ActionLatencyNanoseconds: m.metrics.actionLatencyNanos.Load(),
+		QueueDepth:               queueDepth,
+		QueueOverflows:           m.metrics.queueOverflows.Load(),
+		ProtocolErrors:           m.metrics.protocolErrors.Load(),
+	}
 }
 
 func (m *Manager) Shutdown(ctx context.Context) error {
