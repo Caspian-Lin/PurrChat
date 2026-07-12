@@ -233,7 +233,7 @@ export class WorkflowRuntime {
 
 ## 四、节点 → XState 状态机映射
 
-### 处理类节点（llm / tool / dify / n8n / python / builtin / template）
+### 处理类节点（llm / tool / dify / n8n / builtin / template）
 
 特征：执行异步操作，然后沿控制流继续。
 
@@ -523,7 +523,7 @@ packages/
       debug.ts              ← 调试类型（DebugSession, EventTrace）
       system-messages.ts    ← 系统消息类型
       node-types/           ← 每种节点类型的配置 schema
-        trigger.ts / llm.ts / reply.ts / builtin.ts / python.ts
+        trigger.ts / llm.ts / reply.ts / builtin.ts
         if.ts / loop.ts / switch.ts / merge.ts / tool.ts
         dify.ts / n8n.ts / wait.ts / history.ts / template.ts / end.ts
     package.json            ← name: "@purrchat/workflow-types"

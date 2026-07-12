@@ -8,6 +8,7 @@ const difyConfigSchema = z.object({
   app_type: z.enum(['workflow', 'chatflow']).optional().default('workflow'),
   response_mode: z.enum(['blocking', 'streaming']).optional().default('blocking'),
   inputs_mapping: z.string().optional(),
+  timeout: z.number().optional().default(60000),
 });
 
 export const difyNode: NodeDefinition<z.infer<typeof difyConfigSchema>> = {
@@ -89,7 +90,7 @@ export const difyNode: NodeDefinition<z.infer<typeof difyConfigSchema>> = {
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify(reqBody),
-        signal: AbortSignal.timeout(60000),
+        signal: AbortSignal.timeout(cfg.timeout || 60000),
       });
 
       if (!resp.ok) {

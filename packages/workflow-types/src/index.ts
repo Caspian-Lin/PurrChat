@@ -1,6 +1,6 @@
 // 端口类型系统
 export type { PortDataType, EventType, EventPort, FlowConnection, NodeTypeMeta } from './ports';
-export { PORT_COLORS, NODE_TYPE_META, isPortCompatible, getDefaultPorts, canConnect, getPortById } from './ports';
+export { PORT_COLORS, NODE_TYPE_META, isPortCompatible, getDefaultPorts, getPortsForConfig, canConnect, getPortById } from './ports';
 
 // 节点发布清单
 export { NODE_MANIFEST } from './manifest';

@@ -199,28 +199,25 @@
     </div>
 
     <!-- 工作流（Agent）回复 -->
-    <div
-      v-if="localConfig.type === 'workflow' || localConfig.type === 'special_mode'"
-      class="space-y-3"
-    >
+    <div v-if="localConfig.type === 'workflow'" class="space-y-3">
       <!-- 事件链预览 -->
       <div
-        v-if="(localConfig.workflow ?? localConfig.special_mode)?.events?.length"
+        v-if="localConfig.workflow?.events?.length"
         class="rounded-[var(--radius-sm,8px)] border border-border-subtle bg-bg-quaternary p-3"
       >
         <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-text-secondary font-medium">
-            事件链（{{ (localConfig.workflow ?? localConfig.special_mode)?.events?.length }}
+            事件链（{{ localConfig.workflow?.events?.length }}
             个事件）
           </span>
           <span class="text-xs text-text-quaternary">
-            {{ (localConfig.workflow ?? localConfig.special_mode)?.end_conditions?.length || 0 }}
+            {{ localConfig.workflow?.end_conditions?.length || 0 }}
             个结束条件
           </span>
         </div>
         <div class="flex flex-wrap gap-1.5">
           <span
-            v-for="event in (localConfig.workflow ?? localConfig.special_mode)?.events"
+            v-for="event in localConfig.workflow?.events"
             :key="event.id"
             class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-[var(--radius-xs,4px)] bg-bg-tertiary text-text-secondary"
           >
@@ -295,7 +292,6 @@ const types = [
   { value: 'predefined' as const, label: '预定义' },
   { value: 'llm' as const, label: 'LLM' },
   { value: 'workflow' as const, label: '工作流' },
-  { value: 'special_mode' as const, label: '特殊模式（旧）' },
 ];
 
 const predefinedModes = [
@@ -347,10 +343,7 @@ function createDefaultTriggerEvent(trigger?: TriggerSpec): WorkflowEvent {
 
 function handleTypeSwitch(type: ReplySpec['type']) {
   localConfig.type = type;
-  if (
-    (type === 'workflow' || type === 'special_mode') &&
-    (!localConfig.workflow || localConfig.workflow.events.length === 0)
-  ) {
+  if (type === 'workflow' && (!localConfig.workflow || localConfig.workflow.events.length === 0)) {
     localConfig.workflow = {
       events: [createDefaultTriggerEvent(props.trigger)],
       connections: [],
@@ -367,12 +360,7 @@ function buildLocalConfig(config: ReplySpec): ReplySpec {
       ? { ...config.predefined, replies: [...(config.predefined.replies || [])] }
       : { ...defaultPredefined },
     llm: config?.llm ? { ...config.llm } : { ...defaultLLM },
-    workflow: config?.workflow
-      ? deepCloneWorkflow(config.workflow)
-      : config?.special_mode
-        ? deepCloneWorkflow(config.special_mode)
-        : { ...defaultWorkflow },
-    special_mode: config?.special_mode ? deepCloneWorkflow(config.special_mode) : undefined,
+    workflow: config?.workflow ? deepCloneWorkflow(config.workflow) : { ...defaultWorkflow },
   };
 }
 
@@ -387,7 +375,6 @@ watch(
     localConfig.predefined = rebuilt.predefined;
     localConfig.llm = rebuilt.llm;
     localConfig.workflow = rebuilt.workflow;
-    localConfig.special_mode = rebuilt.special_mode;
   },
   { deep: true }
 );
@@ -396,7 +383,6 @@ function emitUpdate() {
   emit('update', {
     ...localConfig,
     workflow: deepCloneWorkflow(localConfig.workflow),
-    special_mode: deepCloneWorkflow(localConfig.special_mode),
   });
 }
 
@@ -413,7 +399,6 @@ function getEventColor(type: string): string {
   const colors: Record<string, string> = {
     llm: 'var(--theme-primary, #5A8F4E)',
     builtin: 'var(--color-info, #2563eb)',
-    python: '#E6A23C',
     reply: 'var(--color-success, #16a34a)',
   };
   return colors[type] || 'var(--text-quaternary-color, #a8a29e)';

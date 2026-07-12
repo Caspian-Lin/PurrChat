@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
 
 const mergeConfigSchema = z.object({
-  input_count: z.number().optional().default(2),
+  input_count: z.number().int().min(2).max(10).optional().default(2),
 });
 
 export const mergeNode: NodeDefinition<z.infer<typeof mergeConfigSchema>> = {

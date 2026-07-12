@@ -446,9 +446,17 @@ var productionWorkflowNodeTypes = map[string]bool{
 	"end":      true,
 	"wait":     true,
 	"if":       true,
+	"loop":     true,
+	"switch":   true,
+	"merge":    true,
 	"builtin":  true,
 	"template": true,
 	"reply":    true,
+	"history":  true,
+	"tool":     true,
+	"dify":     true,
+	"n8n":      true,
+	"llm":      true,
 }
 
 func deriveCapabilitiesFromDoc(raw json.RawMessage) []string {

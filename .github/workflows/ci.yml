@@ -126,7 +126,7 @@ jobs:
           go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
   test-workflow-engine:
-    name: Test Workflow Engine
+    name: Test Workflow Engine & Bot Engine
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -150,5 +150,60 @@ jobs:
           pnpm -F @purrchat/workflow-engine run typecheck
           pnpm -F bot-engine run type-check
 
+      - name: Lint bot-engine
+        run: pnpm -F bot-engine run lint
+
       - name: Run tests
-        run: pnpm -F @purrchat/workflow-engine test
+        run: |
+          pnpm -F @purrchat/workflow-engine test
+          pnpm -F bot-engine test
+
+  bot-e2e:
+    name: Bot Full-stack E2E
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: testdb
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: testdb
+      DB_USER: testuser
+      DB_PASSWORD: testpass
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          cd apps/backend && go mod download
+
+      - name: Run real-service Bot E2E
+        run: make test-bot-e2e

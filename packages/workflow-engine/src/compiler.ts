@@ -11,6 +11,7 @@ import type {
 import type { NodeRegistry } from './registry.js';
 import { getMissingCapabilities } from './capabilities.js';
 import { resolveSecrets, checkSecretCapability } from './secrets.js';
+import { resolveControlFlowRoute } from './control-flow.js';
 
 /** 终态：节点无后继连接时统一进入 */
 const DONE_STATE = '__done';
@@ -120,8 +121,8 @@ export class Compiler {
         }
       }
 
-      // 解析 secrets.<name> 引用，注入实际解密值
-      const resolvedConfig = resolveSecrets(node.config, context.secrets);
+      // 解析 secrets.<name> 引用，注入实际解密值；注入 __nodeId__ 供节点内部使用
+      const resolvedConfig = { ...(resolveSecrets(node.config, context.secrets) as Record<string, unknown>), __nodeId__: node.id };
 
       const nodeInput = {
         ports: this.resolveNodeInputs(node.id, blueprint.connections, context),
@@ -190,11 +191,6 @@ export class Compiler {
   }
 
   private compileInvokeNode(node: BlueprintNode, blueprint: Blueprint, actorKey: string): any {
-    const outConn = this.findOutputConnection(node.id, 'out_exec', blueprint);
-    const trueConn = this.findOutputConnection(node.id, 'out_true', blueprint);
-    const falseConn = this.findOutputConnection(node.id, 'out_false', blueprint);
-    const isIfNode = node.type === 'if';
-
     const onDoneActions = assign({
       nodeOutputs: ({ context, event }: { context: ExecutionContext; event: any }) => ({
         ...context.nodeOutputs,
@@ -213,23 +209,15 @@ export class Compiler {
       },
     });
 
-    if (isIfNode) {
-      // if 节点：用 guarded transitions 数组按 __branch__ 分流。
-      // 注意 always 是 state 级属性，不能放在 onDone transition 内；
-      // 这里用多个 guarded onDone transition 实现分支 + 兜底。
+    if (['if', 'switch', 'loop', 'merge'].includes(node.type)) {
       const onDoneTransitions: any[] = [
-        {
-          guard: ({ event }: { event: any }) => event.output?.ports?.['__branch__'] === 'true',
-          actions: onDoneActions,
-          target: trueConn ? trueConn.targetNodeId : DONE_STATE,
-        },
-        {
-          guard: ({ event }: { event: any }) => event.output?.ports?.['__branch__'] === 'false',
-          actions: onDoneActions,
-          target: falseConn ? falseConn.targetNodeId : DONE_STATE,
-        },
-        // 兜底：未知分支值时结束（避免永远卡住）
-        { actions: onDoneActions, target: DONE_STATE },
+        ...this.getControlRoutes(node, blueprint).map(({ portId, target }) => ({
+          guard: ({ context, event }: { context: ExecutionContext; event: any }) =>
+            resolveControlFlowRoute(node, event.output?.ports ?? {}, context.session)?.portId === portId,
+          actions: [onDoneActions, this.assignControlRoute(node)],
+          target,
+        })),
+        { actions: [onDoneActions, this.assignControlRoute(node)], target: DONE_STATE },
       ];
 
       return {
@@ -250,6 +238,7 @@ export class Compiler {
     }
 
     // 普通节点：有后继则流转，无后继则结束
+    const outConn = this.findOutputConnection(node.id, 'out_exec', blueprint);
     return {
       invoke: {
         id: `invoke-${node.id}`,
@@ -268,6 +257,44 @@ export class Compiler {
         },
       },
     };
+  }
+
+  private getControlRoutes(node: BlueprintNode, blueprint: Blueprint): Array<{ portId: string; target: string }> {
+    const ports = node.type === 'if'
+      ? [
+        'out_true',
+        ...Array.from(
+          { length: Math.max(0, (node.config.branches?.length ?? 1) - 1) },
+          (_, index) => `out_elif_${index}`,
+        ),
+        'out_false',
+      ]
+      : node.type === 'switch'
+        ? [...(node.config.cases ?? []).map((_: unknown, index: number) => `out_case_${index}`), 'out_default']
+        : node.type === 'loop'
+          ? ['out_body', 'out_done']
+          : ['out_exec'];
+
+    return ports.map((portId) => ({
+      portId,
+      target: this.findOutputConnection(node.id, portId, blueprint)?.targetNodeId ?? DONE_STATE,
+    }));
+  }
+
+  private assignControlRoute(node: BlueprintNode) {
+    return assign(({ context, event }: { context: ExecutionContext; event: any }) => {
+      const output = event.output?.ports ?? {};
+      const route = resolveControlFlowRoute(node, output, context.session);
+      if (!route) return {};
+
+      return {
+        session: route.session,
+        nodeOutputs: {
+          ...context.nodeOutputs,
+          [node.id]: { ...output, __branch__: route.portId, [route.portId]: 'true' },
+        },
+      };
+    });
   }
 
   /**

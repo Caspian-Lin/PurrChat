@@ -183,7 +183,6 @@ const replyLabel = computed(() => {
     predefined: '预定义',
     llm: 'LLM',
     workflow: '工作流',
-    special_mode: '工作流（旧）',
   };
   return labels[r.type] || r.type;
 });
@@ -222,7 +221,7 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
       : undefined,
     llm: reply.llm ? { ...reply.llm } : undefined,
     workflow: (() => {
-      const wf = reply.workflow ?? reply.special_mode;
+      const wf = reply.workflow;
       return wf
         ? {
             events: wf.events.map((e) => ({ ...e, config: { ...e.config } })),
@@ -231,13 +230,6 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
           }
         : undefined;
     })(),
-    special_mode: reply.special_mode
-      ? {
-          events: reply.special_mode.events.map((e) => ({ ...e, config: { ...e.config } })),
-          connections: reply.special_mode.connections?.map((c) => ({ ...c })) || [],
-          end_conditions: reply.special_mode.end_conditions.map((c) => ({ ...c })),
-        }
-      : undefined,
   };
 }
 </script>

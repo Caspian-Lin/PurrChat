@@ -3,7 +3,7 @@
     tint="var(--color-warning, #d97706)"
     accent="var(--color-warning, #d97706)"
     :inputs="INPUTS"
-    :outputs="OUTPUTS"
+    :outputs="outputs"
     :handle-colors="HANDLE_COLORS"
     :label-classes="LABEL_CLASSES"
   >
@@ -33,11 +33,6 @@ const { node } = useNode();
 
 const INPUTS: PortDef[] = [{ id: 'in_exec', name: '执行', dataType: 'trigger' }];
 
-const OUTPUTS: PortDef[] = [
-  { id: 'out_true', name: '真', dataType: 'trigger' },
-  { id: 'out_false', name: '假', dataType: 'trigger' },
-];
-
 const HANDLE_COLORS: Record<string, string> = {
   out_true: 'var(--color-success, #16a34a)',
   out_false: 'var(--color-error, #dc2626)',
@@ -49,11 +44,30 @@ const LABEL_CLASSES: Record<string, string> = {
 };
 
 const conditions = computed(() => {
+  const branches = node.data.config?.branches;
+  if (Array.isArray(branches) && branches.length > 0) {
+    return (branches[0]?.conditions || []) as { left: string; operator: string; right: string }[];
+  }
   const raw = node.data.config?.conditions;
   if (Array.isArray(raw) && raw.length > 0)
     return raw as { left: string; operator: string; right: string }[];
   return [];
 });
+
+const branchCount = computed(() => {
+  const branches = node.data.config?.branches;
+  return Array.isArray(branches) && branches.length > 0 ? branches.length : 1;
+});
+
+const outputs = computed<PortDef[]>(() => [
+  { id: 'out_true', name: '如果', dataType: 'trigger' },
+  ...Array.from({ length: branchCount.value - 1 }, (_, index) => ({
+    id: `out_elif_${index}`,
+    name: `否则如果 ${index + 1}`,
+    dataType: 'trigger' as const,
+  })),
+  { id: 'out_false', name: '否则', dataType: 'trigger' },
+]);
 
 const conditionCount = computed(() => Math.max(conditions.value.length, 1));
 

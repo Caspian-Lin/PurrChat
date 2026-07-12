@@ -11,6 +11,7 @@ const llmConfigSchema = z.object({
   max_tokens: z.number().optional().default(2048),
   context_window: z.number().optional().default(20),
   context_scope: z.string().optional(),
+  timeout: z.number().optional().default(30000),
 });
 
 export const llmNode: NodeDefinition<z.infer<typeof llmConfigSchema>> = {
@@ -63,31 +64,42 @@ export const llmNode: NodeDefinition<z.infer<typeof llmConfigSchema>> = {
         method: 'POST',
         headers,
         body: JSON.stringify(reqBody),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(config.timeout || 30000),
       });
 
       if (!resp.ok) {
         const body = await resp.text();
-        throw new Error(`LLM returned status ${resp.status}: ${body}`);
+        return {
+          ports: {
+            out_output: '',
+            out_error: `[provider] HTTP ${resp.status}: ${body}`,
+            out_exec: 'true',
+          },
+        };
       }
 
       const data = await resp.json() as {
         choices?: Array<{ message?: { content?: string } }>;
       };
 
-      const output = data.choices?.[0]?.message?.content || '...';
+      const output = data.choices?.[0]?.message?.content || '';
 
       return {
         ports: {
           out_output: output,
+          out_error: '',
           out_exec: 'true',
         },
       };
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
+      const category = errorMsg.includes('timeout') || errorMsg.includes('aborted')
+        ? 'timeout'
+        : 'network';
       return {
         ports: {
-          out_output: `LLM 调用失败: ${errorMsg}`,
+          out_output: '',
+          out_error: `[${category}] ${errorMsg}`,
           out_exec: 'true',
         },
       };

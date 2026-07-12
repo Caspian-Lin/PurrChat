@@ -9,7 +9,6 @@ import { buildDefaultPorts } from './eventPorts';
 export const typeIcons: Record<string, string> = {
   llm: '🧠',
   builtin: '⚙',
-  python: '🐍',
   reply: '💬',
 };
 
@@ -19,8 +18,6 @@ export function getEventSummary(evt: WorkflowEvent): string {
       return evt.config.model || 'LLM 调用';
     case 'builtin':
       return evt.config.builtin_type || '内置事件';
-    case 'python':
-      return evt.config.code ? `${evt.config.code.split('\n')[0]}...` : 'Python 脚本';
     case 'reply':
       return evt.config.template ? evt.config.template.slice(0, 30) + '...' : '发送回复';
     case 'template':

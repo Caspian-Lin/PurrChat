@@ -44,20 +44,23 @@ describe('NODE_MANIFEST', () => {
     }
   });
 
-  it.each(['python', 'loop', 'switch', 'merge'] as const)(
-    'keeps %s hidden from production',
-    (type) => {
-      expect(NODE_MANIFEST.find((entry) => entry.type === type)?.productionReady).toBe(false);
-    },
-  );
+  it('does not include removed python node type', () => {
+    expect(NODE_MANIFEST.find((entry) => (entry.type as string) === 'python')).toBeUndefined();
+  });
 
-  it('does not claim unverified external nodes are tested', () => {
+  it.each(['loop', 'switch', 'merge'] as const)('publishes verified %s control flow', (type) => {
+    const entry = NODE_MANIFEST.find((item) => item.type === type);
+    expect(entry?.tested).toBe(true);
+    expect(entry?.productionReady).toBe(true);
+  });
+
+  it('publishes verified external nodes as tested', () => {
     for (const type of ['tool', 'dify', 'n8n', 'llm'] as const) {
-      expect(NODE_MANIFEST.find((entry) => entry.type === type)?.tested).toBe(false);
+      expect(NODE_MANIFEST.find((entry) => entry.type === type)?.tested).toBe(true);
     }
   });
 
-  it('rejects hidden nodes during document validation', () => {
+  it('rejects an incomplete production Loop during document validation', () => {
     const document = createEmptyDocument('unsupported');
     document.spec.nodes = [
       { id: 'trigger', type: 'trigger', name: '触发', config: {} },
@@ -69,7 +72,7 @@ describe('NODE_MANIFEST', () => {
     expect(result.issues).toContainEqual(
       expect.objectContaining({
         level: 'error',
-        code: 'node_not_production_ready',
+        code: 'loop_body_invalid',
         nodeId: 'loop',
       }),
     );

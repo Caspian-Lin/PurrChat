@@ -518,7 +518,10 @@ func TestExecutionGate_TSUnavailable_LogsErrorType(t *testing.T) {
 		GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
 	}))
 
-	require.NoError(t, engine.OnMessageCreated(ctx, makeMessageEvent(env.conversationID, env.senderID, "hello")))
+	triggerMessageID := uuid.New()
+	event := makeMessageEvent(env.conversationID, env.senderID, "hello")
+	event.Message.ID = triggerMessageID
+	require.NoError(t, engine.OnMessageCreated(ctx, event))
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -528,6 +531,8 @@ func TestExecutionGate_TSUnavailable_LogsErrorType(t *testing.T) {
 	assert.Equal(t, models.RunStatusError, logs[0].RunStatus)
 	assert.Equal(t, "ts_unavailable", logs[0].ErrorType)
 	assert.False(t, logs[0].Success)
+	require.NotNil(t, logs[0].TriggerMessageID)
+	assert.Equal(t, triggerMessageID, *logs[0].TriggerMessageID)
 }
 
 func TestExecutionGate_NoPublishedVersion_LogsErrorType(t *testing.T) {
@@ -558,7 +563,10 @@ func TestExecutionGate_NoPublishedVersion_LogsErrorType(t *testing.T) {
 		GrantedCapabilities: []string{models.CapabilityReadTrigger, models.CapabilitySend},
 	}))
 
-	require.NoError(t, engine.OnMessageCreated(ctx, makeMessageEvent(env.conversationID, env.senderID, "hello")))
+	triggerMessageID := uuid.New()
+	event := makeMessageEvent(env.conversationID, env.senderID, "hello")
+	event.Message.ID = triggerMessageID
+	require.NoError(t, engine.OnMessageCreated(ctx, event))
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -567,6 +575,8 @@ func TestExecutionGate_NoPublishedVersion_LogsErrorType(t *testing.T) {
 	require.Len(t, logs, 1)
 	assert.Equal(t, models.RunStatusError, logs[0].RunStatus)
 	assert.Equal(t, "no_published_version", logs[0].ErrorType)
+	require.NotNil(t, logs[0].TriggerMessageID)
+	assert.Equal(t, triggerMessageID, *logs[0].TriggerMessageID)
 }
 
 func TestExecutionGate_DiagnosticsDenied_ClearsTraceAndTrigger(t *testing.T) {

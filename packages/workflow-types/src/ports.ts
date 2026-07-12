@@ -22,7 +22,6 @@ export type EventType =
   | 'n8n'
   | 'llm'
   | 'builtin'
-  | 'python'
   | 'reply'
   | 'template'
   | 'history';
@@ -76,7 +75,6 @@ export const NODE_TYPE_META: Record<EventType, NodeTypeMeta> = {
   n8n: { label: 'n8n', icon: '⚡', category: 'process', description: '调用 n8n Webhook' },
   llm: { label: 'LLM', icon: '🧠', category: 'process', description: 'LLM 调用' },
   builtin: { label: '内置', icon: '⚙', category: 'process', description: '内置事件' },
-  python: { label: 'Python', icon: '🐍', category: 'process', description: 'Python 脚本' },
   template: { label: '模板', icon: '📋', category: 'process', description: '模板渲染' },
   reply: { label: '回复', icon: '💬', category: 'output', description: '发送回复' },
   history: { label: '历史消息', icon: '📜', category: 'process', description: '获取历史消息记录' },
@@ -183,6 +181,7 @@ const DEFAULT_PORTS: Record<EventType, EventPort[]> = {
       ['out_exec', 'trigger', '执行'],
       ['out_output', 'string', '响应'],
       ['out_status', 'number', '状态码'],
+      ['out_error', 'string', '错误'],
     ]
   ),
   // Dify: external workflow
@@ -217,19 +216,10 @@ const DEFAULT_PORTS: Record<EventType, EventPort[]> = {
     [
       ['out_exec', 'trigger', '执行'],
       ['out_output', 'string', '输出'],
+      ['out_error', 'string', '错误'],
     ]
   ),
   builtin: ports(
-    [
-      ['in_exec', 'trigger', '执行'],
-      ['in_input', 'string', '输入'],
-    ],
-    [
-      ['out_exec', 'trigger', '执行'],
-      ['out_output', 'string', '输出'],
-    ]
-  ),
-  python: ports(
     [
       ['in_exec', 'trigger', '执行'],
       ['in_input', 'string', '输入'],
@@ -263,6 +253,57 @@ const DEFAULT_PORTS: Record<EventType, EventPort[]> = {
 
 export function getDefaultPorts(eventType: EventType): EventPort[] {
   return DEFAULT_PORTS[eventType];
+}
+
+/** Build control-flow ports from persisted configuration. */
+export function getPortsForConfig(
+  eventType: EventType,
+  config: Record<string, unknown> = {},
+): EventPort[] {
+  if (eventType === 'if') {
+    const branches = Array.isArray(config.branches) ? config.branches : [];
+    const elifPorts = branches.slice(1).map((_, index): EventPort => ({
+      id: `out_elif_${index}`,
+      name: `否则如果 ${index + 1}`,
+      dataType: 'trigger',
+      direction: 'output',
+    }));
+    return [
+      ...DEFAULT_PORTS.if.filter((port) => port.id === 'in_exec' || port.id === 'out_true'),
+      ...elifPorts,
+      ...DEFAULT_PORTS.if.filter((port) => port.id === 'out_false'),
+    ];
+  }
+
+  if (eventType === 'switch') {
+    const cases = Array.isArray(config.cases) ? config.cases : [];
+    const inputs = DEFAULT_PORTS.switch.filter((port) => port.direction === 'input');
+    const outputs = cases.map((item, index): EventPort => ({
+      id: `out_case_${index}`,
+      name: typeof item === 'object' && item && typeof (item as { label?: unknown }).label === 'string'
+        ? (item as { label: string }).label || `分支 ${index + 1}`
+        : `分支 ${index + 1}`,
+      dataType: 'trigger',
+      direction: 'output',
+    }));
+    return [...inputs, ...outputs, { id: 'out_default', name: '默认', dataType: 'trigger', direction: 'output' }];
+  }
+
+  if (eventType === 'merge') {
+    const configured = typeof config.input_count === 'number' ? config.input_count : 2;
+    const inputCount = Math.max(2, Math.min(10, Math.trunc(configured)));
+    return [
+      ...Array.from({ length: inputCount }, (_, index): EventPort => ({
+        id: `in_exec_${index}`,
+        name: `输入 ${index + 1}`,
+        dataType: 'trigger',
+        direction: 'input',
+      })),
+      { id: 'out_exec', name: '执行', dataType: 'trigger', direction: 'output' },
+    ];
+  }
+
+  return getDefaultPorts(eventType);
 }
 
 // ─── 连线校验 ────────────────────────────────────────────────

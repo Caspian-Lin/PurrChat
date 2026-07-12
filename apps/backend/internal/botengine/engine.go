@@ -23,10 +23,11 @@ type SecretResolver interface {
 // BotEngine Bot 处理引擎
 //
 // 当前职责：
-//   - 消息事件订阅者：接收 MessageCreatedEvent，查找 bot enrollment，调 TS
+//   - 消息事件订阅者：接收 MessageCreatedEvent，查找 bot enrollment/installation，调 TS
 //   - TS 微服务客户端：通过 client.go 调用 TS bot-engine
 //   - Bot 回复发送：通过 messaging.BotMessageSender 统一发送管线
-//   - 调用日志记录：recordCallLog（持久化到数据库）
+//   - Installation / Capability / Secret 运行时校验
+//   - 调用日志记录：recordCallLog（持久化 Trace 与消息关联 ID）
 type BotEngine struct {
 	deployRepo       repository.BotDeploymentRepository
 	botRepo          repository.BotRepository
@@ -38,9 +39,10 @@ type BotEngine struct {
 	secretResolver   SecretResolver
 	messageSender    messaging.BotMessageSender
 
-	workflowSessions sync.Map
-	debugSessions    sync.Map
+	// 工作流会话：记录活跃的工作流部署状态
+	workflowSessions sync.Map // map[string]*WorkflowSession — "conversationID:botID" -> session
 
+	// TS 微服务客户端（用于调用 TS bot-engine）
 	tsClient *BotEngineClient
 }
 
@@ -62,7 +64,6 @@ func NewBotEngine(
 		e.tsClient = NewBotEngineClient(tsServiceURL)
 		logger.InfofWithCaller("[BotEngine] TS service client initialized: %s", tsServiceURL)
 	}
-	e.startDebugSessionCleanup()
 	return e
 }
 
@@ -162,6 +163,12 @@ func (e *BotEngine) processMessage(ctx context.Context, event *messaging.Message
 		return
 	}
 
+	var triggerMsgID *uuid.UUID
+	if msg.ID != uuid.Nil {
+		id := msg.ID
+		triggerMsgID = &id
+	}
+
 	// 1. 通过 enrollment 查找会话中的 Bot 成员
 	botEnrollments, err := e.enrollmentRepo.FindBotEnrollmentsByConversationID(ctx, msg.ConversationID)
 	if err != nil {
@@ -203,16 +210,17 @@ func (e *BotEngine) processMessage(ctx context.Context, event *messaging.Message
 		if bot.PublishedVersion == nil || *bot.PublishedVersion == 0 {
 			logger.InfofWithCaller("[BotEngine] Skip bot=%s: no published workflow version", bot.Name)
 			e.recordCallLog(ctx, &models.BotCallLog{
-				BotID:          bot.ID,
-				ConversationID: msg.ConversationID,
-				SenderID:       msg.SenderID,
-				SenderName:     event.SenderName,
-				TriggerMessage: msg.Content,
-				ExecutionPath:  "ts",
-				Success:        false,
-				ErrorMessage:   "no published workflow version",
-				RunStatus:      models.RunStatusError,
-				ErrorType:      "no_published_version",
+				BotID:            bot.ID,
+				ConversationID:   msg.ConversationID,
+				SenderID:         msg.SenderID,
+				SenderName:       event.SenderName,
+				TriggerMessage:   msg.Content,
+				ExecutionPath:    "ts",
+				Success:          false,
+				ErrorMessage:     "no published workflow version",
+				RunStatus:        models.RunStatusError,
+				ErrorType:        "no_published_version",
+				TriggerMessageID: triggerMsgID,
 			})
 			continue
 		}
@@ -226,16 +234,17 @@ func (e *BotEngine) processMessage(ctx context.Context, event *messaging.Message
 		if err != nil {
 			logger.ErrorfWithCaller("[BotEngine] Failed to load published workflow bot=%s revision=%d: %v", bot.Name, *bot.PublishedVersion, err)
 			e.recordCallLog(ctx, &models.BotCallLog{
-				BotID:          bot.ID,
-				ConversationID: msg.ConversationID,
-				SenderID:       msg.SenderID,
-				SenderName:     event.SenderName,
-				TriggerMessage: msg.Content,
-				ExecutionPath:  "ts",
-				Success:        false,
-				ErrorMessage:   fmt.Sprintf("failed to load published revision %d: %v", *bot.PublishedVersion, err),
-				RunStatus:      models.RunStatusError,
-				ErrorType:      "version_load_failed",
+				BotID:            bot.ID,
+				ConversationID:   msg.ConversationID,
+				SenderID:         msg.SenderID,
+				SenderName:       event.SenderName,
+				TriggerMessage:   msg.Content,
+				ExecutionPath:    "ts",
+				Success:          false,
+				ErrorMessage:     fmt.Sprintf("failed to load published revision %d: %v", *bot.PublishedVersion, err),
+				RunStatus:        models.RunStatusError,
+				ErrorType:        "version_load_failed",
+				TriggerMessageID: triggerMsgID,
 			})
 			continue
 		}
@@ -243,16 +252,17 @@ func (e *BotEngine) processMessage(ctx context.Context, event *messaging.Message
 		if e.tsClient == nil || !e.tsClient.IsAvailable() {
 			logger.ErrorfWithCaller("[BotEngine] TS service unavailable; bot=%s will not execute (no Go fallback)", bot.Name)
 			e.recordCallLog(ctx, &models.BotCallLog{
-				BotID:          bot.ID,
-				ConversationID: msg.ConversationID,
-				SenderID:       msg.SenderID,
-				SenderName:     event.SenderName,
-				TriggerMessage: msg.Content,
-				ExecutionPath:  "ts",
-				Success:        false,
-				ErrorMessage:   "bot-engine service unavailable",
-				RunStatus:      models.RunStatusError,
-				ErrorType:      "ts_unavailable",
+				BotID:            bot.ID,
+				ConversationID:   msg.ConversationID,
+				SenderID:         msg.SenderID,
+				SenderName:       event.SenderName,
+				TriggerMessage:   msg.Content,
+				ExecutionPath:    "ts",
+				Success:          false,
+				ErrorMessage:     "bot-engine service unavailable",
+				RunStatus:        models.RunStatusError,
+				ErrorType:        "ts_unavailable",
+				TriggerMessageID: triggerMsgID,
 			})
 			continue
 		}
@@ -282,12 +292,6 @@ func (e *BotEngine) processMessage(ctx context.Context, event *messaging.Message
 		start := time.Now()
 		execResp, tsErr := e.tsClient.Execute(ctx, botMsg, bot.ID, bot.Name, version.Document, version.Revision, contextMsgs, grantedCaps, secrets)
 		duration := time.Since(start)
-
-		var triggerMsgID *uuid.UUID
-		if msg.ID != uuid.Nil {
-			id := msg.ID
-			triggerMsgID = &id
-		}
 
 		if tsErr == nil {
 			logger.InfofWithCaller("[BotEngine] TS bot=%s runId=%s triggered=%v revision=%d reply=%q sessionActive=%v ms=%d",
@@ -411,136 +415,4 @@ func (e *BotEngine) sendSystemMessage(ctx context.Context, conversationID uuid.U
 	}
 
 	logger.InfofWithCaller("[BotEngine] System message sent to conversation %s: type=%s", conversationID, content.Type)
-}
-
-// ─── 以下为遗留代码，保留至 Go fallback 完全移除 ───
-
-// goFallbackProcess Go 引擎 fallback 路径
-// Deprecated: 仅在 TS 微服务不可用时使用，后续将完全迁移至 TS。
-//
-//nolint:unused
-func (e *BotEngine) goFallbackProcess(ctx context.Context, msg *BotMessage, bot *models.Bot) {
-	mechConfig, err := ParseMechanismConfig(bot.MechanismConfig)
-	if err != nil {
-		logger.ErrorfWithCaller("[BotEngine] Failed to parse mechanism config for bot %s: %v", bot.ID, err)
-		return
-	}
-
-	for i := range mechConfig.Mechanisms {
-		mech := &mechConfig.Mechanisms[i]
-		if !mech.Enabled {
-			continue
-		}
-
-		matched := mech.Trigger.Evaluate(msg.Content)
-		if !matched {
-			continue
-		}
-
-		logger.InfofWithCaller("[BotEngine] Bot %s: mechanism[%d] trigger matched (Go fallback)", bot.Name, i)
-
-		switch mech.Reply.Type {
-		case "workflow":
-			if e.messageSender != nil {
-				if _, err := e.messageSender.SendBotMessage(ctx, &messaging.BotSendRequest{
-					BotID:          bot.ID,
-					ConversationID: msg.ConversationID,
-					Content:        "...",
-					MsgType:        "text",
-					Source:         messaging.SourceWorkflow,
-				}); err != nil {
-					logger.ErrorfWithCaller("[BotEngine] Failed to send fallback reply: %v", err)
-				}
-			}
-		case "predefined", "llm":
-			compiled := CompileSimpleMechanism(mech)
-			if compiled != nil {
-				contextMsgs := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
-				reply, err := e.ExecuteSimpleFlow(ctx, compiled, msg, bot, contextMsgs)
-				if err != nil {
-					logger.ErrorfWithCaller("[BotEngine] Simple flow execution failed for bot %s: %v", bot.ID, err)
-					reply = "..."
-				}
-				if e.messageSender != nil {
-					if _, err := e.messageSender.SendBotMessage(ctx, &messaging.BotSendRequest{
-						BotID:          bot.ID,
-						ConversationID: msg.ConversationID,
-						Content:        reply,
-						MsgType:        "text",
-						Source:         messaging.SourceWorkflow,
-					}); err != nil {
-						logger.ErrorfWithCaller("[BotEngine] Failed to send fallback reply: %v", err)
-					}
-				}
-			} else {
-				contextMessages := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
-				contextVars := map[string]string{"time": time.Now().Format("15:04")}
-				reply, err := mech.Reply.GenerateReply(msg.Content, contextVars, contextMessages, msg.SenderName)
-				if err != nil {
-					reply = "..."
-				}
-				if e.messageSender != nil {
-					if _, err := e.messageSender.SendBotMessage(ctx, &messaging.BotSendRequest{
-						BotID:          bot.ID,
-						ConversationID: msg.ConversationID,
-						Content:        reply,
-						MsgType:        "text",
-						Source:         messaging.SourceWorkflow,
-					}); err != nil {
-						logger.ErrorfWithCaller("[BotEngine] Failed to send fallback reply: %v", err)
-					}
-				}
-			}
-		default:
-			contextMessages := e.collectContextForMechanism(ctx, msg.ConversationID, mech)
-			contextVars := map[string]string{"time": time.Now().Format("15:04")}
-			reply, err := mech.Reply.GenerateReply(msg.Content, contextVars, contextMessages, msg.SenderName)
-			if err != nil {
-				reply = "..."
-			}
-			if e.messageSender != nil {
-				if _, err := e.messageSender.SendBotMessage(ctx, &messaging.BotSendRequest{
-					BotID:          bot.ID,
-					ConversationID: msg.ConversationID,
-					Content:        reply,
-					MsgType:        "text",
-					Source:         messaging.SourceWorkflow,
-				}); err != nil {
-					logger.ErrorfWithCaller("[BotEngine] Failed to send fallback reply: %v", err)
-				}
-			}
-		}
-		break
-	}
-}
-
-// collectContextForMechanism 收集机制所需的上下文消息
-//
-//nolint:unused
-func (e *BotEngine) collectContextForMechanism(ctx context.Context, conversationID uuid.UUID, mech *Mechanism) []ContextMessage {
-	windowSize := 20
-	if mech.Reply.Type == "llm" && mech.Reply.LLM != nil && mech.Reply.LLM.ContextWindow > 0 {
-		windowSize = mech.Reply.LLM.ContextWindow
-	}
-
-	messages, err := e.messageRepo.FindMessages(ctx, conversationID, windowSize, 0)
-	if err != nil {
-		return nil
-	}
-
-	var contextMessages []ContextMessage
-	for _, msg := range messages {
-		if msg.MsgType == models.MsgTypeText {
-			contextMessages = append(contextMessages, ContextMessage{
-				Role:    "user",
-				Content: msg.Content,
-			})
-		}
-	}
-
-	for i, j := 0, len(contextMessages)-1; i < j; i, j = i+1, j-1 {
-		contextMessages[i], contextMessages[j] = contextMessages[j], contextMessages[i]
-	}
-
-	return contextMessages
 }

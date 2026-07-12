@@ -52,7 +52,7 @@ metadata:
 ## 下一阶段计划
 
 - Phase 2: 前端 DAG 编辑器对接 Bot 微服务
-- Phase 3: 迁移剩余节点类型（loop、switch、merge、tool、dify、n8n、python、history）
+- Phase 3: 迁移剩余节点类型（loop、switch、merge、tool、dify、n8n、history）
 
 ## 详细架构文档
 

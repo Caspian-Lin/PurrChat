@@ -183,15 +183,6 @@
           </h3>
           <BotCallLogs :bot-id="bot.id" />
         </section>
-
-        <!-- 调试面板（仅当有特殊模式机制时显示） -->
-        <section v-if="specialModeMechanism">
-          <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
-            <BsBug :size="16" class="text-text-tertiary" />
-            调试 — {{ specialModeMechanism.name }}
-          </h3>
-          <BotDebugPanel :bot-id="bot.id" :mechanism="specialModeMechanism" :bot-name="form.name" />
-        </section>
       </div>
     </div>
 
@@ -218,7 +209,6 @@ import {
   BsArrowLeft,
   BsInfoCircle,
   BsGear,
-  BsBug,
   BsUpload,
   BsDownload,
   BsPlus,
@@ -234,7 +224,6 @@ import type {
   TriggerSpec,
 } from '../../../../models/types';
 import MechanismCard from './MechanismCard.vue';
-import BotDebugPanel from './BotDebugPanel.vue';
 import BotCallLogs from './BotCallLogs.vue';
 import SaveButton from '../settings/SaveButton.vue';
 
@@ -286,20 +275,6 @@ function extractMechanisms(bot: Bot): Mechanism[] {
     });
   }
 
-  // 如果有 special_mode_config，创建第二个特殊模式机制
-  if (bot.special_mode_config && (bot.special_mode_config as any).events?.length) {
-    mechanisms.push({
-      id: 'mech_special',
-      name: '特殊模式',
-      enabled: true,
-      trigger: { type: 'rule', rules: [] },
-      reply: {
-        type: 'special_mode',
-        special_mode: bot.special_mode_config as any,
-      },
-    });
-  }
-
   // 如果没有任何机制，创建一个默认的空规则机制
   if (mechanisms.length === 0) {
     mechanisms.push({
@@ -329,12 +304,6 @@ function deepCloneMechanism(m: Mechanism): Mechanism {
         ? { ...m.reply.predefined, replies: [...(m.reply.predefined.replies || [])] }
         : undefined,
       llm: m.reply.llm ? { ...m.reply.llm } : undefined,
-      special_mode: m.reply.special_mode
-        ? {
-            events: m.reply.special_mode.events.map((e) => ({ ...e, config: { ...e.config } })),
-            end_conditions: m.reply.special_mode.end_conditions.map((c) => ({ ...c })),
-          }
-        : undefined,
     },
   };
 }
@@ -379,11 +348,6 @@ watch(
 // 计算属性：是否已有概率机制
 const hasProbabilityMechanism = computed(() => {
   return form.mechanisms.some((m) => m.trigger.type === 'probability');
-});
-
-// 计算属性：找到特殊模式机制（调试面板用）
-const specialModeMechanism = computed<Mechanism | null>(() => {
-  return form.mechanisms.find((m) => m.reply.type === 'special_mode') || null;
 });
 
 function resetForm() {
@@ -485,7 +449,6 @@ function handleImport() {
             ...props.bot,
             trigger_config: data.trigger_config,
             reply_config: data.reply_config,
-            special_mode_config: data.special_mode_config,
           } as Bot);
         }
 

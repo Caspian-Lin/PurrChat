@@ -10,7 +10,6 @@ import (
 	"os"
 	"time"
 
-	"purr-chat-server/internal/models"
 	"purr-chat-server/pkg/logger"
 
 	"github.com/google/uuid"
@@ -112,66 +111,6 @@ func (c *BotEngineClient) Execute(ctx context.Context, msg *BotMessage, botID uu
 	}
 
 	return &execResp, nil
-}
-
-// DebugRequest 调试请求
-type DebugRequest struct {
-	Message        string          `json:"message"`
-	StepMode       bool            `json:"step_mode,omitempty"`
-	SessionID      string          `json:"session_id,omitempty"`
-	SenderName     string          `json:"sender_name,omitempty"`
-	WorkflowConfig json.RawMessage `json:"workflow_config,omitempty"`
-}
-
-// DebugResponse 调试响应（简化版，完整类型在 workflow-types 中）
-type DebugResponse struct {
-	SessionID      string `json:"session_id"`
-	Reply          string `json:"reply"`
-	WaitingForStep bool   `json:"waiting_for_step"`
-	Round          int    `json:"round"`
-}
-
-// DebugExecute 调用 TS 服务的调试执行
-func (c *BotEngineClient) DebugExecute(ctx context.Context, botID uuid.UUID, req *models.DebugBotRequest) (*models.DebugTraceResult, error) {
-	debugReq := DebugRequest{
-		Message:        req.Message,
-		StepMode:       req.StepMode,
-		SessionID:      req.SessionID,
-		SenderName:     req.SenderName,
-		WorkflowConfig: req.WorkflowConfig,
-	}
-
-	body, err := json.Marshal(debugReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal debug request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/debug", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create debug request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if c.sharedSecret != "" {
-		httpReq.Header.Set("X-Bot-Engine-Secret", c.sharedSecret)
-	}
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("debug request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("debug returned status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var debugResp models.DebugTraceResult
-	if err := json.NewDecoder(resp.Body).Decode(&debugResp); err != nil {
-		return nil, fmt.Errorf("failed to decode debug response: %w", err)
-	}
-
-	return &debugResp, nil
 }
 
 // HealthCheck 检查 TS 服务健康状态
