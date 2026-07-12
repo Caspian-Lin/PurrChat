@@ -31,6 +31,8 @@ import type {
   CreateBotRequest,
   UpdateBotRequest,
   DeployBotRequest,
+  CreateBotInstallationRequest,
+  UpdateBotInstallationRequest,
   UpdateDeploymentStatusRequest,
   BotDeployment,
   PaginatedSearchResult,
@@ -342,6 +344,24 @@ export const api = {
   // 获取 Bot 部署列表
   getBotDeployments: (): Promise<ApiResponse<BotDeployment[]>> => {
     return apiClient.get('/api/bots/deployments').then((res) => res.data);
+  },
+
+  createBotInstallation: (
+    botId: string,
+    data: CreateBotInstallationRequest
+  ): Promise<ApiResponse<{ installation: BotDeployment }>> => {
+    return apiClient.post(`/api/bots/${botId}/installations`, data).then((res) => res.data);
+  },
+
+  updateBotInstallation: (
+    installationId: string,
+    data: UpdateBotInstallationRequest
+  ): Promise<ApiResponse<{ installation: BotDeployment }>> => {
+    return apiClient.patch(`/api/installations/${installationId}`, data).then((res) => res.data);
+  },
+
+  uninstallBotInstallation: (installationId: string): Promise<ApiResponse<void>> => {
+    return apiClient.delete(`/api/installations/${installationId}`).then((res) => res.data);
   },
 
   // 获取会话中的活跃 Bot 列表

@@ -10,6 +10,9 @@ import type {
   UpdateDeploymentStatusRequest,
   PublicBotDetail,
   DeployableConversation,
+  BotDeployment,
+  CreateBotInstallationRequest,
+  UpdateBotInstallationRequest,
 } from '../models/types';
 
 export const useBots = () => {
@@ -98,6 +101,63 @@ export const useBots = () => {
     } catch (err) {
       console.error('[useBots] 部署 Bot 失败:', err);
       notify.error('部署 Bot 失败');
+      return false;
+    }
+  }
+
+  async function installBot(
+    botId: string,
+    data: CreateBotInstallationRequest
+  ): Promise<BotDeployment | null> {
+    try {
+      const response = await api.createBotInstallation(botId, data);
+      if (response.success && response.data?.installation) {
+        notify.success(data.target_type === 'conversation' ? 'Bot 已安装到群聊' : 'Bot 已安装');
+        await botStore.loadDeployments();
+        return response.data.installation;
+      }
+      notify.error(response.message || '安装 Bot 失败');
+      return null;
+    } catch (err) {
+      console.error('[useBots] 安装 Bot 失败:', err);
+      notify.error('安装 Bot 失败');
+      return null;
+    }
+  }
+
+  async function updateInstallation(
+    installationId: string,
+    data: UpdateBotInstallationRequest
+  ): Promise<BotDeployment | null> {
+    try {
+      const response = await api.updateBotInstallation(installationId, data);
+      if (response.success && response.data?.installation) {
+        notify.success('Bot 权限已更新');
+        await botStore.loadDeployments();
+        return response.data.installation;
+      }
+      notify.error(response.message || '更新 Bot 权限失败');
+      return null;
+    } catch (err) {
+      console.error('[useBots] 更新 Bot 权限失败:', err);
+      notify.error('更新 Bot 权限失败');
+      return null;
+    }
+  }
+
+  async function uninstallInstallation(installationId: string): Promise<boolean> {
+    try {
+      const response = await api.uninstallBotInstallation(installationId);
+      if (response.success) {
+        notify.success('Bot 已移除');
+        await botStore.loadDeployments();
+        return true;
+      }
+      notify.error(response.message || '移除 Bot 失败');
+      return false;
+    } catch (err) {
+      console.error('[useBots] 移除 Bot 失败:', err);
+      notify.error('移除 Bot 失败');
       return false;
     }
   }
@@ -201,6 +261,9 @@ export const useBots = () => {
     updateBot,
     deleteBot,
     deployBot,
+    installBot,
+    updateInstallation,
+    uninstallInstallation,
     undeployBot,
     updateDeploymentStatus,
     createBotConversation,

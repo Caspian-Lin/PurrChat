@@ -9,6 +9,7 @@ vi.mock('axios', () => {
     create: vi.fn(() => mockAxios),
     get: vi.fn(),
     post: vi.fn(),
+    patch: vi.fn(),
     put: vi.fn(),
     delete: vi.fn(),
     interceptors: {
@@ -41,6 +42,42 @@ describe('API Client', () => {
 
     await expect(api.getBotApiCapabilities()).resolves.toEqual(catalog);
     expect(mockedAxios.get).toHaveBeenCalledWith('/api/bot/v1/capabilities');
+  });
+
+  it('creates and updates Bot installations with explicit capabilities', async () => {
+    const installation = {
+      id: 'installation-1',
+      app_id: 'bot-1',
+      installed_by: 'user-1',
+      target_type: 'conversation' as const,
+      target_id: 'conversation-1',
+      granted_capabilities: ['messages:read_trigger', 'messages:send'],
+      status: 'active' as const,
+      installed_at: '2026-07-13T00:00:00Z',
+      updated_at: '2026-07-13T00:00:00Z',
+    };
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { success: true, data: { installation } },
+    } as any);
+    mockedAxios.patch.mockResolvedValueOnce({
+      data: { success: true, data: { installation } },
+    } as any);
+
+    const createRequest = {
+      target_type: 'conversation' as const,
+      target_id: 'conversation-1',
+      granted_capabilities: ['messages:read_trigger', 'messages:send'],
+      diagnostics_consent: 'denied' as const,
+    };
+    await api.createBotInstallation('bot-1', createRequest);
+    await api.updateBotInstallation('installation-1', {
+      granted_capabilities: createRequest.granted_capabilities,
+    });
+
+    expect(mockedAxios.post).toHaveBeenCalledWith('/api/bots/bot-1/installations', createRequest);
+    expect(mockedAxios.patch).toHaveBeenCalledWith('/api/installations/installation-1', {
+      granted_capabilities: createRequest.granted_capabilities,
+    });
   });
 
   describe('register', () => {

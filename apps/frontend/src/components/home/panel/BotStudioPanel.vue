@@ -105,9 +105,17 @@
 
   <!-- 安装到群聊弹窗 -->
   <DeployToGroupModal
-    v-if="showDeployModal && deployBotId"
-    :bot-id="deployBotId"
+    v-if="showDeployModal && deployBotTarget"
+    :bot="deployBotTarget"
     @close="showDeployModal = false"
+  />
+
+  <InstallBotModal
+    v-if="showDirectInstallModal && directInstallTarget"
+    :bot="directInstallTarget"
+    :installation="directInstallationTarget"
+    @installed="handleDirectInstalled"
+    @close="closeDirectInstall"
   />
 </template>
 
@@ -119,11 +127,13 @@ import BotList from './bots/BotList.vue';
 import BotEditor from './bots/BotEditor.vue';
 import CreateBotModal from './bots/CreateBotModal.vue';
 import DeployToGroupModal from './bots/DeployToGroupModal.vue';
+import InstallBotModal from './bots/InstallBotModal.vue';
 import { useBotStore } from '../../../stores/bot';
 import { useBots } from '../../../composables/useBots';
 import { useAuthController } from '../../../controllers/authController';
 import { useRouter } from 'vue-router';
-import type { Bot } from '../../../models/types';
+import type { Bot, BotDeployment } from '../../../models/types';
+import { api } from '../../../models/api';
 
 const botStore = useBotStore();
 const { createBot, deleteBot, updateBot, createBotConversation } = useBots();
@@ -134,7 +144,18 @@ const showCreateModal = ref(false);
 const showSearch = ref(false);
 const searchQuery = ref('');
 const showDeployModal = ref(false);
-const deployBotId = ref<string | null>(null);
+const deployBotTarget = ref<Bot | null>(null);
+const showDirectInstallModal = ref(false);
+const directInstallTarget = ref<Bot | null>(null);
+const directInstallationTarget = ref<BotDeployment | null>(null);
+
+const allKnownBots = computed(() => {
+  const known = [...botStore.bots, ...botStore.searchResults];
+  for (const deployment of botStore.deployments) {
+    if (deployment.app) known.push(deployment.app);
+  }
+  return known;
+});
 
 const currentUserId = computed(() => auth.currentUser?.id ?? '');
 
@@ -180,16 +201,66 @@ function handleSelectBot(botId: string) {
   botStore.setActiveBot(botId);
 }
 
-function handleDeploy(botId: string) {
-  deployBotId.value = botId;
+async function handleDeploy(botId: string) {
+  const bot = await resolveBotForInstall(botId);
+  if (!bot) return;
+  deployBotTarget.value = bot;
   showDeployModal.value = true;
 }
 
 async function handleCreateConversation(botId: string) {
+  const existingInstallation = botStore.deployments.find(
+    (deployment) =>
+      deployment.app_id === botId &&
+      deployment.target_type === 'user' &&
+      deployment.target_id === currentUserId.value
+  );
+  const bot = await resolveBotForInstall(botId);
+  const requestedCapabilities = bot?.requested_capabilities ?? [];
+  const needsAuthorization =
+    !existingInstallation ||
+    existingInstallation.status !== 'active' ||
+    requestedCapabilities.some(
+      (capability) => !existingInstallation.granted_capabilities.includes(capability)
+    );
+  if (needsAuthorization) {
+    if (bot) {
+      directInstallTarget.value = bot;
+      directInstallationTarget.value = existingInstallation ?? null;
+      showDirectInstallModal.value = true;
+      return;
+    }
+  }
+  await openBotConversation(botId);
+}
+
+async function resolveBotForInstall(botId: string): Promise<Bot | null> {
+  try {
+    const response = await api.getBot(botId);
+    if (response.success && response.data) return response.data;
+  } catch (error) {
+    console.error('[BotStudioPanel] 获取 Bot 授权信息失败:', error);
+  }
+  return allKnownBots.value.find((item) => item.id === botId) ?? null;
+}
+
+async function openBotConversation(botId: string) {
   const conversation = await createBotConversation(botId);
   if (conversation) {
     router.push({ path: '/chat', query: { conversationId: conversation.id } });
   }
+}
+
+async function handleDirectInstalled() {
+  const botId = directInstallTarget.value?.id;
+  closeDirectInstall();
+  if (botId) await openBotConversation(botId);
+}
+
+function closeDirectInstall() {
+  showDirectInstallModal.value = false;
+  directInstallTarget.value = null;
+  directInstallationTarget.value = null;
 }
 
 async function handleSearch() {

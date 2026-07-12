@@ -340,6 +340,9 @@ export interface Bot {
   description: string;
   status: BotStatus;
   visibility: BotVisibility;
+  discoverability?: 'unlisted' | 'listed' | 'featured';
+  published_version?: number;
+  requested_capabilities?: string[];
   mechanism_config?: MechanismConfig;
   /** @deprecated 使用 mechanism_config */
   trigger_config?: TriggerConfig;
@@ -417,8 +420,9 @@ export interface BotDeployment {
   installed_by: string;
   target_type: 'user' | 'conversation';
   target_id: string;
-  granted_capabilities?: string[];
-  status: string;
+  granted_capabilities: string[];
+  diagnostics_consent?: 'denied' | 'granted';
+  status: 'active' | 'paused' | 'disabled';
   installed_at: string;
   updated_at: string;
   app?: Bot;
@@ -476,6 +480,19 @@ export interface UpdateBotRequest {
 // 部署 Bot 请求
 export interface DeployBotRequest {
   conversation_id: string;
+}
+
+export interface CreateBotInstallationRequest {
+  target_type: 'user' | 'conversation';
+  target_id: string;
+  granted_capabilities: string[];
+  diagnostics_consent?: 'denied' | 'granted';
+}
+
+export interface UpdateBotInstallationRequest {
+  status?: 'active' | 'paused' | 'disabled';
+  granted_capabilities?: string[];
+  diagnostics_consent?: 'denied' | 'granted';
 }
 
 // 更新部署状态请求
