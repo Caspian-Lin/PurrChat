@@ -340,6 +340,7 @@ import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import { BsArrowLeft, BsPlus, BsUpload, BsDownload, BsPcDisplay } from 'vue-icons-plus/bs';
 import { usePlatform } from '../composables/usePlatform';
+import { useNotification } from '../composables/useNotification';
 import { api } from '../models/api';
 import type { Bot, Mechanism, WorkflowVersion } from '../models/types';
 import type { Node, Edge } from '@vue-flow/core';
@@ -384,6 +385,7 @@ import BotDebugPanel from '../components/home/panel/bots/BotDebugPanel.vue';
 const route = useRoute();
 const router = useRouter();
 const { isMobile } = usePlatform();
+const notify = useNotification();
 const { validate } = useWorkflowValidator();
 
 const botId = route.params.botId as string;
@@ -624,10 +626,12 @@ async function passValidationGate(action: string): Promise<boolean> {
 
 async function handleSave(): Promise<boolean> {
   if (!workflowDocument.value || saveState.value === 'saving') return false;
+  const prevSaveState = saveState.value;
   saveState.value = 'saving';
   try {
     if (!(await passValidationGate('保存'))) {
-      saveState.value = 'error';
+      // operationError 为 null 说明用户主动取消警告确认，不算失败
+      saveState.value = operationError.value ? 'error' : prevSaveState;
       return false;
     }
     workflowDocument.value.metadata.revision = revision.value + 1;
@@ -641,6 +645,7 @@ async function handleSave(): Promise<boolean> {
     return true;
   } catch (requestError: any) {
     operationError.value = apiErrorMessage(requestError, '保存失败');
+    notify.error(operationError.value);
     saveState.value = 'error';
     return false;
   }
@@ -649,10 +654,11 @@ async function handleSave(): Promise<boolean> {
 async function handlePublish() {
   if (!workflowDocument.value) return;
   if (dirty.value && !(await handleSave())) return;
+  const prevSaveState = saveState.value;
   saveState.value = 'publishing';
   try {
     if (!(await passValidationGate('发布'))) {
-      saveState.value = 'error';
+      saveState.value = operationError.value ? 'error' : prevSaveState;
       return;
     }
     const version = await api.publishWorkflow(botId, revision.value);
@@ -661,6 +667,7 @@ async function handlePublish() {
     if (showHistory.value) await loadVersions();
   } catch (requestError: any) {
     operationError.value = apiErrorMessage(requestError, '发布失败');
+    notify.error(operationError.value);
     saveState.value = 'error';
   }
 }
@@ -680,7 +687,13 @@ function apiErrorMessage(requestError: any, fallback: string): string {
   if (requestError.response?.status === 409) {
     return '版本冲突：服务端草稿已更新。你的本地内容已保留，请刷新版本后再决定如何处理。';
   }
-  return requestError.response?.data?.error || requestError.response?.data?.message || fallback;
+  const data = requestError.response?.data;
+  const detail = (typeof data === 'string' && data) || data?.error || data?.message || data?.detail;
+  if (detail) return detail;
+  if (requestError.response) {
+    return `${fallback}（HTTP ${requestError.response.status}）`;
+  }
+  return `${fallback}：${requestError.message || '网络错误'}`;
 }
 
 function goBack() {
@@ -896,6 +909,7 @@ async function loadVersions() {
     versions.value = await api.listWorkflowVersions(botId);
   } catch (requestError: any) {
     operationError.value = apiErrorMessage(requestError, '版本历史加载失败');
+    notify.error(operationError.value);
   } finally {
     historyLoading.value = false;
   }
@@ -912,6 +926,7 @@ async function restoreVersion(versionRevision: number) {
     showHistory.value = false;
   } catch (requestError: any) {
     operationError.value = apiErrorMessage(requestError, '恢复版本失败');
+    notify.error(operationError.value);
   } finally {
     historyLoading.value = false;
   }
