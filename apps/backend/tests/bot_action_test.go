@@ -12,6 +12,7 @@ import (
 	"purr-chat-server/internal/onebot"
 	"purr-chat-server/internal/repository"
 	"purr-chat-server/internal/services"
+	"purr-chat-server/pkg/database"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -29,6 +30,7 @@ type actionTestEnv struct {
 	instRepo   repository.BotInstallationRepository
 	msgRepo    repository.ConversationMessageRepository
 	messageSvc *services.MessageService
+	outboxRepo repository.BotEventOutboxRepository
 }
 
 func setupActionTestEnv(t *testing.T) *actionTestEnv {
@@ -42,10 +44,11 @@ func setupActionTestEnv(t *testing.T) *actionTestEnv {
 	msgRepo := repository.NewConversationMessageRepository()
 	botRepo := repository.NewBotRepository()
 	instRepo := repository.NewBotInstallationRepository()
+	outboxRepo := repository.NewBotEventOutboxRepository()
 
 	pub := messaging.NewPublisher(5 * time.Second)
 	ms := services.NewMessageService(userRepo, convRepo, enrollRepo, msgRepo, botRepo, instRepo, pub)
-	dispatcher := botaction.NewDispatcher(ms, botRepo, userRepo, convRepo, enrollRepo, msgRepo, instRepo)
+	dispatcher := botaction.NewDispatcher(ms, botRepo, userRepo, convRepo, enrollRepo, msgRepo, instRepo, outboxRepo)
 
 	owner := CreateTestUser(t, "act_owner", "act_owner@test.com", "pass")
 	other := CreateTestUser(t, "act_other", "act_other@test.com", "pass")
@@ -64,6 +67,12 @@ func setupActionTestEnv(t *testing.T) *actionTestEnv {
 		},
 	}
 	require.NoError(t, botRepo.Create(ctx, bot))
+	credentialID := uuid.New()
+	_, err := database.GetPool().Exec(ctx, `
+		INSERT INTO bot_api_credentials (id, bot_id, name, token_hash, token_prefix)
+		VALUES ($1, $2, 'action-test', $3, 'purr_bot_test')
+	`, credentialID, bot.ID, []byte("action_test_credential_hash_32"))
+	require.NoError(t, err)
 
 	// group conversation with 3 members + bot installation
 	groupConv := &models.Conversation{ConversationType: models.ConversationTypeGroup, Name: "Test Group"}
@@ -108,8 +117,8 @@ func setupActionTestEnv(t *testing.T) *actionTestEnv {
 		dispatcher: dispatcher,
 		bot:        bot, owner: owner, otherUser: other,
 		groupConv: groupConv, directConv: directConv,
-		principal: models.BotPrincipal{BotID: bot.ID, IdentityID: bot.ID},
-		instRepo:  instRepo, msgRepo: msgRepo, messageSvc: ms,
+		principal: models.BotPrincipal{BotID: bot.ID, IdentityID: bot.ID, CredentialID: credentialID},
+		instRepo:  instRepo, msgRepo: msgRepo, messageSvc: ms, outboxRepo: outboxRepo,
 	}
 }
 
@@ -378,4 +387,33 @@ func TestAction_SendMessage_NonMember(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Equal(t, onebot.RetCodePermissionDenied, onebot.AsError(err).Code)
+}
+
+func TestAction_AckEvent(t *testing.T) {
+	env := setupActionTestEnv(t)
+	defer CleanupTestDB(t)
+	ctx := context.Background()
+
+	seq, err := env.outboxRepo.Append(ctx, env.bot.ID, "evt_ack_test", []byte(`{"event_id":"evt_ack_test"}`))
+	require.NoError(t, err)
+	require.Equal(t, int64(1), seq)
+
+	data, err := dispatchAction(t, ctx, env.dispatcher, env.principal, "ack_event", map[string]any{"seq": seq})
+	require.NoError(t, err)
+	var response struct {
+		AckSeq    int64 `json:"ack_seq"`
+		MarkedNum int64 `json:"marked_num"`
+	}
+	require.NoError(t, json.Unmarshal(data, &response))
+	assert.Equal(t, seq, response.AckSeq)
+	assert.Equal(t, int64(1), response.MarkedNum)
+
+	data, err = dispatchAction(t, ctx, env.dispatcher, env.principal, "ack_event", map[string]any{"event_id": "evt_ack_test"})
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(data, &response))
+	assert.Equal(t, seq, response.AckSeq)
+	assert.Equal(t, int64(0), response.MarkedNum)
+
+	_, err = dispatchAction(t, ctx, env.dispatcher, env.principal, "ack_event", map[string]any{"seq": seq + 1})
+	assert.Equal(t, onebot.RetCodeInvalidParams, onebot.AsError(err).Code)
 }

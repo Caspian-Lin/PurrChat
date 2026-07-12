@@ -60,9 +60,23 @@ type connection struct {
 }
 
 func (h *Handler) Connect(c *gin.Context) {
-	if c.Request.URL.RawQuery != "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "query parameters are not accepted"})
-		return
+	var resumeFrom *int64
+	qs := c.Request.URL.Query()
+	if len(qs) > 0 {
+		for key := range qs {
+			if key != "resume_from" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported query parameter: " + key})
+				return
+			}
+		}
+		if val := qs.Get("resume_from"); val != "" {
+			parsed, err := strconv.ParseInt(val, 10, 64)
+			if err != nil || parsed < 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid resume_from value"})
+				return
+			}
+			resumeFrom = &parsed
+		}
 	}
 	value, ok := c.Get("bot_principal")
 	if !ok {
@@ -89,6 +103,13 @@ func (h *Handler) Connect(c *gin.Context) {
 	}
 	go conn.writer()
 	conn.enqueue(mustEvent(principal.BotID, "meta_event", "lifecycle", "connect", map[string]any{"version": onebot.ProfileVersion}))
+	if resumeFrom != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			h.manager.ReplayConnection(ctx, conn, *resumeFrom)
+		}()
+	}
 	conn.reader()
 }
 

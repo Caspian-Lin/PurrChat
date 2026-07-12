@@ -131,6 +131,7 @@ func main() {
 	botDeployRepo := repository.NewBotDeploymentRepository()
 	installationRepo := repository.NewBotInstallationRepository()
 	callLogRepo := repository.NewBotCallLogRepository()
+	outboxRepo := repository.NewBotEventOutboxRepository()
 	authService := services.NewAuthService(userRepo, botRepo, cfg.JWT.Secret)
 	botEngine := botengine.NewBotEngine(botDeployRepo, botRepo, conversationMessageRepo, enrollmentRepo, os.Getenv("BOT_ENGINE_URL"))
 	botEngine.SetCallLogRepo(callLogRepo)
@@ -146,10 +147,12 @@ func main() {
 	memberService := services.NewMemberService(userRepo, conversationRepo, enrollmentRepo)
 	userService := services.NewUserService(userRepo)
 	botService := services.NewBotService(botRepo, installationRepo, userRepo, friendshipRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, callLogRepo)
-	actionDispatcher := botaction.NewDispatcher(messageService, botRepo, userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, installationRepo)
+	actionDispatcher := botaction.NewDispatcher(messageService, botRepo, userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, installationRepo, outboxRepo)
 	botWSManager := botws.NewManager(botws.DefaultConfig(), actionDispatcher)
+	botWSManager.SetReplayer(services.NewOutboxReplayer(outboxRepo))
 	botService.SetConnectionCloser(botWSManager)
-	noticeEmitter := services.NewBotNoticeEmitter(installationRepo, botRepo, botWSManager)
+	reliablePublisher := services.NewReliableEventPublisher(outboxRepo, botWSManager)
+	noticeEmitter := services.NewBotNoticeEmitter(installationRepo, botRepo, reliablePublisher)
 	installationService := services.NewInstallationService(installationRepo, botRepo, enrollmentRepo, conversationMessageRepo)
 	installationService.SetBotNoticeEmitter(noticeEmitter)
 	memberService.SetBotNoticeEmitter(noticeEmitter)
@@ -166,8 +169,12 @@ func main() {
 	// 注册消息事件 sink
 	publisher.RegisterSink("user_ws", services.NewUserWebSocketSink())
 	publisher.RegisterSink("workflow", botEngine)
-	externalBotSink := services.NewExternalBotSink(installationRepo, botRepo, botWSManager)
+	externalBotSink := services.NewExternalBotSink(installationRepo, botRepo, reliablePublisher)
 	publisher.RegisterSink("external_bot", externalBotSink)
+
+	eventRelay := services.NewBotEventRelay(outboxRepo)
+	eventRelayCtx, stopEventRelay := context.WithCancel(context.Background())
+	go eventRelay.Start(eventRelayCtx)
 	authHandler := handlers.NewAuthHandler(authService, cfg.JWT.Secret, cfg.Port == "443" || os.Getenv("FORCE_SECURE_COOKIES") == "true", &cfg.Turnstile)
 	chatHandler := handlers.NewChatHandler(authService, userService, conversationService, messageService, friendService, memberService)
 	botHandler := handlers.NewBotHandler(botService, botEngine)
@@ -388,6 +395,7 @@ func main() {
 	<-quit
 
 	logger.Info("Shutting down server...")
+	stopEventRelay()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := botWSManager.Shutdown(shutdownCtx); err != nil {

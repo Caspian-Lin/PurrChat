@@ -13,6 +13,17 @@ import (
 
 var ErrClosed = errors.New("bot websocket manager is closed")
 
+const MaxReplayBatch = 500
+
+type ResumeEntry struct {
+	Seq     int64
+	Payload []byte
+}
+
+type EventReplayer interface {
+	FindUnacked(ctx context.Context, credentialID, botID uuid.UUID, afterSeq int64, limit int) ([]ResumeEntry, error)
+}
+
 type MetricsSnapshot struct {
 	Accepted        uint64 `json:"accepted"`
 	Active          int64  `json:"active"`
@@ -46,6 +57,7 @@ type botState struct {
 type Manager struct {
 	config      Config
 	dispatcher  ActionDispatcher
+	replayer    EventReplayer
 	mu          sync.RWMutex
 	connections map[uuid.UUID]map[*connection]struct{}
 	credentials map[uuid.UUID]map[*connection]struct{}
@@ -91,6 +103,12 @@ func NewManager(config Config, dispatcher ActionDispatcher) *Manager {
 		dispatcher = RegistryDispatcher{}
 	}
 	return &Manager{config: config, dispatcher: dispatcher, connections: make(map[uuid.UUID]map[*connection]struct{}), credentials: make(map[uuid.UUID]map[*connection]struct{}), states: make(map[uuid.UUID]botState), now: time.Now}
+}
+
+func (m *Manager) SetReplayer(replayer EventReplayer) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.replayer = replayer
 }
 
 func (m *Manager) register(c *connection) error {
@@ -148,6 +166,30 @@ func (m *Manager) PublishBotEvent(botID uuid.UUID, event any) int {
 	for _, c := range items {
 		if c.enqueue(payload) {
 			delivered++
+		}
+	}
+	return delivered
+}
+
+func (m *Manager) ReplayConnection(ctx context.Context, c *connection, afterSeq int64) int {
+	m.mu.RLock()
+	replayer := m.replayer
+	m.mu.RUnlock()
+	if replayer == nil {
+		return 0
+	}
+	limit := min(MaxReplayBatch, max(1, m.config.SendQueueSize-1))
+	entries, err := replayer.FindUnacked(ctx, c.principal.CredentialID, c.principal.BotID, afterSeq, limit)
+	if err != nil || len(entries) == 0 {
+		return 0
+	}
+	delivered := 0
+	for _, entry := range entries {
+		payload := injectSeq(entry.Payload, entry.Seq)
+		if c.enqueue(payload) {
+			delivered++
+		} else {
+			break
 		}
 	}
 	return delivered
@@ -237,4 +279,21 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func injectSeq(payload []byte, seq int64) []byte {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return payload
+	}
+	seqBytes, err := json.Marshal(seq)
+	if err != nil {
+		return payload
+	}
+	raw["seq"] = seqBytes
+	out, err := json.Marshal(raw)
+	if err != nil {
+		return payload
+	}
+	return out
 }

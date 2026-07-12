@@ -24,6 +24,14 @@ type testDispatcher struct {
 	maximum atomic.Int64
 }
 
+type testReplayer struct {
+	entries []ResumeEntry
+}
+
+func (r testReplayer) FindUnacked(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ int64, _ int) ([]ResumeEntry, error) {
+	return r.entries, nil
+}
+
 func (d *testDispatcher) Dispatch(ctx context.Context, _ models.BotPrincipal, request onebot.ActionRequest) (json.RawMessage, error) {
 	active := d.active.Add(1)
 	defer d.active.Add(-1)
@@ -236,4 +244,27 @@ func TestUniversalWebSocketActionTimeoutKeepsConnectionUsable(t *testing.T) {
 	require.Equal(t, "action timeout", response.Message)
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, []byte(`{"action":"next","params":{"delay":0},"echo":2}`)))
 	require.Equal(t, onebot.RetCodeOK, readResponse(t, conn).RetCode)
+}
+
+func TestReplayTargetsOnlyReconnectingConnection(t *testing.T) {
+	manager := NewManager(testConfig(), nil)
+	botID, credentialID := uuid.New(), uuid.New()
+	manager.SetReplayer(testReplayer{entries: []ResumeEntry{{Seq: 7, Payload: []byte(`{"event_id":"evt_test"}`)}}})
+
+	principal := models.BotPrincipal{BotID: botID, CredentialID: credentialID}
+	reconnecting := &connection{manager: manager, principal: principal, send: make(chan outbound, 2), done: make(chan struct{}), actions: make(chan struct{}, 1)}
+	other := &connection{manager: manager, principal: principal, send: make(chan outbound, 2), done: make(chan struct{}), actions: make(chan struct{}, 1)}
+
+	require.Equal(t, 1, manager.ReplayConnection(context.Background(), reconnecting, 0))
+
+	item := <-reconnecting.send
+	var event onebot.Event
+	require.NoError(t, json.Unmarshal(item.payload, &event))
+	require.Equal(t, int64(7), event.Seq)
+
+	select {
+	case <-other.send:
+		t.Fatal("replay must not broadcast to other connections")
+	default:
+	}
 }

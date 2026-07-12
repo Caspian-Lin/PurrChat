@@ -72,6 +72,9 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	tables := []string{
 		"bot_api_credential_audit_logs",
 		"bot_api_credentials",
+		"bot_event_ack_state",
+		"bot_event_outbox",
+		"bot_event_seq_counter",
 		"bot_call_logs",
 		"workflow_versions",
 		"bot_app_secrets",
@@ -401,6 +404,59 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create user_settings table: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `CREATE SEQUENCE IF NOT EXISTS bot_event_seq_counter_seq START WITH 1`)
+	if err != nil {
+		t.Logf("Warning: Failed to create bot_event_seq_counter_seq: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_event_seq_counter (
+			bot_id   UUID PRIMARY KEY REFERENCES bots(id) ON DELETE CASCADE,
+			next_seq BIGINT NOT NULL DEFAULT 1
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_event_seq_counter table: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_event_outbox (
+			id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			bot_id     UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			event_id   TEXT NOT NULL,
+			seq        BIGINT NOT NULL,
+			payload    JSONB NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			acked_at   TIMESTAMP,
+			CONSTRAINT uq_bot_event_outbox_bot_seq UNIQUE (bot_id, seq),
+			CONSTRAINT uq_bot_event_outbox_bot_event UNIQUE (bot_id, event_id)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_event_outbox table: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_bot_event_outbox_resume ON bot_event_outbox (bot_id, seq)`)
+	if err != nil {
+		t.Logf("Warning: Failed to create outbox resume index: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_bot_event_outbox_created ON bot_event_outbox (created_at)`)
+	if err != nil {
+		t.Logf("Warning: Failed to create outbox created index: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_event_ack_state (
+			credential_id  UUID NOT NULL REFERENCES bot_api_credentials(id) ON DELETE CASCADE,
+			bot_id         UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			last_acked_seq BIGINT NOT NULL DEFAULT 0,
+			updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (credential_id, bot_id)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_event_ack_state table: %v", err)
 	}
 
 	// 创建更新时间触发器函数
@@ -766,6 +822,9 @@ func CleanupTestTables(t *testing.T) {
 	tables := []string{
 		"bot_api_credential_audit_logs",
 		"bot_api_credentials",
+		"bot_event_ack_state",
+		"bot_event_outbox",
+		"bot_event_seq_counter",
 		"bot_call_logs",
 		"workflow_versions",
 		"bot_app_secrets",

@@ -25,6 +25,7 @@ type Dispatcher struct {
 	enrollmentRepo   repository.EnrollmentRepository
 	messageRepo      repository.ConversationMessageRepository
 	installationRepo repository.BotInstallationRepository
+	outboxRepo       repository.BotEventOutboxRepository
 }
 
 func NewDispatcher(
@@ -35,6 +36,7 @@ func NewDispatcher(
 	enrollmentRepo repository.EnrollmentRepository,
 	messageRepo repository.ConversationMessageRepository,
 	installationRepo repository.BotInstallationRepository,
+	outboxRepo repository.BotEventOutboxRepository,
 ) *Dispatcher {
 	return &Dispatcher{
 		messageSender:    messageSender,
@@ -44,6 +46,7 @@ func NewDispatcher(
 		enrollmentRepo:   enrollmentRepo,
 		messageRepo:      messageRepo,
 		installationRepo: installationRepo,
+		outboxRepo:       outboxRepo,
 	}
 }
 
@@ -73,6 +76,8 @@ func (d *Dispatcher) Dispatch(ctx context.Context, principal models.BotPrincipal
 		return d.handleGetMemberInfo(ctx, principal, request)
 	case "get_message_history":
 		return d.handleGetMessageHistory(ctx, principal, request)
+	case "ack_event":
+		return d.handleAckEvent(ctx, principal, request)
 	default:
 		return nil, onebot.NewError(onebot.RetCodeUnsupportedAction, "action is not implemented: "+definition.Name, nil)
 	}

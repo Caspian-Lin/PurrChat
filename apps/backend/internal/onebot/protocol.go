@@ -29,6 +29,7 @@ type Event struct {
 	SelfID     string          `json:"self_id"`
 	PostType   string          `json:"post_type"`
 	EventID    string          `json:"event_id"`
+	Seq        int64           `json:"seq,omitempty"`
 	DetailType string          `json:"detail_type"`
 	SubType    string          `json:"sub_type,omitempty"`
 	Data       json.RawMessage `json:"data"`
