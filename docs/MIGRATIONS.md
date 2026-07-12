@@ -56,6 +56,13 @@ cd apps/backend && go run ./cmd/migrate baseline
 cd apps/storage && go run ./cmd/migrate baseline
 ```
 
+与 `up` 相同，若本机只有数据库管理员密码，可传入 `--admin-password`（管理员账号由 `DB_ADMIN_USER` 指定，连接建立后 `SET ROLE DB_USER`，密码不会写入迁移日志）：
+
+```bash
+cd apps/backend && go run ./cmd/migrate baseline --admin-password '管理员密码'
+cd apps/storage && go run ./cmd/migrate baseline --admin-password '管理员密码'
+```
+
 `baseline` 不执行任何 SQL，只写入当前目录中所有迁移的 filename 和 checksum。它要求 backend 已有 `users` 表、storage 已有 `file_metadata` 表，并拒绝覆盖已经存在的该服务迁移记录。完成后运行 `make migrate`，用于校验记录并应用之后新增的迁移。
 
 容器化部署可使用：
