@@ -312,6 +312,7 @@ func main() {
 	// Bot Universal WebSocket uses the strict Bot credential middleware and never accepts query credentials.
 	r.GET("/api/bot/v1/ws", handlers.BotCredentialAuthMiddleware(credentialService), botWSHandler.Connect)
 	r.GET("/api/bot/v1/capabilities", botCapabilityHandler.Get)
+	r.GET("/api/bot/v1/health", botWSHandler.Health)
 	// Bot HTTP Action endpoint shares the same dispatcher as Universal WS.
 	r.POST("/api/bot/v1/actions/:action", handlers.BotCredentialAuthMiddleware(credentialService), botActionHandler.HandleAction)
 

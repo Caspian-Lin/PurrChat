@@ -163,7 +163,12 @@ func (c *connection) reader() {
 }
 
 func (c *connection) dispatch(request onebot.ActionRequest) {
-	defer func() { <-c.actions; c.manager.metrics.actionCompleted.Add(1) }()
+	startedAt := time.Now()
+	defer func() {
+		<-c.actions
+		c.manager.metrics.actionCompleted.Add(1)
+		c.manager.metrics.actionLatencyNanos.Add(uint64(time.Since(startedAt)))
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), c.manager.config.ActionTimeout)
 	defer cancel()
 	if c.audit != nil {
@@ -175,6 +180,7 @@ func (c *connection) dispatch(request onebot.ActionRequest) {
 	}
 	var response onebot.ActionResponse
 	if err != nil {
+		c.manager.metrics.actionFailed.Add(1)
 		response = onebot.Failure(err, request.Echo, c.traceID())
 	} else {
 		response = onebot.Success(data, request.Echo, c.traceID())
@@ -281,4 +287,10 @@ func (h *Handler) Status(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, h.manager.Status(botID))
+}
+
+// Health exposes aggregate, token-free operational signals. Per-bot connection
+// details remain owner-protected by Status.
+func (h *Handler) Health(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "metrics": h.manager.Metrics()})
 }

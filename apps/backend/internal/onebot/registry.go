@@ -242,10 +242,10 @@ func cloneActionDefinition(definition ActionDefinition) ActionDefinition {
 		definition.Source = actionSource(definition.Name)
 	}
 	if len(definition.RequestExample) == 0 {
-		definition.RequestExample = json.RawMessage(`{"params": {}}`)
+		definition.RequestExample = json.RawMessage(fmt.Sprintf(`{"action": %q, "params": {}}`, definition.Name))
 	}
 	if len(definition.ResponseExample) == 0 {
-		definition.ResponseExample = json.RawMessage(`{"retcode": 0, "status": "ok", "data": {}}`)
+		definition.ResponseExample = json.RawMessage(`{"status": "ok", "retcode": 0, "data": null, "trace_id": "trace_example"}`)
 	}
 	return definition
 }
