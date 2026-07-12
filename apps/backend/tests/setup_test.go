@@ -77,6 +77,7 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		"bot_event_seq_counter",
 		"bot_call_logs",
 		"workflow_versions",
+		"bot_workflow_documents",
 		"bot_app_secrets",
 		"bot_deployments",
 		"user_settings",
@@ -210,12 +211,9 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 			status VARCHAR(20) NOT NULL DEFAULT 'active',
 			visibility VARCHAR(20) NOT NULL DEFAULT 'private',
 			mechanism_config JSONB NOT NULL DEFAULT '[]'::jsonb,
-			workflow_document JSONB,
-			workflow_revision INTEGER NOT NULL DEFAULT 0,
 			bot_type VARCHAR(20) NOT NULL DEFAULT 'workflow',
 			discoverability VARCHAR(20) NOT NULL DEFAULT 'unlisted',
 			is_system BOOLEAN NOT NULL DEFAULT FALSE,
-			published_version INTEGER,
 			requested_capabilities TEXT[] NOT NULL DEFAULT '{}',
 			allowed_endpoints TEXT[] NOT NULL DEFAULT '{}',
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -338,21 +336,37 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		t.Fatalf("Failed to create bot_deployments table: %v", err)
 	}
 
-	// 创建 workflow_versions 表(见 migration 010)
+	// 创建 workflow_versions 表(mechanism 级，见 migration 010 + 016)
 	_, err = database.GetPool().Exec(ctx, `
 		CREATE TABLE workflow_versions (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			mechanism_id VARCHAR(100) NOT NULL DEFAULT '',
 			revision INTEGER NOT NULL,
 			document JSONB NOT NULL,
 			capabilities TEXT[] DEFAULT '{}',
 			published_by UUID REFERENCES users(id),
 			published_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(bot_id, revision)
+			UNIQUE(bot_id, mechanism_id, revision)
 		)
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create workflow_versions table: %v", err)
+	}
+
+	// 创建 bot_workflow_documents 表(mechanism 级草稿，见 migration 016)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_workflow_documents (
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			mechanism_id VARCHAR(100) NOT NULL,
+			document JSONB,
+			revision INTEGER NOT NULL DEFAULT 0,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (bot_id, mechanism_id)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_workflow_documents table: %v", err)
 	}
 
 	// 创建 bot_call_logs 表(见 migration 004 + 011)
@@ -827,6 +841,7 @@ func CleanupTestTables(t *testing.T) {
 		"bot_event_seq_counter",
 		"bot_call_logs",
 		"workflow_versions",
+		"bot_workflow_documents",
 		"bot_app_secrets",
 		"bot_deployments",
 		"user_settings",

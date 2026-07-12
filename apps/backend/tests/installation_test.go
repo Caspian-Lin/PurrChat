@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -181,36 +180,6 @@ func TestBotAppInstallation(t *testing.T) {
 		botEnroll2, err := enrollmentRepo.FindByConversationAndUser(ctx, conv.ID, bot.ID)
 		assert.Error(t, err)
 		assert.Nil(t, botEnroll2)
-	})
-
-	// capability:granted 必须是 requested 的子集
-	t.Run("mechanism_config_derives_capabilities_and_syncs_owner_installation", func(t *testing.T) {
-		bot, err := botService.CreateBot(ctx, owner.ID.String(), &models.CreateBotRequest{Name: "FixedReplyBot"})
-		require.NoError(t, err)
-
-		_, err = botService.UpdateBot(ctx, bot.ID.String(), owner.ID.String(), &models.UpdateBotRequest{
-			MechanismConfig: json.RawMessage(`{
-				"mechanisms": [{
-					"id": "fixed",
-					"name": "固定回复",
-					"enabled": true,
-					"trigger": {"type": "rule", "rules": []},
-					"reply": {"type": "predefined", "predefined": {"mode": "fixed", "replies": ["你好"]}}
-				}]
-			}`),
-		})
-		require.NoError(t, err)
-
-		updatedBot, err := botService.GetBot(ctx, bot.ID.String())
-		require.NoError(t, err)
-		assert.ElementsMatch(t, []string{
-			models.CapabilityReadTrigger,
-			models.CapabilitySend,
-		}, updatedBot.RequestedCapabilities)
-
-		installation, err := installationRepo.FindByAppAndTarget(ctx, bot.ID, models.InstallationTargetUser, owner.ID)
-		require.NoError(t, err)
-		assert.ElementsMatch(t, updatedBot.RequestedCapabilities, installation.GrantedCapabilities)
 	})
 
 	// capability:granted 必须是 requested 的子集

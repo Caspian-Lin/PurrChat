@@ -22,16 +22,21 @@ func NewWorkflowHandler(ws *services.WorkflowService) *WorkflowHandler {
 
 func (h *WorkflowHandler) GetWorkflow(c *gin.Context) {
 	botID := c.Param("id")
+	mechanismID := c.Param("mechanismId")
 	userID, ok := getUserID(c)
 	if !ok {
 		return
 	}
 
-	resp, err := h.workflowService.GetWorkflow(c.Request.Context(), botID, userID)
+	resp, err := h.workflowService.GetWorkflow(c.Request.Context(), botID, mechanismID, userID)
 	if err != nil {
 		logger.ErrorfWithCaller("[WorkflowHandler] GetWorkflow failed: %v", err)
 		if isAuthError(err) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if isMechanismNotFoundError(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "workflow not found"})
@@ -44,6 +49,7 @@ func (h *WorkflowHandler) GetWorkflow(c *gin.Context) {
 
 func (h *WorkflowHandler) UpdateWorkflow(c *gin.Context) {
 	botID := c.Param("id")
+	mechanismID := c.Param("mechanismId")
 	userID, ok := getUserID(c)
 	if !ok {
 		return
@@ -68,7 +74,7 @@ func (h *WorkflowHandler) UpdateWorkflow(c *gin.Context) {
 		}
 	}
 
-	resp, err := h.workflowService.UpdateWorkflow(c.Request.Context(), botID, userID, &req)
+	resp, err := h.workflowService.UpdateWorkflow(c.Request.Context(), botID, mechanismID, userID, &req)
 	if err != nil {
 		if isRevisionMismatch(err) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "revision_mismatch"})
@@ -76,6 +82,10 @@ func (h *WorkflowHandler) UpdateWorkflow(c *gin.Context) {
 		}
 		if isAuthError(err) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if isMechanismNotFoundError(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -104,6 +114,7 @@ func (h *WorkflowHandler) ValidateWorkflow(c *gin.Context) {
 
 func (h *WorkflowHandler) PublishWorkflow(c *gin.Context) {
 	botID := c.Param("id")
+	mechanismID := c.Param("mechanismId")
 	userID, ok := getUserID(c)
 	if !ok {
 		return
@@ -126,7 +137,7 @@ func (h *WorkflowHandler) PublishWorkflow(c *gin.Context) {
 		}
 	}
 
-	version, err := h.workflowService.PublishWorkflow(c.Request.Context(), botID, userID, &req)
+	version, err := h.workflowService.PublishWorkflow(c.Request.Context(), botID, mechanismID, userID, &req)
 	if err != nil {
 		if isAuthError(err) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
@@ -134,6 +145,10 @@ func (h *WorkflowHandler) PublishWorkflow(c *gin.Context) {
 		}
 		if isRevisionMismatch(err) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "revision_mismatch"})
+			return
+		}
+		if isMechanismNotFoundError(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -145,6 +160,7 @@ func (h *WorkflowHandler) PublishWorkflow(c *gin.Context) {
 
 func (h *WorkflowHandler) TestRunWorkflow(c *gin.Context) {
 	botID := c.Param("id")
+	mechanismID := c.Param("mechanismId")
 	userID, ok := getUserID(c)
 	if !ok {
 		return
@@ -156,10 +172,14 @@ func (h *WorkflowHandler) TestRunWorkflow(c *gin.Context) {
 		return
 	}
 
-	result, err := h.workflowService.TestRunWorkflow(c.Request.Context(), botID, userID, &req)
+	result, err := h.workflowService.TestRunWorkflow(c.Request.Context(), botID, mechanismID, userID, &req)
 	if err != nil {
 		if isAuthError(err) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if isMechanismNotFoundError(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
@@ -197,14 +217,20 @@ func (h *WorkflowHandler) TestRunStep(c *gin.Context) {
 }
 
 func (h *WorkflowHandler) ListPublishedVersions(c *gin.Context) {
+	botID := c.Param("id")
+	mechanismID := c.Param("mechanismId")
 	userID, ok := getUserID(c)
 	if !ok {
 		return
 	}
-	versions, err := h.workflowService.ListPublishedVersions(c.Request.Context(), c.Param("id"), userID)
+	versions, err := h.workflowService.ListPublishedVersions(c.Request.Context(), botID, mechanismID, userID)
 	if err != nil {
 		if isAuthError(err) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if isMechanismNotFoundError(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -214,6 +240,8 @@ func (h *WorkflowHandler) ListPublishedVersions(c *gin.Context) {
 }
 
 func (h *WorkflowHandler) RollbackWorkflow(c *gin.Context) {
+	botID := c.Param("id")
+	mechanismID := c.Param("mechanismId")
 	userID, ok := getUserID(c)
 	if !ok {
 		return
@@ -223,7 +251,7 @@ func (h *WorkflowHandler) RollbackWorkflow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid workflow revision"})
 		return
 	}
-	resp, err := h.workflowService.RollbackWorkflow(c.Request.Context(), c.Param("id"), userID, revision)
+	resp, err := h.workflowService.RollbackWorkflow(c.Request.Context(), botID, mechanismID, userID, revision)
 	if err != nil {
 		if isAuthError(err) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
@@ -231,6 +259,10 @@ func (h *WorkflowHandler) RollbackWorkflow(c *gin.Context) {
 		}
 		if isRevisionMismatch(err) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "revision_mismatch"})
+			return
+		}
+		if isMechanismNotFoundError(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "workflow version not found"})
@@ -253,4 +285,8 @@ func isRevisionMismatch(err error) bool {
 
 func isAuthError(err error) bool {
 	return strings.Contains(err.Error(), "not authorized")
+}
+
+func isMechanismNotFoundError(err error) bool {
+	return strings.Contains(err.Error(), "not found in bot")
 }

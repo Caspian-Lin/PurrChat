@@ -3,7 +3,6 @@ package botengine
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 
@@ -220,7 +219,18 @@ func (e *BotEngine) processMessage(ctx context.Context, event *messaging.Message
 			continue
 		}
 
-		if bot.PublishedVersion == nil || *bot.PublishedVersion == 0 {
+		if e.workflowRepo == nil {
+			logger.ErrorfWithCaller("[BotEngine] workflowRepo not injected; cannot load published document for bot=%s", bot.Name)
+			continue
+		}
+
+		// mechanism 级：加载该 Bot 每个 mechanism 的最新发布版本（#87）
+		versions, vErr := e.workflowRepo.FindLatestPublishedByBotID(ctx, bot.ID)
+		if vErr != nil {
+			logger.ErrorfWithCaller("[BotEngine] Failed to load published workflows bot=%s: %v", bot.Name, vErr)
+			continue
+		}
+		if len(versions) == 0 {
 			logger.InfofWithCaller("[BotEngine] Skip bot=%s: no published workflow version", bot.Name)
 			e.recordCallLog(ctx, &models.BotCallLog{
 				BotID:            bot.ID,
@@ -233,30 +243,6 @@ func (e *BotEngine) processMessage(ctx context.Context, event *messaging.Message
 				ErrorMessage:     "no published workflow version",
 				RunStatus:        models.RunStatusError,
 				ErrorType:        "no_published_version",
-				TriggerMessageID: triggerMsgID,
-			})
-			continue
-		}
-
-		if e.workflowRepo == nil {
-			logger.ErrorfWithCaller("[BotEngine] workflowRepo not injected; cannot load published document for bot=%s", bot.Name)
-			continue
-		}
-
-		version, err := e.workflowRepo.FindPublishedByRevision(ctx, bot.ID, *bot.PublishedVersion)
-		if err != nil {
-			logger.ErrorfWithCaller("[BotEngine] Failed to load published workflow bot=%s revision=%d: %v", bot.Name, *bot.PublishedVersion, err)
-			e.recordCallLog(ctx, &models.BotCallLog{
-				BotID:            bot.ID,
-				ConversationID:   msg.ConversationID,
-				SenderID:         msg.SenderID,
-				SenderName:       event.SenderName,
-				TriggerMessage:   msg.Content,
-				ExecutionPath:    "ts",
-				Success:          false,
-				ErrorMessage:     fmt.Sprintf("failed to load published revision %d: %v", *bot.PublishedVersion, err),
-				RunStatus:        models.RunStatusError,
-				ErrorType:        "version_load_failed",
 				TriggerMessageID: triggerMsgID,
 			})
 			continue
@@ -280,7 +266,7 @@ func (e *BotEngine) processMessage(ctx context.Context, event *messaging.Message
 			continue
 		}
 
-		// 构建 BotMessage 供 TS 客户端使用
+		// 准备与具体 mechanism 无关的执行上下文
 		botMsg := &BotMessage{
 			ConversationID: msg.ConversationID,
 			SenderID:       msg.SenderID,
@@ -290,7 +276,6 @@ func (e *BotEngine) processMessage(ctx context.Context, event *messaging.Message
 			CreatedAt:      msg.CreatedAt,
 			MessageID:      msg.ID,
 		}
-
 		contextMsgs := e.collectContextMessages(ctx, msg.ConversationID)
 		grantedCaps := inst.GrantedCapabilities
 		var secrets map[string]string
@@ -302,76 +287,87 @@ func (e *BotEngine) processMessage(ctx context.Context, event *messaging.Message
 			}
 		}
 
-		start := time.Now()
-		execResp, tsErr := e.tsClient.Execute(ctx, botMsg, bot.ID, bot.Name, version.Document, version.Revision, contextMsgs, grantedCaps, secrets)
-		duration := time.Since(start)
-
-		if tsErr == nil {
-			logger.InfofWithCaller("[BotEngine] TS bot=%s runId=%s triggered=%v revision=%d reply=%q sessionActive=%v ms=%d",
-				bot.Name, execResp.RunID, execResp.Triggered, version.Revision,
-				truncateStr(execResp.Reply, 50), execResp.SessionActive, int(duration.Milliseconds()))
-
-			runStatus := models.RunStatusCompleted
-			if execResp.Status == "error" {
-				runStatus = models.RunStatusError
-			}
-
-			// 通过统一发送管线持久化并广播 Bot 回复
-			var replyMsgID *uuid.UUID
-			if execResp.Reply != "" && e.messageSender != nil {
-				replyMsg, err := e.messageSender.SendBotMessage(ctx, &messaging.BotSendRequest{
-					BotID:            bot.ID,
-					ConversationID:   msg.ConversationID,
-					Content:          execResp.Reply,
-					MsgType:          string(models.MsgTypeText),
-					Source:           messaging.SourceWorkflow,
-					RunID:            execResp.RunID,
-					TriggerMessageID: triggerMsgID,
-				})
-				if err != nil {
-					logger.ErrorfWithCaller("[BotEngine] Failed to send bot reply via message sender: %v", err)
-				} else if replyMsg != nil {
-					id := replyMsg.ID
-					replyMsgID = &id
-				}
-			}
-
-			e.recordCallLog(ctx, &models.BotCallLog{
-				BotID:            bot.ID,
-				ConversationID:   msg.ConversationID,
-				SenderID:         msg.SenderID,
-				SenderName:       event.SenderName,
-				TriggerMessage:   msg.Content,
-				ReplyContent:     truncateStr(execResp.Reply, 500),
-				ExecutionPath:    "ts",
-				Success:          execResp.Status != "error",
-				DurationMs:       int(duration.Milliseconds()),
-				RunID:            execResp.RunID,
-				TriggerMessageID: triggerMsgID,
-				ReplyMessageID:   replyMsgID,
-				WorkflowRevision: &version.Revision,
-				RunStatus:        runStatus,
-				Trace:            execResp.Trace,
-			})
-		} else {
-			logger.ErrorfWithCaller("[BotEngine] TS failed bot=%s error=%v", bot.Name, tsErr)
-			e.recordCallLog(ctx, &models.BotCallLog{
-				BotID:            bot.ID,
-				ConversationID:   msg.ConversationID,
-				SenderID:         msg.SenderID,
-				SenderName:       event.SenderName,
-				TriggerMessage:   msg.Content,
-				ExecutionPath:    "ts",
-				Success:          false,
-				ErrorMessage:     tsErr.Error(),
-				DurationMs:       int(duration.Milliseconds()),
-				TriggerMessageID: triggerMsgID,
-				WorkflowRevision: &version.Revision,
-				RunStatus:        models.RunStatusError,
-				ErrorType:        "ts_execution_error",
-			})
+		// 遍历每个 mechanism 的发布版本独立执行（#87）
+		for _, version := range versions {
+			e.runPublishedVersion(ctx, bot, version, botMsg, contextMsgs, grantedCaps, secrets, triggerMsgID)
 		}
 	}
+}
+
+// runPublishedVersion 执行单个 mechanism 的已发布工作流版本：调用 TS engine、发送回复、记录调用日志。
+func (e *BotEngine) runPublishedVersion(ctx context.Context, bot *models.Bot, version *models.WorkflowVersion, botMsg *BotMessage, contextMsgs []ContextMessage, grantedCaps []string, secrets map[string]string, triggerMsgID *uuid.UUID) {
+	start := time.Now()
+	execResp, tsErr := e.tsClient.Execute(ctx, botMsg, bot.ID, bot.Name, version.Document, version.Revision, contextMsgs, grantedCaps, secrets)
+	duration := time.Since(start)
+
+	if tsErr == nil {
+		logger.InfofWithCaller("[BotEngine] TS bot=%s mechanism=%s runId=%s triggered=%v revision=%d reply=%q sessionActive=%v ms=%d",
+			bot.Name, version.MechanismID, execResp.RunID, execResp.Triggered, version.Revision,
+			truncateStr(execResp.Reply, 50), execResp.SessionActive, int(duration.Milliseconds()))
+
+		runStatus := models.RunStatusCompleted
+		if execResp.Status == "error" {
+			runStatus = models.RunStatusError
+		}
+
+		// 通过统一发送管线持久化并广播 Bot 回复
+		var replyMsgID *uuid.UUID
+		if execResp.Reply != "" && e.messageSender != nil {
+			replyMsg, err := e.messageSender.SendBotMessage(ctx, &messaging.BotSendRequest{
+				BotID:            bot.ID,
+				ConversationID:   botMsg.ConversationID,
+				Content:          execResp.Reply,
+				MsgType:          string(models.MsgTypeText),
+				Source:           messaging.SourceWorkflow,
+				RunID:            execResp.RunID,
+				TriggerMessageID: triggerMsgID,
+			})
+			if err != nil {
+				logger.ErrorfWithCaller("[BotEngine] Failed to send bot reply via message sender: %v", err)
+			} else if replyMsg != nil {
+				id := replyMsg.ID
+				replyMsgID = &id
+			}
+		}
+
+		e.recordCallLog(ctx, &models.BotCallLog{
+			BotID:            bot.ID,
+			ConversationID:   botMsg.ConversationID,
+			SenderID:         botMsg.SenderID,
+			SenderName:       botMsg.SenderName,
+			TriggerMessage:   botMsg.Content,
+			ReplyContent:     truncateStr(execResp.Reply, 500),
+			MechanismID:      version.MechanismID,
+			ExecutionPath:    "ts",
+			Success:          execResp.Status != "error",
+			DurationMs:       int(duration.Milliseconds()),
+			RunID:            execResp.RunID,
+			TriggerMessageID: triggerMsgID,
+			ReplyMessageID:   replyMsgID,
+			WorkflowRevision: &version.Revision,
+			RunStatus:        runStatus,
+			Trace:            execResp.Trace,
+		})
+		return
+	}
+
+	logger.ErrorfWithCaller("[BotEngine] TS failed bot=%s mechanism=%s error=%v", bot.Name, version.MechanismID, tsErr)
+	e.recordCallLog(ctx, &models.BotCallLog{
+		BotID:            bot.ID,
+		ConversationID:   botMsg.ConversationID,
+		SenderID:         botMsg.SenderID,
+		SenderName:       botMsg.SenderName,
+		TriggerMessage:   botMsg.Content,
+		MechanismID:      version.MechanismID,
+		ExecutionPath:    "ts",
+		Success:          false,
+		ErrorMessage:     tsErr.Error(),
+		DurationMs:       int(duration.Milliseconds()),
+		TriggerMessageID: triggerMsgID,
+		WorkflowRevision: &version.Revision,
+		RunStatus:        models.RunStatusError,
+		ErrorType:        "ts_execution_error",
+	})
 }
 
 // BotMessage Bot 处理的入站消息（供 TS 客户端使用）
