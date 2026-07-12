@@ -14,6 +14,7 @@ type ImplementationStatus string
 
 const (
 	StatusStable        ImplementationStatus = "stable"
+	StatusBeta          ImplementationStatus = "beta"
 	StatusPartial       ImplementationStatus = "partial"
 	StatusPlanned       ImplementationStatus = "planned"
 	StatusBlocked       ImplementationStatus = "blocked"
@@ -45,6 +46,10 @@ type ActionDefinition struct {
 	RequiredCapability string               `json:"required_capability,omitempty"`
 	Version            string               `json:"version"`
 	CompatibilityNote  string               `json:"compatibility_note,omitempty"`
+	Source             string               `json:"source"`
+	RequestExample     json.RawMessage      `json:"request_example,omitempty"`
+	ResponseExample    json.RawMessage      `json:"response_example,omitempty"`
+	References         []string             `json:"references,omitempty"`
 }
 
 type SegmentDefinition struct {
@@ -106,6 +111,19 @@ type EventDefinition struct {
 	RequiredCapability string               `json:"required_capability,omitempty"`
 	Version            string               `json:"version"`
 	CompatibilityNote  string               `json:"compatibility_note,omitempty"`
+	Transports         []Transport          `json:"transports"`
+	Source             string               `json:"source"`
+	EventExample       json.RawMessage      `json:"event_example,omitempty"`
+	References         []string             `json:"references,omitempty"`
+}
+
+// CapabilityCatalog is generated from the runtime registry. Keep protocol documentation
+// and developer tooling on this single source of truth.
+type CapabilityCatalog struct {
+	Profile  ProfileDefinition   `json:"profile"`
+	Actions  []ActionDefinition  `json:"actions"`
+	Events   []EventDefinition   `json:"events"`
+	Segments []SegmentDefinition `json:"segments"`
 }
 
 var eventDefinitions = []EventDefinition{
@@ -166,6 +184,15 @@ func Events() []EventDefinition {
 	return result
 }
 
+func Capabilities() CapabilityCatalog {
+	return CapabilityCatalog{
+		Profile:  Profile(),
+		Actions:  Actions(),
+		Events:   Events(),
+		Segments: Segments(),
+	}
+}
+
 func LookupSegment(segmentType string) (SegmentDefinition, bool) {
 	definition, ok := segmentsByType[segmentType]
 	return cloneSegmentDefinition(definition), ok
@@ -208,6 +235,18 @@ func allTransports() []Transport {
 func cloneActionDefinition(definition ActionDefinition) ActionDefinition {
 	definition.Aliases = slices.Clone(definition.Aliases)
 	definition.Transports = slices.Clone(definition.Transports)
+	definition.RequestExample = slices.Clone(definition.RequestExample)
+	definition.ResponseExample = slices.Clone(definition.ResponseExample)
+	definition.References = slices.Clone(definition.References)
+	if definition.Source == "" {
+		definition.Source = actionSource(definition.Name)
+	}
+	if len(definition.RequestExample) == 0 {
+		definition.RequestExample = json.RawMessage(`{"params": {}}`)
+	}
+	if len(definition.ResponseExample) == 0 {
+		definition.ResponseExample = json.RawMessage(`{"retcode": 0, "status": "ok", "data": {}}`)
+	}
 	return definition
 }
 
@@ -218,7 +257,36 @@ func cloneSegmentDefinition(definition SegmentDefinition) SegmentDefinition {
 
 func cloneEventDefinition(definition EventDefinition) EventDefinition {
 	definition.SubTypes = slices.Clone(definition.SubTypes)
+	definition.Transports = slices.Clone(definition.Transports)
+	definition.EventExample = slices.Clone(definition.EventExample)
+	definition.References = slices.Clone(definition.References)
+	if len(definition.Transports) == 0 {
+		definition.Transports = []Transport{TransportUniversalWebSocket}
+	}
+	if definition.Source == "" {
+		definition.Source = eventSource(definition.DetailType)
+	}
+	if len(definition.EventExample) == 0 {
+		definition.EventExample = json.RawMessage(fmt.Sprintf(`{"post_type": %q, "detail_type": %q}`, definition.PostType, definition.DetailType))
+	}
 	return definition
+}
+
+func actionSource(name string) string {
+	if name == "ack_event" {
+		return "purrchat_extension"
+	}
+	if strings.Contains(name, "file") || strings.Contains(name, "cookie") || strings.Contains(name, "credential") || name == "get_rkey" {
+		return "napcat_extension"
+	}
+	return "onebot_core"
+}
+
+func eventSource(detailType string) string {
+	if detailType == NoticeInstallationChanged {
+		return "purrchat_extension"
+	}
+	return "onebot_core"
 }
 
 func fileReferenceFields() []SegmentField {
