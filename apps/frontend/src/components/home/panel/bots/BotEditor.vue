@@ -305,47 +305,20 @@ const visibilityOptions = [
   { value: 'global' as BotVisibility, label: '系统' },
 ];
 
-// 从 Bot 数据中提取机制列表（兼容旧格式）
+// 从 Bot 数据中提取机制列表
 function extractMechanisms(bot: Bot): Mechanism[] {
-  // 优先使用新的 mechanism_config
   if (bot.mechanism_config?.mechanisms?.length) {
     return bot.mechanism_config.mechanisms.map((m) => deepCloneMechanism(m));
   }
-
-  // 兼容旧格式：合并 trigger_config + reply_config 为一个默认机制
-  const mechanisms: Mechanism[] = [];
-
-  if (bot.trigger_config || bot.reply_config) {
-    mechanisms.push({
-      id: 'mech_default',
-      name: '默认机制',
-      enabled: true,
-      trigger: (bot.trigger_config as any)
-        ? {
-            type: (bot.trigger_config as any).mode === 'probability' ? 'probability' : 'rule',
-            rules: (bot.trigger_config as any).rules,
-            probability: (bot.trigger_config as any).probability,
-          }
-        : { type: 'rule', rules: [] },
-      reply: (bot.reply_config as any) || {
-        type: 'predefined',
-        predefined: { mode: 'random', replies: ['...'] },
-      },
-    });
-  }
-
-  // 如果没有任何机制，创建一个默认的空规则机制
-  if (mechanisms.length === 0) {
-    mechanisms.push({
+  // 无机制时创建一个默认的空规则机制
+  return [
+    {
       id: 'mech_default',
       name: '默认机制',
       enabled: true,
       trigger: { type: 'rule', rules: [] },
-      reply: { type: 'predefined', predefined: { mode: 'random', replies: ['...'] } },
-    });
-  }
-
-  return mechanisms;
+    },
+  ];
 }
 
 function deepCloneMechanism(m: Mechanism): Mechanism {
@@ -356,13 +329,6 @@ function deepCloneMechanism(m: Mechanism): Mechanism {
     trigger: {
       ...m.trigger,
       rules: m.trigger?.rules?.map((r) => ({ ...r })) || [],
-    },
-    reply: {
-      ...m.reply,
-      predefined: m.reply.predefined
-        ? { ...m.reply.predefined, replies: [...(m.reply.predefined.replies || [])] }
-        : undefined,
-      llm: m.reply.llm ? { ...m.reply.llm } : undefined,
     },
   };
 }
@@ -433,7 +399,6 @@ function addMechanism(triggerType: 'rule' | 'probability') {
     name: triggerType === 'probability' ? '概率回复' : '新机制',
     enabled: true,
     trigger,
-    reply: { type: 'predefined', predefined: { mode: 'random', replies: ['...'] } },
   };
 
   form.mechanisms.push(mechanism);
@@ -495,20 +460,11 @@ function handleImport() {
       try {
         const data = JSON.parse(ev.target?.result as string);
 
-        // v2 格式（新机制列表）
+        // v2 格式（机制列表）
         if (data.mechanism_config?.mechanisms) {
           form.mechanisms = data.mechanism_config.mechanisms.map((m: Mechanism) =>
             deepCloneMechanism(m)
           );
-        }
-
-        // 兼容 v1 格式（旧三字段）
-        if (data.trigger_config && !data.mechanism_config) {
-          form.mechanisms = extractMechanisms({
-            ...props.bot,
-            trigger_config: data.trigger_config,
-            reply_config: data.reply_config,
-          } as Bot);
         }
 
         if (data.bot) {

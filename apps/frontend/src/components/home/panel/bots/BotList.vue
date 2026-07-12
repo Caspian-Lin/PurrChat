@@ -59,11 +59,6 @@
               {{ bot.trigger_summary }}
             </span>
             <span
-              class="text-[10px] px-1.5 py-0.5 rounded-full bg-bg-quaternary text-text-tertiary"
-            >
-              {{ bot.reply_type }}
-            </span>
-            <span
               v-if="bot.deployment_count > 0"
               class="text-[10px] px-1.5 py-0.5 rounded-full bg-bg-quaternary text-text-tertiary"
             >
