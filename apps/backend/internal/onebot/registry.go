@@ -79,6 +79,7 @@ var actionDefinitions = []ActionDefinition{
 	{Name: "get_login_info", Category: "bot", Status: StatusStable, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "returns the authenticated PurrChat Bot identity"},
 	{Name: "get_status", Category: "bot", Status: StatusStable, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "always returns online=true for authenticated external bots"},
 	{Name: "get_version_info", Category: "bot", Status: StatusStable, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "reports the PurrChat OneBot profile version"},
+	{Name: "ack_event", Category: "reliability", Status: StatusStable, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "PurrChat extension; ACK all events up to the given seq or event_id, enabling at-least-once delivery"},
 	{Name: "get_cookies", Category: "credential", Status: StatusRejected, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "PurrChat never exposes account cookies"},
 	{Name: "get_csrf_token", Category: "credential", Status: StatusRejected, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "PurrChat never exposes CSRF credentials"},
 	{Name: "get_credentials", Category: "credential", Status: StatusRejected, Transports: allTransports(), Version: ProfileVersion, CompatibilityNote: "PurrChat never exposes credentials"},
