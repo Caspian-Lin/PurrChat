@@ -233,6 +233,12 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 		return
 	}
 
+	var triggerMsgID *uuid.UUID
+	if msg.MessageID != uuid.Nil {
+		id := msg.MessageID
+		triggerMsgID = &id
+	}
+
 	// 1. 通过 enrollment 查找会话中的 Bot 成员
 	botEnrollments, err := e.enrollmentRepo.FindBotEnrollmentsByConversationID(ctx, msg.ConversationID)
 	if err != nil {
@@ -273,16 +279,17 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 		if bot.PublishedVersion == nil || *bot.PublishedVersion == 0 {
 			logger.InfofWithCaller("[BotEngine] Skip bot=%s: no published workflow version", bot.Name)
 			e.recordCallLog(ctx, &models.BotCallLog{
-				BotID:          bot.ID,
-				ConversationID: msg.ConversationID,
-				SenderID:       msg.SenderID,
-				SenderName:     msg.SenderName,
-				TriggerMessage: msg.Content,
-				ExecutionPath:  "ts",
-				Success:        false,
-				ErrorMessage:   "no published workflow version",
-				RunStatus:      models.RunStatusError,
-				ErrorType:      "no_published_version",
+				BotID:            bot.ID,
+				ConversationID:   msg.ConversationID,
+				SenderID:         msg.SenderID,
+				SenderName:       msg.SenderName,
+				TriggerMessage:   msg.Content,
+				ExecutionPath:    "ts",
+				Success:          false,
+				ErrorMessage:     "no published workflow version",
+				RunStatus:        models.RunStatusError,
+				ErrorType:        "no_published_version",
+				TriggerMessageID: triggerMsgID,
 			})
 			continue
 		}
@@ -296,16 +303,17 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 		if err != nil {
 			logger.ErrorfWithCaller("[BotEngine] Failed to load published workflow bot=%s revision=%d: %v", bot.Name, *bot.PublishedVersion, err)
 			e.recordCallLog(ctx, &models.BotCallLog{
-				BotID:          bot.ID,
-				ConversationID: msg.ConversationID,
-				SenderID:       msg.SenderID,
-				SenderName:     msg.SenderName,
-				TriggerMessage: msg.Content,
-				ExecutionPath:  "ts",
-				Success:        false,
-				ErrorMessage:   fmt.Sprintf("failed to load published revision %d: %v", *bot.PublishedVersion, err),
-				RunStatus:      models.RunStatusError,
-				ErrorType:      "version_load_failed",
+				BotID:            bot.ID,
+				ConversationID:   msg.ConversationID,
+				SenderID:         msg.SenderID,
+				SenderName:       msg.SenderName,
+				TriggerMessage:   msg.Content,
+				ExecutionPath:    "ts",
+				Success:          false,
+				ErrorMessage:     fmt.Sprintf("failed to load published revision %d: %v", *bot.PublishedVersion, err),
+				RunStatus:        models.RunStatusError,
+				ErrorType:        "version_load_failed",
+				TriggerMessageID: triggerMsgID,
 			})
 			continue
 		}
@@ -314,16 +322,17 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 		if e.tsClient == nil || !e.tsClient.IsAvailable() {
 			logger.ErrorfWithCaller("[BotEngine] TS service unavailable; bot=%s will not execute (no Go fallback)", bot.Name)
 			e.recordCallLog(ctx, &models.BotCallLog{
-				BotID:          bot.ID,
-				ConversationID: msg.ConversationID,
-				SenderID:       msg.SenderID,
-				SenderName:     msg.SenderName,
-				TriggerMessage: msg.Content,
-				ExecutionPath:  "ts",
-				Success:        false,
-				ErrorMessage:   "bot-engine service unavailable",
-				RunStatus:      models.RunStatusError,
-				ErrorType:      "ts_unavailable",
+				BotID:            bot.ID,
+				ConversationID:   msg.ConversationID,
+				SenderID:         msg.SenderID,
+				SenderName:       msg.SenderName,
+				TriggerMessage:   msg.Content,
+				ExecutionPath:    "ts",
+				Success:          false,
+				ErrorMessage:     "bot-engine service unavailable",
+				RunStatus:        models.RunStatusError,
+				ErrorType:        "ts_unavailable",
+				TriggerMessageID: triggerMsgID,
 			})
 			continue
 		}
@@ -343,13 +352,6 @@ func (e *BotEngine) processMessage(ctx context.Context, msg *BotMessage) {
 		start := time.Now()
 		execResp, tsErr := e.tsClient.Execute(ctx, msg, bot.ID, bot.Name, version.Document, version.Revision, contextMsgs, grantedCaps, secrets)
 		duration := time.Since(start)
-
-		// 准备触发消息 ID
-		var triggerMsgID *uuid.UUID
-		if msg.MessageID != uuid.Nil {
-			id := msg.MessageID
-			triggerMsgID = &id
-		}
 
 		if tsErr == nil {
 			logger.InfofWithCaller("[BotEngine] TS bot=%s runId=%s triggered=%v revision=%d reply=%q sessionActive=%v ms=%d",
