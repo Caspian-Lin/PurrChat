@@ -34,9 +34,6 @@
           <span class="mechanism-card__badge mechanism-card__badge--trigger">
             {{ triggerLabel }}
           </span>
-          <span class="mechanism-card__badge mechanism-card__badge--reply">
-            {{ replyLabel }}
-          </span>
         </div>
       </div>
 
@@ -91,15 +88,19 @@
         <BotTriggerConfig :config="localMechanism.trigger" @update="handleTriggerUpdate" />
       </div>
 
-      <!-- 回复配置 -->
+      <!-- 工作流文档入口 -->
       <div class="mechanism-card__section">
-        <h4 class="mechanism-card__section-title">回复设置</h4>
-        <BotReplyConfig
-          :config="localMechanism.reply"
-          :trigger="localMechanism.trigger"
-          @update="handleReplyUpdate"
-          @open-workflow-editor="emit('openWorkflowEditor', localMechanism.id)"
-        />
+        <h4 class="mechanism-card__section-title">工作流文档</h4>
+        <button
+          class="mechanism-card__workflow-btn"
+          @click="emit('openWorkflowEditor', localMechanism.id)"
+        >
+          <BsBoxArrowUpRight :size="14" />
+          编辑工作流文档
+        </button>
+        <p class="mechanism-card__workflow-hint">
+          在工作流编辑器中设计此机制的回复行为，支持节点编排、调试和版本发布。
+        </p>
       </div>
     </div>
   </div>
@@ -107,10 +108,9 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, watch, nextTick } from 'vue';
-import { BsChevronUp, BsChevronDown, BsTrash3 } from 'vue-icons-plus/bs';
-import type { Mechanism, TriggerSpec, ReplySpec } from '../../../../models/types';
+import { BsChevronUp, BsChevronDown, BsTrash3, BsBoxArrowUpRight } from 'vue-icons-plus/bs';
+import type { Mechanism, TriggerSpec } from '../../../../models/types';
 import BotTriggerConfig from './BotTriggerConfig.vue';
-import BotReplyConfig from './BotReplyConfig.vue';
 
 interface Props {
   mechanism: Mechanism;
@@ -141,7 +141,6 @@ const localMechanism = reactive<Mechanism>({
     ...props.mechanism.trigger,
     rules: props.mechanism.trigger?.rules?.map((r) => ({ ...r })) || [],
   },
-  reply: deepCloneReply(props.mechanism.reply),
 });
 
 watch(
@@ -154,7 +153,6 @@ watch(
       ...newMech.trigger,
       rules: newMech.trigger?.rules?.map((r) => ({ ...r })) || [],
     };
-    localMechanism.reply = deepCloneReply(newMech.reply);
   },
   { deep: true }
 );
@@ -176,17 +174,6 @@ const triggerLabel = computed(() => {
   return `规则（${t.rules.length} 条）`;
 });
 
-const replyLabel = computed(() => {
-  const r = localMechanism.reply;
-  if (!r) return '未配置';
-  const labels: Record<string, string> = {
-    predefined: '预定义',
-    llm: 'LLM',
-    workflow: '工作流',
-  };
-  return labels[r.type] || r.type;
-});
-
 function toggleEnabled() {
   localMechanism.enabled = !localMechanism.enabled;
   emitUpdate();
@@ -197,40 +184,13 @@ function handleTriggerUpdate(trigger: TriggerSpec) {
   emitUpdate();
 }
 
-function handleReplyUpdate(reply: ReplySpec) {
-  localMechanism.reply = reply;
-  emitUpdate();
-}
-
 function emitUpdate() {
   emit('update', {
     id: localMechanism.id,
     name: localMechanism.name,
     enabled: localMechanism.enabled,
     trigger: { ...localMechanism.trigger, rules: [...(localMechanism.trigger?.rules || [])] },
-    reply: deepCloneReply(localMechanism.reply),
   });
-}
-
-function deepCloneReply(reply?: ReplySpec): ReplySpec {
-  if (!reply) return { type: 'predefined', predefined: { mode: 'random', replies: ['...'] } };
-  return {
-    ...reply,
-    predefined: reply.predefined
-      ? { ...reply.predefined, replies: [...(reply.predefined.replies || [])] }
-      : undefined,
-    llm: reply.llm ? { ...reply.llm } : undefined,
-    workflow: (() => {
-      const wf = reply.workflow;
-      return wf
-        ? {
-            events: wf.events.map((e) => ({ ...e, config: { ...e.config } })),
-            connections: wf.connections?.map((c) => ({ ...c })) || [],
-            end_conditions: wf.end_conditions.map((c) => ({ ...c })),
-          }
-        : undefined;
-    })(),
-  };
 }
 </script>
 
@@ -340,11 +300,6 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
   color: #3b82f6;
 }
 
-.mechanism-card__badge--reply {
-  background: rgba(90, 143, 78, 0.08);
-  color: var(--theme-primary, #5a8f4e);
-}
-
 /* 操作按钮 */
 .mechanism-card__actions {
   display: flex;
@@ -402,5 +357,34 @@ function deepCloneReply(reply?: ReplySpec): ReplySpec {
   font-weight: 500;
   color: var(--text-secondary-color, #57534e);
   margin-bottom: 8px;
+}
+
+/* 工作流编辑按钮 */
+.mechanism-card__workflow-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-secondary-color, #57534e);
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.08));
+  background: var(--bg-quaternary, #fff);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mechanism-card__workflow-btn:hover {
+  border-color: var(--theme-primary, #5a8f4e);
+  color: var(--theme-primary, #5a8f4e);
+}
+
+.mechanism-card__workflow-hint {
+  font-size: 11px;
+  color: var(--text-quaternary-color, #a8a29e);
+  margin-top: 6px;
+  line-height: 1.5;
 }
 </style>

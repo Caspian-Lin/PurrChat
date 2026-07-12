@@ -435,7 +435,6 @@ export interface PublicBotDetail extends Bot {
   deployment_count: number;
   owner_name: string;
   trigger_summary: string;
-  reply_type: string;
 }
 
 // 分页搜索结果
@@ -556,13 +555,12 @@ export interface MechanismConfig {
   mechanisms: Mechanism[];
 }
 
-// 单个机制 = 触发规则 + 回复设置
+// 单个机制 = 触发规则（回复行为由 mechanism 级工作流文档定义）
 export interface Mechanism {
   id: string;
   name: string;
   enabled: boolean;
   trigger: TriggerSpec;
-  reply: ReplySpec;
 }
 
 // 触发规格
