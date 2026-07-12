@@ -2,32 +2,35 @@ package services
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	"sync/atomic"
 	"time"
 
 	"purr-chat-server/internal/messaging"
 	"purr-chat-server/internal/models"
+	"purr-chat-server/internal/onebot"
 	"purr-chat-server/internal/repository"
 	"purr-chat-server/pkg/logger"
 
 	"github.com/google/uuid"
 )
 
-// BotEventPublisher 推送 OneBot 事件到外部 Bot WebSocket 连接
 type BotEventPublisher interface {
 	PublishBotEvent(botID uuid.UUID, event any) int
 }
 
-// ExternalBotSink 将消息事件推送到已安装的外部 Bot
-// 仅向有 messages:read_trigger capability 的 active installation 推送
+type SinkEventMetrics struct {
+	MessageSent    atomic.Int64
+	MessageSkipped atomic.Int64
+}
+
 type ExternalBotSink struct {
 	installationRepo repository.BotInstallationRepository
 	botRepo          repository.BotRepository
 	botWSManager     BotEventPublisher
+	metrics          SinkEventMetrics
+	now              func() time.Time
 }
 
-// NewExternalBotSink 创建外部 Bot 事件 sink
 func NewExternalBotSink(
 	installationRepo repository.BotInstallationRepository,
 	botRepo repository.BotRepository,
@@ -37,11 +40,10 @@ func NewExternalBotSink(
 		installationRepo: installationRepo,
 		botRepo:          botRepo,
 		botWSManager:     botWSManager,
+		now:              time.Now,
 	}
 }
 
-// OnMessageCreated 实现 messaging.MessageEventSink
-// Bot 发送的消息和系统消息不推送给外部 Bot（防回复环）
 func (s *ExternalBotSink) OnMessageCreated(ctx context.Context, event *messaging.MessageCreatedEvent) error {
 	if !event.ShouldTriggerBots() {
 		return nil
@@ -52,34 +54,42 @@ func (s *ExternalBotSink) OnMessageCreated(ctx context.Context, event *messaging
 
 	installations, err := s.resolveInstallations(ctx, event)
 	if err != nil {
+		s.metrics.MessageSkipped.Add(1)
 		logger.ErrorfWithCaller("[ExternalBotSink] Failed to resolve installations for conversation %s: %v",
 			event.Message.ConversationID, err)
 		return nil
 	}
 
 	for _, inst := range installations {
-		// 仅向有 messages:read_trigger capability 的安装推送
 		if !models.HasCapability(inst.GrantedCapabilities, models.CapabilityReadTrigger) {
 			continue
 		}
 
-		// 加载 Bot 信息
 		bot, err := s.botRepo.FindByID(ctx, inst.AppID)
 		if err != nil {
+			s.metrics.MessageSkipped.Add(1)
 			logger.ErrorfWithCaller("[ExternalBotSink] Failed to load bot %s: %v", inst.AppID, err)
 			continue
 		}
 		if bot.Status != models.BotStatusActive {
+			s.metrics.MessageSkipped.Add(1)
 			continue
 		}
 
-		// 构建并推送 OneBot 事件
-		onebotEvent := s.buildEvent(event, bot)
+		onebotEvent, err := s.buildEvent(event, bot)
+		if err != nil {
+			s.metrics.MessageSkipped.Add(1)
+			continue
+		}
+
 		delivered := s.botWSManager.PublishBotEvent(bot.ID, onebotEvent)
 
 		if delivered > 0 {
+			s.metrics.MessageSent.Add(1)
 			logger.InfofWithCaller("[ExternalBotSink] Pushed %s event to bot %s (%d connections)",
 				onebotEvent.DetailType, bot.Name, delivered)
+		} else {
+			s.metrics.MessageSkipped.Add(1)
 		}
 	}
 
@@ -110,36 +120,26 @@ func (s *ExternalBotSink) resolveInstallations(ctx context.Context, event *messa
 	return installations, nil
 }
 
-// buildEvent 构建 OneBot 事件
-func (s *ExternalBotSink) buildEvent(event *messaging.MessageCreatedEvent, bot *models.Bot) onebotEventPayload {
-	detailType := "message.private"
+func (s *ExternalBotSink) buildEvent(event *messaging.MessageCreatedEvent, bot *models.Bot) (onebot.Event, error) {
+	detailType := onebot.DetailTypePrivate
 	if event.ConversationType == models.ConversationTypeGroup {
-		detailType = "message.group"
+		detailType = onebot.DetailTypeGroup
 	}
 
-	// 构建消息段
 	segments := messageToSegments(event.Message)
 
-	data, _ := json.Marshal(onebotMessageEventData{
+	data := messageEventData{
 		MessageID:      event.Message.ID.String(),
 		ConversationID: event.Message.ConversationID.String(),
 		UserID:         event.Message.SenderID.String(),
 		SenderName:     event.SenderName,
 		Source:         string(event.Source),
 		Message:        segments,
-	})
-
-	return onebotEventPayload{
-		Time:       event.Message.CreatedAt.Unix(),
-		SelfID:     bot.ID.String(),
-		PostType:   "message",
-		EventID:    generateEventID(),
-		DetailType: detailType,
-		Data:       data,
 	}
+
+	return onebot.BuildMessageEvent(bot.ID.String(), detailType, event.Message.CreatedAt, data)
 }
 
-// messageToSegments 将 PurrChat 消息转换为 OneBot 消息段
 func messageToSegments(msg *models.Message) []map[string]any {
 	switch msg.MsgType {
 	case models.MsgTypeText:
@@ -161,23 +161,7 @@ func messageToSegments(msg *models.Message) []map[string]any {
 	}
 }
 
-// generateEventID 生成唯一事件 ID
-func generateEventID() string {
-	return fmt.Sprintf("evt_%s_%d", uuid.New().String()[:8], time.Now().UnixNano())
-}
-
-// onebotEventPayload OneBot 事件载荷
-type onebotEventPayload struct {
-	Time       int64           `json:"time"`
-	SelfID     string          `json:"self_id"`
-	PostType   string          `json:"post_type"`
-	EventID    string          `json:"event_id"`
-	DetailType string          `json:"detail_type"`
-	Data       json.RawMessage `json:"data"`
-}
-
-// onebotMessageEventData 消息事件数据
-type onebotMessageEventData struct {
+type messageEventData struct {
 	MessageID      string           `json:"message_id"`
 	ConversationID string           `json:"conversation_id"`
 	UserID         string           `json:"user_id"`

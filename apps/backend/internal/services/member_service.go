@@ -18,6 +18,7 @@ type MemberService struct {
 	userRepo         repository.UserRepository
 	conversationRepo repository.ConversationRepository
 	enrollmentRepo   repository.EnrollmentRepository
+	noticeEmitter    *BotNoticeEmitter
 }
 
 // NewMemberService 创建成员管理服务
@@ -31,6 +32,11 @@ func NewMemberService(
 		conversationRepo: conversationRepo,
 		enrollmentRepo:   enrollmentRepo,
 	}
+}
+
+// SetBotNoticeEmitter 注入外部 Bot 事件推送器
+func (s *MemberService) SetBotNoticeEmitter(emitter *BotNoticeEmitter) {
+	s.noticeEmitter = emitter
 }
 
 // AddMemberToConversation 添加成员到会话
@@ -109,6 +115,10 @@ func (s *MemberService) AddMemberToConversation(ctx context.Context, conversatio
 		}
 	}
 
+	if s.noticeEmitter != nil {
+		s.noticeEmitter.NotifyMemberJoined(ctx, conversationID, targetUUID, string(role))
+	}
+
 	return nil
 }
 
@@ -176,6 +186,10 @@ func (s *MemberService) RemoveMemberFromConversation(ctx context.Context, conver
 			}
 			logger.InfofWithCaller("Member removed notification sent to %d members", len(memberIDs))
 		}
+	}
+
+	if s.noticeEmitter != nil {
+		s.noticeEmitter.NotifyMemberLeft(ctx, conversationID, targetUUID)
 	}
 
 	return nil
@@ -258,11 +272,16 @@ func (s *MemberService) UpdateMemberRole(ctx context.Context, conversationIDStr,
 			}
 		}
 
+		if s.noticeEmitter != nil {
+			s.noticeEmitter.NotifyMemberRoleChanged(ctx, conversationID, req.UserID, "member", "owner")
+		}
+
 		logger.InfofWithCaller("Ownership transferred from %s to %s in conversation %s", userID, req.UserID.String(), conversationIDStr)
 		return nil
 	}
 
 	// 设置/撤销管理员
+	newRole := string(req.Role)
 	targetEnrollment.Role = models.EnrollmentRole(req.Role)
 	err = s.enrollmentRepo.Update(ctx, targetEnrollment)
 	if err != nil {
@@ -286,6 +305,10 @@ func (s *MemberService) UpdateMemberRole(ctx context.Context, conversationIDStr,
 				})
 			}
 		}
+	}
+
+	if s.noticeEmitter != nil {
+		s.noticeEmitter.NotifyMemberRoleChanged(ctx, conversationID, req.UserID, "member", newRole)
 	}
 
 	logger.InfofWithCaller("Member %s role updated to %s in conversation %s by %s", req.UserID.String(), req.Role, conversationIDStr, userID)

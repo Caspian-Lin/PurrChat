@@ -33,6 +33,7 @@ type InstallationService struct {
 	botRepo          repository.BotRepository
 	enrollmentRepo   repository.EnrollmentRepository
 	messageRepo      repository.ConversationMessageRepository
+	noticeEmitter    *BotNoticeEmitter
 }
 
 // NewInstallationService 创建安装服务
@@ -48,6 +49,11 @@ func NewInstallationService(
 		enrollmentRepo:   enrollmentRepo,
 		messageRepo:      messageRepo,
 	}
+}
+
+// SetBotNoticeEmitter 注入外部 Bot 事件推送器
+func (s *InstallationService) SetBotNoticeEmitter(emitter *BotNoticeEmitter) {
+	s.noticeEmitter = emitter
 }
 
 // CreateInstallation 安装 Bot 到用户私聊或群聊会话
@@ -147,6 +153,11 @@ func (s *InstallationService) CreateInstallation(ctx context.Context, installerI
 	if err := s.installationRepo.Create(ctx, installation); err != nil {
 		return nil, err
 	}
+
+	if s.noticeEmitter != nil {
+		s.noticeEmitter.NotifyInstallationInstalled(ctx, installation)
+	}
+
 	return installation, nil
 }
 
@@ -270,11 +281,18 @@ func (s *InstallationService) UpdateInstallation(ctx context.Context, requesterI
 		req.DiagnosticsConsent = models.DiagnosticsGranted
 	}
 
-	if req.Status != "" {
+	oldStatus := inst.Status
+	oldCaps := inst.GrantedCapabilities
+	statusChanged := false
+	capsChanged := false
+
+	if req.Status != "" && req.Status != inst.Status {
 		inst.Status = req.Status
+		statusChanged = true
 	}
 	if req.GrantedCapabilities != nil {
 		inst.GrantedCapabilities = req.GrantedCapabilities
+		capsChanged = true
 	}
 	if req.DiagnosticsConsent != "" {
 		inst.DiagnosticsConsent = req.DiagnosticsConsent
@@ -283,6 +301,11 @@ func (s *InstallationService) UpdateInstallation(ctx context.Context, requesterI
 	if err := s.installationRepo.Update(ctx, inst); err != nil {
 		return nil, err
 	}
+
+	if s.noticeEmitter != nil {
+		s.emitInstallationUpdate(ctx, inst, oldStatus, oldCaps, statusChanged, capsChanged)
+	}
+
 	return inst, nil
 }
 
@@ -313,6 +336,10 @@ func (s *InstallationService) UninstallInstallation(ctx context.Context, request
 		}
 	}
 
+	if s.noticeEmitter != nil {
+		s.noticeEmitter.NotifyInstallationUninstalled(ctx, inst)
+	}
+
 	return s.installationRepo.Delete(ctx, id)
 }
 
@@ -332,6 +359,26 @@ func (s *InstallationService) canManage(ctx context.Context, inst *models.BotIns
 		}
 	}
 	return false
+}
+
+// emitInstallationUpdate 根据 installation 更新前后的差异推送对应生命周期事件
+func (s *InstallationService) emitInstallationUpdate(ctx context.Context, inst *models.BotInstallation, oldStatus models.InstallationStatus, oldCaps []string, statusChanged, capsChanged bool) {
+	if statusChanged {
+		switch inst.Status {
+		case models.InstallationPaused, models.InstallationDisabled:
+			s.noticeEmitter.NotifyInstallationSuspended(ctx, inst)
+		case models.InstallationActive:
+			s.noticeEmitter.NotifyInstallationResumed(ctx, inst)
+		default:
+			if capsChanged {
+				s.noticeEmitter.NotifyInstallationCapabilityChanged(ctx, inst)
+			}
+		}
+		return
+	}
+	if capsChanged {
+		s.noticeEmitter.NotifyInstallationCapabilityChanged(ctx, inst)
+	}
 }
 
 // notifyExternalBotInstalled 声明 network:external 的 Bot 安装到群聊后,发系统消息 + WS 通知告知外发
