@@ -164,6 +164,7 @@ func main() {
 	credentialHandler := handlers.NewBotAPICredentialHandler(credentialService)
 	botWSHandler := botws.NewHandler(botWSManager, credentialService, botService)
 	botActionHandler := handlers.NewBotActionHandler(actionDispatcher)
+	botCapabilityHandler := handlers.NewBotCapabilityHandler()
 	botEngine.SetSecretResolver(secretService)
 
 	// 注册消息事件 sink
@@ -310,6 +311,7 @@ func main() {
 	r.GET("/api/ws", websocket.HandleWebSocket)
 	// Bot Universal WebSocket uses the strict Bot credential middleware and never accepts query credentials.
 	r.GET("/api/bot/v1/ws", handlers.BotCredentialAuthMiddleware(credentialService), botWSHandler.Connect)
+	r.GET("/api/bot/v1/capabilities", botCapabilityHandler.Get)
 	// Bot HTTP Action endpoint shares the same dispatcher as Universal WS.
 	r.POST("/api/bot/v1/actions/:action", handlers.BotCredentialAuthMiddleware(credentialService), botActionHandler.HandleAction)
 

@@ -41,6 +41,29 @@ func TestRegistryCapabilitiesAreKnownAndCopiesAreImmutable(t *testing.T) {
 	assert.NotContains(t, definition.Aliases, "mutated")
 }
 
+func TestCapabilityCatalogIsCompleteAndDefensive(t *testing.T) {
+	t.Parallel()
+
+	catalog := Capabilities()
+	require.NotEmpty(t, catalog.Actions)
+	require.NotEmpty(t, catalog.Events)
+	for _, action := range catalog.Actions {
+		assert.NotEmpty(t, action.Source, action.Name)
+		assert.NotEmpty(t, action.RequestExample, action.Name)
+		assert.NotEmpty(t, action.ResponseExample, action.Name)
+	}
+	for _, event := range catalog.Events {
+		assert.NotEmpty(t, event.Source, event.DetailType)
+		assert.NotEmpty(t, event.Transports, event.DetailType)
+		assert.NotEmpty(t, event.EventExample, event.DetailType)
+	}
+
+	catalog.Actions[0].Name = "mutated"
+	catalog.Events[0].Transports[0] = TransportHTTP
+	assert.Equal(t, "send_message", Capabilities().Actions[0].Name)
+	assert.Equal(t, TransportUniversalWebSocket, Capabilities().Events[0].Transports[0])
+}
+
 func TestProfileAndSegmentSchemasAreMachineReadable(t *testing.T) {
 	t.Parallel()
 

@@ -43,6 +43,7 @@ import type {
   WorkflowDocumentResponse,
   WorkflowValidationResponse,
   WorkflowVersion,
+  BotApiCapabilities,
 } from './types';
 import { getApiBaseUrl, getStorageApiBaseUrl, logger } from '../config/app';
 
@@ -315,6 +316,11 @@ export const api = {
   },
 
   // ===== Bot API =====
+
+  // 获取由服务端 OneBot Registry 生成的支持矩阵。
+  getBotApiCapabilities: (): Promise<BotApiCapabilities> => {
+    return apiClient.get('/api/bot/v1/capabilities').then((res) => res.data);
+  },
 
   // 获取用户创建的 Bot 列表
   getBots: (): Promise<ApiResponse<Bot[]>> => {
