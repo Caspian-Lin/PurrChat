@@ -692,7 +692,8 @@ export interface BotCallLog {
 
 // Bot 调用记录列表响应
 export interface BotCallLogListResponse {
-  logs: BotCallLog[];
+  // Older backend versions can encode an empty Go slice as null.
+  logs: BotCallLog[] | null;
   total: number;
   limit: number;
   offset: number;

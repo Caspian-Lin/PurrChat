@@ -65,7 +65,9 @@ func (r *botCallLogRepository) FindAllByBotID(ctx context.Context, botID uuid.UU
 	}
 	defer rows.Close()
 
-	var logs []*models.BotCallLog
+	// Keep the API collection contract stable: an empty, non-nil slice is
+	// encoded as [] instead of null by encoding/json.
+	logs := make([]*models.BotCallLog, 0)
 	for rows.Next() {
 		log := &models.BotCallLog{}
 		err := rows.Scan(
