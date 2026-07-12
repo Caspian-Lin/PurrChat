@@ -3,7 +3,6 @@ package botengine
 import (
 	"context"
 	"encoding/json"
-	"sync"
 	"time"
 
 	"purr-chat-server/internal/messaging"
@@ -37,9 +36,6 @@ type BotEngine struct {
 	workflowRepo     repository.WorkflowRepository
 	secretResolver   SecretResolver
 	messageSender    messaging.BotMessageSender
-
-	// 工作流会话：记录活跃的工作流部署状态
-	workflowSessions sync.Map // map[string]*WorkflowSession — "conversationID:botID" -> session
 
 	// TS 微服务客户端（用于调用 TS bot-engine）
 	tsClient *BotEngineClient

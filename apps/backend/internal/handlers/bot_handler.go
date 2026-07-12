@@ -11,7 +11,6 @@ import (
 	"purr-chat-server/pkg/logger"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 // containsBadInput 判断错误是否属于客户端输入错误（应返回 400）
@@ -497,101 +496,6 @@ func (h *BotHandler) CreateBotConversation(c *gin.Context) {
 		Message: "Bot conversation created successfully",
 		Data:    conversation,
 	})
-}
-
-// ActivateWorkflow 激活工作流
-// @Summary 激活 Bot 工作流
-// @Tags Bot
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Bot ID"
-// @Param request body models.ActivateWorkflowRequest true "激活信息"
-// @Success 200 {object} models.MessageResponse
-// @Router /api/bots/{id}/workflow/activate [post]
-func (h *BotHandler) ActivateWorkflow(c *gin.Context) {
-	botID := c.Param("id")
-	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
-		return
-	}
-
-	var req models.ActivateWorkflowRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
-		return
-	}
-
-	userIDStr, ok := getUserID(c)
-	if !ok {
-		return
-	}
-
-	// 验证权限
-	err := h.botService.ActivateWorkflow(c.Request.Context(), botID, userIDStr, req.ConversationID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to activate workflow: %v", err)
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
-		return
-	}
-
-	// 调用引擎激活工作流
-	botUUID, _ := uuid.Parse(botID)
-	err = h.botEngine.ActivateWorkflow(c.Request.Context(), botUUID, req.ConversationID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to activate workflow (engine): %v", err)
-		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Workflow activated"})
-}
-
-// DeactivateWorkflow 停用工作流
-// @Summary 停用 Bot 工作流
-// @Tags Bot
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Bot ID"
-// @Param request body models.ActivateWorkflowRequest true "停用信息"
-// @Success 200 {object} models.MessageResponse
-// @Router /api/bots/{id}/workflow/deactivate [post]
-func (h *BotHandler) DeactivateWorkflow(c *gin.Context) {
-	botID := c.Param("id")
-	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
-		return
-	}
-
-	var req models.ActivateWorkflowRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
-		return
-	}
-
-	userIDStr, ok := getUserID(c)
-	if !ok {
-		return
-	}
-
-	err := h.botService.DeactivateWorkflow(c.Request.Context(), botID, userIDStr, req.ConversationID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to deactivate workflow: %v", err)
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
-		return
-	}
-
-	// 调用引擎停用工作流
-	botUUID, _ := uuid.Parse(botID)
-	err = h.botEngine.DeactivateWorkflow(c.Request.Context(), botUUID, req.ConversationID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to deactivate workflow (engine): %v", err)
-		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Workflow deactivated"})
 }
 
 // GetDeployableConversations 获取可部署 Bot 的群聊列表
