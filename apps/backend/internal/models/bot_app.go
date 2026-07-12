@@ -139,6 +139,9 @@ type BotInstallation struct {
 	UpdatedAt           time.Time              `json:"updated_at"`
 	// 关联数据(查询时填充)
 	App *Bot `json:"app,omitempty"`
+	// 展示用：目标会话名称与类型（service 层填充）
+	TargetName     string `json:"target_name,omitempty"`
+	TargetConvType string `json:"target_conversation_type,omitempty"`
 }
 
 // CreateInstallationRequest 安装 Bot 请求

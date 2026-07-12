@@ -103,9 +103,11 @@ type PaginatedSearchResult struct {
 
 // DeployableConversation 可部署的会话
 type DeployableConversation struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	MemberCount int       `json:"member_count"`
+	ID               uuid.UUID `json:"id"`
+	Name             string    `json:"name"`
+	ConversationType string    `json:"conversation_type"`
+	AvatarURL        string    `json:"avatar_url,omitempty"`
+	MemberCount      int       `json:"member_count"`
 }
 
 // BotDeploymentStatus 部署状态

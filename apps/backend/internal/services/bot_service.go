@@ -252,17 +252,16 @@ func (s *BotService) GetDeployableConversations(ctx context.Context, userID stri
 		return nil, err
 	}
 
-	// 查询用户所在的群聊，排除 Bot 已部署的
+	// 查询用户所在的会话（群聊 + 好友私聊），排除 Bot 已部署的
 	query := `
-        SELECT c.id, c.name, COUNT(e.id) AS member_count
+        SELECT c.id, c.name, c.conversation_type, c.avatar_url, COUNT(e.id) AS member_count
         FROM conversations c
         JOIN enrollments e ON e.conversation_id = c.id
         WHERE e.user_id = $1
-          AND c.conversation_type = 'group'
           AND c.id NOT IN (
               SELECT target_id FROM bot_installations WHERE target_type = 'conversation' AND app_id = $2
           )
-        GROUP BY c.id, c.name
+        GROUP BY c.id, c.name, c.conversation_type, c.avatar_url
         ORDER BY c.updated_at DESC
     `
 
@@ -275,7 +274,7 @@ func (s *BotService) GetDeployableConversations(ctx context.Context, userID stri
 	var results []*models.DeployableConversation
 	for rows.Next() {
 		dc := &models.DeployableConversation{}
-		if err := rows.Scan(&dc.ID, &dc.Name, &dc.MemberCount); err != nil {
+		if err := rows.Scan(&dc.ID, &dc.Name, &dc.ConversationType, &dc.AvatarURL, &dc.MemberCount); err != nil {
 			return nil, err
 		}
 		results = append(results, dc)
@@ -548,7 +547,41 @@ func (s *BotService) GetBotDeployments(ctx context.Context, userID string) ([]*m
 		return nil, err
 	}
 
-	return s.installationRepo.FindByInstaller(ctx, id)
+	installations, err := s.installationRepo.FindByInstaller(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// 批量补充目标会话名与类型（仅 conversation 类型）
+	convIDs := make([]uuid.UUID, 0, len(installations))
+	for _, inst := range installations {
+		if inst.TargetType == models.InstallationTargetConversation {
+			convIDs = append(convIDs, inst.TargetID)
+		}
+	}
+	if len(convIDs) > 0 {
+		rows, qErr := database.GetPool().Query(ctx,
+			`SELECT id, name, conversation_type FROM conversations WHERE id = ANY($1)`, convIDs)
+		if qErr == nil {
+			defer rows.Close()
+			convInfo := make(map[uuid.UUID]struct{ name, convType string }, len(convIDs))
+			for rows.Next() {
+				var cID uuid.UUID
+				var cName, cType string
+				if sErr := rows.Scan(&cID, &cName, &cType); sErr == nil {
+					convInfo[cID] = struct{ name, convType string }{cName, cType}
+				}
+			}
+			for _, inst := range installations {
+				if info, ok := convInfo[inst.TargetID]; ok {
+					inst.TargetName = info.name
+					inst.TargetConvType = info.convType
+				}
+			}
+		}
+	}
+
+	return installations, nil
 }
 
 // UpdateDeploymentStatus 更新安装状态（暂停/恢复）
