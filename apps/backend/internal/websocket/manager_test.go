@@ -402,7 +402,7 @@ func TestWSOriginAllowed(t *testing.T) {
 }
 
 func TestWSEachMessageSeparateFrame(t *testing.T) {
-	_, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserConnections: 3, SendQueueSize: 64})
+	hub, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserConnections: 3, SendQueueSize: 64})
 
 	token := generateTestToken(t)
 	header := http.Header{}
@@ -413,14 +413,17 @@ func TestWSEachMessageSeparateFrame(t *testing.T) {
 	defer conn.Close()
 
 	userID := getTestUserID(t)
-	hub := GlobalHub
 
-	// Send multiple messages quickly
+	require.Eventually(t, func() bool {
+		return hub.GetClientCount() == 1
+	}, 2*time.Second, 20*time.Millisecond, "client should be registered before sending")
+
 	for i := 0; i < 5; i++ {
 		hub.SendToUser(userID, "test_event", map[string]int{"i": i})
 	}
 
 	// Read each message — each must be a complete JSON object in its own frame
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(3*time.Second)))
 	for i := 0; i < 5; i++ {
 		msgType, data, err := conn.ReadMessage()
 		require.NoError(t, err)
