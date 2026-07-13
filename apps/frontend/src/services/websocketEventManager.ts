@@ -84,6 +84,11 @@ export type WorkflowChangeCallback = (
   _data: { bot_id: string; bot_name: string; conversation_id: string }
 ) => void;
 
+export type BotDeploymentChangeCallback = (
+  _event: 'deployed' | 'undeployed',
+  _data: BotDeployedEventData
+) => void;
+
 /**
  * WebSocket事件管理器
  * 负责处理所有WebSocket事件并自动更新数据结构和视图
@@ -95,6 +100,7 @@ class WebSocketEventManager {
   private friendRequestCallbacks: Set<FriendRequestCallback> = new Set();
   private onlineStatusCallbacks: Set<OnlineStatusCallback> = new Set();
   private workflowCallbacks: Set<WorkflowChangeCallback> = new Set();
+  private botDeploymentCallbacks: Set<BotDeploymentChangeCallback> = new Set();
 
   // 当前选中的会话ID
   private currentConversationId: string | null = null;
@@ -512,6 +518,7 @@ class WebSocketEventManager {
 
   private handleBotDeployed(data: BotDeployedEventData) {
     console.log('[WebSocketEventManager] Bot 安装事件:', data);
+    this.botDeploymentCallbacks.forEach((callback) => callback('deployed', data));
     this.conversationUpdateCallbacks.forEach((callback) => {
       callback({
         id: data.conversation_id,
@@ -524,6 +531,7 @@ class WebSocketEventManager {
 
   private handleBotUndeployed(data: BotDeployedEventData) {
     console.log('[WebSocketEventManager] Bot 卸载事件:', data);
+    this.botDeploymentCallbacks.forEach((callback) => callback('undeployed', data));
     this.conversationUpdateCallbacks.forEach((callback) => {
       callback({
         id: data.conversation_id,
@@ -547,6 +555,11 @@ class WebSocketEventManager {
   onWorkflowChange(callback: WorkflowChangeCallback) {
     this.workflowCallbacks.add(callback);
     return () => this.workflowCallbacks.delete(callback);
+  }
+
+  onBotDeploymentChange(callback: BotDeploymentChangeCallback) {
+    this.botDeploymentCallbacks.add(callback);
+    return () => this.botDeploymentCallbacks.delete(callback);
   }
 
   /**

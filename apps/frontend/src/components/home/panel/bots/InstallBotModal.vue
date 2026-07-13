@@ -12,7 +12,7 @@
           <h2 id="install-bot-title" class="text-base font-semibold text-text-primary">
             {{ installation ? '重新授权' : '安装' }} {{ bot.name }}
           </h2>
-          <p class="mt-0.5 text-xs text-text-tertiary">安装到我的私聊</p>
+          <p class="mt-0.5 text-xs text-text-tertiary">安装到{{ targetLabel }}</p>
         </div>
         <button
           class="rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-hover-bg hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
@@ -27,7 +27,7 @@
       <div class="max-h-[65vh] overflow-y-auto px-6 py-5">
         <BotPermissionReview
           :bot-name="bot.name"
-          target-label="我的私聊"
+          :target-label="targetLabel"
           :requested-capabilities="bot.requested_capabilities ?? []"
           :initial-capabilities="installation?.granted_capabilities"
           @change="handlePermissionChange"
@@ -51,7 +51,7 @@
             v-if="installing"
             class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
           />
-          {{ installing ? '保存中' : installation ? '保存授权并开始对话' : '授权并开始对话' }}
+          {{ installing ? '保存中' : installation ? confirmLabel : installLabel }}
         </button>
       </footer>
     </section>
@@ -59,14 +59,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { BsX } from 'vue-icons-plus/bs';
 import type { Bot, BotDeployment } from '../../../../models/types';
 import { useBots } from '../../../../composables/useBots';
 import { useAuthController } from '../../../../controllers/authController';
 import BotPermissionReview from './BotPermissionReview.vue';
 
-const props = defineProps<{ bot: Bot; installation?: BotDeployment | null }>();
+const props = defineProps<{
+  bot: Bot;
+  installation?: BotDeployment | null;
+  targetType?: 'user' | 'conversation';
+  targetId?: string;
+  targetLabel?: string;
+}>();
 const emit = defineEmits<{
   installed: [];
   close: [];
@@ -78,6 +84,12 @@ const selectedCapabilities = ref<string[]>([]);
 const canConfirm = ref(false);
 const installing = ref(false);
 
+const targetType = computed(() => props.targetType ?? 'user');
+const targetLabel = computed(() => props.targetLabel ?? '我的私聊');
+const isConversation = computed(() => targetType.value === 'conversation');
+const installLabel = computed(() => (isConversation.value ? '授权并安装' : '授权并开始对话'));
+const confirmLabel = computed(() => (isConversation.value ? '保存授权' : '保存授权并开始对话'));
+
 function handlePermissionChange(capabilities: string[], allowed: boolean) {
   selectedCapabilities.value = capabilities;
   canConfirm.value = allowed;
@@ -85,7 +97,10 @@ function handlePermissionChange(capabilities: string[], allowed: boolean) {
 
 async function confirmInstall() {
   const userId = auth.currentUser?.id;
-  if (!userId || !canConfirm.value) return;
+  if (!canConfirm.value) return;
+
+  const resolvedTargetId = props.targetId ?? userId;
+  if (!resolvedTargetId) return;
 
   installing.value = true;
   const diagnosticsConsent = selectedCapabilities.value.includes('network:external')
@@ -98,8 +113,8 @@ async function confirmInstall() {
         diagnostics_consent: diagnosticsConsent,
       })
     : await installBot(props.bot.id, {
-        target_type: 'user',
-        target_id: userId,
+        target_type: targetType.value,
+        target_id: resolvedTargetId,
         granted_capabilities: selectedCapabilities.value,
         diagnostics_consent: diagnosticsConsent,
       });
