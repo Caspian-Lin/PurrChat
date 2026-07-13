@@ -28,26 +28,27 @@ const (
 
 // Close codes
 const (
-	CloseNormal          = 1000
-	CloseQueueOverflow   = 1013
-	CloseConnectionLimit = 1013
-	CloseServerShutdown  = 1001
-	CloseAuthFailure     = 1008
-	CloseMessageTooBig   = 1009
-	CloseProtocolError   = 1002
+	CloseNormal             = 1000
+	CloseQueueOverflow      = 1013
+	CloseConnectionLimit    = 1013
+	CloseConnectionReplaced = 4001
+	CloseServerShutdown     = 1001
+	CloseAuthFailure        = 1008
+	CloseMessageTooBig      = 1009
+	CloseProtocolError      = 1002
 )
 
 // HubConfig WebSocket Hub 配置
 type HubConfig struct {
-	MaxConnections     int
-	MaxUserConnections int
-	SendQueueSize      int
-	ReadLimit          int64
-	WriteTimeout       time.Duration
-	ReadTimeout        time.Duration
-	PingInterval       time.Duration
-	AllowedOrigins     []string
-	AllowQueryToken    bool
+	MaxConnections           int
+	MaxUserDeviceConnections int
+	SendQueueSize            int
+	ReadLimit                int64
+	WriteTimeout             time.Duration
+	ReadTimeout              time.Duration
+	PingInterval             time.Duration
+	AllowedOrigins           []string
+	AllowQueryToken          bool
 }
 
 // HubMetrics WebSocket 连接指标
@@ -125,6 +126,9 @@ func NewHub(cfg HubConfig) *Hub {
 	if cfg.SendQueueSize <= 0 {
 		cfg.SendQueueSize = 256
 	}
+	if cfg.MaxUserDeviceConnections <= 0 {
+		cfg.MaxUserDeviceConnections = 5
+	}
 	if cfg.ReadLimit <= 0 {
 		cfg.ReadLimit = 1 << 20
 	}
@@ -191,12 +195,12 @@ func (h *Hub) RegisterClient(client *Client) error {
 		return errors.New("server is at maximum capacity, please try again later")
 	}
 
-	userConnections := h.userClients[client.UserID]
-	if len(userConnections) >= h.config.MaxUserConnections {
-		oldestClient := userConnections[0]
-		logger.InfofWithCaller("User %s has %d connections, disconnecting oldest connection %s",
-			client.UserID, len(userConnections), oldestClient.ID)
-		oldestClient.close(CloseConnectionLimit, "max user connections exceeded")
+	deviceConnections := h.userDeviceClients[client.UserID][client.DeviceType]
+	if len(deviceConnections) >= h.config.MaxUserDeviceConnections {
+		oldestClient := deviceConnections[0]
+		logger.InfofWithCaller("User %s has %d %s connections, disconnecting oldest connection %s",
+			client.UserID, len(deviceConnections), client.DeviceType, oldestClient.ID)
+		oldestClient.close(CloseConnectionReplaced, "connection replaced by newer session")
 		h.removeClientLocked(oldestClient)
 	}
 
@@ -450,7 +454,7 @@ func (h *Hub) DisconnectOldestUserDevice(userID uuid.UUID, deviceType DeviceType
 	}
 
 	oldestClient := clients[0]
-	oldestClient.close(CloseNormal, "replaced by newer connection")
+	oldestClient.close(CloseConnectionReplaced, "connection replaced by newer session")
 	h.removeClientLocked(oldestClient)
 	logger.InfofWithCaller("Disconnected oldest client %s for user %s device type %s",
 		oldestClient.ID, userID, deviceType)
@@ -464,10 +468,10 @@ func (h *Hub) GetConnectionStats() map[string]interface{} {
 	defer h.mu.RUnlock()
 
 	stats := map[string]interface{}{
-		"total_connections":    len(h.clients),
-		"total_users":          len(h.userClients),
-		"max_connections":      h.config.MaxConnections,
-		"max_user_connections": h.config.MaxUserConnections,
+		"total_connections":           len(h.clients),
+		"total_users":                 len(h.userClients),
+		"max_connections":             h.config.MaxConnections,
+		"max_user_device_connections": h.config.MaxUserDeviceConnections,
 	}
 
 	deviceStats := make(map[DeviceType]int)

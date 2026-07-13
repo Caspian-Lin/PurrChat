@@ -197,15 +197,15 @@ func main() {
 	readTimeout, _ := time.ParseDuration(cfg.WebSocket.ReadTimeout)
 	pingInterval, _ := time.ParseDuration(cfg.WebSocket.PingInterval)
 	websocket.InitHub(websocket.HubConfig{
-		MaxConnections:     cfg.WebSocket.MaxConnections,
-		MaxUserConnections: cfg.WebSocket.MaxUserConnections,
-		SendQueueSize:      cfg.WebSocket.SendQueueSize,
-		ReadLimit:          cfg.WebSocket.ReadLimit,
-		WriteTimeout:       writeTimeout,
-		ReadTimeout:        readTimeout,
-		PingInterval:       pingInterval,
-		AllowedOrigins:     cfg.WebSocket.AllowedOrigins,
-		AllowQueryToken:    cfg.WebSocket.AllowQueryToken,
+		MaxConnections:           cfg.WebSocket.MaxConnections,
+		MaxUserDeviceConnections: cfg.WebSocket.MaxUserDeviceConnections,
+		SendQueueSize:            cfg.WebSocket.SendQueueSize,
+		ReadLimit:                cfg.WebSocket.ReadLimit,
+		WriteTimeout:             writeTimeout,
+		ReadTimeout:              readTimeout,
+		PingInterval:             pingInterval,
+		AllowedOrigins:           cfg.WebSocket.AllowedOrigins,
+		AllowQueryToken:          cfg.WebSocket.AllowQueryToken,
 	})
 	websocket.InitJWTSecret(cfg.JWT.Secret)
 
