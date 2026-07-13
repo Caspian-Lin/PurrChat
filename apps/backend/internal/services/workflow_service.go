@@ -303,7 +303,7 @@ func validateMechanismBelongsToBot(bot *models.Bot, mechanismID string) error {
 // ─── Go 端基础结构校验 ─────────────────────────────────────────
 
 func validateDocumentStructure(raw json.RawMessage) []models.ValidationResultItem {
-	var issues []models.ValidationResultItem
+	issues := make([]models.ValidationResultItem, 0)
 
 	if len(raw) == 0 {
 		issues = append(issues, models.ValidationResultItem{
