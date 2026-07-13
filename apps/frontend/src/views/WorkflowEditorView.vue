@@ -614,8 +614,10 @@ async function passValidationGate(action: string): Promise<boolean> {
   }
 
   const serverResult = await api.validateWorkflow(botId, mechanismId, workflowDocument.value);
+  // 空 Go slice 在旧响应中可能被编码为 null；校验通过时应按空数组处理。
+  const serverIssues = Array.isArray(serverResult.issues) ? serverResult.issues : [];
   const serverGate = evaluateWorkflowGate(
-    { issues: serverResult.issues.map((issue) => ({ ...issue, nodeId: issue.node_id })) },
+    { issues: serverIssues.map((issue) => ({ ...issue, nodeId: issue.node_id })) },
     (message) => window.confirm(message)
   );
   if (!serverGate.allowed) {

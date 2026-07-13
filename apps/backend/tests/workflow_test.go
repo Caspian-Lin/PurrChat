@@ -142,6 +142,7 @@ func TestWorkflowAPI(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, resp.Valid)
 		assert.Len(t, resp.Issues, 0)
+		assert.NotNil(t, resp.Issues)
 	})
 
 	t.Run("validate_invalid_document", func(t *testing.T) {
