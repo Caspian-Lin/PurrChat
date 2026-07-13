@@ -56,8 +56,11 @@ export interface ConversationMemberRemovedData {
   removed_by: string;
 }
 
-class WebSocketService {
+const CLOSE_CONNECTION_REPLACED = 4001;
+
+export class WebSocketService {
   private ws: WebSocket | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
   private baseReconnectDelay = 1000;
@@ -92,11 +95,15 @@ class WebSocketService {
 
   // 连接WebSocket（token 通过 Cookie 或子协议传递，不再通过 URL query）
   connect() {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      logger.log('WebSocket already connected');
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)
+    ) {
+      logger.log('WebSocket connection already active');
       return;
     }
 
+    this.clearReconnectTimer();
     this.connecting.value = true;
     this.connectionStore.setConnecting(true);
     this.isManualClose = false;
@@ -122,10 +129,11 @@ class WebSocketService {
         this.ws = new WebSocket(wsUrl);
       }
 
-      this.ws.onopen = this.handleOpen.bind(this);
-      this.ws.onmessage = this.handleMessage.bind(this);
-      this.ws.onerror = this.handleError.bind(this);
-      this.ws.onclose = this.handleClose.bind(this);
+      const socket = this.ws;
+      socket.onopen = () => this.handleOpen(socket);
+      socket.onmessage = (event) => this.handleMessage(socket, event);
+      socket.onerror = (event) => this.handleError(socket, event);
+      socket.onclose = (event) => this.handleClose(socket, event);
     } catch (error) {
       logger.error('Failed to create WebSocket connection', error);
       this.connecting.value = false;
@@ -137,8 +145,10 @@ class WebSocketService {
   // 断开连接
   disconnect() {
     this.isManualClose = true;
+    this.shouldReconnect = false;
+    this.clearReconnectTimer();
     if (this.ws) {
-      this.ws.close();
+      this.ws.close(1000, 'client disconnect');
       this.ws = null;
     }
     this.connected.value = false;
@@ -185,8 +195,14 @@ class WebSocketService {
   }
 
   // 处理连接打开
-  private handleOpen() {
+  private handleOpen(socket: WebSocket) {
+    if (socket !== this.ws) {
+      socket.close(1000, 'superseded connection');
+      return;
+    }
+
     logger.log('WebSocket connected');
+    this.clearReconnectTimer();
     this.connected.value = true;
     this.connecting.value = false;
     this.connectionStore.setConnected(true);
@@ -198,7 +214,11 @@ class WebSocketService {
   }
 
   // 处理接收到的消息
-  private handleMessage(event: MessageEvent) {
+  private handleMessage(socket: WebSocket, event: MessageEvent) {
+    if (socket !== this.ws) {
+      return;
+    }
+
     try {
       const message: WebSocketMessage = JSON.parse(event.data);
       logger.log('WebSocket message received', message);
@@ -214,14 +234,23 @@ class WebSocketService {
   }
 
   // 处理连接错误
-  private handleError(error: Event) {
+  private handleError(socket: WebSocket, error: Event) {
+    if (socket !== this.ws) {
+      return;
+    }
+
     logger.error('WebSocket error', error);
     this.connecting.value = false;
     this.connectionStore.setConnecting(false);
   }
 
   // 处理连接关闭
-  private handleClose(event: CloseEvent) {
+  private handleClose(socket: WebSocket, event: CloseEvent) {
+    if (socket !== this.ws) {
+      return;
+    }
+
+    this.ws = null;
     logger.log('WebSocket closed', { code: event.code, reason: event.reason });
     this.connected.value = false;
     this.connecting.value = false;
@@ -232,6 +261,13 @@ class WebSocketService {
     if (event.code === 1008) {
       this.shouldReconnect = false;
       logger.error('WebSocket auth failure, not reconnecting');
+      return;
+    }
+
+    // 4001 = 当前连接已被同一用户的新连接替代。重连会继续淘汰其他连接，形成循环。
+    if (event.code === CLOSE_CONNECTION_REPLACED) {
+      this.shouldReconnect = false;
+      logger.warn('WebSocket connection replaced by a newer session, not reconnecting');
       return;
     }
 
@@ -247,6 +283,10 @@ class WebSocketService {
 
   // 安排重连 — 指数退避 + jitter
   private scheduleReconnect() {
+    if (this.reconnectTimer || !this.shouldReconnect || this.isManualClose) {
+      return;
+    }
+
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       logger.error('Max reconnection attempts reached');
       return;
@@ -268,12 +308,20 @@ class WebSocketService {
       `Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`
     );
 
-    setTimeout(() => {
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       const auth = useAuthStore();
       if (auth.isAuthenticated && auth.user) {
         this.connect();
       }
     }, delay);
+  }
+
+  private clearReconnectTimer() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
   }
 
   // 处理新消息

@@ -116,7 +116,7 @@ func (r *botInstallationRepository) FindByIDWithApp(ctx context.Context, id uuid
         SELECT i.id, i.app_id, i.installed_by, i.target_type, i.target_id,
                i.granted_capabilities, i.diagnostics_consent, i.status, i.config, i.installed_at, i.updated_at,
                b.id, b.owner_id, b.name, b.avatar_url, b.description, b.status, b.visibility, b.mechanism_config,
-               b.bot_type, b.discoverability, b.is_system, b.published_version, b.requested_capabilities,
+               b.bot_type, b.discoverability, b.is_system, b.requested_capabilities,
                b.created_at, b.updated_at
         FROM bot_installations i
         JOIN bots b ON i.app_id = b.id
@@ -128,7 +128,7 @@ func (r *botInstallationRepository) FindByIDWithApp(ctx context.Context, id uuid
 		&inst.ID, &inst.AppID, &inst.InstalledBy, &inst.TargetType, &inst.TargetID,
 		&inst.GrantedCapabilities, &inst.DiagnosticsConsent, &inst.Status, &inst.Config, &inst.InstalledAt, &inst.UpdatedAt,
 		&bot.ID, &bot.OwnerID, &bot.Name, &bot.AvatarURL, &bot.Description, &bot.Status, &bot.Visibility, &bot.MechanismConfig,
-		&bot.BotType, &bot.Discoverability, &bot.IsSystem, &bot.PublishedVersion, &bot.RequestedCapabilities,
+		&bot.BotType, &bot.Discoverability, &bot.IsSystem, &bot.RequestedCapabilities,
 		&bot.CreatedAt, &bot.UpdatedAt,
 	)
 	if err != nil {

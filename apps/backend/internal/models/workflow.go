@@ -7,10 +7,11 @@ import (
 	"github.com/google/uuid"
 )
 
-// WorkflowVersion 已发布的工作流版本
+// WorkflowVersion 已发布的工作流版本（按 mechanism 隔离）
 type WorkflowVersion struct {
 	ID           uuid.UUID       `json:"id"`
 	BotID        uuid.UUID       `json:"bot_id"`
+	MechanismID  string          `json:"mechanism_id"`
 	Revision     int             `json:"revision"`
 	Document     json.RawMessage `json:"document"`
 	Capabilities []string        `json:"capabilities"`
@@ -18,29 +19,29 @@ type WorkflowVersion struct {
 	PublishedAt  time.Time       `json:"published_at"`
 }
 
-// UpdateWorkflowRequest PUT /api/bots/:id/workflow
+// UpdateWorkflowRequest PUT /api/bots/:id/mechanisms/:mechanismId/workflow
 type UpdateWorkflowRequest struct {
 	Revision int             `json:"revision"`
 	Document json.RawMessage `json:"document"`
 }
 
-// ValidateWorkflowRequest POST /api/bots/:id/workflow/validate
+// ValidateWorkflowRequest POST /api/bots/:id/mechanisms/:mechanismId/workflow/validate
 type ValidateWorkflowRequest struct {
 	Document json.RawMessage `json:"document"`
 }
 
-// PublishWorkflowRequest POST /api/bots/:id/workflow/publish
+// PublishWorkflowRequest POST /api/bots/:id/mechanisms/:mechanismId/workflow/publish
 type PublishWorkflowRequest struct {
 	Revision int `json:"revision"`
 }
 
-// TestRunWorkflowRequest POST /api/bots/:id/workflow/test-runs
+// TestRunWorkflowRequest POST /api/bots/:id/mechanisms/:mechanismId/workflow/test-runs
 type TestRunWorkflowRequest struct {
 	Message  string          `json:"message"`
 	Document json.RawMessage `json:"document,omitempty"`
 }
 
-// WorkflowDocumentResponse GET /api/bots/:id/workflow
+// WorkflowDocumentResponse GET /api/bots/:id/mechanisms/:mechanismId/workflow
 type WorkflowDocumentResponse struct {
 	Document     json.RawMessage `json:"document"`
 	Revision     int             `json:"revision"`

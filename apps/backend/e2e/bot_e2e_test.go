@@ -384,14 +384,20 @@ func createAndPublishBot(t *testing.T, owner *apiClient, suffix, document string
 		"name": "E2E Bot " + suffix, "description": "black-box test bot", "discoverability": "listed",
 	}, http.StatusOK, &created)
 
+	// mechanism 级工作流需要归属一个 mechanism，先配置 mechanism_config
+	owner.doJSON(t, http.MethodPut, "/api/bots/"+created.ID, map[string]any{
+		"mechanism_config": json.RawMessage(`{"mechanisms":[{"id":"mech_e2e","name":"E2E","enabled":true,"trigger":{"type":"rule","rules":[]},"reply":{"type":"workflow","workflow":{"events":[],"connections":[],"end_conditions":[{"type":"max_rounds","value":5}]}}}]}`),
+	}, http.StatusOK, nil)
+
+	const mechanismID = "mech_e2e"
 	var draft struct {
 		Revision int `json:"revision"`
 	}
-	owner.doJSON(t, http.MethodPut, "/api/bots/"+created.ID+"/workflow", map[string]any{
+	owner.doJSON(t, http.MethodPut, "/api/bots/"+created.ID+"/mechanisms/"+mechanismID+"/workflow", map[string]any{
 		"revision": 0, "document": json.RawMessage(document),
 	}, http.StatusOK, &draft)
 	require.Equal(t, 1, draft.Revision)
-	owner.doJSON(t, http.MethodPost, "/api/bots/"+created.ID+"/workflow/publish", map[string]any{
+	owner.doJSON(t, http.MethodPost, "/api/bots/"+created.ID+"/mechanisms/"+mechanismID+"/workflow/publish", map[string]any{
 		"revision": draft.Revision,
 	}, http.StatusOK, nil)
 	return created

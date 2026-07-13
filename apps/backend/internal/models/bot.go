@@ -34,12 +34,9 @@ type Bot struct {
 	Status                BotStatus       `json:"status"`
 	Visibility            BotVisibility   `json:"visibility"` // deprecated, #36 迁移后移除
 	MechanismConfig       json.RawMessage `json:"mechanism_config"`
-	WorkflowDocument      json.RawMessage `json:"workflow_document,omitempty"`
-	WorkflowRevision      int             `json:"workflow_revision"`
 	BotType               BotType         `json:"bot_type"`
 	Discoverability       Discoverability `json:"discoverability"`
 	IsSystem              bool            `json:"is_system"`
-	PublishedVersion      *int            `json:"published_version,omitempty"`
 	RequestedCapabilities []string        `json:"requested_capabilities"`
 	AllowedEndpoints      []string        `json:"allowed_endpoints"`
 	CreatedAt             time.Time       `json:"created_at"`
@@ -51,6 +48,7 @@ type CreateBotRequest struct {
 	Name            string          `json:"name" binding:"required,min=1,max=40"`
 	AvatarURL       string          `json:"avatar_url" binding:"omitempty,uri"`
 	Description     string          `json:"description" binding:"omitempty,max=500"`
+	BotType         BotType         `json:"bot_type" binding:"omitempty,oneof=builtin workflow external"`
 	Discoverability Discoverability `json:"discoverability" binding:"omitempty,oneof=unlisted listed featured"`
 	// Visibility deprecated,兼容旧客户端;若传则映射到 discoverability
 	Visibility BotVisibility `json:"visibility" binding:"omitempty,oneof=private public global"`
@@ -79,18 +77,12 @@ type UpdateDeploymentStatusRequest struct {
 	Status         string    `json:"status" binding:"required,oneof=active paused"`
 }
 
-// ActivateWorkflowRequest 激活/停用工作流请求
-type ActivateWorkflowRequest struct {
-	ConversationID uuid.UUID `json:"conversation_id" binding:"required,uuid"`
-}
-
 // PublicBotDetail 公开 Bot 详情（含统计数据）
 type PublicBotDetail struct {
 	Bot
 	DeploymentCount int    `json:"deployment_count"`
 	OwnerName       string `json:"owner_name"`
 	TriggerSummary  string `json:"trigger_summary"`
-	ReplyType       string `json:"reply_type"`
 }
 
 // PaginatedSearchResult 分页搜索结果

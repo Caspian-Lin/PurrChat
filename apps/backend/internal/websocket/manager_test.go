@@ -17,10 +17,10 @@ import (
 )
 
 func TestNewHub(t *testing.T) {
-	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserConnections: 3, SendQueueSize: 64})
+	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserDeviceConnections: 5, SendQueueSize: 64})
 	assert.NotNil(t, hub)
 	assert.Equal(t, 100, hub.config.MaxConnections)
-	assert.Equal(t, 3, hub.config.MaxUserConnections)
+	assert.Equal(t, 5, hub.config.MaxUserDeviceConnections)
 	assert.NotNil(t, hub.clients)
 	assert.NotNil(t, hub.userClients)
 	assert.NotNil(t, hub.metrics)
@@ -28,6 +28,7 @@ func TestNewHub(t *testing.T) {
 
 func TestHubConfigDefaults(t *testing.T) {
 	hub := NewHub(HubConfig{})
+	assert.Equal(t, 5, hub.config.MaxUserDeviceConnections)
 	assert.Equal(t, 256, hub.config.SendQueueSize)
 	assert.Equal(t, int64(1<<20), hub.config.ReadLimit)
 	assert.Equal(t, 10*time.Second, hub.config.WriteTimeout)
@@ -63,7 +64,7 @@ func TestClientCloseOnce(t *testing.T) {
 }
 
 func TestRegisterAndUnregister(t *testing.T) {
-	hub := NewHub(HubConfig{MaxConnections: 10, MaxUserConnections: 3, SendQueueSize: 64})
+	hub := NewHub(HubConfig{MaxConnections: 10, MaxUserDeviceConnections: 5, SendQueueSize: 64})
 	go hub.Run()
 	defer hub.Shutdown()
 
@@ -87,7 +88,7 @@ func TestRegisterAndUnregister(t *testing.T) {
 }
 
 func TestMaxConnections(t *testing.T) {
-	hub := NewHub(HubConfig{MaxConnections: 2, MaxUserConnections: 5, SendQueueSize: 64})
+	hub := NewHub(HubConfig{MaxConnections: 2, MaxUserDeviceConnections: 5, SendQueueSize: 64})
 	go hub.Run()
 	defer hub.Shutdown()
 
@@ -110,8 +111,8 @@ func TestMaxConnections(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestMaxUserConnectionsEvictsOldest(t *testing.T) {
-	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserConnections: 2, SendQueueSize: 64})
+func TestMaxUserDeviceConnectionsEvictsOldestOfSameDeviceType(t *testing.T) {
+	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserDeviceConnections: 2, SendQueueSize: 64})
 	go hub.Run()
 	defer hub.Shutdown()
 
@@ -127,10 +128,39 @@ func TestMaxUserConnectionsEvictsOldest(t *testing.T) {
 
 	assert.Equal(t, 2, hub.GetUserConnectionCount(userID))
 	assert.Equal(t, 2, hub.GetUserDeviceConnectionCount(userID, DeviceTypeWeb))
+	assert.Equal(t, CloseConnectionReplaced, c1.closeCode)
+	assert.Equal(t, "connection replaced by newer session", c1.closeReason)
+	select {
+	case <-c1.done:
+	default:
+		t.Fatal("expected oldest connection to be closed")
+	}
+}
+
+func TestMaxUserDeviceConnectionsCountsDeviceTypesSeparately(t *testing.T) {
+	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserDeviceConnections: 2, SendQueueSize: 64})
+	go hub.Run()
+	defer hub.Shutdown()
+
+	userID := uuid.New()
+	web1 := &Client{ID: uuid.New(), UserID: userID, Send: make(chan []byte, 64), DeviceType: DeviceTypeWeb}
+	web2 := &Client{ID: uuid.New(), UserID: userID, Send: make(chan []byte, 64), DeviceType: DeviceTypeWeb}
+	desktop1 := &Client{ID: uuid.New(), UserID: userID, Send: make(chan []byte, 64), DeviceType: DeviceTypeDesktop}
+	desktop2 := &Client{ID: uuid.New(), UserID: userID, Send: make(chan []byte, 64), DeviceType: DeviceTypeDesktop}
+
+	for _, client := range []*Client{web1, web2, desktop1, desktop2} {
+		require.NoError(t, hub.RegisterClient(client))
+	}
+
+	assert.Equal(t, 4, hub.GetUserConnectionCount(userID))
+	assert.Equal(t, 2, hub.GetUserDeviceConnectionCount(userID, DeviceTypeWeb))
+	assert.Equal(t, 2, hub.GetUserDeviceConnectionCount(userID, DeviceTypeDesktop))
+	assert.Equal(t, 0, web1.closeCode)
+	assert.Equal(t, 0, desktop1.closeCode)
 }
 
 func TestConcurrentRegisterUnregister(t *testing.T) {
-	hub := NewHub(HubConfig{MaxConnections: 1000, MaxUserConnections: 10, SendQueueSize: 64})
+	hub := NewHub(HubConfig{MaxConnections: 1000, MaxUserDeviceConnections: 10, SendQueueSize: 64})
 	go hub.Run()
 	defer hub.Shutdown()
 
@@ -154,7 +184,7 @@ func TestConcurrentRegisterUnregister(t *testing.T) {
 }
 
 func TestConcurrentBroadcast(t *testing.T) {
-	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserConnections: 10, SendQueueSize: 64})
+	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserDeviceConnections: 10, SendQueueSize: 64})
 	go hub.Run()
 	defer hub.Shutdown()
 
@@ -188,7 +218,7 @@ func TestConcurrentBroadcast(t *testing.T) {
 }
 
 func TestBroadcastQueueOverflowDisconnects(t *testing.T) {
-	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserConnections: 10, SendQueueSize: 2})
+	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserDeviceConnections: 10, SendQueueSize: 2})
 	go hub.Run()
 	defer hub.Shutdown()
 
@@ -212,7 +242,7 @@ func TestBroadcastQueueOverflowDisconnects(t *testing.T) {
 }
 
 func TestSendToUser(t *testing.T) {
-	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserConnections: 10, SendQueueSize: 64})
+	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserDeviceConnections: 10, SendQueueSize: 64})
 	go hub.Run()
 	defer hub.Shutdown()
 
@@ -237,7 +267,7 @@ func TestSendToUser(t *testing.T) {
 }
 
 func TestShutdown(t *testing.T) {
-	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserConnections: 10, SendQueueSize: 64})
+	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserDeviceConnections: 10, SendQueueSize: 64})
 	go hub.Run()
 
 	for i := 0; i < 5; i++ {
@@ -260,7 +290,7 @@ func TestShutdown(t *testing.T) {
 }
 
 func TestGetConnectionStats(t *testing.T) {
-	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserConnections: 10, SendQueueSize: 64})
+	hub := NewHub(HubConfig{MaxConnections: 100, MaxUserDeviceConnections: 10, SendQueueSize: 64})
 
 	userID := uuid.New()
 	client := &Client{
@@ -323,7 +353,7 @@ func wsURL(server *httptest.Server) string {
 }
 
 func TestWSConnectionRequiresToken(t *testing.T) {
-	_, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserConnections: 3})
+	_, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserDeviceConnections: 5})
 
 	_, resp, err := websocket.DefaultDialer.Dial(wsURL(server), nil)
 	require.Error(t, err)
@@ -331,7 +361,7 @@ func TestWSConnectionRequiresToken(t *testing.T) {
 }
 
 func TestWSConnectionWithCookie(t *testing.T) {
-	_, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserConnections: 3})
+	_, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserDeviceConnections: 5})
 
 	token := generateTestToken(t)
 	dialer := websocket.Dialer{}
@@ -344,8 +374,39 @@ func TestWSConnectionWithCookie(t *testing.T) {
 	defer conn.Close()
 }
 
+func TestWSNewSameDeviceConnectionReplacesOldestWithoutRetryCode(t *testing.T) {
+	hub, _, server := setupTestHub(t, HubConfig{
+		MaxConnections:           10,
+		MaxUserDeviceConnections: 1,
+		SendQueueSize:            64,
+	})
+
+	token := generateTestToken(t)
+	header := http.Header{}
+	header.Add("Cookie", "purrchat_token="+token)
+	header.Set("User-Agent", "Mozilla/5.0 Chrome/149.0")
+
+	oldest, _, err := websocket.DefaultDialer.Dial(wsURL(server), header)
+	require.NoError(t, err)
+	defer oldest.Close()
+
+	newest, _, err := websocket.DefaultDialer.Dial(wsURL(server), header)
+	require.NoError(t, err)
+	defer newest.Close()
+
+	_, _, err = oldest.ReadMessage()
+	require.Error(t, err)
+	var closeErr *websocket.CloseError
+	require.ErrorAs(t, err, &closeErr)
+	assert.Equal(t, CloseConnectionReplaced, closeErr.Code)
+	assert.Equal(t, "connection replaced by newer session", closeErr.Text)
+	assert.Eventually(t, func() bool {
+		return hub.GetClientCount() == 1
+	}, time.Second, 10*time.Millisecond)
+}
+
 func TestWSConnectionWithSubprotocol(t *testing.T) {
-	_, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserConnections: 3})
+	_, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserDeviceConnections: 5})
 
 	token := generateTestToken(t)
 	header := http.Header{}
@@ -357,7 +418,7 @@ func TestWSConnectionWithSubprotocol(t *testing.T) {
 }
 
 func TestWSQueryTokenRejectedByDefault(t *testing.T) {
-	_, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserConnections: 3})
+	_, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserDeviceConnections: 5})
 
 	token := generateTestToken(t)
 	_, resp, err := websocket.DefaultDialer.Dial(wsURL(server)+"?token="+token, nil)
@@ -367,9 +428,9 @@ func TestWSQueryTokenRejectedByDefault(t *testing.T) {
 
 func TestWSOriginRejected(t *testing.T) {
 	_, _, server := setupTestHub(t, HubConfig{
-		MaxConnections:     10,
-		MaxUserConnections: 3,
-		AllowedOrigins:     []string{"https://allowed.com"},
+		MaxConnections:           10,
+		MaxUserDeviceConnections: 5,
+		AllowedOrigins:           []string{"https://allowed.com"},
 	})
 
 	token := generateTestToken(t)
@@ -385,9 +446,9 @@ func TestWSOriginRejected(t *testing.T) {
 
 func TestWSOriginAllowed(t *testing.T) {
 	_, _, server := setupTestHub(t, HubConfig{
-		MaxConnections:     10,
-		MaxUserConnections: 3,
-		AllowedOrigins:     []string{"https://allowed.com"},
+		MaxConnections:           10,
+		MaxUserDeviceConnections: 5,
+		AllowedOrigins:           []string{"https://allowed.com"},
 	})
 
 	token := generateTestToken(t)
@@ -402,7 +463,7 @@ func TestWSOriginAllowed(t *testing.T) {
 }
 
 func TestWSEachMessageSeparateFrame(t *testing.T) {
-	hub, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserConnections: 3, SendQueueSize: 64})
+	hub, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserDeviceConnections: 5, SendQueueSize: 64})
 
 	token := generateTestToken(t)
 	header := http.Header{}
@@ -437,10 +498,10 @@ func TestWSEachMessageSeparateFrame(t *testing.T) {
 
 func TestWSMessageTooBig(t *testing.T) {
 	_, _, server := setupTestHub(t, HubConfig{
-		MaxConnections:     10,
-		MaxUserConnections: 3,
-		ReadLimit:          64,
-		SendQueueSize:      64,
+		MaxConnections:           10,
+		MaxUserDeviceConnections: 5,
+		ReadLimit:                64,
+		SendQueueSize:            64,
 	})
 
 	token := generateTestToken(t)
@@ -462,7 +523,7 @@ func TestWSMessageTooBig(t *testing.T) {
 }
 
 func TestWSGracefulShutdown(t *testing.T) {
-	hub, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserConnections: 3})
+	hub, _, server := setupTestHub(t, HubConfig{MaxConnections: 10, MaxUserDeviceConnections: 5})
 
 	token := generateTestToken(t)
 	header := http.Header{}
@@ -485,12 +546,12 @@ func TestWSGracefulShutdown(t *testing.T) {
 
 func TestWSPingPong(t *testing.T) {
 	cfg := HubConfig{
-		MaxConnections:     10,
-		MaxUserConnections: 3,
-		PingInterval:       100 * time.Millisecond,
-		ReadTimeout:        500 * time.Millisecond,
-		WriteTimeout:       500 * time.Millisecond,
-		SendQueueSize:      64,
+		MaxConnections:           10,
+		MaxUserDeviceConnections: 5,
+		PingInterval:             100 * time.Millisecond,
+		ReadTimeout:              500 * time.Millisecond,
+		WriteTimeout:             500 * time.Millisecond,
+		SendQueueSize:            64,
 	}
 	_, _, server := setupTestHub(t, cfg)
 

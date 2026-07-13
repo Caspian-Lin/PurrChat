@@ -309,6 +309,7 @@
           <BotDebugPanel
             v-if="events.length > 0"
             :bot-id="botId"
+            :mechanism-id="mechanismId"
             :events="events"
             :connections="connections"
             :end-conditions="endConditions"
@@ -349,8 +350,8 @@ import { canConnect, getPortById, getDefaultPorts } from '../utils/portTypes';
 import { ensurePorts } from '../utils/eventPorts';
 import { documentToYaml, sanitizeForExport } from '@purrchat/workflow-engine';
 import {
+  createEmptyDocument,
   isWorkflowDocument,
-  migrateMechanismToDocument,
   type FlowConnection,
   type WorkflowDocument,
   type WorkflowEndCondition,
@@ -540,7 +541,7 @@ async function loadData() {
   try {
     const [botResult, workflowResult] = await Promise.all([
       api.getBot(botId),
-      api.getWorkflow(botId).catch((requestError: any) => {
+      api.getWorkflow(botId, mechanismId).catch((requestError: any) => {
         if (requestError.response?.status === 404) return null;
         throw requestError;
       }),
@@ -558,11 +559,9 @@ async function loadData() {
     let documentValue = workflowResult?.document;
     const loadedPersistedDocument =
       isWorkflowDocument(documentValue) && documentValue.spec.nodes.length > 0;
+    // mechanism 级工作流不再从 mechanism_config 迁移；首次访问以空文档为起点（#88）
     if (!isWorkflowDocument(documentValue) || documentValue.spec.nodes.length === 0) {
-      const migrationSource = found ? { mechanisms: [found] } : botResult.data.mechanism_config;
-      const migrated = migrateMechanismToDocument(migrationSource, botResult.data.name);
-      if (!isWorkflowDocument(documentValue) || migrated.spec.nodes.length > 0)
-        documentValue = migrated;
+      documentValue = createEmptyDocument(botResult.data.name);
     }
 
     if (!isWorkflowDocument(documentValue)) {
@@ -608,17 +607,27 @@ async function passValidationGate(action: string): Promise<boolean> {
     window.confirm(message)
   );
   if (!localGate.allowed) {
-    if (localGate.errors.length) showGateErrors(`${action}已被本地验证阻止`, localGate.errors);
+    if (localGate.errors.length) {
+      showGateErrors(`${action}已被本地验证阻止`, localGate.errors);
+    } else if (localGate.warnings.length) {
+      showGateErrors(`${action}已取消`, localGate.warnings);
+    }
     return false;
   }
 
-  const serverResult = await api.validateWorkflow(botId, workflowDocument.value);
+  const serverResult = await api.validateWorkflow(botId, mechanismId, workflowDocument.value);
+  // 空 Go slice 在旧响应中可能被编码为 null；校验通过时应按空数组处理。
+  const serverIssues = Array.isArray(serverResult.issues) ? serverResult.issues : [];
   const serverGate = evaluateWorkflowGate(
-    { issues: serverResult.issues.map((issue) => ({ ...issue, nodeId: issue.node_id })) },
+    { issues: serverIssues.map((issue) => ({ ...issue, nodeId: issue.node_id })) },
     (message) => window.confirm(message)
   );
   if (!serverGate.allowed) {
-    if (serverGate.errors.length) showGateErrors(`${action}已被服务端验证阻止`, serverGate.errors);
+    if (serverGate.errors.length) {
+      showGateErrors(`${action}已被服务端验证阻止`, serverGate.errors);
+    } else if (serverGate.warnings.length) {
+      showGateErrors(`${action}已取消`, serverGate.warnings);
+    }
     return false;
   }
   return true;
@@ -633,7 +642,7 @@ async function handleSave(): Promise<boolean> {
       return false;
     }
     workflowDocument.value.metadata.revision = revision.value + 1;
-    const response = await api.updateWorkflow(botId, {
+    const response = await api.updateWorkflow(botId, mechanismId, {
       revision: revision.value,
       document: workflowDocument.value,
     });
@@ -657,7 +666,7 @@ async function handlePublish() {
       saveState.value = 'error';
       return;
     }
-    const version = await api.publishWorkflow(botId, revision.value);
+    const version = await api.publishWorkflow(botId, mechanismId, revision.value);
     publishedRevision.value = version.revision;
     saveState.value = 'saved';
     if (showHistory.value) await loadVersions();
@@ -685,7 +694,9 @@ function apiErrorMessage(requestError: any, fallback: string): string {
   if (requestError.response?.status === 409) {
     return '版本冲突：服务端草稿已更新。你的本地内容已保留，请刷新版本后再决定如何处理。';
   }
-  return requestError.response?.data?.error || requestError.response?.data?.message || fallback;
+  const responseData = requestError.response?.data;
+  if (typeof responseData === 'string' && responseData.trim()) return responseData;
+  return responseData?.error || responseData?.message || requestError.message || fallback;
 }
 
 function goBack() {
@@ -898,7 +909,7 @@ async function toggleHistory() {
 async function loadVersions() {
   historyLoading.value = true;
   try {
-    versions.value = await api.listWorkflowVersions(botId);
+    versions.value = await api.listWorkflowVersions(botId, mechanismId);
   } catch (requestError: any) {
     operationError.value = apiErrorMessage(requestError, '版本历史加载失败');
   } finally {
@@ -911,7 +922,7 @@ async function restoreVersion(versionRevision: number) {
   if (!window.confirm(`将已发布的 r${versionRevision} 恢复为新草稿？恢复后不会自动发布。`)) return;
   historyLoading.value = true;
   try {
-    const response = await api.rollbackWorkflow(botId, versionRevision);
+    const response = await api.rollbackWorkflow(botId, mechanismId, versionRevision);
     applyWorkflowResponse(response);
     saveState.value = 'saved';
     showHistory.value = false;

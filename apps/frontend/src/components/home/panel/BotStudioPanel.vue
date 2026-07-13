@@ -178,10 +178,11 @@ onMounted(async () => {
   await Promise.all([botStore.loadBots(), botStore.loadDeployments()]);
 });
 
-async function handleCreateBot(data: { name: string; description?: string }) {
+async function handleCreateBot(data: { name: string; description?: string; bot_type?: string }) {
   const bot = await createBot({
     name: data.name,
     description: data.description || '',
+    bot_type: data.bot_type as any,
   });
   if (bot) {
     showCreateModal.value = false;

@@ -197,15 +197,15 @@ func main() {
 	readTimeout, _ := time.ParseDuration(cfg.WebSocket.ReadTimeout)
 	pingInterval, _ := time.ParseDuration(cfg.WebSocket.PingInterval)
 	websocket.InitHub(websocket.HubConfig{
-		MaxConnections:     cfg.WebSocket.MaxConnections,
-		MaxUserConnections: cfg.WebSocket.MaxUserConnections,
-		SendQueueSize:      cfg.WebSocket.SendQueueSize,
-		ReadLimit:          cfg.WebSocket.ReadLimit,
-		WriteTimeout:       writeTimeout,
-		ReadTimeout:        readTimeout,
-		PingInterval:       pingInterval,
-		AllowedOrigins:     cfg.WebSocket.AllowedOrigins,
-		AllowQueryToken:    cfg.WebSocket.AllowQueryToken,
+		MaxConnections:           cfg.WebSocket.MaxConnections,
+		MaxUserDeviceConnections: cfg.WebSocket.MaxUserDeviceConnections,
+		SendQueueSize:            cfg.WebSocket.SendQueueSize,
+		ReadLimit:                cfg.WebSocket.ReadLimit,
+		WriteTimeout:             writeTimeout,
+		ReadTimeout:              readTimeout,
+		PingInterval:             pingInterval,
+		AllowedOrigins:           cfg.WebSocket.AllowedOrigins,
+		AllowQueryToken:          cfg.WebSocket.AllowQueryToken,
 	})
 	websocket.InitJWTSecret(cfg.JWT.Secret)
 
@@ -332,21 +332,19 @@ func main() {
 		bots.DELETE("/:id/deploy", botHandler.UndeployBot)
 		bots.PUT("/:id/deploy/status", botHandler.UpdateDeploymentStatus)
 		bots.POST("/:id/conversation", botHandler.CreateBotConversation)
-		bots.POST("/:id/workflow/activate", botHandler.ActivateWorkflow)
-		bots.POST("/:id/workflow/deactivate", botHandler.DeactivateWorkflow)
 		bots.GET("/:id/deployable-conversations", botHandler.GetDeployableConversations)
 		bots.GET("/:id/call-logs", botHandler.GetBotCallLogs)
 		bots.POST("/:id/installations", installationHandler.CreateInstallation)
 		bots.GET("/:id/installations", installationHandler.ListByApp)
-		// Workflow Document API (#13)
-		bots.GET("/:id/workflow", workflowHandler.GetWorkflow)
-		bots.PUT("/:id/workflow", workflowHandler.UpdateWorkflow)
-		bots.POST("/:id/workflow/validate", workflowHandler.ValidateWorkflow)
-		bots.POST("/:id/workflow/publish", workflowHandler.PublishWorkflow)
-		bots.GET("/:id/workflow/versions", workflowHandler.ListPublishedVersions)
-		bots.POST("/:id/workflow/versions/:revision/rollback", workflowHandler.RollbackWorkflow)
-		bots.POST("/:id/workflow/test-runs", workflowHandler.TestRunWorkflow)
-		bots.POST("/:id/workflow/test-runs/step", workflowHandler.TestRunStep)
+		// Workflow Document API (#13) — mechanism 级 (#87)
+		bots.GET("/:id/mechanisms/:mechanismId/workflow", workflowHandler.GetWorkflow)
+		bots.PUT("/:id/mechanisms/:mechanismId/workflow", workflowHandler.UpdateWorkflow)
+		bots.POST("/:id/mechanisms/:mechanismId/workflow/validate", workflowHandler.ValidateWorkflow)
+		bots.POST("/:id/mechanisms/:mechanismId/workflow/publish", workflowHandler.PublishWorkflow)
+		bots.GET("/:id/mechanisms/:mechanismId/workflow/versions", workflowHandler.ListPublishedVersions)
+		bots.POST("/:id/mechanisms/:mechanismId/workflow/versions/:revision/rollback", workflowHandler.RollbackWorkflow)
+		bots.POST("/:id/mechanisms/:mechanismId/workflow/test-runs", workflowHandler.TestRunWorkflow)
+		bots.POST("/:id/mechanisms/:mechanismId/workflow/test-runs/step", workflowHandler.TestRunStep)
 		// Secret 管理(owner-only CRUD,不返回明文)
 		bots.GET("/:id/secrets", secretHandler.ListSecrets)
 		bots.PUT("/:id/secrets/:key", sensitiveRateLimit, secretHandler.SetSecret)

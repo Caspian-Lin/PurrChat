@@ -90,48 +90,6 @@ func deriveDiagnosticsConsent(requestedCapabilities []string) models.Diagnostics
 	return models.DiagnosticsDenied
 }
 
-// deriveCapabilitiesFromMechanismConfig 为仍使用 BotEditor mechanism_config 的 Bot
-// 推导运行权限。发布版 Workflow Document 有独立的发布期推导逻辑。
-func deriveCapabilitiesFromMechanismConfig(raw json.RawMessage) ([]string, error) {
-	config, err := botengine.ParseMechanismConfig(raw)
-	if err != nil {
-		return nil, err
-	}
-
-	derived := make(map[string]bool)
-	for _, mechanism := range config.Mechanisms {
-		if !mechanism.Enabled {
-			continue
-		}
-		derived[models.CapabilityReadTrigger] = true
-		switch mechanism.Reply.Type {
-		case "predefined":
-			derived[models.CapabilitySend] = true
-		case "llm":
-			derived[models.CapabilityReadHistory] = true
-			derived[models.CapabilityNetworkExternal] = true
-			derived[models.CapabilitySend] = true
-		case "workflow":
-			if mechanism.Reply.Workflow == nil {
-				continue
-			}
-			for _, event := range mechanism.Reply.Workflow.Events {
-				for _, capability := range models.GetNodeCapabilities(event.Type) {
-					derived[capability] = true
-				}
-			}
-		}
-	}
-
-	capabilities := make([]string, 0, len(derived))
-	for _, capability := range models.AllCapabilities {
-		if derived[capability] {
-			capabilities = append(capabilities, capability)
-		}
-	}
-	return capabilities, nil
-}
-
 // CreateBot 创建 Bot
 func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.CreateBotRequest) (*models.Bot, error) {
 	ownerUUID, err := uuid.Parse(ownerID)
@@ -154,6 +112,11 @@ func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.
 		}
 	}
 
+	botType := req.BotType
+	if botType == "" {
+		botType = models.BotTypeWorkflow
+	}
+
 	bot := &models.Bot{
 		OwnerID:         ownerUUID,
 		Name:            req.Name,
@@ -163,8 +126,13 @@ func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.
 		Visibility:      visibility,
 		Discoverability: discoverability,
 		IsSystem:        visibility == models.BotVisibilityGlobal,
-		BotType:         models.BotTypeWorkflow,
-		MechanismConfig: botengine.DefaultMechanismConfig(),
+		BotType:         botType,
+	}
+
+	if botType == models.BotTypeExternal {
+		bot.MechanismConfig = json.RawMessage(`{"mechanisms":[]}`)
+	} else {
+		bot.MechanismConfig = botengine.DefaultMechanismConfig()
 	}
 
 	// 在共享事务中创建 Bot、会话、enrollment 和 installation，防止半安装状态。
@@ -258,16 +226,13 @@ func (s *BotService) SearchPublicBotsPaginated(ctx context.Context, query string
 		return nil, err
 	}
 
-	// 填充 trigger_summary 和 reply_type（从 mechanism_config 中提取）
+	// 填充 trigger_summary（从 mechanism_config 中提取）
 	for _, bot := range bots {
 		mc, err := botengine.ParseMechanismConfig(bot.MechanismConfig)
 		if err == nil && len(mc.Mechanisms) > 0 {
-			// 使用第一个启用的机制生成摘要
 			for _, mech := range mc.Mechanisms {
 				if mech.Enabled {
-					triggerSummary, replySummary := botengine.GetMechanismSummary(mech)
-					bot.TriggerSummary = triggerSummary
-					bot.ReplyType = replySummary
+					bot.TriggerSummary = botengine.GetMechanismTriggerSummary(mech)
 					break
 				}
 			}
@@ -361,21 +326,11 @@ func (s *BotService) UpdateBot(ctx context.Context, botID string, userID string,
 	if req.Visibility != "" {
 		bot.Visibility = req.Visibility
 	}
-	capabilitiesChanged := false
 	if req.MechanismConfig != nil {
 		bot.MechanismConfig = req.MechanismConfig
-		if req.RequestedCapabilities == nil {
-			capabilities, deriveErr := deriveCapabilitiesFromMechanismConfig(req.MechanismConfig)
-			if deriveErr != nil {
-				return nil, fmt.Errorf("derive mechanism capabilities: %w", deriveErr)
-			}
-			bot.RequestedCapabilities = capabilities
-			capabilitiesChanged = true
-		}
 	}
 	if req.RequestedCapabilities != nil {
 		bot.RequestedCapabilities = req.RequestedCapabilities
-		capabilitiesChanged = true
 	}
 	if req.AllowedEndpoints != nil {
 		bot.AllowedEndpoints = req.AllowedEndpoints
@@ -385,7 +340,8 @@ func (s *BotService) UpdateBot(ctx context.Context, botID string, userID string,
 	if err != nil {
 		return nil, err
 	}
-	if capabilitiesChanged {
+	// 显式更新权限时同步 owner 安装；mechanism_config 不再自动推导可执行权限（#87）
+	if req.RequestedCapabilities != nil {
 		if _, syncErr := database.GetPool().Exec(ctx, `
 			UPDATE bot_installations
 			SET granted_capabilities = $1,
@@ -661,7 +617,7 @@ func (s *BotService) GetBotDeployments(ctx context.Context, userID string) ([]*m
 		}
 		botRows, bErr := database.GetPool().Query(ctx, `
 			SELECT id, owner_id, name, avatar_url, description, status, visibility, mechanism_config,
-			       bot_type, discoverability, is_system, published_version, requested_capabilities,
+			       bot_type, discoverability, is_system, requested_capabilities,
 			       allowed_endpoints, created_at, updated_at
 			FROM bots WHERE id = ANY($1)
 		`, appIDs)
@@ -671,7 +627,7 @@ func (s *BotService) GetBotDeployments(ctx context.Context, userID string) ([]*m
 				var b models.Bot
 				if sErr := botRows.Scan(
 					&b.ID, &b.OwnerID, &b.Name, &b.AvatarURL, &b.Description, &b.Status, &b.Visibility,
-					&b.MechanismConfig, &b.BotType, &b.Discoverability, &b.IsSystem, &b.PublishedVersion,
+					&b.MechanismConfig, &b.BotType, &b.Discoverability, &b.IsSystem,
 					&b.RequestedCapabilities, &b.AllowedEndpoints, &b.CreatedAt, &b.UpdatedAt,
 				); sErr == nil {
 					botMap[b.ID] = &b
@@ -718,58 +674,6 @@ func (s *BotService) UpdateDeploymentStatus(ctx context.Context, botID, userID s
 
 	inst.Status = models.InstallationStatus(req.Status)
 	return s.installationRepo.Update(ctx, inst)
-}
-
-// ActivateWorkflow 激活工作流
-func (s *BotService) ActivateWorkflow(ctx context.Context, botID, userID string, conversationID uuid.UUID) error {
-	userUUID, _ := uuid.Parse(userID)
-
-	// 验证安装存在
-	inst, err := s.installationRepo.FindByAppAndTarget(ctx, uuid.MustParse(botID), models.InstallationTargetConversation, conversationID)
-	if err != nil {
-		return errors.New("bot not installed to this conversation")
-	}
-
-	// 验证权限：安装者或 Bot owner 可以激活
-	if inst.InstalledBy != userUUID {
-		bot, err := s.botRepo.FindByID(ctx, uuid.MustParse(botID))
-		if err != nil || bot.OwnerID != userUUID {
-			return errors.New("not authorized")
-		}
-	}
-
-	// 检查该会话是否已有其他 Bot 的工作流活跃
-	installations, err := s.installationRepo.FindActiveByConversation(ctx, conversationID)
-	if err == nil {
-		for _, i := range installations {
-			if i.Status == models.InstallationActive && i.AppID.String() != botID {
-				return errors.New("another bot's workflow is already active in this conversation")
-			}
-		}
-	}
-
-	return nil // 实际激活由 BotEngine 处理
-}
-
-// DeactivateWorkflow 停用工作流
-func (s *BotService) DeactivateWorkflow(ctx context.Context, botID, userID string, conversationID uuid.UUID) error {
-	userUUID, _ := uuid.Parse(userID)
-
-	// 验证安装存在
-	inst, err := s.installationRepo.FindByAppAndTarget(ctx, uuid.MustParse(botID), models.InstallationTargetConversation, conversationID)
-	if err != nil {
-		return errors.New("bot not installed to this conversation")
-	}
-
-	// 验证权限
-	if inst.InstalledBy != userUUID {
-		bot, err := s.botRepo.FindByID(ctx, uuid.MustParse(botID))
-		if err != nil || bot.OwnerID != userUUID {
-			return errors.New("not authorized")
-		}
-	}
-
-	return nil // 实际停用由 BotEngine 处理
 }
 
 // CreateBotConversation 创建与 Bot 的私聊会话(幂等)

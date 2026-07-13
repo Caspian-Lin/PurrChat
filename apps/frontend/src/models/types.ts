@@ -332,6 +332,9 @@ export type BotStatus = 'active' | 'disabled';
 // Bot 可见性
 export type BotVisibility = 'private' | 'public' | 'global';
 
+// Bot 类型
+export type BotType = 'builtin' | 'workflow' | 'external';
+
 // Bot 模型
 export interface Bot {
   id: string;
@@ -340,15 +343,12 @@ export interface Bot {
   avatar_url: string;
   description: string;
   status: BotStatus;
+  bot_type: BotType;
   visibility: BotVisibility;
   discoverability?: 'unlisted' | 'listed' | 'featured';
   published_version?: number;
   requested_capabilities?: string[];
   mechanism_config?: MechanismConfig;
-  /** @deprecated 使用 mechanism_config */
-  trigger_config?: TriggerConfig;
-  /** @deprecated 使用 mechanism_config */
-  reply_config?: ReplyConfig;
   created_at: string;
   updated_at: string;
 }
@@ -436,7 +436,6 @@ export interface PublicBotDetail extends Bot {
   deployment_count: number;
   owner_name: string;
   trigger_summary: string;
-  reply_type: string;
 }
 
 // 分页搜索结果
@@ -461,6 +460,7 @@ export interface CreateBotRequest {
   name: string;
   avatar_url?: string;
   description?: string;
+  bot_type?: BotType;
   visibility?: BotVisibility;
 }
 
@@ -557,13 +557,12 @@ export interface MechanismConfig {
   mechanisms: Mechanism[];
 }
 
-// 单个机制 = 触发规则 + 回复设置
+// 单个机制 = 触发规则（回复行为由 mechanism 级工作流文档定义）
 export interface Mechanism {
   id: string;
   name: string;
   enabled: boolean;
   trigger: TriggerSpec;
-  reply: ReplySpec;
 }
 
 // 触发规格
@@ -729,6 +728,7 @@ export interface WorkflowDocumentResponse {
 export interface WorkflowVersion {
   id: string;
   bot_id: string;
+  mechanism_id: string;
   revision: number;
   document: import('@purrchat/workflow-types').WorkflowDocument;
   capabilities: string[];
@@ -784,4 +784,28 @@ export interface RunTrace {
   senderName?: string;
   waitingForStep?: boolean;
   session_id?: string;
+}
+
+// ===== Bot API Credential =====
+
+export interface BotAPICredential {
+  id: string;
+  bot_id: string;
+  name: string;
+  token_prefix: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BotAPICredentialSecret {
+  credential: BotAPICredential;
+  token: string;
+}
+
+export interface CreateBotAPICredentialRequest {
+  name: string;
+  expires_at?: string | null;
 }
