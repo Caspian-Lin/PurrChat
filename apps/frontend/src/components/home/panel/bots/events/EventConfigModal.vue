@@ -808,7 +808,10 @@ import {
   type WorkflowEvent,
   type FlowConnection,
 } from '@purrchat/workflow-types';
-import { PRODUCTION_NODE_MANIFEST } from '../../../../../utils/workflowDocument';
+import {
+  cloneWorkflowEvent,
+  PRODUCTION_NODE_MANIFEST,
+} from '../../../../../utils/workflowDocument';
 import VarReferencePicker from './VarReferencePicker.vue';
 
 interface Props {
@@ -1037,19 +1040,21 @@ watch(
   () => props.visible,
   () => {
     if (props.visible && props.editingEvent) {
+      // props 中的嵌套对象会被 Vue 包装为 Proxy，不能传给 structuredClone。
+      const editingEvent = cloneWorkflowEvent(props.editingEvent);
       Object.assign(form, {
-        id: props.editingEvent.id,
-        key: props.editingEvent.key,
-        type: props.editingEvent.type,
-        name: props.editingEvent.name,
-        config: structuredClone(props.editingEvent.config),
-        ports: [...(props.editingEvent.ports || getDefaultPorts(props.editingEvent.type))],
-        position: props.editingEvent.position ? { ...props.editingEvent.position } : undefined,
+        id: editingEvent.id,
+        key: editingEvent.key,
+        type: editingEvent.type,
+        name: editingEvent.name,
+        config: editingEvent.config,
+        ports: editingEvent.ports || getDefaultPorts(editingEvent.type),
+        position: editingEvent.position,
       });
       normalizeIfConfig();
       // 恢复自定义端口
       customPorts.length = 0;
-      const extracted = extractCustomPorts(props.editingEvent);
+      const extracted = extractCustomPorts(editingEvent);
       extracted.forEach((p) => customPorts.push(p));
     } else if (props.visible) {
       const type = PRODUCTION_NODE_MANIFEST[0].type;
