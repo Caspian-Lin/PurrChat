@@ -186,6 +186,11 @@ func (s *InstallationService) CreateInstallation(ctx context.Context, installerI
 		return nil, err
 	}
 
+	// 8. 群聊安装:广播 bot_deployed 系统消息与 WebSocket 事件
+	if req.TargetType == models.InstallationTargetConversation {
+		s.broadcastBotDeployed(ctx, bot, req.TargetID, installerUUID)
+	}
+
 	if s.noticeEmitter != nil {
 		s.noticeEmitter.NotifyInstallationInstalled(ctx, installation)
 	}
@@ -370,6 +375,7 @@ func (s *InstallationService) UninstallInstallation(ctx context.Context, request
 		if err := s.enrollmentRepo.DeleteByConversationAndUser(ctx, inst.TargetID, inst.AppID); err != nil {
 			logger.ErrorfWithCaller("[InstallationService] Failed to remove bot enrollment: %v", err)
 		}
+		s.broadcastBotUndeployed(ctx, inst)
 	}
 
 	if s.noticeEmitter != nil {
@@ -443,6 +449,74 @@ func (s *InstallationService) notifyExternalBotInstalled(ctx context.Context, bo
 					"bot_name":        bot.Name,
 					"conversation_id": conversationID.String(),
 					"installed_by":    installerID.String(),
+				})
+			}
+		}
+	}
+}
+
+// broadcastBotDeployed 向会话成员广播 bot_deployed 系统消息和 WebSocket 事件
+func (s *InstallationService) broadcastBotDeployed(ctx context.Context, bot *models.Bot, conversationID, installerID uuid.UUID) {
+	sysContent := &models.SystemMessageContent{
+		Type:    "bot_deployed",
+		BotID:   bot.ID.String(),
+		BotName: bot.Name,
+	}
+	sysJSON, _ := json.Marshal(sysContent)
+	sysMessage := &models.Message{
+		SenderID: bot.ID,
+		Content:  string(sysJSON),
+		MsgType:  models.MsgTypeSystem,
+	}
+	if err := s.messageRepo.InsertMessage(ctx, conversationID, sysMessage); err != nil {
+		logger.ErrorfWithCaller("[InstallationService] Failed to insert bot_deployed system message: %v", err)
+	}
+
+	if websocket.GlobalHub != nil {
+		members, err := s.enrollmentRepo.FindByConversationID(ctx, conversationID)
+		if err == nil {
+			for _, m := range members {
+				websocket.GlobalHub.SendToUser(m.UserID, "bot_deployed", map[string]any{
+					"bot_id":          bot.ID.String(),
+					"bot_name":        bot.Name,
+					"conversation_id": conversationID.String(),
+					"deployed_by":     installerID.String(),
+				})
+			}
+		}
+	}
+}
+
+// broadcastBotUndeployed 向会话成员广播 bot_undeployed 系统消息和 WebSocket 事件
+func (s *InstallationService) broadcastBotUndeployed(ctx context.Context, inst *models.BotInstallation) {
+	botName := ""
+	botID := inst.AppID
+	if inst.App != nil {
+		botName = inst.App.Name
+	}
+
+	sysContent := &models.SystemMessageContent{
+		Type:    "bot_undeployed",
+		BotID:   botID.String(),
+		BotName: botName,
+	}
+	sysJSON, _ := json.Marshal(sysContent)
+	sysMessage := &models.Message{
+		SenderID: botID,
+		Content:  string(sysJSON),
+		MsgType:  models.MsgTypeSystem,
+	}
+	if err := s.messageRepo.InsertMessage(ctx, inst.TargetID, sysMessage); err != nil {
+		logger.ErrorfWithCaller("[InstallationService] Failed to insert bot_undeployed system message: %v", err)
+	}
+
+	if websocket.GlobalHub != nil {
+		members, err := s.enrollmentRepo.FindByConversationID(ctx, inst.TargetID)
+		if err == nil {
+			for _, m := range members {
+				websocket.GlobalHub.SendToUser(m.UserID, "bot_undeployed", map[string]any{
+					"bot_id":          botID.String(),
+					"conversation_id": inst.TargetID.String(),
 				})
 			}
 		}
