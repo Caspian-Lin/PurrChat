@@ -4,12 +4,21 @@
       <header
         class="flex flex-wrap items-start justify-between gap-5 border-b border-border-subtle pb-6"
       >
-        <div class="max-w-2xl">
-          <p class="text-sm font-medium text-text-secondary">Bot Studio / Developer</p>
-          <h1 class="mt-2 text-2xl font-semibold tracking-[-0.02em]">OneBot API 支持矩阵</h1>
-          <p class="mt-2 text-sm leading-6 text-text-secondary">
-            此页面直接读取服务端协议 Registry，展示当前可用能力与兼容边界。
-          </p>
+        <div class="flex items-start gap-3 max-w-2xl">
+          <button
+            class="mt-1 flex-shrink-0 p-1.5 rounded-lg hover:bg-hover-bg text-text-tertiary hover:text-text-primary transition-colors"
+            title="返回 Bot Studio"
+            @click="$router.push('/bots')"
+          >
+            <BsArrowLeft :size="18" />
+          </button>
+          <div>
+            <p class="text-sm font-medium text-text-secondary">Bot Studio / Developer</p>
+            <h1 class="mt-2 text-2xl font-semibold tracking-[-0.02em]">OneBot API 支持矩阵</h1>
+            <p class="mt-2 text-sm leading-6 text-text-secondary">
+              此页面直接读取服务端协议 Registry，展示当前可用能力与兼容边界。
+            </p>
+          </div>
         </div>
         <button
           class="rounded-[var(--radius-sm,8px)] bg-bg-quaternary px-4 py-2 text-sm font-medium transition-colors hover:bg-hover-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
@@ -184,6 +193,7 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, ref } from 'vue';
+import { BsArrowLeft } from 'vue-icons-plus/bs';
 import { api } from '../models/api';
 import type {
   BotApiActionCapability,

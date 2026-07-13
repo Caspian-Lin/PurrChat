@@ -42,6 +42,9 @@ import type {
   WorkflowValidationResponse,
   WorkflowVersion,
   BotApiCapabilities,
+  BotAPICredential,
+  BotAPICredentialSecret,
+  CreateBotAPICredentialRequest,
 } from './types';
 import { getApiBaseUrl, getStorageApiBaseUrl, logger } from '../config/app';
 
@@ -387,6 +390,36 @@ export const api = {
   // 删除 Bot
   deleteBot: (botId: string): Promise<ApiResponse<void>> => {
     return apiClient.delete(`/api/bots/${botId}`).then((res) => res.data);
+  },
+
+  // ===== Bot API Credentials =====
+
+  listBotCredentials: (
+    botId: string
+  ): Promise<{ credentials: BotAPICredential[]; total: number }> => {
+    return apiClient.get(`/api/bots/${botId}/credentials`).then((res) => res.data);
+  },
+
+  createBotCredential: (
+    botId: string,
+    data: CreateBotAPICredentialRequest
+  ): Promise<BotAPICredentialSecret> => {
+    return apiClient.post(`/api/bots/${botId}/credentials`, data).then((res) => res.data);
+  },
+
+  rotateBotCredential: (
+    botId: string,
+    credentialId: string
+  ): Promise<BotAPICredentialSecret> => {
+    return apiClient
+      .post(`/api/bots/${botId}/credentials/${credentialId}/rotate`)
+      .then((res) => res.data);
+  },
+
+  revokeBotCredential: (botId: string, credentialId: string): Promise<BotAPICredential> => {
+    return apiClient
+      .delete(`/api/bots/${botId}/credentials/${credentialId}`)
+      .then((res) => res.data);
   },
 
   // 部署 Bot 到会话

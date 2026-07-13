@@ -29,6 +29,12 @@
           <div class="flex items-center gap-2">
             <span class="text-sm font-medium text-text-primary truncate">{{ bot.name }}</span>
             <span
+              v-if="bot.bot_type === 'external'"
+              class="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--theme-primary)]/10 text-[var(--theme-primary)] flex-shrink-0"
+            >
+              OneBot
+            </span>
+            <span
               v-if="bot.status === 'disabled'"
               class="text-[10px] px-1.5 py-0.5 rounded-full bg-bg-quaternary text-text-tertiary flex-shrink-0"
             >

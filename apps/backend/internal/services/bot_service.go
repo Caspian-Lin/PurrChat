@@ -112,6 +112,11 @@ func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.
 		}
 	}
 
+	botType := req.BotType
+	if botType == "" {
+		botType = models.BotTypeWorkflow
+	}
+
 	bot := &models.Bot{
 		OwnerID:         ownerUUID,
 		Name:            req.Name,
@@ -121,8 +126,13 @@ func (s *BotService) CreateBot(ctx context.Context, ownerID string, req *models.
 		Visibility:      visibility,
 		Discoverability: discoverability,
 		IsSystem:        visibility == models.BotVisibilityGlobal,
-		BotType:         models.BotTypeWorkflow,
-		MechanismConfig: botengine.DefaultMechanismConfig(),
+		BotType:         botType,
+	}
+
+	if botType == models.BotTypeExternal {
+		bot.MechanismConfig = json.RawMessage(`{"mechanisms":[]}`)
+	} else {
+		bot.MechanismConfig = botengine.DefaultMechanismConfig()
 	}
 
 	// 在共享事务中创建 Bot、会话、enrollment 和 installation，防止半安装状态。

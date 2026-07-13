@@ -48,6 +48,7 @@ type CreateBotRequest struct {
 	Name            string          `json:"name" binding:"required,min=1,max=40"`
 	AvatarURL       string          `json:"avatar_url" binding:"omitempty,uri"`
 	Description     string          `json:"description" binding:"omitempty,max=500"`
+	BotType         BotType         `json:"bot_type" binding:"omitempty,oneof=builtin workflow external"`
 	Discoverability Discoverability `json:"discoverability" binding:"omitempty,oneof=unlisted listed featured"`
 	// Visibility deprecated,兼容旧客户端;若传则映射到 discoverability
 	Visibility BotVisibility `json:"visibility" binding:"omitempty,oneof=private public global"`

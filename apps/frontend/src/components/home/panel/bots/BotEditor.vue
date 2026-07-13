@@ -179,8 +179,8 @@
           </div>
         </section>
 
-        <!-- 机制列表 -->
-        <section>
+        <!-- 机制列表（仅 workflow bot） -->
+        <section v-if="bot.bot_type !== 'external'">
           <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
             <BsGear :size="16" class="text-text-tertiary" />
             机制列表
@@ -225,6 +225,12 @@
             </button>
           </div>
         </section>
+
+        <!-- OneBot API 管理（仅 external bot） -->
+        <template v-if="bot.bot_type === 'external'">
+          <BotCredentialsPanel :bot-id="bot.id" />
+          <BotApiGuide :bot-id="bot.id" />
+        </template>
 
         <!-- 调用记录 -->
         <section class="mt-6">
@@ -279,6 +285,8 @@ import type {
 } from '../../../../models/types';
 import MechanismCard from './MechanismCard.vue';
 import BotCallLogs from './BotCallLogs.vue';
+import BotCredentialsPanel from './BotCredentialsPanel.vue';
+import BotApiGuide from './BotApiGuide.vue';
 import SaveButton from '../settings/SaveButton.vue';
 
 interface Props {
@@ -307,6 +315,7 @@ const visibilityOptions = [
 
 // 从 Bot 数据中提取机制列表
 function extractMechanisms(bot: Bot): Mechanism[] {
+  if (bot.bot_type === 'external') return [];
   if (bot.mechanism_config?.mechanisms?.length) {
     return bot.mechanism_config.mechanisms.map((m) => deepCloneMechanism(m));
   }
@@ -483,17 +492,20 @@ function handleImport() {
 async function handleSave() {
   saving.value = true;
   try {
-    const mechanismConfig: MechanismConfig = {
-      mechanisms: form.mechanisms.map((m) => deepCloneMechanism(m)),
-    };
-
-    emit('update', props.bot.id, {
+    const updateData: UpdateBotRequest = {
       name: form.name,
       description: form.description,
       visibility: form.visibility,
       status: form.status,
-      mechanism_config: mechanismConfig,
-    });
+    };
+
+    if (props.bot.bot_type !== 'external') {
+      updateData.mechanism_config = {
+        mechanisms: form.mechanisms.map((m) => deepCloneMechanism(m)),
+      };
+    }
+
+    emit('update', props.bot.id, updateData);
 
     baseline.value = serializeForm();
   } finally {
