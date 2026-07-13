@@ -605,7 +605,11 @@ async function passValidationGate(action: string): Promise<boolean> {
     window.confirm(message)
   );
   if (!localGate.allowed) {
-    if (localGate.errors.length) showGateErrors(`${action}已被本地验证阻止`, localGate.errors);
+    if (localGate.errors.length) {
+      showGateErrors(`${action}已被本地验证阻止`, localGate.errors);
+    } else if (localGate.warnings.length) {
+      showGateErrors(`${action}已取消`, localGate.warnings);
+    }
     return false;
   }
 
@@ -615,7 +619,11 @@ async function passValidationGate(action: string): Promise<boolean> {
     (message) => window.confirm(message)
   );
   if (!serverGate.allowed) {
-    if (serverGate.errors.length) showGateErrors(`${action}已被服务端验证阻止`, serverGate.errors);
+    if (serverGate.errors.length) {
+      showGateErrors(`${action}已被服务端验证阻止`, serverGate.errors);
+    } else if (serverGate.warnings.length) {
+      showGateErrors(`${action}已取消`, serverGate.warnings);
+    }
     return false;
   }
   return true;
@@ -679,7 +687,9 @@ function apiErrorMessage(requestError: any, fallback: string): string {
   if (requestError.response?.status === 409) {
     return '版本冲突：服务端草稿已更新。你的本地内容已保留，请刷新版本后再决定如何处理。';
   }
-  return requestError.response?.data?.error || requestError.response?.data?.message || fallback;
+  const responseData = requestError.response?.data;
+  if (typeof responseData === 'string' && responseData.trim()) return responseData;
+  return responseData?.error || responseData?.message || requestError.message || fallback;
 }
 
 function goBack() {
