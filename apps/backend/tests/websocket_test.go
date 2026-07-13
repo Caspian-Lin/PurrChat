@@ -26,7 +26,7 @@ func init() {
 
 // setupTestHub 设置测试用的Hub
 func setupTestHub(t *testing.T) *websocket.Hub {
-	hub := websocket.NewHub(websocket.HubConfig{MaxConnections: 100, MaxUserConnections: 3, SendQueueSize: 256})
+	hub := websocket.NewHub(websocket.HubConfig{MaxConnections: 100, MaxUserDeviceConnections: 5, SendQueueSize: 256})
 	go hub.Run()
 	return hub
 }
@@ -63,7 +63,7 @@ func TestHubRegisterClient(t *testing.T) {
 	userID := uuid.New()
 
 	// 测试1: 正常注册
-	createTestClient(t, hub, userID, websocket.DeviceTypeWeb)
+	client1 := createTestClient(t, hub, userID, websocket.DeviceTypeWeb)
 	assert.Equal(t, 1, hub.GetClientCount())
 	assert.Equal(t, 1, hub.GetUserConnectionCount(userID))
 
@@ -77,12 +77,13 @@ func TestHubRegisterClient(t *testing.T) {
 	assert.Equal(t, 3, hub.GetClientCount())
 	assert.Equal(t, 3, hub.GetUserConnectionCount(userID))
 
-	// 测试4: 尝试注册第四个客户端（应该断开最早的连接）
+	// 测试4: 不同设备类型分别计数，第四种设备不会淘汰已有连接
 	client4 := createTestClient(t, hub, userID, websocket.DeviceTypeTablet)
-	assert.Equal(t, 3, hub.GetClientCount()) // 应该还是3个连接
-	assert.Equal(t, 3, hub.GetUserConnectionCount(userID))
+	assert.Equal(t, 4, hub.GetClientCount())
+	assert.Equal(t, 4, hub.GetUserConnectionCount(userID))
 
 	// 清理
+	hub.UnregisterClient(client1)
 	hub.UnregisterClient(client2)
 	hub.UnregisterClient(client3)
 	hub.UnregisterClient(client4)
@@ -91,7 +92,7 @@ func TestHubRegisterClient(t *testing.T) {
 // TestHubMaxConnections 测试全局连接数限制
 func TestHubMaxConnections(t *testing.T) {
 	maxConnections := 5
-	hub := websocket.NewHub(websocket.HubConfig{MaxConnections: maxConnections, MaxUserConnections: 3, SendQueueSize: 256})
+	hub := websocket.NewHub(websocket.HubConfig{MaxConnections: maxConnections, MaxUserDeviceConnections: 5, SendQueueSize: 256})
 	go hub.Run()
 
 	// 创建多个用户
@@ -316,7 +317,7 @@ func TestHubGetConnectionStats(t *testing.T) {
 	assert.Equal(t, 3, stats["total_connections"])
 	assert.Equal(t, 2, stats["total_users"])
 	assert.Equal(t, 100, stats["max_connections"])
-	assert.Equal(t, 3, stats["max_user_connections"])
+	assert.Equal(t, 5, stats["max_user_device_connections"])
 
 	deviceStats, ok := stats["device_connections"].(map[websocket.DeviceType]int)
 	require.True(t, ok)
@@ -463,7 +464,7 @@ func TestWebSocketHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	// 初始化WebSocket Hub
-	websocket.InitHub(websocket.HubConfig{MaxConnections: 100, MaxUserConnections: 3, SendQueueSize: 256, AllowQueryToken: true})
+	websocket.InitHub(websocket.HubConfig{MaxConnections: 100, MaxUserDeviceConnections: 5, SendQueueSize: 256, AllowQueryToken: true})
 	defer websocket.GlobalHub.Shutdown()
 	websocket.InitJWTSecret("test-secret")
 

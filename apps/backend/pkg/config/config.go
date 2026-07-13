@@ -59,15 +59,15 @@ type JWTConfig struct {
 }
 
 type WebSocketConfig struct {
-	MaxConnections     int
-	MaxUserConnections int
-	AllowedOrigins     []string
-	AllowQueryToken    bool
-	ReadLimit          int64
-	WriteTimeout       string
-	ReadTimeout        string
-	PingInterval       string
-	SendQueueSize      int
+	MaxConnections           int
+	MaxUserDeviceConnections int
+	AllowedOrigins           []string
+	AllowQueryToken          bool
+	ReadLimit                int64
+	WriteTimeout             string
+	ReadTimeout              string
+	PingInterval             string
+	SendQueueSize            int
 }
 
 func Load() *Config {
@@ -91,15 +91,15 @@ func Load() *Config {
 			MaxLines:  getEnvInt("LOG_MAX_LINES", 100000),
 		},
 		WebSocket: WebSocketConfig{
-			MaxConnections:     getEnvInt("MAX_CONNECTIONS", 20000),
-			MaxUserConnections: getEnvInt("MAX_USER_CONNECTIONS", 3),
-			AllowedOrigins:     getEnvSlice("WS_ALLOWED_ORIGINS"),
-			AllowQueryToken:    getEnv("WS_ALLOW_QUERY_TOKEN", "false") == "true",
-			ReadLimit:          int64(getEnvInt("WS_READ_LIMIT", 1<<20)),
-			WriteTimeout:       getEnv("WS_WRITE_TIMEOUT", "10s"),
-			ReadTimeout:        getEnv("WS_READ_TIMEOUT", "60s"),
-			PingInterval:       getEnv("WS_PING_INTERVAL", "54s"),
-			SendQueueSize:      getEnvInt("WS_SEND_QUEUE_SIZE", 256),
+			MaxConnections:           getEnvInt("MAX_CONNECTIONS", 20000),
+			MaxUserDeviceConnections: getEnvInt("MAX_USER_DEVICE_CONNECTIONS", 5),
+			AllowedOrigins:           getEnvSlice("WS_ALLOWED_ORIGINS"),
+			AllowQueryToken:          getEnv("WS_ALLOW_QUERY_TOKEN", "false") == "true",
+			ReadLimit:                int64(getEnvInt("WS_READ_LIMIT", 1<<20)),
+			WriteTimeout:             getEnv("WS_WRITE_TIMEOUT", "10s"),
+			ReadTimeout:              getEnv("WS_READ_TIMEOUT", "60s"),
+			PingInterval:             getEnv("WS_PING_INTERVAL", "54s"),
+			SendQueueSize:            getEnvInt("WS_SEND_QUEUE_SIZE", 256),
 		},
 		RateLimit: RateLimitConfig{
 			GlobalRatePerSec:    getEnvFloat("RATE_LIMIT_GLOBAL_RPS", 2),      // 2 req/s, ~120 req/min

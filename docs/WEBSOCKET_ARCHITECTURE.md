@@ -328,6 +328,7 @@ const isOnline = getUserOnlineStatus(userId);
 
 | 环境变量 | 默认值 | 说明 |
 |---------|--------|------|
+| `MAX_USER_DEVICE_CONNECTIONS` | `5` | 同一用户每种设备类型的最大连接数 |
 | `WS_ALLOWED_ORIGINS` | 空（允许所有） | 逗号分隔的允许 Origin 列表，生产环境必须配置 |
 | `WS_ALLOW_QUERY_TOKEN` | `false` | 是否允许通过 URL query 传递 token（已弃用，仅兼容旧客户端） |
 | `WS_READ_LIMIT` | `1048576` (1MB) | 单条消息最大字节数 |
@@ -335,6 +336,8 @@ const isOnline = getUserOnlineStatus(userId);
 | `WS_READ_TIMEOUT` | `60s` | 读取超时（Pong 后重置） |
 | `WS_PING_INTERVAL` | `54s` | Ping 间隔 |
 | `WS_SEND_QUEUE_SIZE` | `256` | 每连接发送队列大小 |
+
+同一用户的连接上限由 `MAX_USER_DEVICE_CONNECTIONS` 控制，默认为 5；Web、Desktop、Mobile 和 Tablet 分别计数。同一设备类型建立第 6 条连接时，服务端会替代该类型中最旧的连接。
 
 ### Token 认证优先级
 
@@ -370,6 +373,7 @@ const isOnline = getUserOnlineStatus(userId);
 | 1008 | 鉴权失败（Policy Violation） |
 | 1009 | 消息过大 |
 | 1013 | 队列溢出 / 连接数超限（Try Again Later） |
+| 4001 | 当前连接已被同一用户的新连接替代 |
 
 ### 指标
 
@@ -390,7 +394,9 @@ const isOnline = getUserOnlineStatus(userId);
 
 - 指数退避 + ±25% jitter，上限 30 秒
 - 鉴权失败（close code 1008）不重连
+- 被新连接替代（close code 4001）不重连，避免连接上限淘汰引发重连循环
 - 正常关闭（close code 1000）仅在手动关闭时不重连
+- 同一前端实例在 `CONNECTING` / `OPEN` 状态不重复创建连接，且最多保留一个重连计时器
 - 最大重连次数 10 次
 
 ### WebSocket 事件格式

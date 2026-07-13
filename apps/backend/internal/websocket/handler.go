@@ -29,8 +29,8 @@ func InitHub(cfg HubConfig) {
 	GlobalHub = NewHub(cfg)
 	hubConfig = cfg
 	go GlobalHub.Run()
-	logger.Infof("WebSocket Hub initialized: maxConnections=%d, maxUserConnections=%d, allowedOrigins=%v, allowQueryToken=%v",
-		cfg.MaxConnections, cfg.MaxUserConnections, cfg.AllowedOrigins, cfg.AllowQueryToken)
+	logger.Infof("WebSocket Hub initialized: maxConnections=%d, maxUserDeviceConnections=%d, allowedOrigins=%v, allowQueryToken=%v",
+		cfg.MaxConnections, cfg.MaxUserDeviceConnections, cfg.AllowedOrigins, cfg.AllowQueryToken)
 }
 
 // InitJWTSecret 初始化JWT secret
