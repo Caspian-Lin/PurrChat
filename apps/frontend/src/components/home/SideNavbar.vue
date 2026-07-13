@@ -158,7 +158,7 @@ const activePanel = computed(() => {
   if (route.path === '/chat') return 'chat';
   if (route.path === '/friends') return 'friends';
   if (route.path === '/ai') return 'ai';
-  if (route.path === '/bots') return 'bots';
+  if (route.path === '/bots' || route.path.startsWith('/bot-studio/')) return 'bots';
   if (route.path === '/settings') return 'settings';
   return 'chat';
 });
