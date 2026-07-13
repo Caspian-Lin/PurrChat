@@ -80,6 +80,39 @@ describe('API Client', () => {
     });
   });
 
+  it('returns structured error code when updateBotInstallation gets HTTP error', async () => {
+    mockedAxios.patch.mockRejectedValueOnce({
+      response: {
+        data: { success: false, code: 'granted_exceeds_requested', message: '超权' },
+      },
+    } as any);
+
+    const result = await api.updateBotInstallation('inst-1', {
+      granted_capabilities: ['secrets:use'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.code).toBe('granted_exceeds_requested');
+    expect(result.message).toBe('超权');
+  });
+
+  it('returns structured error code when createBotInstallation gets HTTP error', async () => {
+    mockedAxios.post.mockRejectedValueOnce({
+      response: {
+        data: { success: false, code: 'forbidden', message: '无权' },
+      },
+    } as any);
+
+    const result = await api.createBotInstallation('bot-1', {
+      target_type: 'user',
+      target_id: 'user-1',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.code).toBe('forbidden');
+    expect(result.message).toBe('无权');
+  });
+
   describe('register', () => {
     it('should register a new user', async () => {
       const mockUser: User = {

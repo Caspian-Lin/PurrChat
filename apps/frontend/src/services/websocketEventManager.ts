@@ -1,6 +1,7 @@
 import { websocketService } from './websocket';
 import { useMessageStore } from '../stores/message';
 import { useAuthStore } from '../stores/auth';
+import { useBotStore } from '../stores/bot';
 import type { Message, Conversation, Friendship, User } from '../models/types';
 
 // WebSocket事件数据类型定义
@@ -140,6 +141,9 @@ class WebSocketEventManager {
     // Bot 安装/卸载事件
     websocketService.on('bot_deployed', this.handleBotDeployed.bind(this));
     websocketService.on('bot_undeployed', this.handleBotUndeployed.bind(this));
+
+    // Bot 状态变更（发布工作流等）
+    websocketService.on('bot_updated', this.handleBotUpdated.bind(this));
   }
 
   /**
@@ -528,6 +532,13 @@ class WebSocketEventManager {
         updated_at: new Date().toISOString(),
       });
     });
+  }
+
+  private handleBotUpdated(data: { bot_id: string }) {
+    console.log('[WebSocketEventManager] Bot 状态变更:', data);
+    const botStore = useBotStore();
+    botStore.loadBots();
+    botStore.loadDeployments();
   }
 
   /**

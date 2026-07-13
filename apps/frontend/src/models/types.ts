@@ -40,6 +40,7 @@ export interface LoginResponse {
 // API 响应
 export interface ApiResponse<T = any> {
   success: boolean;
+  code?: string;
   message?: string;
   data?: T;
 }

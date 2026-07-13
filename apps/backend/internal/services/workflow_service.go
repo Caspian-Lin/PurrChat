@@ -9,6 +9,7 @@ import (
 
 	"purr-chat-server/internal/botengine"
 	"purr-chat-server/internal/models"
+	"purr-chat-server/internal/websocket"
 	"purr-chat-server/pkg/logger"
 
 	"github.com/google/uuid"
@@ -157,6 +158,12 @@ func (s *WorkflowService) PublishWorkflow(ctx context.Context, botID string, req
 	}
 
 	logger.InfofWithCaller("[WorkflowService] Bot %s workflow published: rev %d, capabilities=%v", botID, revision, capabilities)
+
+	if websocket.GlobalHub != nil {
+		websocket.GlobalHub.SendToUser(requesterUUID, "bot_updated", map[string]any{
+			"bot_id": botID,
+		})
+	}
 
 	return version, nil
 }

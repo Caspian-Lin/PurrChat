@@ -341,6 +341,7 @@ import { Controls } from '@vue-flow/controls';
 import { BsArrowLeft, BsPlus, BsUpload, BsDownload, BsPcDisplay } from 'vue-icons-plus/bs';
 import { usePlatform } from '../composables/usePlatform';
 import { api } from '../models/api';
+import { useBotStore } from '../stores/bot';
 import type { Bot, Mechanism, WorkflowVersion } from '../models/types';
 import type { Node, Edge } from '@vue-flow/core';
 import { eventsToFlowNodes, eventsToFlowEdges, autoLayoutEvents } from '../utils/eventFlowUtils';
@@ -385,6 +386,7 @@ const route = useRoute();
 const router = useRouter();
 const { isMobile } = usePlatform();
 const { validate } = useWorkflowValidator();
+const botStore = useBotStore();
 
 const botId = route.params.botId as string;
 const mechanismId = route.params.mechanismId as string;
@@ -659,6 +661,9 @@ async function handlePublish() {
     publishedRevision.value = version.revision;
     saveState.value = 'saved';
     if (showHistory.value) await loadVersions();
+    botStore.loadBots();
+    botStore.loadDeployments();
+    channel?.postMessage({ type: 'bot-updated', botId });
   } catch (requestError: any) {
     operationError.value = apiErrorMessage(requestError, '发布失败');
     saveState.value = 'error';

@@ -20,6 +20,12 @@ func NewInstallationHandler(installationService *services.InstallationService) *
 	return &InstallationHandler{installationService: installationService}
 }
 
+// respondInstallationError 用 ClassifyInstallationError 映射错误到结构化 HTTP 响应
+func respondInstallationError(c *gin.Context, err error) {
+	status, code, message := services.ClassifyInstallationError(err)
+	c.JSON(status, models.APIResponse{Success: false, Code: code, Message: message})
+}
+
 // CreateInstallation 安装 Bot
 // @Summary 安装 Bot 到用户私聊或群聊
 // @Tags Bot
@@ -32,7 +38,7 @@ func (h *InstallationHandler) CreateInstallation(c *gin.Context) {
 	appID := c.Param("id")
 	var req models.CreateInstallationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Code: "invalid_request", Message: "Invalid request: " + err.Error()})
 		return
 	}
 
@@ -44,11 +50,7 @@ func (h *InstallationHandler) CreateInstallation(c *gin.Context) {
 	inst, err := h.installationService.CreateInstallation(c.Request.Context(), userIDStr, appID, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to create installation: %v", err)
-		if containsBadInput(err.Error()) {
-			c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Internal server error"})
-		}
+		respondInstallationError(c, err)
 		return
 	}
 
@@ -91,11 +93,7 @@ func (h *InstallationHandler) ListByApp(c *gin.Context) {
 	}
 	list, err := h.installationService.ListByApp(c.Request.Context(), userIDStr, c.Param("id"))
 	if err != nil {
-		if containsBadInput(err.Error()) {
-			c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Internal server error"})
-		}
+		respondInstallationError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -124,11 +122,7 @@ func (h *InstallationHandler) ListByTarget(c *gin.Context) {
 	}
 	list, err := h.installationService.ListByTarget(c.Request.Context(), userIDStr, targetType, targetID)
 	if err != nil {
-		if containsBadInput(err.Error()) {
-			c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Internal server error"})
-		}
+		respondInstallationError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -168,7 +162,7 @@ func (h *InstallationHandler) ListMine(c *gin.Context) {
 func (h *InstallationHandler) UpdateInstallation(c *gin.Context) {
 	var req models.UpdateInstallationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Code: "invalid_request", Message: "Invalid request: " + err.Error()})
 		return
 	}
 	userIDStr, ok := getUserID(c)
@@ -177,11 +171,7 @@ func (h *InstallationHandler) UpdateInstallation(c *gin.Context) {
 	}
 	inst, err := h.installationService.UpdateInstallation(c.Request.Context(), userIDStr, c.Param("iid"), &req)
 	if err != nil {
-		if containsBadInput(err.Error()) {
-			c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Internal server error"})
-		}
+		respondInstallationError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -203,11 +193,7 @@ func (h *InstallationHandler) UninstallInstallation(c *gin.Context) {
 		return
 	}
 	if err := h.installationService.UninstallInstallation(c.Request.Context(), userIDStr, c.Param("iid")); err != nil {
-		if containsBadInput(err.Error()) {
-			c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Internal server error"})
-		}
+		respondInstallationError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Bot uninstalled"})

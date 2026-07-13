@@ -56,6 +56,38 @@ func (s *InstallationService) SetBotNoticeEmitter(emitter *BotNoticeEmitter) {
 	s.noticeEmitter = emitter
 }
 
+// ClassifyInstallationError 将 installation 域错误映射为 HTTP 状态码、结构化错误码和面向用户的消息。
+// handler 层调用此函数替代字符串匹配,确保错误响应携带稳定 code 供前端区分处理。
+// 未识别的错误统一归为 internal_error。
+func ClassifyInstallationError(err error) (status int, code, message string) {
+	switch {
+	case errors.Is(err, ErrInvalidID):
+		return 400, "invalid_id", "无效的 ID"
+	case errors.Is(err, errBotNotFound):
+		return 404, "bot_not_found", "Bot 不存在"
+	case errors.Is(err, errBotDisabled):
+		return 400, "bot_disabled", "Bot 已被禁用"
+	case errors.Is(err, errInstallationNotFound):
+		return 404, "installation_not_found", "安装记录不存在"
+	case errors.Is(err, errNotAuthorized):
+		return 403, "forbidden", "无权管理此安装"
+	case errors.Is(err, errGrantedExceedsReq):
+		return 400, "granted_exceeds_requested", "授予的权限超出了 Bot 声明的权限范围"
+	case errors.Is(err, errInstallNotMember):
+		return 403, "not_conversation_member", "你不是该会话的成员"
+	case errors.Is(err, errInstallNoPermission):
+		return 403, "install_no_permission", "只有会话管理员或群主才能安装 Bot"
+	case errors.Is(err, errCannotInstallOther):
+		return 403, "cannot_install_for_other", "不能为其他用户安装 Bot"
+	case errors.Is(err, errBotNotDiscoverable):
+		return 403, "bot_not_discoverable", "该 Bot 不可公开安装"
+	case errors.Is(err, errAlreadyInstalled):
+		return 409, "already_installed", "该 Bot 已安装到此目标"
+	default:
+		return 500, "internal_error", "内部错误"
+	}
+}
+
 // CreateInstallation 安装 Bot 到用户私聊或群聊会话
 func (s *InstallationService) CreateInstallation(ctx context.Context, installerID string, appID string, req *models.CreateInstallationRequest) (*models.BotInstallation, error) {
 	installerUUID, err := uuid.Parse(installerID)
