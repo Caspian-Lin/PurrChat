@@ -394,27 +394,29 @@ export const api = {
 
   // ===== Bot API Credentials =====
 
-  listBotCredentials: (botId: string): Promise<ApiResponse<BotAPICredential[]>> => {
+  listBotCredentials: (
+    botId: string
+  ): Promise<{ credentials: BotAPICredential[]; total: number }> => {
     return apiClient.get(`/api/bots/${botId}/credentials`).then((res) => res.data);
   },
 
   createBotCredential: (
     botId: string,
     data: CreateBotAPICredentialRequest
-  ): Promise<ApiResponse<BotAPICredentialSecret>> => {
+  ): Promise<BotAPICredentialSecret> => {
     return apiClient.post(`/api/bots/${botId}/credentials`, data).then((res) => res.data);
   },
 
   rotateBotCredential: (
     botId: string,
     credentialId: string
-  ): Promise<ApiResponse<BotAPICredentialSecret>> => {
+  ): Promise<BotAPICredentialSecret> => {
     return apiClient
       .post(`/api/bots/${botId}/credentials/${credentialId}/rotate`)
       .then((res) => res.data);
   },
 
-  revokeBotCredential: (botId: string, credentialId: string): Promise<ApiResponse<void>> => {
+  revokeBotCredential: (botId: string, credentialId: string): Promise<BotAPICredential> => {
     return apiClient
       .delete(`/api/bots/${botId}/credentials/${credentialId}`)
       .then((res) => res.data);

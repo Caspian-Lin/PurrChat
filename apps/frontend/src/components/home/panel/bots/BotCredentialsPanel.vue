@@ -147,9 +147,7 @@ async function loadCredentials() {
   loading.value = true;
   try {
     const res = await api.listBotCredentials(props.botId);
-    if (res.data) {
-      credentials.value = res.data;
-    }
+    credentials.value = res.credentials;
   } catch {
     // ignore
   } finally {
@@ -164,8 +162,8 @@ async function handleCreate() {
     const res = await api.createBotCredential(props.botId, {
       name: newCredentialName.value.trim(),
     });
-    if (res.data) {
-      tokenDisplay.value = res.data.token;
+    if (res.token) {
+      tokenDisplay.value = res.token;
       copied.value = false;
       newCredentialName.value = '';
       await loadCredentials();
@@ -183,8 +181,8 @@ async function handleRotate(credentialId: string) {
     return;
   try {
     const res = await api.rotateBotCredential(props.botId, credentialId);
-    if (res.data) {
-      tokenDisplay.value = res.data.token;
+    if (res.token) {
+      tokenDisplay.value = res.token;
       copied.value = false;
       await loadCredentials();
     }
