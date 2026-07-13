@@ -350,14 +350,28 @@ export const api = {
     botId: string,
     data: CreateBotInstallationRequest
   ): Promise<ApiResponse<{ installation: BotDeployment }>> => {
-    return apiClient.post(`/api/bots/${botId}/installations`, data).then((res) => res.data);
+    return apiClient
+      .post(`/api/bots/${botId}/installations`, data)
+      .then((res) => res.data)
+      .catch((error) => ({
+        success: false,
+        code: error.response?.data?.code,
+        message: error.response?.data?.message || '安装 Bot 失败',
+      }));
   },
 
   updateBotInstallation: (
     installationId: string,
     data: UpdateBotInstallationRequest
   ): Promise<ApiResponse<{ installation: BotDeployment }>> => {
-    return apiClient.patch(`/api/installations/${installationId}`, data).then((res) => res.data);
+    return apiClient
+      .patch(`/api/installations/${installationId}`, data)
+      .then((res) => res.data)
+      .catch((error) => ({
+        success: false,
+        code: error.response?.data?.code,
+        message: error.response?.data?.message || '更新 Bot 权限失败',
+      }));
   },
 
   uninstallBotInstallation: (installationId: string): Promise<ApiResponse<void>> => {
