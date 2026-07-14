@@ -12,6 +12,8 @@ A space where you compose AI characters with real behavior, memory and agency �
 
 [![CI](https://github.com/Caspian-Lin/PurrChat/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/Caspian-Lin/PurrChat/actions/workflows/ci.yml?query=branch%3Adev)
 
+> Active development: [Caspian-Lin/PurrChat](https://github.com/Caspian-Lin/PurrChat) — this repository is the public stable mirror.
+
 [English](#english) &middot; [简体中文](#简体中文)
 
 <!-- Demo GIF — replace with a real recording when available -->
