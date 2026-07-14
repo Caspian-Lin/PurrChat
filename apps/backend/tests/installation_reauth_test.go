@@ -84,14 +84,14 @@ func TestPublishDoesNotExpandThirdPartyInstallation(t *testing.T) {
 		}
 	}`
 
-	_, err = wfService.UpdateWorkflow(ctx, bot.ID.String(), owner.ID.String(), &models.UpdateWorkflowRequest{
+	_, err = wfService.UpdateWorkflow(ctx, bot.ID.String(), "mech_default", owner.ID.String(), &models.UpdateWorkflowRequest{
 		Revision: 0,
 		Document: json.RawMessage(validDocument),
 	})
 	require.NoError(t, err)
 
 	// 发布工作流(推导出 [read_trigger, send])
-	version, err := wfService.PublishWorkflow(ctx, bot.ID.String(), owner.ID.String(), &models.PublishWorkflowRequest{Revision: 1})
+	version, err := wfService.PublishWorkflow(ctx, bot.ID.String(), "mech_default", owner.ID.String(), &models.PublishWorkflowRequest{Revision: 1})
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{models.CapabilityReadTrigger, models.CapabilitySend}, version.Capabilities)
 
