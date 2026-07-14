@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
+import { resolveTemplate } from '../resolver.js';
 
 const llmConfigSchema = z.object({
   api_url: z.string(),
@@ -10,6 +11,7 @@ const llmConfigSchema = z.object({
   max_tokens: z.number().optional().default(2048),
   context_window: z.number().optional().default(20),
   context_scope: z.string().optional(),
+  timeout: z.number().optional().default(30000),
 });
 
 export const llmNode: NodeDefinition<z.infer<typeof llmConfigSchema>> = {
@@ -25,7 +27,8 @@ export const llmNode: NodeDefinition<z.infer<typeof llmConfigSchema>> = {
     const messages: Array<{ role: string; content: string }> = [];
 
     if (config.system_prompt) {
-      messages.push({ role: 'system', content: config.system_prompt });
+      // LLM 节点的 system_prompt 也支持统一变量解析
+      messages.push({ role: 'system', content: resolveTemplate(config.system_prompt, ctx) });
     }
 
     // 截取上下文窗口
@@ -61,31 +64,42 @@ export const llmNode: NodeDefinition<z.infer<typeof llmConfigSchema>> = {
         method: 'POST',
         headers,
         body: JSON.stringify(reqBody),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(config.timeout || 30000),
       });
 
       if (!resp.ok) {
         const body = await resp.text();
-        throw new Error(`LLM returned status ${resp.status}: ${body}`);
+        return {
+          ports: {
+            out_output: '',
+            out_error: `[provider] HTTP ${resp.status}: ${body}`,
+            out_exec: 'true',
+          },
+        };
       }
 
       const data = await resp.json() as {
         choices?: Array<{ message?: { content?: string } }>;
       };
 
-      const output = data.choices?.[0]?.message?.content || '...';
+      const output = data.choices?.[0]?.message?.content || '';
 
       return {
         ports: {
           out_output: output,
+          out_error: '',
           out_exec: 'true',
         },
       };
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
+      const category = errorMsg.includes('timeout') || errorMsg.includes('aborted')
+        ? 'timeout'
+        : 'network';
       return {
         ports: {
-          out_output: `LLM 调用失败: ${errorMsg}`,
+          out_output: '',
+          out_error: `[${category}] ${errorMsg}`,
           out_exec: 'true',
         },
       };

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
-import { replaceVariables } from '../ports.js';
+import { resolveTemplate } from '../resolver.js';
 
 export const replyNode: NodeDefinition = {
   type: 'reply',
@@ -17,18 +17,8 @@ export const replyNode: NodeDefinition = {
       content = (config as any).template;
     }
 
-    // 变量替换
-    content = replaceVariables(content, {
-      nodeOutputs: {},
-      variables: ctx.variables,
-      eventOutputs: ctx.eventOutputs,
-      contextBuffer: ctx.contextBuffer,
-      finalReply: '',
-      nameResolver: {},
-    });
-
-    // 替换 {args} 变量
-    content = replaceArgsVars(content, input.rawInput);
+    // 统一变量替换（支持 ${path} 规范格式和所有遗留格式）
+    content = resolveTemplate(content, ctx);
 
     return {
       ports: {
@@ -38,24 +28,3 @@ export const replyNode: NodeDefinition = {
     };
   },
 };
-
-/**
- * 替换模板中的 {args} 和 {args:N} 变量
- * {args} = 完整输入
- * {args:N} = 输入的第 N 个单词（从 1 开始）
- */
-function replaceArgsVars(template: string, input: string): string {
-  const args = input.trim().split(/\s+/);
-  let result = template;
-
-  // 替换 {args:N}
-  result = result.replace(/\{args:(\d+)\}/g, (_match, index: string) => {
-    const i = parseInt(index, 10) - 1;
-    return i >= 0 && i < args.length ? args[i] : '';
-  });
-
-  // 替换 {args}
-  result = result.replace(/\{args\}/g, input.trim());
-
-  return result;
-}

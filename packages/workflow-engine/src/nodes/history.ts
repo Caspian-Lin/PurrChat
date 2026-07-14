@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
 
+/** 硬上限：防止无界内存和 token 消耗 */
+const MAX_HISTORY_LIMIT = 100;
+
 const historyConfigSchema = z.object({
   count: z.number().optional().default(20),
+  message_types: z.array(z.string()).optional(),
+  sort_order: z.enum(['asc', 'desc']).optional().default('asc'),
 });
 
 export const historyNode: NodeDefinition<z.infer<typeof historyConfigSchema>> = {
@@ -15,7 +20,6 @@ export const historyNode: NodeDefinition<z.infer<typeof historyConfigSchema>> = 
     const cfg = config as any;
     let count = cfg.count || 20;
 
-    // 从输入端口读取 N
     const portCount = input.ports['in_count'];
     if (portCount) {
       const parsed = parseInt(portCount, 10);
@@ -24,10 +28,22 @@ export const historyNode: NodeDefinition<z.infer<typeof historyConfigSchema>> = 
       }
     }
 
-    // 获取最近 N 条消息
-    const messages = ctx.contextBuffer.slice(-count);
+    count = Math.min(count, MAX_HISTORY_LIMIT);
 
-    // 格式化为 prompt 字符串
+    let messages = [...ctx.history];
+
+    const messageTypes = cfg.message_types;
+    if (Array.isArray(messageTypes) && messageTypes.length > 0) {
+      const allowed = new Set(messageTypes);
+      messages = messages.filter((m) => allowed.has(m.role));
+    }
+
+    messages = messages.slice(-count);
+
+    if (cfg.sort_order === 'desc') {
+      messages = [...messages].reverse();
+    }
+
     const historyPrompt = messages
       .map((m) => `[${m.role}]: ${m.content}`)
       .join('\n');

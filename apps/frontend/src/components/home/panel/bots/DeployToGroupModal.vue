@@ -1,124 +1,286 @@
 <template>
-  <div class="fixed inset-0 z-50 flex items-center justify-center" @click.self="$emit('close')">
-    <!-- 遮罩 -->
-    <div class="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="$emit('close')">
+    <div class="absolute inset-0 bg-black/30" aria-hidden="true" />
 
-    <!-- 弹窗 -->
-    <div
-      class="relative w-full max-w-md mx-4 bg-bg-primary rounded-[var(--radius-lg,16px)] shadow-lg overflow-hidden"
+    <section
+      class="relative w-full max-w-lg overflow-hidden rounded-[var(--radius-lg,16px)] bg-bg-primary shadow-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="group-install-title"
     >
-      <!-- 头部 -->
-      <div class="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
-        <h2 class="text-base font-semibold text-text-primary">部署到群聊</h2>
+      <header class="flex items-center justify-between border-b border-border-subtle px-6 py-4">
+        <div class="flex min-w-0 items-center gap-2">
+          <button
+            v-if="mode === 'authorize'"
+            class="rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-hover-bg hover:text-text-primary"
+            aria-label="返回群聊列表"
+            :disabled="submitting"
+            @click="backToList"
+          >
+            <BsArrowLeft :size="17" />
+          </button>
+          <div class="min-w-0">
+            <h2 id="group-install-title" class="truncate text-base font-semibold text-text-primary">
+              {{
+                mode === 'list' ? '安装到群聊' : editingInstallation ? '管理 Bot 权限' : '授权安装'
+              }}
+            </h2>
+            <p class="mt-0.5 truncate text-xs text-text-tertiary">
+              {{ mode === 'list' ? bot.name : selectedTarget?.name }}
+            </p>
+          </div>
+        </div>
         <button
-          class="p-1.5 rounded-lg hover:bg-hover-bg text-text-tertiary hover:text-text-primary transition-colors"
+          class="rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-hover-bg hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
+          aria-label="关闭"
+          :disabled="submitting"
           @click="$emit('close')"
         >
           <BsX :size="18" />
         </button>
-      </div>
+      </header>
 
-      <!-- 内容 -->
-      <div class="px-6 py-4">
-        <!-- 加载中 -->
-        <div v-if="loading" class="flex items-center justify-center py-8">
+      <div class="max-h-[65vh] overflow-y-auto px-6 py-5">
+        <div v-if="loading" class="space-y-3" aria-label="正在加载群聊">
           <div
-            class="w-6 h-6 border-2 border-text-quaternary border-t-[var(--theme-primary)] rounded-full animate-spin"
+            v-for="index in 3"
+            :key="index"
+            class="h-14 animate-pulse rounded-xl bg-bg-secondary"
           />
         </div>
 
-        <!-- 群聊列表 -->
-        <div v-else-if="conversations.length > 0" class="space-y-1 max-h-[300px] overflow-y-auto">
-          <button
-            v-for="conv in conversations"
-            :key="conv.id"
-            class="w-full flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-sm,8px)] hover:bg-hover-bg transition-colors text-left group"
-            :disabled="deploying === conv.id"
-            @click="handleDeploy(conv.id)"
-          >
-            <div
-              class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white text-xs font-bold"
-              style="background: var(--theme-primary)"
-            >
-              {{ conv.name.charAt(0) }}
+        <template v-else-if="mode === 'list'">
+          <section v-if="installedGroups.length" class="mb-5">
+            <h3 class="mb-2 text-xs font-medium text-text-tertiary">已安装</h3>
+            <div class="space-y-2">
+              <div
+                v-for="installation in installedGroups"
+                :key="installation.id"
+                class="flex items-center gap-3 rounded-[var(--radius-md,12px)] bg-bg-secondary px-3.5 py-3"
+              >
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-medium text-text-primary">
+                    {{ installation.target_name || installation.target_id }}
+                  </p>
+                  <p class="mt-0.5 text-xs text-text-tertiary">
+                    已授权 {{ installation.granted_capabilities.length }} 项能力
+                  </p>
+                </div>
+                <button
+                  class="rounded-lg px-2.5 py-1.5 text-xs text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary"
+                  @click="manageInstallation(installation)"
+                >
+                  管理权限
+                </button>
+                <button
+                  class="rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
+                  aria-label="从群聊移除 Bot"
+                  title="卸载"
+                  :disabled="uninstalling === installation.id"
+                  @click="handleUninstall(installation)"
+                >
+                  <span
+                    v-if="uninstalling === installation.id"
+                    class="block h-3.5 w-3.5 animate-spin rounded-full border-2 border-text-quaternary border-t-[var(--theme-primary)]"
+                  />
+                  <BsTrash v-else :size="14" />
+                </button>
+              </div>
             </div>
-            <div class="flex-1 min-w-0">
-              <div class="text-sm text-text-primary truncate">{{ conv.name }}</div>
-              <div class="text-xs text-text-tertiary">{{ conv.member_count }} 位成员</div>
-            </div>
-            <div
-              v-if="deploying === conv.id"
-              class="w-4 h-4 border-2 border-text-quaternary border-t-[var(--theme-primary)] rounded-full animate-spin flex-shrink-0"
-            />
-            <BsCheckLg
-              v-else-if="deployed === conv.id"
-              :size="16"
-              class="text-green-500 flex-shrink-0"
-            />
-          </button>
-        </div>
+          </section>
 
-        <!-- 空状态 -->
-        <div v-else class="text-center py-8">
-          <BsPeopleFill :size="32" class="mx-auto text-text-quaternary mb-3" />
-          <p class="text-sm text-text-tertiary">没有可部署的群聊</p>
-          <p class="text-xs text-text-quaternary mt-1">
-            Bot 已部署到所有你的群聊，或你还未加入群聊
-          </p>
-        </div>
+          <section v-if="conversations.length">
+            <h3 v-if="installedGroups.length" class="mb-2 text-xs font-medium text-text-tertiary">
+              选择要安装的群聊
+            </h3>
+            <div class="space-y-1">
+              <button
+                v-for="conversation in conversations"
+                :key="conversation.id"
+                class="flex w-full items-center gap-3 rounded-[var(--radius-md,12px)] px-3 py-2.5 text-left transition-colors hover:bg-hover-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
+                @click="authorizeConversation(conversation)"
+              >
+                <div
+                  class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--theme-primary)] text-xs font-bold text-white"
+                >
+                  {{ conversation.name.charAt(0) }}
+                </div>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-medium text-text-primary">
+                    {{ conversation.name }}
+                  </span>
+                  <span class="block text-xs text-text-tertiary">
+                    {{ conversation.member_count }} 位成员
+                  </span>
+                </span>
+                <BsChevronRight :size="15" class="flex-shrink-0 text-text-quaternary" />
+              </button>
+            </div>
+          </section>
+
+          <div v-else-if="!installedGroups.length" class="py-8 text-center">
+            <BsPeopleFill :size="32" class="mx-auto mb-3 text-text-quaternary" />
+            <p class="text-sm text-text-secondary">没有可安装的群聊</p>
+            <p class="mt-1 text-xs text-text-tertiary">只有群主或管理员可以安装 Bot</p>
+          </div>
+        </template>
+
+        <BotPermissionReview
+          v-else-if="selectedTarget"
+          :key="editingInstallation?.id ?? selectedTarget.id"
+          :bot-name="bot.name"
+          :target-label="selectedTarget.name"
+          :requested-capabilities="bot.requested_capabilities ?? []"
+          :initial-capabilities="editingInstallation?.granted_capabilities"
+          @change="handlePermissionChange"
+        />
       </div>
 
-      <!-- 底部 -->
-      <div class="flex justify-end px-6 py-4 border-t border-border-subtle">
+      <footer class="flex items-center justify-end gap-3 border-t border-border-subtle px-6 py-4">
+        <template v-if="mode === 'authorize'">
+          <button
+            class="rounded-[var(--radius-sm,8px)] px-4 py-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg"
+            :disabled="submitting"
+            @click="backToList"
+          >
+            返回
+          </button>
+          <button
+            class="inline-flex min-w-24 items-center justify-center gap-2 rounded-[var(--radius-sm,8px)] bg-[var(--theme-primary)] px-4 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="submitting || !canConfirm"
+            @click="confirmAuthorization"
+          >
+            <span
+              v-if="submitting"
+              class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+            />
+            {{ submitting ? '保存中' : editingInstallation ? '保存权限' : '授权并安装' }}
+          </button>
+        </template>
         <button
-          class="px-4 py-2 text-sm rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-secondary hover:bg-hover-bg transition-colors"
+          v-else
+          class="rounded-[var(--radius-sm,8px)] bg-bg-quaternary px-4 py-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg"
           @click="$emit('close')"
         >
-          关闭
+          完成
         </button>
-      </div>
-    </div>
+      </footer>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { BsX, BsPeopleFill, BsCheckLg } from 'vue-icons-plus/bs';
+import { computed, onMounted, ref } from 'vue';
+import { BsArrowLeft, BsChevronRight, BsPeopleFill, BsTrash, BsX } from 'vue-icons-plus/bs';
 import { useBots } from '../../../../composables/useBots';
-import type { DeployableConversation } from '../../../../models/types';
+import { useBotStore } from '../../../../stores/bot';
+import type { Bot, BotDeployment, DeployableConversation } from '../../../../models/types';
+import BotPermissionReview from './BotPermissionReview.vue';
 
-interface Props {
-  botId: string;
-}
-
-const props = defineProps<Props>();
-
+const props = defineProps<{ bot: Bot }>();
 const emit = defineEmits<{
   deployed: [conversationId: string];
   close: [];
 }>();
 
-const { deployBot, getDeployableConversations } = useBots();
-
+const { getDeployableConversations, installBot, updateInstallation, uninstallInstallation } =
+  useBots();
+const botStore = useBotStore();
 const loading = ref(true);
 const conversations = ref<DeployableConversation[]>([]);
-const deploying = ref<string | null>(null);
-const deployed = ref<string | null>(null);
+const mode = ref<'list' | 'authorize'>('list');
+const selectedTarget = ref<DeployableConversation | null>(null);
+const editingInstallation = ref<BotDeployment | null>(null);
+const selectedCapabilities = ref<string[]>([]);
+const canConfirm = ref(false);
+const submitting = ref(false);
+const uninstalling = ref<string | null>(null);
 
-onMounted(async () => {
-  conversations.value = await getDeployableConversations(props.botId);
-  loading.value = false;
-});
+const installedGroups = computed(() =>
+  botStore.deployments.filter(
+    (deployment) => deployment.app_id === props.bot.id && deployment.target_type === 'conversation'
+  )
+);
 
-async function handleDeploy(conversationId: string) {
-  deploying.value = conversationId;
-  const success = await deployBot(props.botId, conversationId);
-  if (success) {
-    deployed.value = conversationId;
-    // 从列表中移除已部署的群聊
-    conversations.value = conversations.value.filter((c) => c.id !== conversationId);
-    emit('deployed', conversationId);
+onMounted(loadData);
+
+async function loadData() {
+  loading.value = true;
+  try {
+    await botStore.loadDeployments();
+    conversations.value = await getDeployableConversations(props.bot.id);
+  } finally {
+    loading.value = false;
   }
-  deploying.value = null;
+}
+
+function authorizeConversation(conversation: DeployableConversation) {
+  selectedTarget.value = conversation;
+  editingInstallation.value = null;
+  mode.value = 'authorize';
+}
+
+function manageInstallation(installation: BotDeployment) {
+  selectedTarget.value = {
+    id: installation.target_id,
+    name: installation.target_name || installation.target_id,
+    conversation_type: 'group',
+    member_count: 0,
+  };
+  editingInstallation.value = installation;
+  mode.value = 'authorize';
+}
+
+function backToList() {
+  if (submitting.value) return;
+  mode.value = 'list';
+  selectedTarget.value = null;
+  editingInstallation.value = null;
+  selectedCapabilities.value = [];
+  canConfirm.value = false;
+}
+
+function handlePermissionChange(capabilities: string[], allowed: boolean) {
+  selectedCapabilities.value = capabilities;
+  canConfirm.value = allowed;
+}
+
+async function confirmAuthorization() {
+  if (!selectedTarget.value || !canConfirm.value) return;
+  submitting.value = true;
+
+  const diagnosticsConsent = selectedCapabilities.value.includes('network:external')
+    ? 'granted'
+    : 'denied';
+  const installation = editingInstallation.value
+    ? await updateInstallation(editingInstallation.value.id, {
+        status: 'active',
+        granted_capabilities: selectedCapabilities.value,
+        diagnostics_consent: diagnosticsConsent,
+      })
+    : await installBot(props.bot.id, {
+        target_type: 'conversation',
+        target_id: selectedTarget.value.id,
+        granted_capabilities: selectedCapabilities.value,
+        diagnostics_consent: diagnosticsConsent,
+      });
+
+  submitting.value = false;
+  if (!installation) return;
+
+  if (!editingInstallation.value) {
+    conversations.value = conversations.value.filter(
+      (conversation) => conversation.id !== selectedTarget.value?.id
+    );
+    emit('deployed', installation.target_id);
+  }
+  backToList();
+}
+
+async function handleUninstall(installation: BotDeployment) {
+  uninstalling.value = installation.id;
+  const removed = await uninstallInstallation(installation.id);
+  uninstalling.value = null;
+  if (removed) conversations.value = await getDeployableConversations(props.bot.id);
 }
 </script>

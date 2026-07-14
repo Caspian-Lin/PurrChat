@@ -754,6 +754,17 @@ onMounted(async () => {
 
     onMessageUpdate(handleMessageUpdate);
     onConversationUpdate(handleConversationUpdate);
+
+    // 处理路由参数中的会话 ID（首次 mount 时 watcher 不会触发）
+    const convId = route.query.conversationId;
+    if (convId && typeof convId === 'string') {
+      const conversation = conversations.value.find((c) => c.id === convId);
+      if (conversation) {
+        showConversation(conversation.id);
+        selectedConversation.value = conversation;
+      }
+      router.replace({ path: '/chat', query: {} });
+    }
   } else {
     console.log('[ChatPanel] currentUser 不存在，不加载数据');
   }

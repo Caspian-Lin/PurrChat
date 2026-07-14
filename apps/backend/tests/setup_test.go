@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"purr-chat-server/internal/handlers"
+	"purr-chat-server/internal/messaging"
 	"purr-chat-server/internal/models"
 	"purr-chat-server/internal/repository"
 	"purr-chat-server/internal/services"
@@ -69,7 +70,20 @@ func SetupTestDB(t *testing.T) {
 // CreateTestTables 创建测试表
 func CreateTestTables(t *testing.T, ctx context.Context) {
 	tables := []string{
+		"bot_api_credential_audit_logs",
+		"bot_api_credentials",
+		"bot_event_ack_state",
+		"bot_event_outbox",
+		"bot_event_seq_counter",
+		"bot_call_logs",
+		"workflow_versions",
+		"bot_workflow_documents",
+		"bot_app_secrets",
+		"bot_deployments",
 		"user_settings",
+		"bot_installations",
+		"bot_identities",
+		"bots",
 		"enrollments",
 		"friendships",
 		"conversations",
@@ -186,6 +200,214 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 		t.Fatalf("Failed to create enrollments table: %v", err)
 	}
 
+	// 创建 bots 表(App 化模型,见 migration 007)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bots (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			name VARCHAR(40) NOT NULL,
+			avatar_url TEXT DEFAULT '',
+			description TEXT DEFAULT '',
+			status VARCHAR(20) NOT NULL DEFAULT 'active',
+			visibility VARCHAR(20) NOT NULL DEFAULT 'private',
+			mechanism_config JSONB NOT NULL DEFAULT '[]'::jsonb,
+			bot_type VARCHAR(20) NOT NULL DEFAULT 'workflow',
+			discoverability VARCHAR(20) NOT NULL DEFAULT 'unlisted',
+			is_system BOOLEAN NOT NULL DEFAULT FALSE,
+			requested_capabilities TEXT[] NOT NULL DEFAULT '{}',
+			allowed_endpoints TEXT[] NOT NULL DEFAULT '{}',
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT check_bot_status CHECK (status IN ('active', 'disabled')),
+			CONSTRAINT check_bot_visibility CHECK (visibility IN ('private', 'public', 'global')),
+			CONSTRAINT check_bot_type CHECK (bot_type IN ('builtin', 'workflow', 'external')),
+			CONSTRAINT check_bot_discoverability CHECK (discoverability IN ('unlisted', 'listed', 'featured'))
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bots table: %v", err)
+	}
+
+	// 创建 bot_identities 表
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_identities (
+			app_id UUID PRIMARY KEY REFERENCES bots(id) ON DELETE CASCADE,
+			user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+			display_name VARCHAR(40) NOT NULL,
+			avatar_url TEXT DEFAULT '',
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_identities table: %v", err)
+	}
+
+	// 创建 bot_installations 表
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_installations (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			app_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			installed_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			target_type VARCHAR(20) NOT NULL,
+			target_id UUID NOT NULL,
+			granted_capabilities TEXT[] NOT NULL DEFAULT '{}',
+			diagnostics_consent VARCHAR(20) NOT NULL DEFAULT 'denied',
+			status VARCHAR(20) NOT NULL DEFAULT 'active',
+			config JSONB DEFAULT '{}'::jsonb,
+			installed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(target_type, target_id, app_id),
+			CONSTRAINT check_installation_target CHECK (target_type IN ('user', 'conversation')),
+			CONSTRAINT check_installation_diag CHECK (diagnostics_consent IN ('denied', 'granted')),
+			CONSTRAINT check_installation_status CHECK (status IN ('active', 'paused', 'disabled'))
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_installations table: %v", err)
+	}
+
+	// 创建 bot_app_secrets 表(见 migration 008)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_app_secrets (
+			app_id     UUID        NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			key_name   VARCHAR(64) NOT NULL,
+			ciphertext TEXT        NOT NULL,
+			created_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (app_id, key_name)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_app_secrets table: %v", err)
+	}
+
+	// 创建 external Bot API credential 与无敏感正文审计表(见 migration 012)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_api_credentials (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			name VARCHAR(64) NOT NULL,
+			token_hash BYTEA NOT NULL UNIQUE,
+			token_prefix VARCHAR(20) NOT NULL,
+			last_used_at TIMESTAMP,
+			expires_at TIMESTAMP,
+			revoked_at TIMESTAMP,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT check_bot_api_credential_name CHECK (char_length(trim(name)) > 0)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_api_credentials table: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_api_credential_audit_logs (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			credential_id UUID NOT NULL REFERENCES bot_api_credentials(id) ON DELETE CASCADE,
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+			event_type VARCHAR(32) NOT NULL,
+			metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT check_bot_api_credential_audit_event CHECK (event_type IN ('created', 'rotated', 'revoked', 'connected', 'invoked'))
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_api_credential_audit_logs table: %v", err)
+	}
+
+	// 创建 bot_deployments 表(legacy,用于迁移测试)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_deployments (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+			deployed_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			status VARCHAR(20) NOT NULL DEFAULT 'active',
+			workflow_active BOOLEAN DEFAULT FALSE,
+			workflow_started_at TIMESTAMP,
+			deployed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(bot_id, conversation_id),
+			CONSTRAINT check_deployment_status CHECK (status IN ('active', 'paused'))
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_deployments table: %v", err)
+	}
+
+	// 创建 workflow_versions 表(mechanism 级，见 migration 010 + 016)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE workflow_versions (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			mechanism_id VARCHAR(100) NOT NULL DEFAULT '',
+			revision INTEGER NOT NULL,
+			document JSONB NOT NULL,
+			capabilities TEXT[] DEFAULT '{}',
+			published_by UUID REFERENCES users(id),
+			published_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(bot_id, mechanism_id, revision)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create workflow_versions table: %v", err)
+	}
+
+	// 创建 bot_workflow_documents 表(mechanism 级草稿，见 migration 016)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_workflow_documents (
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			mechanism_id VARCHAR(100) NOT NULL,
+			document JSONB,
+			revision INTEGER NOT NULL DEFAULT 0,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (bot_id, mechanism_id)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_workflow_documents table: %v", err)
+	}
+
+	// 创建 bot_call_logs 表(见 migration 004 + 011)
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_call_logs (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+			sender_id UUID NOT NULL,
+			sender_name VARCHAR(40) NOT NULL DEFAULT '',
+			trigger_message TEXT NOT NULL,
+			reply_content TEXT,
+			mechanism_id VARCHAR(100) NOT NULL DEFAULT '',
+			mechanism_name VARCHAR(100) NOT NULL DEFAULT '',
+			reply_type VARCHAR(20) NOT NULL DEFAULT '',
+			execution_path VARCHAR(10) NOT NULL DEFAULT 'ts',
+			success BOOLEAN NOT NULL DEFAULT TRUE,
+			error_message TEXT,
+			duration_ms INTEGER NOT NULL DEFAULT 0,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			run_id VARCHAR(64) NOT NULL DEFAULT '',
+			trigger_message_id UUID,
+			reply_message_id UUID,
+			workflow_revision INTEGER,
+			run_status VARCHAR(20) NOT NULL DEFAULT '',
+			error_type VARCHAR(60) NOT NULL DEFAULT '',
+			trace JSONB
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_call_logs table: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_bot_call_logs_bot_id ON bot_call_logs (bot_id, created_at DESC)`)
+	if err != nil {
+		t.Logf("Warning: Failed to create bot_call_logs index: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_bot_call_logs_bot_conv ON bot_call_logs (bot_id, conversation_id, created_at DESC)`)
+	if err != nil {
+		t.Logf("Warning: Failed to create bot_call_logs conv index: %v", err)
+	}
+
 	// 创建user_settings表
 	_, err = database.GetPool().Exec(ctx, `
 		CREATE TABLE user_settings (
@@ -196,6 +418,59 @@ func CreateTestTables(t *testing.T, ctx context.Context) {
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create user_settings table: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `CREATE SEQUENCE IF NOT EXISTS bot_event_seq_counter_seq START WITH 1`)
+	if err != nil {
+		t.Logf("Warning: Failed to create bot_event_seq_counter_seq: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_event_seq_counter (
+			bot_id   UUID PRIMARY KEY REFERENCES bots(id) ON DELETE CASCADE,
+			next_seq BIGINT NOT NULL DEFAULT 1
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_event_seq_counter table: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_event_outbox (
+			id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			bot_id     UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			event_id   TEXT NOT NULL,
+			seq        BIGINT NOT NULL,
+			payload    JSONB NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			acked_at   TIMESTAMP,
+			CONSTRAINT uq_bot_event_outbox_bot_seq UNIQUE (bot_id, seq),
+			CONSTRAINT uq_bot_event_outbox_bot_event UNIQUE (bot_id, event_id)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_event_outbox table: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_bot_event_outbox_resume ON bot_event_outbox (bot_id, seq)`)
+	if err != nil {
+		t.Logf("Warning: Failed to create outbox resume index: %v", err)
+	}
+	_, err = database.GetPool().Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_bot_event_outbox_created ON bot_event_outbox (created_at)`)
+	if err != nil {
+		t.Logf("Warning: Failed to create outbox created index: %v", err)
+	}
+
+	_, err = database.GetPool().Exec(ctx, `
+		CREATE TABLE bot_event_ack_state (
+			credential_id  UUID NOT NULL REFERENCES bot_api_credentials(id) ON DELETE CASCADE,
+			bot_id         UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+			last_acked_seq BIGINT NOT NULL DEFAULT 0,
+			updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (credential_id, bot_id)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create bot_event_ack_state table: %v", err)
 	}
 
 	// 创建更新时间触发器函数
@@ -501,7 +776,7 @@ func SetupTestRouter() {
 
 	authService := services.NewAuthService(userRepo, repository.NewBotRepository(), jwtSecret)
 	conversationService := services.NewConversationService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, friendshipRepo)
-	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, nil, nil)
+	messageService := services.NewMessageService(userRepo, conversationRepo, enrollmentRepo, conversationMessageRepo, nil, nil, messaging.NewPublisher(0))
 	friendService := services.NewFriendService(userRepo, friendshipRepo, enrollmentRepo, conversationMessageRepo)
 	memberService := services.NewMemberService(userRepo, conversationRepo, enrollmentRepo)
 	userService := services.NewUserService(userRepo)
@@ -519,8 +794,11 @@ func SetupTestRouter() {
 
 	testRouter.GET("/api/conversations", handlers.AuthMiddleware(jwtSecret), chatHandler.GetConversations)
 	testRouter.POST("/api/conversations", handlers.AuthMiddleware(jwtSecret), chatHandler.CreateConversation)
+	testRouter.GET("/api/conversations/members", handlers.AuthMiddleware(jwtSecret), chatHandler.GetConversationMembers)
 
 	testRouter.GET("/api/messages", handlers.AuthMiddleware(jwtSecret), chatHandler.GetMessages)
+	testRouter.GET("/api/messages/export", handlers.AuthMiddleware(jwtSecret), chatHandler.ExportMessages)
+	testRouter.GET("/api/messages/incremental", handlers.AuthMiddleware(jwtSecret), chatHandler.GetMessagesIncremental)
 	testRouter.POST("/api/messages", handlers.AuthMiddleware(jwtSecret), chatHandler.SendMessage)
 
 	testRouter.GET("/api/friends", handlers.AuthMiddleware(jwtSecret), chatHandler.GetFriends)
@@ -556,7 +834,20 @@ func CleanupTestTables(t *testing.T) {
 	}
 
 	tables := []string{
+		"bot_api_credential_audit_logs",
+		"bot_api_credentials",
+		"bot_event_ack_state",
+		"bot_event_outbox",
+		"bot_event_seq_counter",
+		"bot_call_logs",
+		"workflow_versions",
+		"bot_workflow_documents",
+		"bot_app_secrets",
+		"bot_deployments",
 		"user_settings",
+		"bot_installations",
+		"bot_identities",
+		"bots",
 		"enrollments",
 		"friendships",
 		"conversations",

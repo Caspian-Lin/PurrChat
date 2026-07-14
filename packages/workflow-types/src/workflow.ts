@@ -36,11 +36,10 @@ export interface TriggerRule {
 
 // 回复规格
 export interface ReplySpec {
-  type: 'predefined' | 'llm' | 'workflow' | 'special_mode';
+  type: 'predefined' | 'llm' | 'workflow';
   predefined?: PredefinedConfig;
   llm?: LLMConfig;
   workflow?: WorkflowSpec;
-  special_mode?: WorkflowSpec;
 }
 
 // 预定义回复配置
@@ -75,6 +74,8 @@ export interface WorkflowEvent {
   id: string;
   type: EventType;
   name: string;
+  /** 稳定 key：用于变量引用 ${nodes.<key>.outputs.<port>} */
+  key?: string;
   config: Record<string, any>;
   ports?: EventPort[];
   position?: { x: number; y: number };

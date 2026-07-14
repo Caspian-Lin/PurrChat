@@ -1,6 +1,7 @@
 import { websocketService } from './websocket';
 import { useMessageStore } from '../stores/message';
 import { useAuthStore } from '../stores/auth';
+import { useBotStore } from '../stores/bot';
 import type { Message, Conversation, Friendship, User } from '../models/types';
 
 // WebSocket事件数据类型定义
@@ -66,6 +67,13 @@ export interface UserOnlineStatusEventData {
   last_seen?: string;
 }
 
+export interface BotDeployedEventData {
+  bot_id: string;
+  bot_name: string;
+  conversation_id: string;
+  deployed_by: string;
+}
+
 // 回调函数类型定义
 export type ConversationUpdateCallback = (_conversation: Conversation) => void;
 export type MessageUpdateCallback = (_conversationId: string, _message: Message) => void;
@@ -74,6 +82,11 @@ export type OnlineStatusCallback = (_userId: string, _online: boolean) => void;
 export type WorkflowChangeCallback = (
   _event: 'started' | 'ended',
   _data: { bot_id: string; bot_name: string; conversation_id: string }
+) => void;
+
+export type BotDeploymentChangeCallback = (
+  _event: 'deployed' | 'undeployed',
+  _data: BotDeployedEventData
 ) => void;
 
 /**
@@ -87,6 +100,7 @@ class WebSocketEventManager {
   private friendRequestCallbacks: Set<FriendRequestCallback> = new Set();
   private onlineStatusCallbacks: Set<OnlineStatusCallback> = new Set();
   private workflowCallbacks: Set<WorkflowChangeCallback> = new Set();
+  private botDeploymentCallbacks: Set<BotDeploymentChangeCallback> = new Set();
 
   // 当前选中的会话ID
   private currentConversationId: string | null = null;
@@ -126,11 +140,16 @@ class WebSocketEventManager {
     // 用户在线状态事件
     websocketService.on('user_online_status', this.handleUserOnlineStatus.bind(this));
 
-    // Bot 工作流事件（新旧事件名并存，向后兼容）
-    websocketService.on('bot_special_mode_started', this.handleWorkflowStarted.bind(this));
-    websocketService.on('bot_special_mode_ended', this.handleWorkflowEnded.bind(this));
+    // Bot 工作流事件
     websocketService.on('bot_workflow_started', this.handleWorkflowStarted.bind(this));
     websocketService.on('bot_workflow_ended', this.handleWorkflowEnded.bind(this));
+
+    // Bot 安装/卸载事件
+    websocketService.on('bot_deployed', this.handleBotDeployed.bind(this));
+    websocketService.on('bot_undeployed', this.handleBotUndeployed.bind(this));
+
+    // Bot 状态变更（发布工作流等）
+    websocketService.on('bot_updated', this.handleBotUpdated.bind(this));
   }
 
   /**
@@ -497,12 +516,50 @@ class WebSocketEventManager {
     this.workflowCallbacks.forEach((callback) => callback('ended', data));
   }
 
+  private handleBotDeployed(data: BotDeployedEventData) {
+    console.log('[WebSocketEventManager] Bot 安装事件:', data);
+    this.botDeploymentCallbacks.forEach((callback) => callback('deployed', data));
+    this.conversationUpdateCallbacks.forEach((callback) => {
+      callback({
+        id: data.conversation_id,
+        conversation_type: 'group',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    });
+  }
+
+  private handleBotUndeployed(data: BotDeployedEventData) {
+    console.log('[WebSocketEventManager] Bot 卸载事件:', data);
+    this.botDeploymentCallbacks.forEach((callback) => callback('undeployed', data));
+    this.conversationUpdateCallbacks.forEach((callback) => {
+      callback({
+        id: data.conversation_id,
+        conversation_type: 'group',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    });
+  }
+
+  private handleBotUpdated(data: { bot_id: string }) {
+    console.log('[WebSocketEventManager] Bot 状态变更:', data);
+    const botStore = useBotStore();
+    botStore.loadBots();
+    botStore.loadDeployments();
+  }
+
   /**
    * 注册工作流变更回调
    */
   onWorkflowChange(callback: WorkflowChangeCallback) {
     this.workflowCallbacks.add(callback);
     return () => this.workflowCallbacks.delete(callback);
+  }
+
+  onBotDeploymentChange(callback: BotDeploymentChangeCallback) {
+    this.botDeploymentCallbacks.add(callback);
+    return () => this.botDeploymentCallbacks.delete(callback);
   }
 
   /**

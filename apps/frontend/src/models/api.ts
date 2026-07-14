@@ -31,15 +31,20 @@ import type {
   CreateBotRequest,
   UpdateBotRequest,
   DeployBotRequest,
+  CreateBotInstallationRequest,
+  UpdateBotInstallationRequest,
   UpdateDeploymentStatusRequest,
   BotDeployment,
   PaginatedSearchResult,
   DeployableConversation,
-  DebugBotRequest,
-  DebugStepRequest,
-  DebugResetRequest,
-  DebugTraceResult,
   BotCallLogListResponse,
+  WorkflowDocumentResponse,
+  WorkflowValidationResponse,
+  WorkflowVersion,
+  BotApiCapabilities,
+  BotAPICredential,
+  BotAPICredentialSecret,
+  CreateBotAPICredentialRequest,
 } from './types';
 import { getApiBaseUrl, getStorageApiBaseUrl, logger } from '../config/app';
 
@@ -313,6 +318,11 @@ export const api = {
 
   // ===== Bot API =====
 
+  // 获取由服务端 OneBot Registry 生成的支持矩阵。
+  getBotApiCapabilities: (): Promise<BotApiCapabilities> => {
+    return apiClient.get('/api/bot/v1/capabilities').then((res) => res.data);
+  },
+
   // 获取用户创建的 Bot 列表
   getBots: (): Promise<ApiResponse<Bot[]>> => {
     return apiClient.get('/api/bots').then((res) => res.data);
@@ -339,6 +349,38 @@ export const api = {
     return apiClient.get('/api/bots/deployments').then((res) => res.data);
   },
 
+  createBotInstallation: (
+    botId: string,
+    data: CreateBotInstallationRequest
+  ): Promise<ApiResponse<{ installation: BotDeployment }>> => {
+    return apiClient
+      .post(`/api/bots/${botId}/installations`, data)
+      .then((res) => res.data)
+      .catch((error) => ({
+        success: false,
+        code: error.response?.data?.code,
+        message: error.response?.data?.message || '安装 Bot 失败',
+      }));
+  },
+
+  updateBotInstallation: (
+    installationId: string,
+    data: UpdateBotInstallationRequest
+  ): Promise<ApiResponse<{ installation: BotDeployment }>> => {
+    return apiClient
+      .patch(`/api/installations/${installationId}`, data)
+      .then((res) => res.data)
+      .catch((error) => ({
+        success: false,
+        code: error.response?.data?.code,
+        message: error.response?.data?.message || '更新 Bot 权限失败',
+      }));
+  },
+
+  uninstallBotInstallation: (installationId: string): Promise<ApiResponse<void>> => {
+    return apiClient.delete(`/api/installations/${installationId}`).then((res) => res.data);
+  },
+
   // 获取会话中的活跃 Bot 列表
   getConversationBots: (conversationId: string): Promise<ApiResponse<BotDeployment[]>> => {
     return apiClient.get(`/api/conversations/${conversationId}/bots`).then((res) => res.data);
@@ -362,6 +404,36 @@ export const api = {
   // 删除 Bot
   deleteBot: (botId: string): Promise<ApiResponse<void>> => {
     return apiClient.delete(`/api/bots/${botId}`).then((res) => res.data);
+  },
+
+  // ===== Bot API Credentials =====
+
+  listBotCredentials: (
+    botId: string
+  ): Promise<{ credentials: BotAPICredential[]; total: number }> => {
+    return apiClient.get(`/api/bots/${botId}/credentials`).then((res) => res.data);
+  },
+
+  createBotCredential: (
+    botId: string,
+    data: CreateBotAPICredentialRequest
+  ): Promise<BotAPICredentialSecret> => {
+    return apiClient.post(`/api/bots/${botId}/credentials`, data).then((res) => res.data);
+  },
+
+  rotateBotCredential: (
+    botId: string,
+    credentialId: string
+  ): Promise<BotAPICredentialSecret> => {
+    return apiClient
+      .post(`/api/bots/${botId}/credentials/${credentialId}/rotate`)
+      .then((res) => res.data);
+  },
+
+  revokeBotCredential: (botId: string, credentialId: string): Promise<BotAPICredential> => {
+    return apiClient
+      .delete(`/api/bots/${botId}/credentials/${credentialId}`)
+      .then((res) => res.data);
   },
 
   // 部署 Bot 到会话
@@ -391,34 +463,6 @@ export const api = {
     return apiClient.post(`/api/bots/${botId}/conversation`).then((res) => res.data);
   },
 
-  // 激活 Bot 特殊模式
-  activateSpecialMode: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
-    return apiClient
-      .post(`/api/bots/${botId}/special-mode/activate`, { conversation_id: conversationId })
-      .then((res) => res.data);
-  },
-
-  // 停用 Bot 特殊模式
-  deactivateSpecialMode: (botId: string, conversationId: string): Promise<ApiResponse<void>> => {
-    return apiClient
-      .post(`/api/bots/${botId}/special-mode/deactivate`, { conversation_id: conversationId })
-      .then((res) => res.data);
-  },
-
-  // ─── 调试 API ───
-
-  debugBot: (botId: string, data: DebugBotRequest): Promise<ApiResponse<DebugTraceResult>> => {
-    return apiClient.post(`/api/bots/${botId}/debug`, data).then((res) => res.data);
-  },
-
-  debugStep: (botId: string, data: DebugStepRequest): Promise<ApiResponse<DebugTraceResult>> => {
-    return apiClient.post(`/api/bots/${botId}/debug/step`, data).then((res) => res.data);
-  },
-
-  debugReset: (botId: string, data: DebugResetRequest): Promise<ApiResponse<void>> => {
-    return apiClient.post(`/api/bots/${botId}/debug/reset`, data).then((res) => res.data);
-  },
-
   getBotCallLogs: (
     botId: string,
     limit = 20,
@@ -426,6 +470,91 @@ export const api = {
   ): Promise<ApiResponse<BotCallLogListResponse>> => {
     return apiClient
       .get(`/api/bots/${botId}/call-logs`, { params: { limit, offset } })
+      .then((res) => res.data);
+  },
+
+  // ─── Workflow Document API（mechanism 级, #87/#88）───
+
+  getWorkflow: (botId: string, mechanismId: string): Promise<WorkflowDocumentResponse> => {
+    return apiClient
+      .get(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow`)
+      .then((res) => res.data);
+  },
+
+  updateWorkflow: (
+    botId: string,
+    mechanismId: string,
+    data: { revision: number; document: unknown }
+  ): Promise<WorkflowDocumentResponse> => {
+    return apiClient
+      .put(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow`, data, {
+        headers: { 'If-Match': String(data.revision) },
+      })
+      .then((res) => res.data);
+  },
+
+  validateWorkflow: (
+    botId: string,
+    mechanismId: string,
+    document: unknown
+  ): Promise<WorkflowValidationResponse> => {
+    return apiClient
+      .post(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow/validate`, { document })
+      .then((res) => res.data);
+  },
+
+  publishWorkflow: (
+    botId: string,
+    mechanismId: string,
+    revision: number
+  ): Promise<WorkflowVersion> => {
+    return apiClient
+      .post(
+        `/api/bots/${botId}/mechanisms/${mechanismId}/workflow/publish`,
+        { revision },
+        { headers: { 'If-Match': String(revision) } }
+      )
+      .then((res) => res.data);
+  },
+
+  listWorkflowVersions: (botId: string, mechanismId: string): Promise<WorkflowVersion[]> => {
+    return apiClient
+      .get(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow/versions`)
+      .then((res) => res.data);
+  },
+
+  rollbackWorkflow: (
+    botId: string,
+    mechanismId: string,
+    revision: number
+  ): Promise<WorkflowDocumentResponse> => {
+    return apiClient
+      .post(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow/versions/${revision}/rollback`)
+      .then((res) => res.data);
+  },
+
+  testRunWorkflow: (
+    botId: string,
+    mechanismId: string,
+    data: {
+      message: string;
+      document?: unknown;
+      side_effects?: string;
+      step_mode?: boolean;
+      sender_name?: string;
+      session_id?: string;
+    }
+  ): Promise<unknown> => {
+    return apiClient
+      .post(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow/test-runs`, data)
+      .then((res) => res.data);
+  },
+
+  testRunStep: (botId: string, mechanismId: string, sessionId: string): Promise<unknown> => {
+    return apiClient
+      .post(`/api/bots/${botId}/mechanisms/${mechanismId}/workflow/test-runs/step`, {
+        session_id: sessionId,
+      })
       .then((res) => res.data);
   },
 };

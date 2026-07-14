@@ -81,16 +81,16 @@ DB_PASSWORD=mypassword \
 
 #### 环境变量
 
-| 变量              | 说明                                             | 默认值        |
-| ----------------- | ------------------------------------------------ | ------------- |
-| `DB_HOST`         | 数据库主机                                       | `localhost`   |
-| `DB_PORT`         | 数据库端口                                       | `5432`        |
-| `DB_NAME`         | 管理连接数据库                                   | `postgres`    |
+| 变量              | 说明                                              | 默认值        |
+| ----------------- | ------------------------------------------------- | ------------- |
+| `DB_HOST`         | 数据库主机                                        | `localhost`   |
+| `DB_PORT`         | 数据库端口                                        | `5432`        |
+| `DB_NAME`         | 管理连接数据库                                    | `postgres`    |
 | `DB_USER`         | 管理数据库用户，需要 `CREATEDB`/`CREATEROLE` 权限 | `postgres`    |
-| `DB_PASSWORD`     | 管理数据库用户密码                               | （空）        |
-| `APP_DB_NAME`     | 应用数据库名称                                   | `purrchat`    |
-| `APP_DB_USER`     | 应用迁移/运行用户                                | `purrchat`    |
-| `APP_DB_PASSWORD` | 应用数据库用户密码                               | `purrchat_pw` |
+| `DB_PASSWORD`     | 管理数据库用户密码                                | （空）        |
+| `APP_DB_NAME`     | 应用数据库名称                                    | `purrchat`    |
+| `APP_DB_USER`     | 应用迁移/运行用户                                 | `purrchat`    |
+| `APP_DB_PASSWORD` | 应用数据库用户密码                                | `purrchat_pw` |
 
 ## 使用场景
 
@@ -145,12 +145,12 @@ psql -U postgres -d purrchat -c "ALTER DATABASE purrchat OWNER TO purrchat; GRAN
 make migrate
 
 # 方法 3：直接运行 Go 程序
-cd apps/backend && go run cmd/server/main.go migrate
+cd apps/backend && go run ./cmd/migrate up
 ```
 
 ## 迁移脚本自动执行
 
-新的迁移系统会自动执行 `migrations` 目录下的所有 SQL 文件，按文件名排序执行（如 001、002、003...）。添加新的迁移文件时，只需在 `migrations` 目录下添加新的 `.sql` 文件即可，无需修改代码。
+迁移运行器只执行尚未记录的 SQL，并校验已应用文件的 filename 与 checksum。backend 和 storage 使用独立版本命名空间；创建、执行和 baseline 流程见 [`docs/MIGRATIONS.md`](../../docs/MIGRATIONS.md)。
 
 ## 备份恢复
 
@@ -208,7 +208,7 @@ ls -ld scripts/backups/
 
 ## 相关文档
 
-- [数据库迁移指南](../../docs/MIGRATION.md)
+- [数据库迁移指南](../../docs/MIGRATIONS.md)
 - [部署指南](../../docs/DEPLOYMENT.md)
 - [数据库架构](../../migrations/001_init_schema.sql)
 
@@ -220,7 +220,3 @@ ls -ld scripts/backups/
 2. 验证数据库连接配置
 3. 确认 PostgreSQL 服务状态
 4. 查阅故障排除部分
-
-## 许可证
-
-本脚本作为 PurrChat 项目的一部分，遵循项目许可证。

@@ -10,6 +10,9 @@ import type {
   UpdateDeploymentStatusRequest,
   PublicBotDetail,
   DeployableConversation,
+  BotDeployment,
+  CreateBotInstallationRequest,
+  UpdateBotInstallationRequest,
 } from '../models/types';
 
 export const useBots = () => {
@@ -102,6 +105,51 @@ export const useBots = () => {
     }
   }
 
+  async function installBot(
+    botId: string,
+    data: CreateBotInstallationRequest
+  ): Promise<BotDeployment | null> {
+    const response = await api.createBotInstallation(botId, data);
+    if (response.success && response.data?.installation) {
+      notify.success(data.target_type === 'conversation' ? 'Bot 已安装到群聊' : 'Bot 已安装');
+      await botStore.loadDeployments();
+      return response.data.installation;
+    }
+    notify.error(response.message || '安装 Bot 失败');
+    return null;
+  }
+
+  async function updateInstallation(
+    installationId: string,
+    data: UpdateBotInstallationRequest
+  ): Promise<BotDeployment | null> {
+    const response = await api.updateBotInstallation(installationId, data);
+    if (response.success && response.data?.installation) {
+      notify.success('Bot 权限已更新');
+      await botStore.loadDeployments();
+      return response.data.installation;
+    }
+    notify.error(response.message || '更新 Bot 权限失败');
+    return null;
+  }
+
+  async function uninstallInstallation(installationId: string): Promise<boolean> {
+    try {
+      const response = await api.uninstallBotInstallation(installationId);
+      if (response.success) {
+        notify.success('Bot 已移除');
+        await botStore.loadDeployments();
+        return true;
+      }
+      notify.error(response.message || '移除 Bot 失败');
+      return false;
+    } catch (err) {
+      console.error('[useBots] 移除 Bot 失败:', err);
+      notify.error('移除 Bot 失败');
+      return false;
+    }
+  }
+
   // 从会话移除 Bot
   async function undeployBot(botId: string, conversationId: string): Promise<boolean> {
     try {
@@ -181,7 +229,7 @@ export const useBots = () => {
     }
   }
 
-  // 获取可部署 Bot 的群聊列表
+  // 获取可安装 Bot 的群聊列表
   async function getDeployableConversations(botId: string): Promise<DeployableConversation[]> {
     try {
       const response = await api.getDeployableConversations(botId);
@@ -201,6 +249,9 @@ export const useBots = () => {
     updateBot,
     deleteBot,
     deployBot,
+    installBot,
+    updateInstallation,
+    uninstallInstallation,
     undeployBot,
     updateDeploymentStatus,
     createBotConversation,

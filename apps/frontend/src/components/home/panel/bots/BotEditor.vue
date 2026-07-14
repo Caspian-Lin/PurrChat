@@ -28,8 +28,9 @@
       >
         {{ form.status === 'active' ? '活跃' : '已禁用' }}
       </span>
-      <!-- 导出/导入按钮 -->
+      <!-- 导出/导入按钮（仅 owner） -->
       <button
+        v-if="isOwned"
         class="p-1.5 rounded-lg hover:bg-hover-bg text-text-tertiary hover:text-text-primary transition-colors"
         aria-label="导入配置"
         title="导入配置"
@@ -47,8 +48,58 @@
       </button>
     </div>
 
-    <!-- 编辑器内容 -->
-    <div class="flex-1 overflow-y-auto">
+    <!-- 非 owner：只读信息 + 操作 -->
+    <div v-if="!isOwned" class="flex-1 overflow-y-auto">
+      <div class="mx-auto max-w-2xl p-6 space-y-6">
+        <!-- Bot 头像与名称 -->
+        <div class="flex items-start gap-4">
+          <div
+            class="w-16 h-16 rounded-[var(--radius-lg,16px)] flex items-center justify-center flex-shrink-0 text-white font-bold"
+            style="background: var(--theme-primary)"
+          >
+            <BsCpu v-if="!bot.avatar_url" :size="28" />
+            <img
+              v-else
+              :src="bot.avatar_url"
+              :alt="bot.name"
+              class="w-full h-full rounded-[var(--radius-lg,16px)] object-cover"
+              referrerpolicy="no-referrer"
+            />
+          </div>
+          <div class="flex-1 min-w-0">
+            <h2 class="text-lg font-semibold text-text-primary">{{ bot.name }}</h2>
+            <p class="text-sm text-text-tertiary mt-1">{{ bot.description || '无描述' }}</p>
+            <span
+              class="inline-block mt-2 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]"
+            >
+              公开 Bot
+            </span>
+          </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="flex gap-3">
+          <button
+            class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-sm,8px)] text-white transition-colors"
+            style="background: var(--theme-primary)"
+            @click="$emit('create-conversation', bot.id)"
+          >
+            <BsChatDots :size="16" />
+            开始对话
+          </button>
+          <button
+            class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-secondary hover:bg-hover-bg transition-colors"
+            @click="$emit('deploy', bot.id)"
+          >
+            <BsBoxArrowUpRight :size="16" />
+            安装到群聊
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- owner：完整编辑器 -->
+    <div v-else class="flex-1 overflow-y-auto">
       <div class="mx-auto max-w-3xl p-6 space-y-8">
         <!-- 基本信息 -->
         <section>
@@ -128,8 +179,8 @@
           </div>
         </section>
 
-        <!-- 机制列表 -->
-        <section>
+        <!-- 机制列表（仅 workflow bot） -->
+        <section v-if="bot.bot_type !== 'external'">
           <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
             <BsGear :size="16" class="text-text-tertiary" />
             机制列表
@@ -175,6 +226,12 @@
           </div>
         </section>
 
+        <!-- OneBot API 管理（仅 external bot） -->
+        <template v-if="bot.bot_type === 'external'">
+          <BotCredentialsPanel :bot-id="bot.id" />
+          <BotApiGuide :bot-id="bot.id" />
+        </template>
+
         <!-- 调用记录 -->
         <section class="mt-6">
           <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
@@ -183,49 +240,40 @@
           </h3>
           <BotCallLogs :bot-id="bot.id" />
         </section>
-
-        <!-- 调试面板（仅当有特殊模式机制时显示） -->
-        <section v-if="specialModeMechanism">
-          <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
-            <BsBug :size="16" class="text-text-tertiary" />
-            调试 — {{ specialModeMechanism.name }}
-          </h3>
-          <BotDebugPanel :bot-id="bot.id" :mechanism="specialModeMechanism" :bot-name="form.name" />
-        </section>
-
-        <!-- 保存按钮 -->
-        <div class="flex justify-end gap-3 pb-6">
-          <button
-            class="px-4 py-2 text-sm rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-secondary hover:bg-hover-bg transition-colors"
-            @click="resetForm"
-          >
-            重置
-          </button>
-          <button
-            class="px-4 py-2 text-sm rounded-[var(--radius-sm,8px)] text-white transition-colors disabled:opacity-50"
-            style="background: var(--theme-primary)"
-            :disabled="saving"
-            @click="handleSave"
-          >
-            {{ saving ? '保存中...' : '保存更改' }}
-          </button>
-        </div>
       </div>
+    </div>
+
+    <!-- 浮动保存按钮（仅 owner） -->
+    <div v-if="isOwned" class="fixed bottom-12 right-12 z-40 flex items-center gap-2">
+      <Transition name="reset-btn">
+        <button
+          v-if="isDirty && !saving"
+          class="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-secondary hover:bg-hover-bg transition-all duration-200 active:scale-[0.98]"
+          @click="resetForm"
+        >
+          <BsArrowCounterclockwise :size="16" />
+          重置
+        </button>
+      </Transition>
+      <SaveButton :is-dirty="isDirty" :is-saving="saving" @save="handleSave" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, computed } from 'vue';
+import { reactive, ref, computed, watch } from 'vue';
 import {
   BsArrowLeft,
   BsInfoCircle,
   BsGear,
-  BsBug,
   BsUpload,
   BsDownload,
   BsPlus,
   BsClockHistory,
+  BsArrowCounterclockwise,
+  BsCpu,
+  BsChatDots,
+  BsBoxArrowUpRight,
 } from 'vue-icons-plus/bs';
 import type {
   Bot,
@@ -236,18 +284,25 @@ import type {
   TriggerSpec,
 } from '../../../../models/types';
 import MechanismCard from './MechanismCard.vue';
-import BotDebugPanel from './BotDebugPanel.vue';
 import BotCallLogs from './BotCallLogs.vue';
+import BotCredentialsPanel from './BotCredentialsPanel.vue';
+import BotApiGuide from './BotApiGuide.vue';
+import SaveButton from '../settings/SaveButton.vue';
 
 interface Props {
   bot: Bot;
+  isOwned?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  isOwned: true,
+});
 
 const emit = defineEmits<{
   update: [botId: string, data: UpdateBotRequest];
   back: [];
+  'create-conversation': [botId: string];
+  deploy: [botId: string];
 }>();
 
 const saving = ref(false);
@@ -258,61 +313,21 @@ const visibilityOptions = [
   { value: 'global' as BotVisibility, label: '系统' },
 ];
 
-// 从 Bot 数据中提取机制列表（兼容旧格式）
+// 从 Bot 数据中提取机制列表
 function extractMechanisms(bot: Bot): Mechanism[] {
-  // 优先使用新的 mechanism_config
+  if (bot.bot_type === 'external') return [];
   if (bot.mechanism_config?.mechanisms?.length) {
     return bot.mechanism_config.mechanisms.map((m) => deepCloneMechanism(m));
   }
-
-  // 兼容旧格式：合并 trigger_config + reply_config 为一个默认机制
-  const mechanisms: Mechanism[] = [];
-
-  if (bot.trigger_config || bot.reply_config) {
-    mechanisms.push({
-      id: 'mech_default',
-      name: '默认机制',
-      enabled: true,
-      trigger: (bot.trigger_config as any)
-        ? {
-            type: (bot.trigger_config as any).mode === 'probability' ? 'probability' : 'rule',
-            rules: (bot.trigger_config as any).rules,
-            probability: (bot.trigger_config as any).probability,
-          }
-        : { type: 'rule', rules: [] },
-      reply: (bot.reply_config as any) || {
-        type: 'predefined',
-        predefined: { mode: 'random', replies: ['...'] },
-      },
-    });
-  }
-
-  // 如果有 special_mode_config，创建第二个特殊模式机制
-  if (bot.special_mode_config && (bot.special_mode_config as any).events?.length) {
-    mechanisms.push({
-      id: 'mech_special',
-      name: '特殊模式',
-      enabled: true,
-      trigger: { type: 'rule', rules: [] },
-      reply: {
-        type: 'special_mode',
-        special_mode: bot.special_mode_config as any,
-      },
-    });
-  }
-
-  // 如果没有任何机制，创建一个默认的空规则机制
-  if (mechanisms.length === 0) {
-    mechanisms.push({
+  // 无机制时创建一个默认的空规则机制
+  return [
+    {
       id: 'mech_default',
       name: '默认机制',
       enabled: true,
       trigger: { type: 'rule', rules: [] },
-      reply: { type: 'predefined', predefined: { mode: 'random', replies: ['...'] } },
-    });
-  }
-
-  return mechanisms;
+    },
+  ];
 }
 
 function deepCloneMechanism(m: Mechanism): Mechanism {
@@ -323,19 +338,6 @@ function deepCloneMechanism(m: Mechanism): Mechanism {
     trigger: {
       ...m.trigger,
       rules: m.trigger?.rules?.map((r) => ({ ...r })) || [],
-    },
-    reply: {
-      ...m.reply,
-      predefined: m.reply.predefined
-        ? { ...m.reply.predefined, replies: [...(m.reply.predefined.replies || [])] }
-        : undefined,
-      llm: m.reply.llm ? { ...m.reply.llm } : undefined,
-      special_mode: m.reply.special_mode
-        ? {
-            events: m.reply.special_mode.events.map((e) => ({ ...e, config: { ...e.config } })),
-            end_conditions: m.reply.special_mode.end_conditions.map((c) => ({ ...c })),
-          }
-        : undefined,
     },
   };
 }
@@ -348,14 +350,38 @@ const form = reactive({
   mechanisms: extractMechanisms(props.bot),
 });
 
+// ─── Dirty 检测 ──────────────────────────────────────────────
+
+function serializeForm(): string {
+  return JSON.stringify({
+    name: form.name,
+    description: form.description,
+    visibility: form.visibility,
+    status: form.status,
+    mechanisms: form.mechanisms,
+  });
+}
+
+const baseline = ref(serializeForm());
+
+const isDirty = computed(() => serializeForm() !== baseline.value);
+
+// Bot 切换时重置 baseline
+watch(
+  () => props.bot.id,
+  () => {
+    form.name = props.bot.name;
+    form.description = props.bot.description;
+    form.visibility = props.bot.visibility;
+    form.status = props.bot.status;
+    form.mechanisms = extractMechanisms(props.bot);
+    baseline.value = serializeForm();
+  }
+);
+
 // 计算属性：是否已有概率机制
 const hasProbabilityMechanism = computed(() => {
   return form.mechanisms.some((m) => m.trigger.type === 'probability');
-});
-
-// 计算属性：找到特殊模式机制（调试面板用）
-const specialModeMechanism = computed<Mechanism | null>(() => {
-  return form.mechanisms.find((m) => m.reply.type === 'special_mode') || null;
 });
 
 function resetForm() {
@@ -364,6 +390,7 @@ function resetForm() {
   form.visibility = props.bot.visibility;
   form.status = props.bot.status;
   form.mechanisms = extractMechanisms(props.bot);
+  baseline.value = serializeForm();
 }
 
 function generateId(): string {
@@ -381,7 +408,6 @@ function addMechanism(triggerType: 'rule' | 'probability') {
     name: triggerType === 'probability' ? '概率回复' : '新机制',
     enabled: true,
     trigger,
-    reply: { type: 'predefined', predefined: { mode: 'random', replies: ['...'] } },
   };
 
   form.mechanisms.push(mechanism);
@@ -443,21 +469,11 @@ function handleImport() {
       try {
         const data = JSON.parse(ev.target?.result as string);
 
-        // v2 格式（新机制列表）
+        // v2 格式（机制列表）
         if (data.mechanism_config?.mechanisms) {
           form.mechanisms = data.mechanism_config.mechanisms.map((m: Mechanism) =>
             deepCloneMechanism(m)
           );
-        }
-
-        // 兼容 v1 格式（旧三字段）
-        if (data.trigger_config && !data.mechanism_config) {
-          form.mechanisms = extractMechanisms({
-            ...props.bot,
-            trigger_config: data.trigger_config,
-            reply_config: data.reply_config,
-            special_mode_config: data.special_mode_config,
-          } as Bot);
         }
 
         if (data.bot) {
@@ -476,19 +492,41 @@ function handleImport() {
 async function handleSave() {
   saving.value = true;
   try {
-    const mechanismConfig: MechanismConfig = {
-      mechanisms: form.mechanisms.map((m) => deepCloneMechanism(m)),
-    };
-
-    emit('update', props.bot.id, {
+    const updateData: UpdateBotRequest = {
       name: form.name,
       description: form.description,
       visibility: form.visibility,
       status: form.status,
-      mechanism_config: mechanismConfig,
-    });
+    };
+
+    if (props.bot.bot_type !== 'external') {
+      updateData.mechanism_config = {
+        mechanisms: form.mechanisms.map((m) => deepCloneMechanism(m)),
+      };
+    }
+
+    emit('update', props.bot.id, updateData);
+
+    baseline.value = serializeForm();
   } finally {
     saving.value = false;
   }
 }
 </script>
+
+<style scoped>
+.reset-btn-enter-active {
+  transition: all 200ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+.reset-btn-leave-active {
+  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reset-btn-enter-from {
+  opacity: 0;
+  transform: translateY(16px);
+}
+.reset-btn-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+</style>

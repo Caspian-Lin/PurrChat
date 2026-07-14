@@ -9,6 +9,7 @@ vi.mock('axios', () => {
     create: vi.fn(() => mockAxios),
     get: vi.fn(),
     post: vi.fn(),
+    patch: vi.fn(),
     put: vi.fn(),
     delete: vi.fn(),
     interceptors: {
@@ -33,6 +34,83 @@ describe('API Client', () => {
     localStorage.clear();
     // Reset the mock to return itself
     mockedAxios.create.mockReturnValue(mockedAxios as any);
+  });
+
+  it('gets the Bot API capability catalog from the Registry endpoint', async () => {
+    const catalog = { profile: {}, actions: [], events: [], segments: [] };
+    mockedAxios.get.mockResolvedValueOnce({ data: catalog } as any);
+
+    await expect(api.getBotApiCapabilities()).resolves.toEqual(catalog);
+    expect(mockedAxios.get).toHaveBeenCalledWith('/api/bot/v1/capabilities');
+  });
+
+  it('creates and updates Bot installations with explicit capabilities', async () => {
+    const installation = {
+      id: 'installation-1',
+      app_id: 'bot-1',
+      installed_by: 'user-1',
+      target_type: 'conversation' as const,
+      target_id: 'conversation-1',
+      granted_capabilities: ['messages:read_trigger', 'messages:send'],
+      status: 'active' as const,
+      installed_at: '2026-07-13T00:00:00Z',
+      updated_at: '2026-07-13T00:00:00Z',
+    };
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { success: true, data: { installation } },
+    } as any);
+    mockedAxios.patch.mockResolvedValueOnce({
+      data: { success: true, data: { installation } },
+    } as any);
+
+    const createRequest = {
+      target_type: 'conversation' as const,
+      target_id: 'conversation-1',
+      granted_capabilities: ['messages:read_trigger', 'messages:send'],
+      diagnostics_consent: 'denied' as const,
+    };
+    await api.createBotInstallation('bot-1', createRequest);
+    await api.updateBotInstallation('installation-1', {
+      granted_capabilities: createRequest.granted_capabilities,
+    });
+
+    expect(mockedAxios.post).toHaveBeenCalledWith('/api/bots/bot-1/installations', createRequest);
+    expect(mockedAxios.patch).toHaveBeenCalledWith('/api/installations/installation-1', {
+      granted_capabilities: createRequest.granted_capabilities,
+    });
+  });
+
+  it('returns structured error code when updateBotInstallation gets HTTP error', async () => {
+    mockedAxios.patch.mockRejectedValueOnce({
+      response: {
+        data: { success: false, code: 'granted_exceeds_requested', message: '超权' },
+      },
+    } as any);
+
+    const result = await api.updateBotInstallation('inst-1', {
+      granted_capabilities: ['secrets:use'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.code).toBe('granted_exceeds_requested');
+    expect(result.message).toBe('超权');
+  });
+
+  it('returns structured error code when createBotInstallation gets HTTP error', async () => {
+    mockedAxios.post.mockRejectedValueOnce({
+      response: {
+        data: { success: false, code: 'forbidden', message: '无权' },
+      },
+    } as any);
+
+    const result = await api.createBotInstallation('bot-1', {
+      target_type: 'user',
+      target_id: 'user-1',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.code).toBe('forbidden');
+    expect(result.message).toBe('无权');
   });
 
   describe('register', () => {

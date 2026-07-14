@@ -4,7 +4,7 @@ import type { WorkflowSpec } from './workflow';
 
 export interface EventTrace {
   event_id: string;
-  event_type: 'llm' | 'builtin' | 'python' | 'reply';
+  event_type: 'llm' | 'builtin' | 'reply';
   event_name: string;
   status: 'pending' | 'running' | 'success' | 'error';
   input: string;
@@ -35,7 +35,6 @@ export interface DebugBotRequest {
   session_id?: string;
   sender_name?: string;
   workflow_config?: WorkflowSpec;
-  special_mode_config?: WorkflowSpec;
 }
 
 export interface DebugStepRequest {

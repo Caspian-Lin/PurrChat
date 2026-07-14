@@ -5,3 +5,4 @@
 - [XState 微服务迁移计划](project_xstate_migration.md) — Bot 引擎迁移至 XState + TypeScript，Phase 0/1/2 实施计划
 - [Bot 系统 2026-07 调查](project_bot_system_audit_2026_07.md) — XState 运行时缺陷、节点/变量/调试/E2E 缺口与 Bot App 化建议
 - [后端编译命令](feedback_build_commands.md) — 必须 cd 到 apps/backend 再执行 go build/test，或用 make
+- [GitHub CLI 沙箱网络问题](feedback_github_cli_sandbox_network.md) — `gh` 写操作在沙箱内可能无法连接 api.github.com，应提权重试

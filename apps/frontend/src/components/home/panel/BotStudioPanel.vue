@@ -20,6 +20,13 @@
           </button>
           <button
             class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
+            title="开发者 API"
+            @click="router.push('/bot-studio/developer/api')"
+          >
+            API
+          </button>
+          <button
+            class="relative p-2 flex items-center justify-center hover:bg-hover-bg transition-colors text-text-tertiary hover:text-text-primary"
             title="搜索公开 Bot"
             @click="showSearch = !showSearch"
           >
@@ -41,14 +48,16 @@
         <!-- Bot 列表 -->
         <div class="flex-1 min-h-0">
           <BotList
-            :bots="searchQuery ? botStore.searchResults : botStore.bots"
+            :bots="displayBots"
             :active-bot-id="botStore.activeBotId"
             :loading="botStore.loading || botStore.searchLoading"
             :is-search="!!searchQuery"
             :has-more="botStore.searchHasMore"
+            :current-user-id="currentUserId"
             @select="handleSelectBot"
             @delete="handleDeleteBot"
             @create-conversation="handleCreateConversation"
+            @deploy="handleDeploy"
             @load-more="handleLoadMore"
           />
         </div>
@@ -60,8 +69,11 @@
       v-if="botStore.activeBot"
       :key="botStore.activeBotId ?? undefined"
       :bot="botStore.activeBot"
+      :is-owned="botStore.activeBot.owner_id === currentUserId"
       @update="handleUpdateBot"
       @back="botStore.setActiveBot(null)"
+      @create-conversation="handleCreateConversation"
+      @deploy="handleDeploy"
     />
 
     <!-- 空状态 -->
@@ -90,35 +102,87 @@
     @create="handleCreateBot"
     @close="showCreateModal = false"
   />
+
+  <!-- 安装到群聊弹窗 -->
+  <DeployToGroupModal
+    v-if="showDeployModal && deployBotTarget"
+    :bot="deployBotTarget"
+    @close="showDeployModal = false"
+  />
+
+  <InstallBotModal
+    v-if="showDirectInstallModal && directInstallTarget"
+    :bot="directInstallTarget"
+    :installation="directInstallationTarget"
+    @installed="handleDirectInstalled"
+    @close="closeDirectInstall"
+  />
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { BsPlusLg, BsSearch, BsCpu } from 'vue-icons-plus/bs';
 import BasePanel from './BasePanel.vue';
 import BotList from './bots/BotList.vue';
 import BotEditor from './bots/BotEditor.vue';
 import CreateBotModal from './bots/CreateBotModal.vue';
+import DeployToGroupModal from './bots/DeployToGroupModal.vue';
+import InstallBotModal from './bots/InstallBotModal.vue';
 import { useBotStore } from '../../../stores/bot';
 import { useBots } from '../../../composables/useBots';
+import { useAuthController } from '../../../controllers/authController';
 import { useRouter } from 'vue-router';
+import type { Bot, BotDeployment } from '../../../models/types';
+import { api } from '../../../models/api';
 
 const botStore = useBotStore();
 const { createBot, deleteBot, updateBot, createBotConversation } = useBots();
+const auth = useAuthController();
 const router = useRouter();
 
 const showCreateModal = ref(false);
 const showSearch = ref(false);
 const searchQuery = ref('');
+const showDeployModal = ref(false);
+const deployBotTarget = ref<Bot | null>(null);
+const showDirectInstallModal = ref(false);
+const directInstallTarget = ref<Bot | null>(null);
+const directInstallationTarget = ref<BotDeployment | null>(null);
 
-onMounted(async () => {
-  await botStore.loadBots();
+const allKnownBots = computed(() => {
+  const known = [...botStore.bots, ...botStore.searchResults];
+  for (const deployment of botStore.deployments) {
+    if (deployment.app) known.push(deployment.app);
+  }
+  return known;
 });
 
-async function handleCreateBot(data: { name: string; description?: string }) {
+const currentUserId = computed(() => auth.currentUser?.id ?? '');
+
+// 合并：我的 Bot + 已安装的公开 Bot
+const displayBots = computed<Bot[]>(() => {
+  if (searchQuery.value) return botStore.searchResults;
+  const myBots = botStore.bots;
+  const seen = new Set(myBots.map((b) => b.id));
+  const installed: Bot[] = [];
+  for (const dep of botStore.deployments) {
+    if (dep.app && !seen.has(dep.app.id) && dep.app.owner_id !== currentUserId.value) {
+      installed.push(dep.app);
+      seen.add(dep.app.id);
+    }
+  }
+  return [...myBots, ...installed];
+});
+
+onMounted(async () => {
+  await Promise.all([botStore.loadBots(), botStore.loadDeployments()]);
+});
+
+async function handleCreateBot(data: { name: string; description?: string; bot_type?: string }) {
   const bot = await createBot({
     name: data.name,
     description: data.description || '',
+    bot_type: data.bot_type as any,
   });
   if (bot) {
     showCreateModal.value = false;
@@ -138,11 +202,66 @@ function handleSelectBot(botId: string) {
   botStore.setActiveBot(botId);
 }
 
+async function handleDeploy(botId: string) {
+  const bot = await resolveBotForInstall(botId);
+  if (!bot) return;
+  deployBotTarget.value = bot;
+  showDeployModal.value = true;
+}
+
 async function handleCreateConversation(botId: string) {
+  const existingInstallation = botStore.deployments.find(
+    (deployment) =>
+      deployment.app_id === botId &&
+      deployment.target_type === 'user' &&
+      deployment.target_id === currentUserId.value
+  );
+  const bot = await resolveBotForInstall(botId);
+  const requestedCapabilities = bot?.requested_capabilities ?? [];
+  const needsAuthorization =
+    !existingInstallation ||
+    existingInstallation.status !== 'active' ||
+    requestedCapabilities.some(
+      (capability) => !existingInstallation.granted_capabilities.includes(capability)
+    );
+  if (needsAuthorization) {
+    if (bot) {
+      directInstallTarget.value = bot;
+      directInstallationTarget.value = existingInstallation ?? null;
+      showDirectInstallModal.value = true;
+      return;
+    }
+  }
+  await openBotConversation(botId);
+}
+
+async function resolveBotForInstall(botId: string): Promise<Bot | null> {
+  try {
+    const response = await api.getBot(botId);
+    if (response.success && response.data) return response.data;
+  } catch (error) {
+    console.error('[BotStudioPanel] 获取 Bot 授权信息失败:', error);
+  }
+  return allKnownBots.value.find((item) => item.id === botId) ?? null;
+}
+
+async function openBotConversation(botId: string) {
   const conversation = await createBotConversation(botId);
   if (conversation) {
-    router.push('/chat');
+    router.push({ path: '/chat', query: { conversationId: conversation.id } });
   }
+}
+
+async function handleDirectInstalled() {
+  const botId = directInstallTarget.value?.id;
+  closeDirectInstall();
+  if (botId) await openBotConversation(botId);
+}
+
+function closeDirectInstall() {
+  showDirectInstallModal.value = false;
+  directInstallTarget.value = null;
+  directInstallationTarget.value = null;
 }
 
 async function handleSearch() {

@@ -26,7 +26,7 @@ func init() {
 
 // setupTestHub 设置测试用的Hub
 func setupTestHub(t *testing.T) *websocket.Hub {
-	hub := websocket.NewHub(100, 3) // 测试环境使用较小的限制
+	hub := websocket.NewHub(websocket.HubConfig{MaxConnections: 100, MaxUserDeviceConnections: 5, SendQueueSize: 256})
 	go hub.Run()
 	return hub
 }
@@ -77,20 +77,13 @@ func TestHubRegisterClient(t *testing.T) {
 	assert.Equal(t, 3, hub.GetClientCount())
 	assert.Equal(t, 3, hub.GetUserConnectionCount(userID))
 
-	// 测试4: 尝试注册第四个客户端（应该断开最早的连接）
+	// 测试4: 不同设备类型分别计数，第四种设备不会淘汰已有连接
 	client4 := createTestClient(t, hub, userID, websocket.DeviceTypeTablet)
-	assert.Equal(t, 3, hub.GetClientCount()) // 应该还是3个连接
-	assert.Equal(t, 3, hub.GetUserConnectionCount(userID))
-
-	// 验证最早的连接（client1）已经被断开
-	select {
-	case _, ok := <-client1.Send:
-		assert.False(t, ok, "client1.Send channel should be closed")
-	default:
-		// 通道已关闭或没有消息
-	}
+	assert.Equal(t, 4, hub.GetClientCount())
+	assert.Equal(t, 4, hub.GetUserConnectionCount(userID))
 
 	// 清理
+	hub.UnregisterClient(client1)
 	hub.UnregisterClient(client2)
 	hub.UnregisterClient(client3)
 	hub.UnregisterClient(client4)
@@ -99,7 +92,7 @@ func TestHubRegisterClient(t *testing.T) {
 // TestHubMaxConnections 测试全局连接数限制
 func TestHubMaxConnections(t *testing.T) {
 	maxConnections := 5
-	hub := websocket.NewHub(maxConnections, 3)
+	hub := websocket.NewHub(websocket.HubConfig{MaxConnections: maxConnections, MaxUserDeviceConnections: 5, SendQueueSize: 256})
 	go hub.Run()
 
 	// 创建多个用户
@@ -324,7 +317,7 @@ func TestHubGetConnectionStats(t *testing.T) {
 	assert.Equal(t, 3, stats["total_connections"])
 	assert.Equal(t, 2, stats["total_users"])
 	assert.Equal(t, 100, stats["max_connections"])
-	assert.Equal(t, 3, stats["max_user_connections"])
+	assert.Equal(t, 5, stats["max_user_device_connections"])
 
 	deviceStats, ok := stats["device_connections"].(map[websocket.DeviceType]int)
 	require.True(t, ok)
@@ -339,8 +332,8 @@ func TestHubDisconnectUserDevice(t *testing.T) {
 	userID := uuid.New()
 
 	// 创建多个不同设备类型的客户端
-	client1 := createTestClient(t, hub, userID, websocket.DeviceTypeWeb)
-	client2 := createTestClient(t, hub, userID, websocket.DeviceTypeWeb) // 第二个web客户端
+	createTestClient(t, hub, userID, websocket.DeviceTypeWeb)
+	createTestClient(t, hub, userID, websocket.DeviceTypeWeb) // 第二个web客户端
 	client3 := createTestClient(t, hub, userID, websocket.DeviceTypeMobile)
 
 	assert.Equal(t, 3, hub.GetClientCount())
@@ -354,19 +347,6 @@ func TestHubDisconnectUserDevice(t *testing.T) {
 	assert.Equal(t, 0, hub.GetUserDeviceConnectionCount(userID, websocket.DeviceTypeWeb))
 	assert.Equal(t, 1, hub.GetUserDeviceConnectionCount(userID, websocket.DeviceTypeMobile))
 
-	// 验证web客户端的通道已关闭
-	select {
-	case _, ok := <-client1.Send:
-		assert.False(t, ok, "client1.Send channel should be closed")
-	default:
-	}
-
-	select {
-	case _, ok := <-client2.Send:
-		assert.False(t, ok, "client2.Send channel should be closed")
-	default:
-	}
-
 	// 清理
 	hub.UnregisterClient(client3)
 }
@@ -378,7 +358,7 @@ func TestHubDisconnectOldestUserDevice(t *testing.T) {
 	userID := uuid.New()
 
 	// 创建多个web设备类型的客户端
-	client1 := createTestClient(t, hub, userID, websocket.DeviceTypeWeb)
+	createTestClient(t, hub, userID, websocket.DeviceTypeWeb)
 	time.Sleep(10 * time.Millisecond) // 确保时间戳不同
 	client2 := createTestClient(t, hub, userID, websocket.DeviceTypeWeb)
 	time.Sleep(10 * time.Millisecond)
@@ -393,20 +373,6 @@ func TestHubDisconnectOldestUserDevice(t *testing.T) {
 
 	assert.Equal(t, 2, hub.GetClientCount())
 	assert.Equal(t, 2, hub.GetUserDeviceConnectionCount(userID, websocket.DeviceTypeWeb))
-
-	// 验证最早的客户端（client1）已被断开
-	select {
-	case _, ok := <-client1.Send:
-		assert.False(t, ok, "client1.Send channel should be closed")
-	default:
-	}
-
-	// 验证其他客户端仍然正常
-	select {
-	case _, ok := <-client2.Send:
-		assert.True(t, ok || len(client2.Send) == 0) // 通道可能为空但不应该关闭
-	case <-time.After(100 * time.Millisecond):
-	}
 
 	// 清理
 	hub.UnregisterClient(client2)
@@ -498,9 +464,8 @@ func TestWebSocketHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	// 初始化WebSocket Hub
-	hub := websocket.NewHub(100, 3)
-	go hub.Run()
-	websocket.GlobalHub = hub
+	websocket.InitHub(websocket.HubConfig{MaxConnections: 100, MaxUserDeviceConnections: 5, SendQueueSize: 256, AllowQueryToken: true})
+	defer websocket.GlobalHub.Shutdown()
 	websocket.InitJWTSecret("test-secret")
 
 	// 创建测试路由

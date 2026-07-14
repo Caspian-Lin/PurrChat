@@ -410,9 +410,16 @@ func (s *ConversationService) DeleteConversation(ctx context.Context, conversati
 }
 
 // GetConversationMembers 获取会话成员
-func (s *ConversationService) GetConversationMembers(ctx context.Context, conversationIDStr string) ([]*models.Enrollment, error) {
-	conversationID, err := uuid.Parse(conversationIDStr)
+func (s *ConversationService) GetConversationMembers(ctx context.Context, requesterIDStr, conversationIDStr string) ([]*models.Enrollment, error) {
+	requesterID, err := parseID(requesterIDStr)
 	if err != nil {
+		return nil, err
+	}
+	conversationID, err := parseID(conversationIDStr)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireConversationMember(ctx, s.enrollmentRepo, conversationID, requesterID); err != nil {
 		return nil, err
 	}
 
@@ -425,7 +432,7 @@ func (s *ConversationService) GetConversationMembers(ctx context.Context, conver
 	for _, member := range members {
 		user, err := s.userRepo.FindByID(ctx, member.UserID)
 		if err == nil {
-			sanitizeUser(user)
+			sanitizePublicProfile(user)
 			member.User = user
 		}
 	}

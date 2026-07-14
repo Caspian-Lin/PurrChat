@@ -1,0 +1,524 @@
+package services
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"time"
+
+	"purr-chat-server/internal/models"
+	"purr-chat-server/internal/repository"
+	"purr-chat-server/internal/websocket"
+	"purr-chat-server/pkg/logger"
+
+	"github.com/google/uuid"
+)
+
+// 业务错误(handler 通过 containsBadInput 判断返回 400)
+var (
+	errBotNotFound          = errors.New("bot not found")
+	errBotDisabled          = errors.New("bot is disabled")
+	errInstallNotMember     = errors.New("not a conversation member")
+	errInstallNoPermission  = errors.New("only conversation owner/admin can install bots")
+	errCannotInstallOther   = errors.New("cannot install a bot for another user")
+	errBotNotDiscoverable   = errors.New("this bot is not publicly available")
+	errAlreadyInstalled     = errors.New("bot is already installed to this target")
+	errInstallationNotFound = errors.New("installation not found")
+	errGrantedExceedsReq    = errors.New("granted capabilities exceed requested capabilities")
+)
+
+// InstallationService Bot 安装业务逻辑服务
+type InstallationService struct {
+	installationRepo repository.BotInstallationRepository
+	botRepo          repository.BotRepository
+	enrollmentRepo   repository.EnrollmentRepository
+	messageRepo      repository.ConversationMessageRepository
+	noticeEmitter    *BotNoticeEmitter
+}
+
+// NewInstallationService 创建安装服务
+func NewInstallationService(
+	installationRepo repository.BotInstallationRepository,
+	botRepo repository.BotRepository,
+	enrollmentRepo repository.EnrollmentRepository,
+	messageRepo repository.ConversationMessageRepository,
+) *InstallationService {
+	return &InstallationService{
+		installationRepo: installationRepo,
+		botRepo:          botRepo,
+		enrollmentRepo:   enrollmentRepo,
+		messageRepo:      messageRepo,
+	}
+}
+
+// SetBotNoticeEmitter 注入外部 Bot 事件推送器
+func (s *InstallationService) SetBotNoticeEmitter(emitter *BotNoticeEmitter) {
+	s.noticeEmitter = emitter
+}
+
+// ClassifyInstallationError 将 installation 域错误映射为 HTTP 状态码、结构化错误码和面向用户的消息。
+// handler 层调用此函数替代字符串匹配,确保错误响应携带稳定 code 供前端区分处理。
+// 未识别的错误统一归为 internal_error。
+func ClassifyInstallationError(err error) (status int, code, message string) {
+	switch {
+	case errors.Is(err, ErrInvalidID):
+		return 400, "invalid_id", "无效的 ID"
+	case errors.Is(err, errBotNotFound):
+		return 404, "bot_not_found", "Bot 不存在"
+	case errors.Is(err, errBotDisabled):
+		return 400, "bot_disabled", "Bot 已被禁用"
+	case errors.Is(err, errInstallationNotFound):
+		return 404, "installation_not_found", "安装记录不存在"
+	case errors.Is(err, errNotAuthorized):
+		return 403, "forbidden", "无权管理此安装"
+	case errors.Is(err, errGrantedExceedsReq):
+		return 400, "granted_exceeds_requested", "授予的权限超出了 Bot 声明的权限范围"
+	case errors.Is(err, errInstallNotMember):
+		return 403, "not_conversation_member", "你不是该会话的成员"
+	case errors.Is(err, errInstallNoPermission):
+		return 403, "install_no_permission", "只有会话管理员或群主才能安装 Bot"
+	case errors.Is(err, errCannotInstallOther):
+		return 403, "cannot_install_for_other", "不能为其他用户安装 Bot"
+	case errors.Is(err, errBotNotDiscoverable):
+		return 403, "bot_not_discoverable", "该 Bot 不可公开安装"
+	case errors.Is(err, errAlreadyInstalled):
+		return 409, "already_installed", "该 Bot 已安装到此目标"
+	default:
+		return 500, "internal_error", "内部错误"
+	}
+}
+
+// CreateInstallation 安装 Bot 到用户私聊或群聊会话
+func (s *InstallationService) CreateInstallation(ctx context.Context, installerID string, appID string, req *models.CreateInstallationRequest) (*models.BotInstallation, error) {
+	installerUUID, err := uuid.Parse(installerID)
+	if err != nil {
+		return nil, err
+	}
+	appUUID, err := uuid.Parse(appID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1. 获取 Bot 并校验状态
+	bot, err := s.botRepo.FindByID(ctx, appUUID)
+	if err != nil {
+		return nil, errBotNotFound
+	}
+	if bot.Status != models.BotStatusActive {
+		return nil, errBotDisabled
+	}
+
+	// 2. 权限校验
+	switch req.TargetType {
+	case models.InstallationTargetUser:
+		// 用户只能给自己安装
+		if req.TargetID != installerUUID {
+			return nil, errCannotInstallOther
+		}
+		// 非 owner 只能安装可发现的 Bot(listed/featured)
+		if bot.OwnerID != installerUUID && bot.Discoverability == models.DiscoverabilityUnlisted {
+			return nil, errBotNotDiscoverable
+		}
+	case models.InstallationTargetConversation:
+		// 群聊安装:操作者必须是 conversation owner/admin
+		enrollment, err := s.enrollmentRepo.FindByConversationAndUser(ctx, req.TargetID, installerUUID)
+		if err != nil || enrollment == nil {
+			return nil, errInstallNotMember
+		}
+		if enrollment.Role != models.EnrollmentRoleOwner && enrollment.Role != models.EnrollmentRoleAdmin {
+			return nil, errInstallNoPermission
+		}
+	}
+
+	// 3. 幂等:已安装则返回现有记录
+	if existing, _ := s.installationRepo.FindByAppAndTarget(ctx, appUUID, req.TargetType, req.TargetID); existing != nil {
+		return nil, errAlreadyInstalled
+	}
+
+	// 4. granted_capabilities:未指定则授予 Bot 声明的全部 requested
+	granted := req.GrantedCapabilities
+	if len(granted) == 0 {
+		granted = bot.RequestedCapabilities
+	}
+	// 校验 granted ⊆ requested(安装者只能缩减,不能超授权)
+	if violations := models.IsGrantedSubsetOfRequested(granted, bot.RequestedCapabilities); len(violations) > 0 {
+		return nil, errGrantedExceedsReq
+	}
+
+	// 5. diagnostics_consent:实际授予外发能力时强制 granted
+	diag := req.DiagnosticsConsent
+	if diag == "" {
+		diag = models.DiagnosticsDenied
+	}
+	if models.HasCapability(granted, models.CapabilityNetworkExternal) {
+		diag = models.DiagnosticsGranted
+	}
+
+	// 6. 群聊安装:Bot 作为 enrollment(member)加入会话(消息路由仍依赖 enrollment)
+	if req.TargetType == models.InstallationTargetConversation {
+		botEnrollment := &models.Enrollment{
+			ConversationID: req.TargetID,
+			UserID:         appUUID,
+			Role:           models.EnrollmentRoleMember,
+			JoinedAt:       time.Now().UTC(),
+		}
+		if err := s.enrollmentRepo.Create(ctx, botEnrollment); err != nil {
+			logger.ErrorfWithCaller("[InstallationService] Failed to enroll bot in conversation: %v", err)
+		}
+
+		// 声明 network:external 的 Bot 安装到群聊后,强制向全体成员发系统消息告知外发
+		if models.HasCapability(granted, models.CapabilityNetworkExternal) {
+			s.notifyExternalBotInstalled(ctx, bot, req.TargetID, installerUUID)
+		}
+	}
+
+	// 7. 创建安装记录
+	installation := &models.BotInstallation{
+		AppID:               appUUID,
+		InstalledBy:         installerUUID,
+		TargetType:          req.TargetType,
+		TargetID:            req.TargetID,
+		GrantedCapabilities: granted,
+		DiagnosticsConsent:  diag,
+		Status:              models.InstallationActive,
+	}
+	if err := s.installationRepo.Create(ctx, installation); err != nil {
+		return nil, err
+	}
+
+	// 8. 群聊安装:广播 bot_deployed 系统消息与 WebSocket 事件
+	if req.TargetType == models.InstallationTargetConversation {
+		s.broadcastBotDeployed(ctx, bot, req.TargetID, installerUUID)
+	}
+
+	if s.noticeEmitter != nil {
+		s.noticeEmitter.NotifyInstallationInstalled(ctx, installation)
+	}
+
+	return installation, nil
+}
+
+// GetInstallation 获取单个安装详情(带 Bot 关联)
+func (s *InstallationService) GetInstallation(ctx context.Context, requesterID, installationID string) (*models.BotInstallation, error) {
+	requesterUUID, err := parseID(requesterID)
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseID(installationID)
+	if err != nil {
+		return nil, err
+	}
+	inst, err := s.installationRepo.FindByIDWithApp(ctx, id)
+	if err != nil {
+		return nil, ErrResourceNotFound
+	}
+	if !s.canManage(ctx, inst, requesterUUID) {
+		return nil, ErrResourceNotFound
+	}
+	return inst, nil
+}
+
+// AuthorizeBotConversationRead 校验可信 Bot 身份对会话读取能力的实时授权。
+// 调用方必须先通过 Bot credential 验证 botID，不能接受客户端伪造的身份。
+func (s *InstallationService) AuthorizeBotConversationRead(ctx context.Context, botID, conversationID uuid.UUID, capability string) error {
+	bot, err := s.botRepo.FindByID(ctx, botID)
+	if err != nil || bot.Status != models.BotStatusActive {
+		return ErrResourceNotFound
+	}
+	if err := requireConversationMember(ctx, s.enrollmentRepo, conversationID, botID); err != nil {
+		return ErrResourceNotFound
+	}
+	inst, err := s.installationRepo.FindByAppAndTarget(ctx, botID, models.InstallationTargetConversation, conversationID)
+	if err != nil || inst.Status != models.InstallationActive || !models.HasCapability(inst.GrantedCapabilities, capability) {
+		return ErrResourceNotFound
+	}
+	return nil
+}
+
+// ListByApp 列出某 Bot 的所有安装(仅 Bot owner)
+func (s *InstallationService) ListByApp(ctx context.Context, ownerID string, appID string) ([]*models.BotInstallation, error) {
+	ownerUUID, err := uuid.Parse(ownerID)
+	if err != nil {
+		return nil, err
+	}
+	appUUID, err := uuid.Parse(appID)
+	if err != nil {
+		return nil, err
+	}
+	bot, err := s.botRepo.FindByID(ctx, appUUID)
+	if err != nil {
+		return nil, errBotNotFound
+	}
+	if bot.OwnerID != ownerUUID {
+		return nil, errNotAuthorized
+	}
+	return s.installationRepo.FindByApp(ctx, appUUID)
+}
+
+// ListByTarget 列出某目标的安装(用户自己的私聊 或 会话的群聊)
+func (s *InstallationService) ListByTarget(ctx context.Context, requesterID string, targetType models.InstallationTargetType, targetID string) ([]*models.BotInstallation, error) {
+	requesterUUID, err := uuid.Parse(requesterID)
+	if err != nil {
+		return nil, err
+	}
+	targetUUID, err := uuid.Parse(targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	switch targetType {
+	case models.InstallationTargetUser:
+		// 只能查自己的私聊安装
+		if targetUUID != requesterUUID {
+			return nil, errNotAuthorized
+		}
+	case models.InstallationTargetConversation:
+		// 必须是会话成员
+		enrollment, err := s.enrollmentRepo.FindByConversationAndUser(ctx, targetUUID, requesterUUID)
+		if err != nil || enrollment == nil {
+			return nil, errInstallNotMember
+		}
+	}
+
+	return s.installationRepo.FindByTarget(ctx, targetType, targetUUID)
+}
+
+// ListMine 列出当前用户作为安装者的安装
+func (s *InstallationService) ListMine(ctx context.Context, installerID string) ([]*models.BotInstallation, error) {
+	installerUUID, err := uuid.Parse(installerID)
+	if err != nil {
+		return nil, err
+	}
+	return s.installationRepo.FindByInstaller(ctx, installerUUID)
+}
+
+// UpdateInstallation 更新安装(暂停/恢复/重新授权;权限:installer 或会话 admin/owner 或 Bot owner)
+func (s *InstallationService) UpdateInstallation(ctx context.Context, requesterID string, installationID string, req *models.UpdateInstallationRequest) (*models.BotInstallation, error) {
+	requesterUUID, err := uuid.Parse(requesterID)
+	if err != nil {
+		return nil, err
+	}
+	id, err := uuid.Parse(installationID)
+	if err != nil {
+		return nil, err
+	}
+
+	inst, err := s.installationRepo.FindByIDWithApp(ctx, id)
+	if err != nil {
+		return nil, errInstallationNotFound
+	}
+
+	if !s.canManage(ctx, inst, requesterUUID) {
+		return nil, errNotAuthorized
+	}
+
+	oldStatus := inst.Status
+	oldCaps := inst.GrantedCapabilities
+	statusChanged := false
+	capsChanged := false
+
+	if req.Status != "" && req.Status != inst.Status {
+		inst.Status = req.Status
+		statusChanged = true
+	}
+	if req.GrantedCapabilities != nil {
+		if inst.App == nil {
+			return nil, errBotNotFound
+		}
+		if violations := models.IsGrantedSubsetOfRequested(req.GrantedCapabilities, inst.App.RequestedCapabilities); len(violations) > 0 {
+			return nil, errGrantedExceedsReq
+		}
+		inst.GrantedCapabilities = req.GrantedCapabilities
+		capsChanged = true
+	}
+	if req.DiagnosticsConsent != "" {
+		inst.DiagnosticsConsent = req.DiagnosticsConsent
+	}
+	// 实际授予外发能力后，诊断授权不可关闭；未授予时保留安装者选择。
+	if models.HasCapability(inst.GrantedCapabilities, models.CapabilityNetworkExternal) {
+		inst.DiagnosticsConsent = models.DiagnosticsGranted
+	}
+
+	if err := s.installationRepo.Update(ctx, inst); err != nil {
+		return nil, err
+	}
+
+	if s.noticeEmitter != nil {
+		s.emitInstallationUpdate(ctx, inst, oldStatus, oldCaps, statusChanged, capsChanged)
+	}
+
+	return inst, nil
+}
+
+// UninstallInstallation 卸载安装
+func (s *InstallationService) UninstallInstallation(ctx context.Context, requesterID string, installationID string) error {
+	requesterUUID, err := uuid.Parse(requesterID)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(installationID)
+	if err != nil {
+		return err
+	}
+
+	inst, err := s.installationRepo.FindByIDWithApp(ctx, id)
+	if err != nil {
+		return errInstallationNotFound
+	}
+
+	if !s.canManage(ctx, inst, requesterUUID) {
+		return errNotAuthorized
+	}
+
+	// 群聊安装:同时从会话移除 Bot 成员身份
+	if inst.TargetType == models.InstallationTargetConversation {
+		if err := s.enrollmentRepo.DeleteByConversationAndUser(ctx, inst.TargetID, inst.AppID); err != nil {
+			logger.ErrorfWithCaller("[InstallationService] Failed to remove bot enrollment: %v", err)
+		}
+		s.broadcastBotUndeployed(ctx, inst)
+	}
+
+	if s.noticeEmitter != nil {
+		s.noticeEmitter.NotifyInstallationUninstalled(ctx, inst)
+	}
+
+	return s.installationRepo.Delete(ctx, id)
+}
+
+// canManage 判断请求者是否有权管理该安装
+// user 安装:installer 本人;conversation 安装:installer、会话 owner/admin、Bot owner
+func (s *InstallationService) canManage(ctx context.Context, inst *models.BotInstallation, requesterUUID uuid.UUID) bool {
+	if inst.InstalledBy == requesterUUID {
+		return true
+	}
+	if inst.App != nil && inst.App.OwnerID == requesterUUID {
+		return true
+	}
+	if inst.TargetType == models.InstallationTargetConversation {
+		enrollment, err := s.enrollmentRepo.FindByConversationAndUser(ctx, inst.TargetID, requesterUUID)
+		if err == nil && enrollment != nil {
+			return enrollment.Role == models.EnrollmentRoleOwner || enrollment.Role == models.EnrollmentRoleAdmin
+		}
+	}
+	return false
+}
+
+// emitInstallationUpdate 根据 installation 更新前后的差异推送对应生命周期事件
+func (s *InstallationService) emitInstallationUpdate(ctx context.Context, inst *models.BotInstallation, oldStatus models.InstallationStatus, oldCaps []string, statusChanged, capsChanged bool) {
+	if statusChanged {
+		switch inst.Status {
+		case models.InstallationPaused, models.InstallationDisabled:
+			s.noticeEmitter.NotifyInstallationSuspended(ctx, inst)
+		case models.InstallationActive:
+			s.noticeEmitter.NotifyInstallationResumed(ctx, inst)
+		default:
+			if capsChanged {
+				s.noticeEmitter.NotifyInstallationCapabilityChanged(ctx, inst)
+			}
+		}
+		return
+	}
+	if capsChanged {
+		s.noticeEmitter.NotifyInstallationCapabilityChanged(ctx, inst)
+	}
+}
+
+// notifyExternalBotInstalled 声明 network:external 的 Bot 安装到群聊后,发系统消息 + WS 通知告知外发
+func (s *InstallationService) notifyExternalBotInstalled(ctx context.Context, bot *models.Bot, conversationID uuid.UUID, installerID uuid.UUID) {
+	sysContent := &models.SystemMessageContent{
+		Type:    "bot_external_warning",
+		BotID:   bot.ID.String(),
+		BotName: bot.Name,
+	}
+	sysJSON, _ := json.Marshal(sysContent)
+	sysMessage := &models.Message{
+		SenderID: bot.ID,
+		Content:  string(sysJSON),
+		MsgType:  models.MsgTypeSystem,
+	}
+	if err := s.messageRepo.InsertMessage(ctx, conversationID, sysMessage); err != nil {
+		logger.ErrorfWithCaller("[InstallationService] Failed to insert external warning system message: %v", err)
+	}
+
+	if websocket.GlobalHub != nil {
+		members, err := s.enrollmentRepo.FindByConversationID(ctx, conversationID)
+		if err == nil {
+			for _, m := range members {
+				websocket.GlobalHub.SendToUser(m.UserID, "bot_external_warning", map[string]any{
+					"bot_id":          bot.ID.String(),
+					"bot_name":        bot.Name,
+					"conversation_id": conversationID.String(),
+					"installed_by":    installerID.String(),
+				})
+			}
+		}
+	}
+}
+
+// broadcastBotDeployed 向会话成员广播 bot_deployed 系统消息和 WebSocket 事件
+func (s *InstallationService) broadcastBotDeployed(ctx context.Context, bot *models.Bot, conversationID, installerID uuid.UUID) {
+	sysContent := &models.SystemMessageContent{
+		Type:    "bot_deployed",
+		BotID:   bot.ID.String(),
+		BotName: bot.Name,
+	}
+	sysJSON, _ := json.Marshal(sysContent)
+	sysMessage := &models.Message{
+		SenderID: bot.ID,
+		Content:  string(sysJSON),
+		MsgType:  models.MsgTypeSystem,
+	}
+	if err := s.messageRepo.InsertMessage(ctx, conversationID, sysMessage); err != nil {
+		logger.ErrorfWithCaller("[InstallationService] Failed to insert bot_deployed system message: %v", err)
+	}
+
+	if websocket.GlobalHub != nil {
+		members, err := s.enrollmentRepo.FindByConversationID(ctx, conversationID)
+		if err == nil {
+			for _, m := range members {
+				websocket.GlobalHub.SendToUser(m.UserID, "bot_deployed", map[string]any{
+					"bot_id":          bot.ID.String(),
+					"bot_name":        bot.Name,
+					"conversation_id": conversationID.String(),
+					"deployed_by":     installerID.String(),
+				})
+			}
+		}
+	}
+}
+
+// broadcastBotUndeployed 向会话成员广播 bot_undeployed 系统消息和 WebSocket 事件
+func (s *InstallationService) broadcastBotUndeployed(ctx context.Context, inst *models.BotInstallation) {
+	botName := ""
+	botID := inst.AppID
+	if inst.App != nil {
+		botName = inst.App.Name
+	}
+
+	sysContent := &models.SystemMessageContent{
+		Type:    "bot_undeployed",
+		BotID:   botID.String(),
+		BotName: botName,
+	}
+	sysJSON, _ := json.Marshal(sysContent)
+	sysMessage := &models.Message{
+		SenderID: botID,
+		Content:  string(sysJSON),
+		MsgType:  models.MsgTypeSystem,
+	}
+	if err := s.messageRepo.InsertMessage(ctx, inst.TargetID, sysMessage); err != nil {
+		logger.ErrorfWithCaller("[InstallationService] Failed to insert bot_undeployed system message: %v", err)
+	}
+
+	if websocket.GlobalHub != nil {
+		members, err := s.enrollmentRepo.FindByConversationID(ctx, inst.TargetID)
+		if err == nil {
+			for _, m := range members {
+				websocket.GlobalHub.SendToUser(m.UserID, "bot_undeployed", map[string]any{
+					"bot_id":          botID.String(),
+					"conversation_id": inst.TargetID.String(),
+				})
+			}
+		}
+	}
+}

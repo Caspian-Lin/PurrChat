@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
-import { replaceVariables } from '../ports.js';
+import { resolveTemplate } from '../resolver.js';
 
 const n8nConfigSchema = z.object({
   webhook_url: z.string(),
@@ -10,6 +10,7 @@ const n8nConfigSchema = z.object({
   auth_header_value: z.string().optional(),
   auth_username: z.string().optional(),
   auth_password: z.string().optional(),
+  timeout: z.number().optional().default(30000),
 });
 
 export const n8nNode: NodeDefinition<z.infer<typeof n8nConfigSchema>> = {
@@ -18,19 +19,12 @@ export const n8nNode: NodeDefinition<z.infer<typeof n8nConfigSchema>> = {
   category: 'processing',
   icon: '⚡',
   configSchema: n8nConfigSchema,
-  async execute(input, config, _ctx) {
+  async execute(input, config, ctx) {
     const cfg = config as any;
     let webhookURL = cfg.webhook_url || '';
 
-    // 变量替换
-    webhookURL = replaceVariables(webhookURL, {
-      nodeOutputs: {},
-      variables: {},
-      eventOutputs: {},
-      contextBuffer: [],
-      finalReply: '',
-      nameResolver: {},
-    });
+    // 统一变量替换
+    webhookURL = resolveTemplate(webhookURL, ctx);
 
     const method = cfg.method || 'POST';
     const headers: Record<string, string> = {
@@ -48,7 +42,7 @@ export const n8nNode: NodeDefinition<z.infer<typeof n8nConfigSchema>> = {
       const fetchOptions: RequestInit = {
         method,
         headers,
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(cfg.timeout || 30000),
       };
 
       if (method !== 'GET' && method !== 'HEAD' && body) {

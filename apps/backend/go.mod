@@ -3,6 +3,7 @@ module purr-chat-server
 go 1.25.0
 
 require (
+	github.com/Caspian-Lin/PurrChat/packages/db-migrate v0.0.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-playground/validator/v10 v10.14.0
 	github.com/golang-jwt/jwt/v5 v5.2.0
@@ -13,6 +14,8 @@ require (
 	golang.org/x/crypto v0.46.0
 	golang.org/x/time v0.15.0
 )
+
+replace github.com/Caspian-Lin/PurrChat/packages/db-migrate => ../../packages/db-migrate
 
 require (
 	github.com/bytedance/sonic v1.9.1 // indirect

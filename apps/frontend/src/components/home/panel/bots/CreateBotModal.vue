@@ -18,6 +18,24 @@
         </button>
       </div>
 
+      <!-- 类型选择 -->
+      <div class="flex gap-1 px-6 pt-4">
+        <button
+          v-for="t in botTypes"
+          :key="t.value"
+          class="flex-1 px-3 py-2 text-xs rounded-[var(--radius-sm,8px)] transition-colors"
+          :class="
+            botType === t.value
+              ? 'text-white'
+              : 'bg-bg-quaternary text-text-secondary hover:bg-hover-bg'
+          "
+          :style="botType === t.value ? { background: 'var(--theme-primary)' } : {}"
+          @click="botType = t.value"
+        >
+          {{ t.label }}
+        </button>
+      </div>
+
       <!-- 表单 -->
       <div class="px-6 py-4 space-y-4">
         <div>
@@ -28,7 +46,7 @@
             v-model="name"
             type="text"
             maxlength="40"
-            placeholder="给你的 Bot 起个名字"
+            :placeholder="botType === 'external' ? '你的 OneBot Bot 名称' : '给你的 Bot 起个名字'"
             class="w-full px-3 py-2.5 text-sm rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary placeholder:text-text-quaternary outline-none focus:ring-1 focus:ring-[var(--theme-primary)] transition-all"
             @keydown.enter="handleCreate"
           />
@@ -44,6 +62,16 @@
             placeholder="描述 Bot 的用途..."
             class="w-full px-3 py-2.5 text-sm rounded-[var(--radius-sm,8px)] bg-bg-quaternary text-text-primary placeholder:text-text-quaternary outline-none focus:ring-1 focus:ring-[var(--theme-primary)] transition-all resize-none"
           />
+        </div>
+
+        <!-- OneBot API 提示 -->
+        <div
+          v-if="botType === 'external'"
+          class="p-3 rounded-[var(--radius-sm,8px)] bg-[var(--theme-primary)]/5 text-xs text-text-secondary space-y-1"
+        >
+          <p class="font-medium text-text-primary">OneBot API Bot</p>
+          <p>创建后可获取鉴权 Token，通过 OneBot 协议接入外部 Bot 平台。</p>
+          <p>创建成功后在编辑面板查看完整接入指南。</p>
         </div>
       </div>
 
@@ -71,12 +99,19 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { BsX } from 'vue-icons-plus/bs';
+import type { BotType } from '../../../../models/types';
 
 const emit = defineEmits<{
-  create: [data: { name: string; description?: string }];
+  create: [data: { name: string; description?: string; bot_type: BotType }];
   close: [];
 }>();
 
+const botTypes: { value: BotType; label: string }[] = [
+  { value: 'workflow', label: 'Workflow Bot' },
+  { value: 'external', label: 'OneBot API' },
+];
+
+const botType = ref<BotType>('workflow');
 const name = ref('');
 const description = ref('');
 
@@ -85,6 +120,7 @@ function handleCreate() {
   emit('create', {
     name: name.value.trim(),
     description: description.value.trim() || undefined,
+    bot_type: botType.value,
   });
 }
 </script>

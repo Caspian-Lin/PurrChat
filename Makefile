@@ -1,4 +1,4 @@
-.PHONY: help install dev build test lint lint-fix clean format type-check docker-up docker-down docker-logs docker-build migrate db-clean db-clean-yes db-reset db-reset-yes \
+.PHONY: help install dev build test test-bot-e2e lint lint-fix clean format type-check docker-up docker-down docker-logs docker-build migrate migrate-backend migrate-storage migrate-baseline db-clean db-clean-yes db-reset db-reset-yes \
         android-dev android-build-debug android-build-release android-build-apk android-keystore android-clean
 
 # 日志目录
@@ -13,6 +13,7 @@ help:
 	@echo "  make dev          - 启动开发模式"
 	@echo "  make build        - 构建所有应用"
 	@echo "  make test         - 运行所有测试"
+	@echo "  make test-bot-e2e - 运行真实后端、Bot Engine、PostgreSQL 与 WebSocket 黑盒测试"
 	@echo "  make lint         - 运行代码检查"
 	@echo "  make lint-fix     - 自动修复代码问题"
 	@echo "  make format       - 格式化代码"
@@ -36,13 +37,15 @@ help:
 	@echo "  make clean        - 清理构建产物和依赖"
 	@echo ""
 	@echo "数据库迁移:"
-	@echo "  make migrate      - 执行所有数据库迁移"
+	@echo "  make migrate      - 执行 backend 与 storage 的待应用迁移"
+	@echo "  make migrate-baseline - 显式登记已有数据库的迁移基线"
 	@echo "  make db-clean     - 删除并重建数据库（保留确认提示）"
 	@echo "  make db-reset     - 删除并重建数据库后执行迁移"
 	@echo "  make db-reset-yes - 跳过确认，删除并重建数据库后执行迁移"
 	@echo ""
 	@echo "存储服务:"
 	@echo "  make dev-storage  - 启动存储服务"
+	@echo "  make dev-bot-engine - 启动 Bot Engine 微服务"
 
 ifneq (,$(wildcard ./apps/backend/.env))
     include ./apps/backend/.env
@@ -96,26 +99,33 @@ test:
 	echo "  运行完整的CI测试流程" | tee -a $$LOG_FILE; \
 	echo "======================================" | tee -a $$LOG_FILE; \
 	echo "" | tee -a $$LOG_FILE; \
-	echo "[1/5] 前端 Lint..." | tee -a $$LOG_FILE; \
+	echo "[1/6] 前端 Lint..." | tee -a $$LOG_FILE; \
 	$(MAKE) lint-frontend >> $$LOG_FILE 2>&1 || (echo "" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && echo "  ❌ 测试失败！" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && exit 1); \
 	echo "" | tee -a $$LOG_FILE; \
-	echo "[2/5] 后端 Lint..." | tee -a $$LOG_FILE; \
+	echo "[2/6] 后端 Lint..." | tee -a $$LOG_FILE; \
 	$(MAKE) lint-backend >> $$LOG_FILE 2>&1 || (echo "" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && echo "  ❌ 测试失败！" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && exit 1); \
 	echo "" | tee -a $$LOG_FILE; \
-	echo "[3/5] 前端测试..." | tee -a $$LOG_FILE; \
+	echo "[3/6] 前端测试..." | tee -a $$LOG_FILE; \
 	$(MAKE) test-frontend >> $$LOG_FILE 2>&1 || (echo "" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && echo "  ❌ 测试失败！" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && exit 1); \
 	echo "" | tee -a $$LOG_FILE; \
-	echo "[4/5] 后端测试..." | tee -a $$LOG_FILE; \
+	echo "[4/6] 后端测试..." | tee -a $$LOG_FILE; \
 	$(MAKE) test-backend >> $$LOG_FILE 2>&1 || (echo "" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && echo "  ❌ 测试失败！" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && exit 1); \
 	echo "" | tee -a $$LOG_FILE; \
-	echo "[5/5] 存储服务测试..." | tee -a $$LOG_FILE; \
+	echo "[5/6] 存储服务测试..." | tee -a $$LOG_FILE; \
 	$(MAKE) test-storage >> $$LOG_FILE 2>&1 || (echo "" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && echo "  ❌ 测试失败！" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && exit 1); \
+	echo "" | tee -a $$LOG_FILE; \
+	echo "[6/6] Bot Engine 测试..." | tee -a $$LOG_FILE; \
+	$(MAKE) test-bot-engine >> $$LOG_FILE 2>&1 || (echo "" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && echo "  ❌ 测试失败！" | tee -a $$LOG_FILE && echo "======================================" | tee -a $$LOG_FILE && exit 1); \
 	echo "" | tee -a $$LOG_FILE; \
 	echo "======================================" | tee -a $$LOG_FILE; \
 	echo "  ✅ 所有测试通过！" | tee -a $$LOG_FILE; \
 	echo "======================================" | tee -a $$LOG_FILE; \
 	echo "" | tee -a $$LOG_FILE; \
 	echo "日志文件: $$LOG_FILE" | tee -a $$LOG_FILE
+
+# Bot 全栈黑盒测试；需要可用的 PostgreSQL 测试库环境变量。
+test-bot-e2e:
+	apps/backend/scripts/run_bot_e2e.sh
 
 # 代码检查
 lint:
@@ -168,12 +178,19 @@ type-check:
 clean:
 	pnpm run clean
 
-# 数据库迁移（同时执行后端和存储服务的 migration）
-migrate:
-	@echo "执行数据库迁移..."
-	@ln -sf ../../storage/migrations/002_file_metadata.sql apps/backend/migrations/003_storage_file_metadata.sql
-	cd apps/backend && go run cmd/server/main.go migrate
-	@rm -f apps/backend/migrations/003_storage_file_metadata.sql
+# 数据库迁移。两个服务共享数据库，但拥有独立的版本命名空间与执行入口。
+migrate: migrate-backend migrate-storage
+
+migrate-backend:
+	cd apps/backend && go run ./cmd/migrate up
+
+migrate-storage:
+	cd apps/storage && go run ./cmd/migrate up
+
+# 仅用于已由旧迁移机制创建的数据库；该命令不执行 SQL。
+migrate-baseline:
+	cd apps/backend && go run ./cmd/migrate baseline
+	cd apps/storage && go run ./cmd/migrate baseline
 
 # 删除并重建数据库。管理员连接参数使用 DB_ADMIN_*，应用库参数使用 APP_DB_*。
 db-clean:
@@ -201,6 +218,16 @@ test-storage:
 lint-storage:
 	@echo "Running storage lint..."
 	cd apps/storage && golangci-lint run --timeout=5m 2>/dev/null || go vet ./...
+
+# Bot Engine 微服务
+dev-bot-engine:
+	pnpm -F bot-engine run dev
+
+test-bot-engine:
+	@echo "Running bot-engine tests..."
+	pnpm -F bot-engine run lint
+	pnpm -F bot-engine run type-check
+	pnpm -F bot-engine test
 
 # Docker 启动
 docker-up:

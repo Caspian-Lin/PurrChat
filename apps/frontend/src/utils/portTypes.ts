@@ -18,6 +18,7 @@ export {
   NODE_TYPE_META,
   isPortCompatible,
   getDefaultPorts,
+  getPortsForConfig,
   canConnect,
   getPortById,
 } from '@purrchat/workflow-types';

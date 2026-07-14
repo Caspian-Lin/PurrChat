@@ -11,7 +11,6 @@ import (
 	"purr-chat-server/pkg/logger"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 // containsBadInput 判断错误是否属于客户端输入错误（应返回 400）
@@ -318,7 +317,7 @@ func (h *BotHandler) DeployBot(c *gin.Context) {
 		return
 	}
 
-	deployment, err := h.botService.DeployBot(c.Request.Context(), botID, userIDStr, &req)
+	installation, err := h.botService.DeployBot(c.Request.Context(), botID, userIDStr, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to deploy bot: %v", err)
 		c.JSON(http.StatusBadRequest, models.APIResponse{
@@ -331,7 +330,7 @@ func (h *BotHandler) DeployBot(c *gin.Context) {
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Bot deployed successfully",
-		Data:    deployment,
+		Data:    installation,
 	})
 }
 
@@ -449,10 +448,7 @@ func (h *BotHandler) UpdateDeploymentStatus(c *gin.Context) {
 	err := h.botService.UpdateDeploymentStatus(c.Request.Context(), botID, userIDStr, &req)
 	if err != nil {
 		logger.ErrorfWithCaller("Failed to update deployment status: %v", err)
-		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Message: err.Error(),
-		})
+		respondProtectedResourceError(c, err, "Failed to update deployment status")
 		return
 	}
 
@@ -502,101 +498,6 @@ func (h *BotHandler) CreateBotConversation(c *gin.Context) {
 	})
 }
 
-// ActivateWorkflow 激活工作流
-// @Summary 激活 Bot 工作流
-// @Tags Bot
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Bot ID"
-// @Param request body models.ActivateWorkflowRequest true "激活信息"
-// @Success 200 {object} models.MessageResponse
-// @Router /api/bots/{id}/workflow/activate [post]
-func (h *BotHandler) ActivateWorkflow(c *gin.Context) {
-	botID := c.Param("id")
-	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
-		return
-	}
-
-	var req models.ActivateWorkflowRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
-		return
-	}
-
-	userIDStr, ok := getUserID(c)
-	if !ok {
-		return
-	}
-
-	// 验证权限
-	err := h.botService.ActivateWorkflow(c.Request.Context(), botID, userIDStr, req.ConversationID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to activate workflow: %v", err)
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
-		return
-	}
-
-	// 调用引擎激活工作流
-	botUUID, _ := uuid.Parse(botID)
-	err = h.botEngine.ActivateWorkflow(c.Request.Context(), botUUID, req.ConversationID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to activate workflow (engine): %v", err)
-		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Workflow activated"})
-}
-
-// DeactivateWorkflow 停用工作流
-// @Summary 停用 Bot 工作流
-// @Tags Bot
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Bot ID"
-// @Param request body models.ActivateWorkflowRequest true "停用信息"
-// @Success 200 {object} models.MessageResponse
-// @Router /api/bots/{id}/workflow/deactivate [post]
-func (h *BotHandler) DeactivateWorkflow(c *gin.Context) {
-	botID := c.Param("id")
-	if botID == "" {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
-		return
-	}
-
-	var req models.ActivateWorkflowRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
-		return
-	}
-
-	userIDStr, ok := getUserID(c)
-	if !ok {
-		return
-	}
-
-	err := h.botService.DeactivateWorkflow(c.Request.Context(), botID, userIDStr, req.ConversationID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to deactivate workflow: %v", err)
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
-		return
-	}
-
-	// 调用引擎停用工作流
-	botUUID, _ := uuid.Parse(botID)
-	err = h.botEngine.DeactivateWorkflow(c.Request.Context(), botUUID, req.ConversationID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to deactivate workflow (engine): %v", err)
-		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Workflow deactivated"})
-}
-
 // GetDeployableConversations 获取可部署 Bot 的群聊列表
 // @Summary 获取可部署 Bot 的群聊列表
 // @Tags Bot
@@ -627,106 +528,6 @@ func (h *BotHandler) GetDeployableConversations(c *gin.Context) {
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: conversations})
 }
 
-// DebugBot 调试执行 Bot 事件链
-// @Summary 调试执行 Bot 事件链
-// @Tags Bot
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Bot ID"
-// @Param request body models.DebugBotRequest true "调试请求"
-// @Success 200 {object} models.MessageResponse
-// @Router /api/bots/{id}/debug [post]
-func (h *BotHandler) DebugBot(c *gin.Context) {
-	botIDStr := c.Param("id")
-	if botIDStr == "" {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
-		return
-	}
-
-	var req models.DebugBotRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
-		return
-	}
-
-	botID, err := uuid.Parse(botIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "invalid bot id"})
-		return
-	}
-
-	result, err := h.botEngine.DebugExecute(c.Request.Context(), botID, &req)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to debug bot: %v", err)
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: result})
-}
-
-// DebugStep 调试逐步执行
-// @Summary 调试逐步执行下一个事件
-// @Tags Bot
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Bot ID"
-// @Param request body models.DebugStepRequest true "逐步执行请求"
-// @Success 200 {object} models.MessageResponse
-// @Router /api/bots/{id}/debug/step [post]
-func (h *BotHandler) DebugStep(c *gin.Context) {
-	botIDStr := c.Param("id")
-	if botIDStr == "" {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "bot id is required"})
-		return
-	}
-
-	var req models.DebugStepRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
-		return
-	}
-
-	botID, err := uuid.Parse(botIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "invalid bot id"})
-		return
-	}
-
-	result, err := h.botEngine.DebugStep(c.Request.Context(), botID, req.SessionID)
-	if err != nil {
-		logger.ErrorfWithCaller("Failed to debug step: %v", err)
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: result})
-}
-
-// DebugReset 重置调试会话
-// @Summary 重置调试会话
-// @Tags Bot
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Bot ID"
-// @Param request body models.DebugResetRequest true "重置请求"
-// @Success 200 {object} models.MessageResponse
-// @Router /api/bots/{id}/debug/reset [post]
-func (h *BotHandler) DebugReset(c *gin.Context) {
-	var req models.DebugResetRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Message: "Invalid request: " + err.Error()})
-		return
-	}
-
-	h.botEngine.DebugReset(req.SessionID)
-
-	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Debug session reset"})
-}
-
 // GetConversationBots 获取会话中活跃的 Bot 列表
 func (h *BotHandler) GetConversationBots(c *gin.Context) {
 	conversationID := c.Param("id")
@@ -735,9 +536,13 @@ func (h *BotHandler) GetConversationBots(c *gin.Context) {
 		return
 	}
 
-	deployments, err := h.botService.GetActiveBotsForConversation(c.Request.Context(), conversationID)
+	requesterID, ok := getUserID(c)
+	if !ok {
+		return
+	}
+	deployments, err := h.botService.GetActiveBotsForConversation(c.Request.Context(), requesterID, conversationID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Failed to get conversation bots"})
+		respondProtectedResourceError(c, err, "Failed to get conversation bots")
 		return
 	}
 

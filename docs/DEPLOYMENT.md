@@ -198,19 +198,7 @@ pnpm tauri:build:win64
 
 ## 数据库迁移
 
-迁移文件位于 `apps/backend/migrations/`:
-
-```
-001_init_schema.sql       # 初始 Schema (users, conversations, friendships, enrollments)
-002_file_metadata.sql     # 文件元数据表
-003_add_file_msg_type.sql # 消息类型扩展 (支持 file)
-```
-
-Docker Compose 启动时自动执行迁移。手动迁移:
-
-```bash
-docker compose exec -T postgres psql -U postgres -d purrchat -f /path/to/migration.sql
-```
+迁移分别位于 `apps/backend/migrations/` 与 `apps/storage/migrations/`。Docker Compose 会先运行对应的 one-shot migrator，只有成功后才启动应用服务。手动执行、已有数据库 baseline、回滚边界和新迁移编号规则见 [数据库迁移指南](MIGRATIONS.md)。
 
 ## CI/CD
 

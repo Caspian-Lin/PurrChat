@@ -250,6 +250,15 @@
         </div>
       </div>
 
+      <!-- 已安装 Bot（仅群聊显示） -->
+      <ConversationBotList
+        v-if="conversation?.conversation_type === 'group'"
+        :conversation-id="conversation?.id || ''"
+        :conversation-name="conversationName"
+        :can-manage="canManageMembers"
+        @bots-changed="loadMembers"
+      />
+
       <!-- 发送消息按钮 -->
       <div>
         <button
@@ -319,6 +328,7 @@ import { BsCamera, BsPencil, BsCheck, BsX, BsCpu } from 'vue-icons-plus/bs';
 import BaseModal from '../common/BaseModal.vue';
 import BaseListItem from '../common/BaseListItem.vue';
 import AddMemberModal from './AddMemberModal.vue';
+import ConversationBotList from './ConversationBotList.vue';
 import { api } from '../../models/api';
 import { getUserAvatar, getUserUsername, getOtherUser } from '../../utils/userHelpers';
 import { useNotification } from '../../composables/useNotification';

@@ -35,6 +35,12 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true },
       },
       {
+        path: 'bot-studio/developer/api',
+        name: 'BotApiDeveloper',
+        component: () => import('../views/BotApiDeveloperView.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('../components/home/panel/SettingsPanel.vue'),

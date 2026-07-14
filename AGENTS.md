@@ -1,7 +1,6 @@
 # PurrChat Agent Guide
 
-进入任务先读本文件；再按需读 `README.md`、`docs/ROADMAP.md`、`docs/DESIGN_SYSTEM.md`、相关架构文档和源码。`CLAUDE.md` 的要求已合并到这里，后续可删除。
-
+进入任务先读本文件；再按需读 `README.md`、`docs/ROADMAP.md`、`docs/DESIGN_SYSTEM.md`、相关架构文档和源码。
 ## 项目记忆
 
 每次对话开始先了解当前状态：
@@ -23,6 +22,15 @@ Monorepo 结构：
 - `docs`：设计系统、路线图、部署、WebSocket、Bot 引擎等文档。
 
 品牌关键词：**Intimate · Refined · Alive**（亲密 · 精致 · 鲜活）。
+
+## 开发阶段与兼容策略
+
+PurrChat 当前始终处于内部测试阶段，测试数据和旧配置不构成兼容边界：
+
+- 不为旧 Bot、旧 `mechanism_config`、旧 API 或旧前端流程实现数据迁移、兼容分支、运行时 fallback 或双写。
+- 功能重构时直接收敛到当前目标模型，并删除被替代的旧实现；测试环境中的旧数据可由 owner 重建。
+- 数据库结构仍通过项目既有 migration 机制演进，但 migration 只负责建立当前 schema，不负责保留或转换内部测试阶段的历史业务数据。
+- 除非 owner 在具体任务中明确提出兼容要求，否则不要主动增加向后兼容和存量数据迁移工作。
 
 ## 开发流程
 
@@ -78,62 +86,62 @@ Issue 模板：
 
 ### 3. 分支策略
 
-- `main`：稳定主线。只有 `dev` 经充分用户测试并完成一个 milestone 后，才统一合入 `main`。
-- `dev`：日常集成分支。功能分支从 `dev` 创建，PR 合入 `dev`。
+- `main`：稳定主线。只有 `dev` 经充分用户测试后，才统一合入 `main`。
+- `dev`：日常集成分支。功能分支可直接 PR 合入 `dev`，也可先合入所属 milestone 的集成分支。
+- milestone 集成分支：跨多个 issue 的里程碑用一个集成分支（命名 `m/<short-name>`，从 `dev` 创建）。该 milestone 下的功能分支 PR 以集成分支为 base；集成分支测试稳定后再整体 PR 合入 `dev`，即视为 milestone 完成。
 - 功能分支：每个 issue 一个分支，建议 `feat/<issue-id>-short-name`、`fix/<issue-id>-short-name`、`docs/<issue-id>-short-name`。
-- 不在 `main` 直接开发；不把未完成、未测试、未 review 的功能直接合入 `dev`。
-- CI 只作为 PR 是否允许合并的凭证；CI 不负责自动合并分支，也不维护额外集成分支。
+- 不在 `main` 直接开发；不把未完成、未测试、未 review 的功能直接合入 `dev` 或集成分支。
+- CI 在所有 PR 上运行，并在 `main`、`dev`、`m/**` 长期分支 push 时运行；功能分支不单独触发 push CI，避免同一提交与 PR CI 重复运行。CI 作为 PR 是否允许合并的凭证，不负责自动合并分支。
 
 ### 4. 单任务开发与 PR
 
-1. 从最新 `dev` 创建功能分支。
-2. 按 issue 范围实现，不夹带无关重构。
-3. 本地运行匹配影响范围的测试；跨模块或不确定影响时运行完整 `make test`。
-4. 提交前遵守本文 commit 流程。
-5. 创建 PR，目标分支 `dev`。
-6. 等 CI 通过。CI 会在面向 `main` / `dev` 的 PR 上运行，并在 `main` / `dev` 收到 push（含 PR merge）后再次验证集成分支。
-7. 开发者复查 PR diff、测试结果和 issue 完成标准。
-8. 请求 owner 或指定 reviewer 确认。
-9. reviewer 确认后才合并到 `dev`。
-10. milestone 完成并经用户测试后，再从 `dev` 统一合入 `main`。
+功能完成的标准流程，前几步由 agent 自主完成，只有「PR 通过后是否合并」需要 owner 确认：
 
-PR 描述包含：GitHub closing keyword 关联 issue（如独立成行的 `Closes #123`）、实现内容、本地验证命令与结果、风险/迁移/配置/回滚说明、UI 截图或录屏说明（如适用）。合入 `dev` 即代表单任务完成；仓库 workflow 会在 PR merge 到 `dev` / `main` 后关闭 PR 描述中独立成行 closing keyword 指向的 issue，避免把正文示例误解析为真实 issue。
+1. 从最新 `dev`（或所属 milestone 集成分支）创建功能分支。
+2. 按 issue 范围实现，不夹带无关重构。
+3. 本地运行匹配影响范围的测试；跨模块或不确定影响时运行完整 `make test`。**本地测试必须通过才能继续。**
+4. 按「Commit Workflow」提交。
+5. push 功能分支到远程。
+6. 创建 PR：base 为 `dev` 或所属 milestone 集成分支；描述含独立成行的 closing keyword（如 `Closes #123`）、实现内容、本地验证命令与结果、风险/迁移/配置/回滚说明、UI 截图或录屏（如适用）。
+7. 等 CI 通过。CI 在所有 PR 上运行，并在 `main`、`dev`、`m/**` 长期分支 push 时运行。
+8. **CI 通过后，是否合并 PR 由 owner 确认**；未经确认不要合并。
+9. 合并目标为 PR 的 base 分支（`dev` 或 milestone 集成分支）。PR merge 时，仓库 workflow 会关闭描述中独立成行 closing keyword 指向的 issue。
+10. milestone 集成分支整体合入 `dev` 即视为 milestone 完成；`dev` 经充分用户测试后再统一合入 `main`。
+
+总结：本地测试 → 提交 → push → 创建 PR 均可自主完成；**只有 merge 这一步需要 owner 确认**。
 
 ## GitHub 操作
 
 优先用 `gh`：
 
+- 本项目的 issue、milestone、PR 均指 **GitHub** 上的资源，不是 Linear；优先用 `gh` 操作。
 - 创建 milestone、issue、PR。
 - 查询 CI、PR review/comment、issue 状态。
-- 创建 PR 时用 GitHub closing keyword 关联对应 issue；PR 合入 `dev` / `main` 后由 workflow 自动关闭对应 issue。
+- 创建 PR 时用 GitHub closing keyword 关联对应 issue；PR 合入 `dev` / `main` / milestone 集成分支后由 workflow 自动关闭对应 issue。**issue 的关闭一律通过 PR 完成，不手动关闭。**
 - 在 PR comment 中沉淀代码实现决策。
 
 涉及 GitHub Project 看板同步时，先尝试 `gh` 和 GraphQL；需要额外 token scope、MCP 或 GitHub App 权限时，向 owner 说明能力和原因。
 
-未经用户明确要求，不要 push、merge、close issue、删除远程分支或修改远程保护规则。
+功能开发中，push 功能分支、创建 PR 是标准流程的一部分，可自主完成；但 merge PR、删除远程分支、修改远程保护规则需 owner 明确要求。
 
 ## Commit Workflow
 
-当用户显式请求提交（如 `/commit`、`提交`、`commit`），或对话结束前检测到有未提交代码改动时，执行：
+功能实现并本地测试通过后，按以下流程提交并推送（不再需要用户显式请求）：
 
 0. 运行 `make lint-fix`，确保代码正确格式化。
 
-第一步：创建提交计划
+提交：
 
 1. 运行 `git status` 和 `git diff` 了解所有变更。
 2. 按逻辑分组为独立 commit，不同关注点分开提交。
 3. 每个 commit 用中文拟定简洁 message，格式 `<type>(<scope>): <描述>`；type 使用 `feat`、`fix`、`refactor`、`style`、`docs` 等。
-4. 向用户展示分组计划，包含每组文件列表和 commit message。
-5. 等待用户确认或调整；未确认前不要执行任何 `git add` / `git commit`。
-
-第二步：执行提交
-
-1. 用户确认后，按计划依次 `git add` 和 `git commit`。
-2. 最后运行 `git status` + `git log --oneline -N` 展示结果。
+4. 按计划依次 `git add` 和 `git commit`。
+5. 运行 `git status` + `git log --oneline -N` 展示结果。
+6. push 功能分支，并按「单任务开发与 PR」创建 PR。
 
 规则：
 
-- 不要 push，除非用户显式要求。
+- 功能分支的提交与 push 是标准流程，本地测试通过后即可自主执行；只有 PR 通过后的 merge 需 owner 确认。
 - commit message 可多行，用 markdown 式分点，简洁描述改动目的而非机械罗列内容。
 - 已有暂存区内容时，一并纳入分析。
 - 不添加 `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`。

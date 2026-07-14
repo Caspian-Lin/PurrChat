@@ -1,14 +1,17 @@
 module purr-chat-storage
 
-go 1.25
+go 1.25.0
 
 require (
+	github.com/Caspian-Lin/PurrChat/packages/db-migrate v0.0.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/golang-jwt/jwt/v5 v5.2.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.5.0
 	github.com/minio/minio-go/v7 v7.0.99
 )
+
+replace github.com/Caspian-Lin/PurrChat/packages/db-migrate => ../../packages/db-migrate
 
 require (
 	github.com/bytedance/sonic v1.9.1 // indirect

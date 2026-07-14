@@ -40,6 +40,7 @@ export interface LoginResponse {
 // API 响应
 export interface ApiResponse<T = any> {
   success: boolean;
+  code?: string;
   message?: string;
   data?: T;
 }
@@ -109,7 +110,7 @@ export interface Message {
 
 // 系统消息内容（JSON 格式存储在 Message.content 中）
 export interface SystemMessageContent {
-  type: 'special_mode_start' | 'special_mode_end' | 'bot_deployed' | 'bot_undeployed';
+  type: 'workflow_start' | 'workflow_end' | 'bot_deployed' | 'bot_undeployed';
   bot_id?: string;
   bot_name?: string;
   user_id?: string;
@@ -331,6 +332,9 @@ export type BotStatus = 'active' | 'disabled';
 // Bot 可见性
 export type BotVisibility = 'private' | 'public' | 'global';
 
+// Bot 类型
+export type BotType = 'builtin' | 'workflow' | 'external';
+
 // Bot 模型
 export interface Bot {
   id: string;
@@ -339,30 +343,92 @@ export interface Bot {
   avatar_url: string;
   description: string;
   status: BotStatus;
+  bot_type: BotType;
   visibility: BotVisibility;
+  discoverability?: 'unlisted' | 'listed' | 'featured';
+  published_version?: number;
+  requested_capabilities?: string[];
   mechanism_config?: MechanismConfig;
-  /** @deprecated 使用 mechanism_config */
-  trigger_config?: TriggerConfig;
-  /** @deprecated 使用 mechanism_config */
-  reply_config?: ReplyConfig;
-  /** @deprecated 使用 mechanism_config */
-  special_mode_config?: SpecialModeConfig;
   created_at: string;
   updated_at: string;
 }
 
-// Bot 部署
+export type BotApiStatus =
+  | 'stable'
+  | 'beta'
+  | 'partial'
+  | 'planned'
+  | 'blocked'
+  | 'not_applicable'
+  | 'rejected';
+
+export interface BotApiProfile {
+  version: string;
+  id_format: string;
+  conversation_key: string;
+  message_format: string;
+  cq_code_core_format: boolean;
+}
+
+export interface BotApiActionCapability {
+  name: string;
+  aliases?: string[];
+  category: string;
+  status: BotApiStatus;
+  transports: ('universal_websocket' | 'http')[];
+  required_capability?: string;
+  version: string;
+  compatibility_note?: string;
+  source: string;
+  request_example?: Record<string, unknown>;
+  response_example?: Record<string, unknown>;
+  references?: string[];
+}
+
+export interface BotApiEventCapability {
+  post_type: string;
+  detail_type: string;
+  sub_types?: string[];
+  category: string;
+  status: BotApiStatus;
+  transports: ('universal_websocket' | 'http')[];
+  required_capability?: string;
+  version: string;
+  compatibility_note?: string;
+  source: string;
+  event_example?: Record<string, unknown>;
+  references?: string[];
+}
+
+export interface BotApiSegmentCapability {
+  type: string;
+  status: BotApiStatus;
+  compatibility_note?: string;
+  fields: { name: string; type: string; required: boolean }[];
+}
+
+export interface BotApiCapabilities {
+  profile: BotApiProfile;
+  actions: BotApiActionCapability[];
+  events: BotApiEventCapability[];
+  segments: BotApiSegmentCapability[];
+}
+
+// Bot 部署（对齐后端 BotInstallation）
 export interface BotDeployment {
   id: string;
-  bot_id: string;
-  conversation_id: string;
-  deployed_by: string;
-  status: 'active' | 'paused';
-  special_mode_active: boolean;
-  special_mode_started_at?: string;
-  deployed_at: string;
-  bot?: Bot;
-  conversation?: Conversation;
+  app_id: string;
+  installed_by: string;
+  target_type: 'user' | 'conversation';
+  target_id: string;
+  granted_capabilities: string[];
+  diagnostics_consent?: 'denied' | 'granted';
+  status: 'active' | 'paused' | 'disabled';
+  installed_at: string;
+  updated_at: string;
+  app?: Bot;
+  target_name?: string;
+  target_conversation_type?: string;
 }
 
 // 公开 Bot 详情（含统计信息）
@@ -370,7 +436,6 @@ export interface PublicBotDetail extends Bot {
   deployment_count: number;
   owner_name: string;
   trigger_summary: string;
-  reply_type: string;
 }
 
 // 分页搜索结果
@@ -385,6 +450,8 @@ export interface PaginatedSearchResult {
 export interface DeployableConversation {
   id: string;
   name: string;
+  conversation_type: 'group' | 'direct';
+  avatar_url?: string;
   member_count: number;
 }
 
@@ -393,6 +460,7 @@ export interface CreateBotRequest {
   name: string;
   avatar_url?: string;
   description?: string;
+  bot_type?: BotType;
   visibility?: BotVisibility;
 }
 
@@ -408,13 +476,24 @@ export interface UpdateBotRequest {
   trigger_config?: TriggerConfig;
   /** @deprecated 使用 mechanism_config */
   reply_config?: ReplyConfig;
-  /** @deprecated 使用 mechanism_config */
-  special_mode_config?: SpecialModeConfig;
 }
 
 // 部署 Bot 请求
 export interface DeployBotRequest {
   conversation_id: string;
+}
+
+export interface CreateBotInstallationRequest {
+  target_type: 'user' | 'conversation';
+  target_id: string;
+  granted_capabilities: string[];
+  diagnostics_consent?: 'denied' | 'granted';
+}
+
+export interface UpdateBotInstallationRequest {
+  status?: 'active' | 'paused' | 'disabled';
+  granted_capabilities?: string[];
+  diagnostics_consent?: 'denied' | 'granted';
 }
 
 // 更新部署状态请求
@@ -471,13 +550,6 @@ export interface LLMConfig {
   context_window?: number;
 }
 
-// 特殊模式配置（事件链）
-/** @deprecated 使用 SpecialModeSpec（在 MechanismConfig 中） */
-export interface SpecialModeConfig {
-  events?: SpecialModeEvent[];
-  end_conditions?: SpecialModeEndCondition[];
-}
-
 // ===== 机制列表类型定义 =====
 
 // 机制配置（Bot 的新统一配置格式）
@@ -485,13 +557,12 @@ export interface MechanismConfig {
   mechanisms: Mechanism[];
 }
 
-// 单个机制 = 触发规则 + 回复设置
+// 单个机制 = 触发规则（回复行为由 mechanism 级工作流文档定义）
 export interface Mechanism {
   id: string;
   name: string;
   enabled: boolean;
   trigger: TriggerSpec;
-  reply: ReplySpec;
 }
 
 // 触发规格
@@ -503,29 +574,35 @@ export interface TriggerSpec {
 
 // 回复规格
 export interface ReplySpec {
-  type: 'predefined' | 'llm' | 'special_mode';
+  type: 'predefined' | 'llm' | 'workflow';
   predefined?: PredefinedConfig;
   llm?: LLMConfig;
-  special_mode?: SpecialModeSpec;
+  workflow?: WorkflowSpec;
 }
 
-// 特殊模式规格（嵌套在机制中）
-export interface SpecialModeSpec {
-  events: SpecialModeEvent[];
+// 工作流规格（嵌套在机制中）
+export interface WorkflowSpec {
+  events: WorkflowEvent[];
   connections?: FlowConnection[];
-  end_conditions: SpecialModeEndCondition[];
+  end_conditions: WorkflowEndCondition[];
 }
 
-// 特殊模式事件
-export interface SpecialModeEvent {
+// 工作流事件
+export interface WorkflowEvent {
   id: string;
   type: EventType;
   name: string;
+  key?: string;
   config: Record<string, any>;
   ports?: EventPort[];
   position?: { x: number; y: number };
-  /** @deprecated 使用 connections 代替 */
-  next?: string[];
+}
+
+// 工作流结束条件
+export interface WorkflowEndCondition {
+  type: 'message_match' | 'max_rounds' | 'timeout';
+  pattern?: string;
+  value?: number;
 }
 
 // LLM 事件配置
@@ -566,28 +643,11 @@ export interface ReplyEventConfig {
   template: string;
 }
 
-// 特殊模式结束条件
-export interface SpecialModeEndCondition {
-  type: 'message_match' | 'max_rounds' | 'timeout';
-  pattern?: string;
-  value?: number;
-}
-
-// 特殊模式运行时会话（调试用）
-export interface SpecialModeSession {
-  conversation_id: string;
-  bot_id: string;
-  bot_name: string;
-  round: number;
-  started_at: string;
-  event_outputs: Record<string, string>;
-}
-
 // ─── 调试相关类型 ───
 
 export interface EventTrace {
   event_id: string;
-  event_type: 'llm' | 'builtin' | 'python' | 'reply';
+  event_type: 'llm' | 'builtin' | 'reply';
   event_name: string;
   status: 'pending' | 'running' | 'success' | 'error';
   input: string;
@@ -617,7 +677,6 @@ export interface DebugBotRequest {
   step_mode?: boolean;
   session_id?: string;
   sender_name?: string;
-  special_mode_config?: SpecialModeConfig;
 }
 
 export interface DebugStepRequest {
@@ -650,8 +709,103 @@ export interface BotCallLog {
 
 // Bot 调用记录列表响应
 export interface BotCallLogListResponse {
-  logs: BotCallLog[];
+  // Older backend versions can encode an empty Go slice as null.
+  logs: BotCallLog[] | null;
   total: number;
   limit: number;
   offset: number;
+}
+
+// ─── Workflow Document API 类型 (#13) ─────────────────────────
+
+export interface WorkflowDocumentResponse {
+  document: import('@purrchat/workflow-types').WorkflowDocument;
+  revision: number;
+  etag: string;
+  published_revision?: number;
+}
+
+export interface WorkflowVersion {
+  id: string;
+  bot_id: string;
+  mechanism_id: string;
+  revision: number;
+  document: import('@purrchat/workflow-types').WorkflowDocument;
+  capabilities: string[];
+  published_by?: string;
+  published_at: string;
+}
+
+export interface WorkflowValidationIssue {
+  level: 'error' | 'warning';
+  code: string;
+  message: string;
+  path?: string;
+  node_id?: string;
+  connection_id?: string;
+}
+
+export interface WorkflowValidationResponse {
+  valid: boolean;
+  issues: WorkflowValidationIssue[];
+  derived_capabilities?: string[];
+}
+
+// ─── Debug Trace 类型 (#15) ───────────────────────────────────
+
+export type NodeTraceStatus = 'pending' | 'running' | 'success' | 'error' | 'skip';
+
+export interface NodeTrace {
+  nodeId: string;
+  nodeKey?: string;
+  nodeType: string;
+  nodeName?: string;
+  status: NodeTraceStatus;
+  input?: Record<string, string>;
+  output?: Record<string, string>;
+  branch?: string;
+  error?: string;
+  startTime?: number;
+  endTime?: number;
+  durationMs?: number;
+}
+
+export type RunTraceStatus = 'running' | 'completed' | 'error' | 'cancelled';
+
+export interface RunTrace {
+  runId: string;
+  status: RunTraceStatus;
+  nodes: NodeTrace[];
+  startedAt: number;
+  completedAt?: number;
+  durationMs?: number;
+  reply?: string;
+  input: string;
+  senderName?: string;
+  waitingForStep?: boolean;
+  session_id?: string;
+}
+
+// ===== Bot API Credential =====
+
+export interface BotAPICredential {
+  id: string;
+  bot_id: string;
+  name: string;
+  token_prefix: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BotAPICredentialSecret {
+  credential: BotAPICredential;
+  token: string;
+}
+
+export interface CreateBotAPICredentialRequest {
+  name: string;
+  expires_at?: string | null;
 }

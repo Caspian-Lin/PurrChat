@@ -1,4 +1,5 @@
-import type { MechanismConfig, DebugBotRequest } from '@purrchat/workflow-types';
+import type { WorkflowDocument, RunTrace, RunTraceStatus } from '@purrchat/workflow-types';
+import type { DebugBotRequest } from '@purrchat/workflow-types';
 
 // ─── 执行请求/响应 ───────────────────────────────────────────
 
@@ -10,19 +11,25 @@ export interface ExecuteRequest {
   sender_name: string;
   content: string;
   msg_type: string;
-  mechanism_config: MechanismConfig;
+  document: WorkflowDocument;
+  revision: number;
   context_messages?: Array<{ role: string; content: string }>;
+  /** 安装时授予的 capabilities，传给 workflow-engine 做运行时强制校验 */
+  granted_capabilities?: string[];
+  /** 运行时解密后的密钥明文（仅在 secrets:use 已授予时填充，内网传输） */
+  secrets?: Record<string, string>;
 }
 
 export interface ExecuteResponse {
+  run_id: string;
   reply: string;
   session_active: boolean;
   session_id?: string;
   triggered: boolean;
-  mechanism_id?: string;
-  mechanism_name?: string;
-  reply_type?: string;
   execution_ms?: number;
+  revision?: number;
+  status: RunTraceStatus;
+  trace?: RunTrace;
 }
 
 // ─── 调试请求/响应 ───────────────────────────────────────────

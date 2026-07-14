@@ -1,4 +1,5 @@
 import { ref, onUnmounted } from 'vue';
+import { platformAdapters } from '../platform';
 
 interface Position {
   x: number;
@@ -25,7 +26,8 @@ export function useLongPress(
     // 只处理单指触摸
     if (event.touches.length !== 1) return;
 
-    const touch = event.touches[0];
+    const touch = event.touches.item(0);
+    if (!touch) return;
     startPosition = { x: touch.clientX, y: touch.clientY };
     isLongPressing.value = false;
 
@@ -33,10 +35,7 @@ export function useLongPress(
       if (startPosition) {
         isLongPressing.value = true;
         onLongPress(startPosition);
-        // 触发轻微振动反馈（如果支持）
-        if (navigator.vibrate) {
-          navigator.vibrate(30);
-        }
+        platformAdapters.feedback.vibrate(30);
       }
     }, duration);
   }
@@ -44,7 +43,8 @@ export function useLongPress(
   function onTouchMove(event: TouchEvent) {
     if (!startPosition || !timer) return;
 
-    const touch = event.touches[0];
+    const touch = event.touches.item(0);
+    if (!touch) return;
     const deltaX = Math.abs(touch.clientX - startPosition.x);
     const deltaY = Math.abs(touch.clientY - startPosition.y);
 

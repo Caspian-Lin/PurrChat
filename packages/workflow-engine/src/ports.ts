@@ -1,5 +1,16 @@
 import type { FlowConnection } from '@purrchat/workflow-types';
-import type { ExecutionContext } from './types.js';
+import { resolveTemplate, type ResolveContext } from './resolver.js';
+
+/**
+ * 变量解析所需的最小上下文结构（向后兼容）。
+ * 新代码应直接使用 ResolveContext / resolveTemplate()。
+ */
+export interface VariableResolveContext {
+  nodeOutputs: Record<string, Record<string, string>>;
+  eventOutputs: Record<string, string>;
+  variables: Record<string, string>;
+  nameResolver: Record<string, string>;
+}
 
 // ─── 端口值解析 ──────────────────────────────────────────────
 
@@ -10,7 +21,7 @@ import type { ExecutionContext } from './types.js';
 export function resolveInputPorts(
   nodeId: string,
   connections: FlowConnection[],
-  context: ExecutionContext,
+  context: VariableResolveContext,
 ): Record<string, string> {
   const result: Record<string, string> = {};
 
@@ -35,7 +46,7 @@ export function getPortValue(
   nodeId: string,
   portId: string,
   connections: FlowConnection[],
-  context: ExecutionContext,
+  context: VariableResolveContext,
 ): string {
   const key = `${nodeId}:${portId}`;
 
@@ -62,44 +73,35 @@ export function getPortValue(
 // ─── 变量替换 ────────────────────────────────────────────────
 
 /**
- * 替换模板中的变量引用
- * 支持两种格式：
- *   - {nodeName.portName} — 人类可读格式（优先解析）
- *   - $nodeID:portID / $evtID.output / $variable — 机器格式（向后兼容）
+ * @deprecated 使用 resolveTemplate() 代替。
+ * 向后兼容包装：接受 VariableResolveContext（可能缺少新字段），
+ * 内部委托给 resolveTemplate()。
  */
 export function replaceVariables(
   s: string,
-  context: ExecutionContext,
+  context: VariableResolveContext | ResolveContext,
 ): string {
-  // 替换 {name.port} 格式（最高优先级）
-  s = s.replace(/\{([^}]+)\}/g, (match, ref: string) => {
-    const mappedKey = context.nameResolver[ref];
-    if (mappedKey) {
-      const [nodeId, portId] = mappedKey.split(':');
-      const val = context.nodeOutputs[nodeId]?.[portId];
-      if (val !== undefined) return val;
-    }
-    return match; // 未找到映射，原样返回
+  // 如果 context 已包含完整字段，直接使用
+  if ('nodeKeyMap' in context && 'rawInput' in context) {
+    return resolveTemplate(s, context as ResolveContext);
+  }
+
+  // 否则用旧字段构建最小 ResolveContext
+  const ctx = context as VariableResolveContext;
+  return resolveTemplate(s, {
+    nodeOutputs: ctx.nodeOutputs ?? {},
+    nameResolver: ctx.nameResolver ?? {},
+    nodeKeyMap: {},
+    variables: ctx.variables ?? {},
+    eventOutputs: ctx.eventOutputs ?? {},
+    rawInput: ctx.variables?.['__rawInput__'] ?? '',
+    senderId: ctx.variables?.['sender_id'] ?? '',
+    senderName: ctx.variables?.['username'] ?? '',
+    conversationId: ctx.variables?.['conversation_id'] ?? '',
+    history: [],
+    secrets: {},
+    session: {},
   });
-
-  // 替换端口值引用 $nodeID:portID
-  for (const [nodeId, ports] of Object.entries(context.nodeOutputs)) {
-    for (const [portId, val] of Object.entries(ports)) {
-      s = s.replaceAll(`$${nodeId}:${portId}`, val);
-    }
-  }
-
-  // 替换事件输出引用 $evtID.output
-  for (const [evtId, output] of Object.entries(context.eventOutputs)) {
-    s = s.replaceAll(`$${evtId}.output`, output);
-  }
-
-  // 替换会话变量
-  for (const [key, value] of Object.entries(context.variables)) {
-    s = s.replaceAll(`$${key}`, value);
-  }
-
-  return s;
 }
 
 // ─── 条件求值 ────────────────────────────────────────────────
@@ -113,7 +115,7 @@ export function replaceVariables(
  */
 export function evaluateCondition(
   condition: string,
-  context: ExecutionContext,
+  context: VariableResolveContext | ResolveContext,
 ): boolean {
   if (!condition) return false;
 

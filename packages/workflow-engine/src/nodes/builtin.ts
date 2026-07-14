@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { NodeDefinition } from '../types.js';
+import { resolveTemplate, type ResolveContext } from '../resolver.js';
 
 const builtinConfigSchema = z.object({
   builtin_type: z.enum(['random_number', 'haiku', 'echo', 'count', 'template']),
@@ -37,7 +38,7 @@ export const builtinNode: NodeDefinition<z.infer<typeof builtinConfigSchema>> = 
         output = builtinCount(cfg, ctx.variables);
         break;
       case 'template':
-        output = builtinTemplate(cfg, input.rawInput, ctx.variables);
+        output = builtinTemplate(cfg, ctx);
         break;
       default:
         throw new Error(`Unknown builtin type: ${cfg.builtin_type}`);
@@ -99,26 +100,11 @@ function builtinCount(
 
 function builtinTemplate(
   config: z.infer<typeof builtinConfigSchema>,
-  input: string,
-  variables: Record<string, string>,
+  ctx: ResolveContext,
 ): string {
   const template = config.template;
   if (!template) throw new Error('template is empty');
 
-  let result = template;
-
-  // 替换变量
-  for (const [key, value] of Object.entries(variables)) {
-    result = result.replaceAll(`{${key}}`, value);
-  }
-
-  // 替换 {args} 和 {args:N}
-  const args = input.trim().split(/\s+/);
-  result = result.replace(/\{args:(\d+)\}/g, (_match, index: string) => {
-    const i = parseInt(index, 10) - 1;
-    return i >= 0 && i < args.length ? args[i]! : '';
-  });
-  result = result.replaceAll('{args}', input.trim());
-
-  return result;
+  // 统一变量替换（${path} + 所有遗留格式）
+  return resolveTemplate(template, ctx);
 }

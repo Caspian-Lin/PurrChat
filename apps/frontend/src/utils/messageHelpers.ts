@@ -5,10 +5,8 @@ export function formatSystemMessageText(message: Message, currentUserId?: string
     const sys = JSON.parse(message.content) as SystemMessageContent;
     switch (sys.type) {
       case 'workflow_start':
-      case 'special_mode_start':
         return `${sys.bot_name || 'Bot'} 进入了 Agent 模式`;
       case 'workflow_end':
-      case 'special_mode_end':
         return `${sys.bot_name || 'Bot'} 退出了 Agent 模式`;
       case 'bot_deployed':
         return `${sys.bot_name || 'Bot'} 已加入对话`;

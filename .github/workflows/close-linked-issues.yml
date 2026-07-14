@@ -1,12 +1,11 @@
 name: Close Linked Issues
 
+# 任意 base 的 PR 合并后都尝试关闭 closing keyword 指向的 issue
+# （PR 可合入 dev / main / milestone 集成分支，均触发关闭）
 on:
   pull_request:
     types:
       - closed
-    branches:
-      - main
-      - dev
 
 permissions:
   contents: read

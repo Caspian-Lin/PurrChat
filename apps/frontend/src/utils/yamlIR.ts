@@ -28,6 +28,12 @@
 import yaml from 'js-yaml';
 import type { WorkflowEvent, FlowConnection } from '../models/types';
 import { getDefaultPorts } from './portTypes';
+import {
+  documentToYaml,
+  sanitizeForExport,
+  type WorkflowDocument,
+} from '@purrchat/workflow-engine';
+import { WORKFLOW_API_VERSION, WORKFLOW_KIND } from '@purrchat/workflow-types';
 
 // ──────────────────────────────────────────────────────────
 // Types
@@ -38,6 +44,8 @@ interface YamlNode {
   name: string;
   type: string;
   id?: string; // 可选，导入时自动生成
+  key?: string;
+  position?: { x: number; y: number };
   config?: Record<string, any>;
 }
 
@@ -66,6 +74,9 @@ export function flowToYaml(events: WorkflowEvent[], connections: FlowConnection[
     const node: YamlNode = {
       name: evt.name,
       type: evt.type,
+      id: evt.id,
+      key: evt.key,
+      position: evt.position,
     };
     // 保留 config（仅非空字段）
     if (evt.config && Object.keys(evt.config).length > 0) {
@@ -145,8 +156,10 @@ export function yamlToFlow(yamlStr: string): YamlImportResult {
       id,
       type: yamlNode.type as any,
       name: yamlNode.name,
+      key: yamlNode.key,
       config: yamlNode.config || {},
       ports: defaultPorts,
+      position: yamlNode.position,
     });
   }
 
@@ -183,6 +196,108 @@ export function yamlToFlow(yamlStr: string): YamlImportResult {
   }
 
   return { events, connections, errors };
+}
+
+// ──────────────────────────────────────────────────────────
+// WorkflowDocument 格式（apiVersion/kind/metadata/spec）
+// ──────────────────────────────────────────────────────────
+
+/**
+ * 将编辑器的 events + connections + trigger + endConditions 组装为 WorkflowDocument
+ */
+export function flowToDocument(
+  events: WorkflowEvent[],
+  connections: FlowConnection[] = [],
+  trigger: { type: string; rules?: any[] } = { type: 'rule', rules: [] },
+  endConditions: any[] = [],
+  botName = 'untitled',
+  revision = 0
+): WorkflowDocument {
+  return {
+    apiVersion: WORKFLOW_API_VERSION,
+    kind: WORKFLOW_KIND,
+    metadata: { name: botName, revision },
+    spec: {
+      trigger: trigger as any,
+      nodes: events.map((e) => ({
+        id: e.id,
+        type: e.type as any,
+        name: e.name,
+        key: e.key,
+        config: e.config ?? {},
+        ports: e.ports,
+        position: e.position,
+      })),
+      connections,
+      endConditions,
+    },
+  };
+}
+
+/**
+ * 将 WorkflowDocument 拆解为编辑器内部格式
+ */
+export function documentToFlow(doc: WorkflowDocument): {
+  events: WorkflowEvent[];
+  connections: FlowConnection[];
+  trigger: any;
+  endConditions: any[];
+} {
+  return {
+    events: (doc.spec.nodes || []).map((n) => ({
+      id: n.id,
+      type: n.type as any,
+      name: n.name,
+      key: n.key,
+      config: n.config ?? {},
+      ports: n.ports,
+      position: n.position,
+    })),
+    connections: doc.spec.connections || [],
+    trigger: doc.spec.trigger,
+    endConditions: doc.spec.endConditions || [],
+  };
+}
+
+/**
+ * 以 WorkflowDocument 格式导出 YAML（含 endConditions，明文密钥自动替换为引用）
+ */
+export function flowToDocumentYaml(
+  events: WorkflowEvent[],
+  connections: FlowConnection[] = [],
+  trigger: { type: string; rules?: any[] } = { type: 'rule', rules: [] },
+  endConditions: any[] = [],
+  botName = 'untitled'
+): string {
+  const doc = flowToDocument(events, connections, trigger, endConditions, botName);
+  const safe = sanitizeForExport(doc);
+  return documentToYaml(safe);
+}
+
+/**
+ * 从 YAML 解析 WorkflowDocument（支持新旧两种格式）
+ */
+export function yamlToFlowDocument(yamlStr: string): YamlImportResult & {
+  document?: WorkflowDocument;
+  endConditions?: any[];
+  trigger?: any;
+} {
+  const parsed = yaml.load(yamlStr);
+
+  if (parsed && typeof parsed === 'object' && (parsed as any).apiVersion === WORKFLOW_API_VERSION) {
+    const doc = parsed as WorkflowDocument;
+    const { events, connections, trigger, endConditions } = documentToFlow(doc);
+    return {
+      events,
+      connections,
+      errors: [],
+      document: doc,
+      trigger,
+      endConditions,
+    };
+  }
+
+  return yamlToFlow(yamlStr);
 }
 
 // ──────────────────────────────────────────────────────────
