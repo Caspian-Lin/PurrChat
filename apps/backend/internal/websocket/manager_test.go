@@ -394,6 +394,9 @@ func TestWSNewSameDeviceConnectionReplacesOldestWithoutRetryCode(t *testing.T) {
 	require.NoError(t, err)
 	defer newest.Close()
 
+	// 服务端在注册 newest 时异步关闭 oldest（writePump 发送 close frame），
+	// 给读取加 deadline 防止事件延迟时无限阻塞
+	require.NoError(t, oldest.SetReadDeadline(time.Now().Add(3*time.Second)))
 	_, _, err = oldest.ReadMessage()
 	require.Error(t, err)
 	var closeErr *websocket.CloseError
@@ -517,7 +520,8 @@ func TestWSMessageTooBig(t *testing.T) {
 	err = conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"ping","data":"`+bigMsg+`"}`))
 	require.NoError(t, err)
 
-	// Server should close the connection
+	// Server should close the connection; add deadline to avoid blocking forever
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(3*time.Second)))
 	_, _, err = conn.ReadMessage()
 	require.Error(t, err)
 }
@@ -533,13 +537,14 @@ func TestWSGracefulShutdown(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	time.Sleep(50 * time.Millisecond)
-	assert.Equal(t, 1, hub.GetClientCount())
+	require.Eventually(t, func() bool {
+		return hub.GetClientCount() == 1
+	}, 2*time.Second, 10*time.Millisecond)
 
 	hub.Shutdown()
-	time.Sleep(100 * time.Millisecond)
 
-	// Connection should be closed
+	// Connection should be closed after shutdown; deadline prevents infinite block
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(3*time.Second)))
 	_, _, err = conn.ReadMessage()
 	require.Error(t, err)
 }
@@ -568,10 +573,13 @@ func TestWSPingPong(t *testing.T) {
 		return nil
 	})
 
-	// Wait for ping
-	time.Sleep(200 * time.Millisecond)
+	// Wait for client registration before relying on ping keepalive
+	require.Eventually(t, func() bool {
+		return GlobalHub.GetClientCount() == 1
+	}, 2*time.Second, 10*time.Millisecond)
 
-	// Connection should still be alive
+	// Wait for at least one ping cycle, then connection should still be alive
+	time.Sleep(200 * time.Millisecond)
 	assert.Equal(t, 1, GlobalHub.GetClientCount())
 }
 
